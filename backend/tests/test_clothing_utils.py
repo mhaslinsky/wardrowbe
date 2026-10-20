@@ -73,6 +73,59 @@ def test_allows_layering_base_top_plus_outer_layer():
     assert len(result) == 3
 
 
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [("t-shirt", "shirt"), ("shirt", "t-shirt"), ("shirt", "sweater"), ("sweater", "polo")],
+)
+def test_layerable_top_over_another_top_is_kept_in_either_order(first, second):
+    under, over, pants = _ids(3)
+    item_type_map = {under: first, over: second, pants: "jeans"}
+    assert deduplicate_by_body_slot([under, over, pants], item_type_map) == [under, over, pants]
+
+
+@pytest.mark.parametrize("outer", ["jacket", "coat"])
+def test_hoodie_under_an_outer_layer_is_kept_in_either_order(outer):
+    tee, hoodie, coat = _ids(3)
+    item_type_map = {tee: "t-shirt", hoodie: "hoodie", coat: outer}
+    assert deduplicate_by_body_slot([tee, hoodie, coat], item_type_map) == [tee, hoodie, coat]
+    assert deduplicate_by_body_slot([tee, coat, hoodie], item_type_map) == [tee, coat, hoodie]
+
+
+def test_tee_overshirt_and_jacket_make_three_layers():
+    tee, shirt, jacket, pants = _ids(4)
+    item_type_map = {tee: "t-shirt", shirt: "shirt", jacket: "jacket", pants: "pants"}
+    ids = [tee, shirt, jacket, pants]
+    assert deduplicate_by_body_slot(ids, item_type_map) == ids
+
+
+def test_fourth_upper_layer_is_dropped_once_the_mid_layer_is_taken():
+    shirt, sweater, hoodie, jacket = _ids(4)
+    item_type_map = {shirt: "shirt", sweater: "sweater", hoodie: "hoodie", jacket: "jacket"}
+    assert deduplicate_by_body_slot([shirt, sweater, hoodie, jacket], item_type_map) == [
+        shirt,
+        sweater,
+        hoodie,
+    ]
+
+
+def test_cardigan_takes_the_mid_layer_so_a_second_top_is_dropped():
+    tee, cardigan, shirt = _ids(3)
+    item_type_map = {tee: "t-shirt", cardigan: "cardigan", shirt: "shirt"}
+    assert deduplicate_by_body_slot([tee, cardigan, shirt], item_type_map) == [tee, cardigan]
+
+
+def test_two_coats_still_keep_only_the_first():
+    coat, jacket = _ids(2)
+    item_type_map = {coat: "coat", jacket: "jacket"}
+    assert deduplicate_by_body_slot([coat, jacket], item_type_map) == [coat]
+
+
+def test_layerable_top_is_not_added_over_a_dress():
+    dress, shirt = _ids(2)
+    item_type_map = {dress: "dress", shirt: "shirt"}
+    assert deduplicate_by_body_slot([dress, shirt], item_type_map) == [dress]
+
+
 def test_keeps_first_item_per_slot():
     jeans_id, skirt_id = _ids(2)
     item_type_map = {jeans_id: "jeans", skirt_id: "skirt"}
@@ -338,7 +391,7 @@ def test_mandatory_full_body_drops_non_mandatory_separates():
 
 def test_two_mandatory_items_in_one_role_do_not_both_survive():
     shirt_a, shirt_b, pants_id = _ids(3)
-    item_type_map = {shirt_a: "shirt", shirt_b: "polo", pants_id: "jeans"}
+    item_type_map = {shirt_a: "t-shirt", shirt_b: "polo", pants_id: "jeans"}
     result = deduplicate_by_body_slot(
         [shirt_a, shirt_b, pants_id],
         item_type_map,

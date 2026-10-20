@@ -53,6 +53,7 @@ RULES:
 - OPTIONAL: legwear (<<LEGWEAR_TYPES>>) under a skirt, dress or shorts in cool or cold weather; leave it out when it is warm, and put only thermal legwear under trousers or a jumpsuit, only when it is very cold. Legwear does not replace the bottom, the one-piece garment or footwear
 - OPTIONAL: ONE bag if appropriate for the occasion
 - OPTIONAL: accessories (belt, scarf, hat, jewelry) that genuinely complement the outfit
+- OPTIONAL: ONE middle layer between the top and outerwear: a <<MID_LAYER_TYPES>>, or a second piece from <<CAN_BE_MID_LAYER_TYPES>> worn over the top (an open shirt over a tee, a sweater over a shirt, a hoodie under a jacket). At most three layers on the upper body
 - For cold or rainy weather, add outerwear (jacket/coat) if available
 - Every piece must earn its place — do not add items just to fill slots
 - Do NOT pick the same item number twice

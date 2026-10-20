@@ -13,6 +13,11 @@ ITEM_ROLE: dict[str, str] = {entry["value"]: entry["role"] for entry in _DATA["t
 WORN_ALONE_TYPES: frozenset[str] = frozenset(
     entry["value"] for entry in _DATA["types"] if entry.get("worn_alone")
 )
+# Tops and layers that can also go in the middle: an open shirt over a tee, a sweater over a
+# shirt, a hoodie under a jacket.
+CAN_BE_MID_LAYER_TYPES: frozenset[str] = frozenset(
+    entry["value"] for entry in _DATA["types"] if entry.get("can_be_mid_layer")
+)
 DEFAULT_WASH_INTERVALS: dict[str, int] = {
     entry["value"]: entry["wash_interval"] for entry in _DATA["types"]
 }
@@ -90,4 +95,4 @@ def render_outfit_prompt(template: str) -> str:
     # ITEM_ROLE so separates, one-piece and legwear lists stay in step with the vocabulary.
     for role in ROLES:
         template = template.replace(f"<<{role.upper()}_TYPES>>", ", ".join(types_for_role(role)))
-    return template
+    return template.replace("<<CAN_BE_MID_LAYER_TYPES>>", ", ".join(sorted(CAN_BE_MID_LAYER_TYPES)))
