@@ -1,7 +1,7 @@
 {
   "roles": ["full_body", "base_top", "mid_layer", "suit", "outer_layer", "bottom", "legwear", "footwear", "socks", "neckwear", "accessory"],
   "types": [
-    {"value": "shirt", "role": "base_top", "wash_interval": 2},
+    {"value": "shirt", "role": "base_top", "wash_interval": 2, "can_be_mid_layer": true},
     {"value": "t-shirt", "role": "base_top", "wash_interval": 1},
     {"value": "top", "role": "base_top", "wash_interval": 2},
     {"value": "pants", "role": "bottom", "wash_interval": 4},
@@ -12,8 +12,8 @@
     {"value": "skirt", "role": "bottom", "wash_interval": 3},
     {"value": "jacket", "role": "outer_layer", "wash_interval": 8},
     {"value": "coat", "role": "outer_layer", "wash_interval": 10},
-    {"value": "sweater", "role": "base_top", "wash_interval": 5},
-    {"value": "hoodie", "role": "outer_layer", "wash_interval": 4},
+    {"value": "sweater", "role": "base_top", "wash_interval": 5, "can_be_mid_layer": true},
+    {"value": "hoodie", "role": "outer_layer", "wash_interval": 4, "can_be_mid_layer": true},
     {"value": "blazer", "role": "outer_layer", "wash_interval": 5},
     {"value": "suit", "role": "suit", "wash_interval": 5},
     {"value": "vest", "role": "mid_layer", "wash_interval": 5},

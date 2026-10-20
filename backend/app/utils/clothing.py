@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.utils.garment_vocabulary import ITEM_ROLE, ROLES
+from app.utils.garment_vocabulary import CAN_BE_MID_LAYER_TYPES, ITEM_ROLE, ROLES
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,26 @@ def covered_body_slots(item_ids: list[UUID], item_type_map: dict[UUID, str]) -> 
     }
 
 
+def _seat_in_mid_layer(
+    iid: UUID, slot: str, item_type_map: dict[UUID, str], claimed: dict[str, UUID]
+) -> bool:
+    """Keep a second top or outer layer by putting it, or the piece already holding its slot,
+    in the free mid layer. A dress or suit holding the slot is never layered over."""
+    if slot not in ("base_top", "outer_layer") or "mid_layer" in claimed:
+        return False
+    occupant = claimed[slot]
+    if _slots_for_type(item_type_map.get(occupant, "")) != {slot}:
+        return False
+    if item_type_map.get(iid, "") in CAN_BE_MID_LAYER_TYPES:
+        claimed["mid_layer"] = iid
+        return True
+    if item_type_map.get(occupant, "") in CAN_BE_MID_LAYER_TYPES:
+        claimed["mid_layer"] = occupant
+        claimed[slot] = iid
+        return True
+    return False
+
+
 def deduplicate_by_body_slot(
     item_ids: list[UUID],
     item_type_map: dict[UUID, str],
@@ -80,6 +100,9 @@ def deduplicate_by_body_slot(
         item_type = item_type_map.get(iid, "")
         slots = _slots_for_type(item_type)
         taken = next((slot for slot in sorted(slots) if slot in claimed), None)
+        if taken and len(slots) == 1 and _seat_in_mid_layer(iid, taken, item_type_map, claimed):
+            kept.add(iid)
+            continue
         if taken:
             logger.warning(
                 f"Removing {item_type} item {iid}: {taken} already filled by {claimed[taken]}"
