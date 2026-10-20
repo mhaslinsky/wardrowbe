@@ -68,7 +68,7 @@ SENSITIVITY_SHIFT = 5
 
 # An outfit is unwearable without these, so the prompt must keep candidates for them even
 # when a whole category scores below the TOP_N cut and would otherwise be sliced away.
-ESSENTIAL_ROLES = ("footwear", "bottom")
+ESSENTIAL_ROLES = ("footwear", "bottom", "accessory")
 MIN_CANDIDATES_PER_ESSENTIAL_ROLE = 4
 
 TEMP_RANGE_MIN_SWING = 8.0
