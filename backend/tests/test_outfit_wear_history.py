@@ -106,3 +106,30 @@ async def test_worn_feedback_still_feeds_learning(
         select(func.count()).select_from(ItemPairScore).where(ItemPairScore.user_id == test_user.id)
     )
     assert pair_scores == 3
+
+
+@pytest.mark.asyncio
+async def test_a_studio_outfit_marked_worn_is_listed_under_worn(
+    client: AsyncClient, db_session, test_user, auth_headers
+):
+    item_ids = await _items(db_session, test_user.id)
+    created = await client.post(
+        "/api/v1/outfits/studio",
+        json={
+            "items": item_ids,
+            "occasion": "casual",
+            "scheduled_for": "2026-10-03",
+            "mark_worn": True,
+        },
+        headers=auth_headers,
+    )
+    assert created.status_code == 201
+
+    listed = await client.get(
+        "/api/v1/outfits",
+        params={"status": "accepted", "is_lookbook": "false"},
+        headers=auth_headers,
+    )
+
+    assert listed.status_code == 200
+    assert [outfit["id"] for outfit in listed.json()["outfits"]] == [created.json()["id"]]

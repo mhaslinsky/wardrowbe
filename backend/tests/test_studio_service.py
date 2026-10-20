@@ -162,6 +162,8 @@ async def test_create_from_scratch_mark_worn(
 
     assert outfit.scheduled_for == worn_on
     assert outfit.feedback.worn_at == worn_on
+    assert outfit.status == OutfitStatus.accepted
+    assert outfit.responded_at is not None
     await db_session.refresh(shirt)
     assert shirt.wear_count == 1
     assert shirt.wears_since_wash == 1
@@ -291,6 +293,8 @@ async def test_wear_today(db_session, studio_user, wardrobe_items):
     assert wear.scheduled_for == today
     assert wear.cloned_from_outfit_id == template.id
     assert len(wear.items) == 3
+    assert wear.status == OutfitStatus.accepted
+    assert template.status == OutfitStatus.pending
 
     await db_session.refresh(shirt)
     assert shirt.wear_count == 1
@@ -461,6 +465,7 @@ async def test_wore_instead(db_session, studio_user, wardrobe_items):
     assert replacement.name is None
     assert len(replacement.items) == 2
     assert replacement.feedback.rating == 5
+    assert replacement.status == OutfitStatus.accepted
 
     await db_session.refresh(original)
     assert original.status == OutfitStatus.rejected
