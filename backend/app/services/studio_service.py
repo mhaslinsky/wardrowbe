@@ -70,6 +70,15 @@ async def validate_item_ownership(
     return items
 
 
+def _worn_status(worn_on: date | None) -> OutfitStatus:
+    """An outfit created already worn counts as accepted, so it shows in the Worn history."""
+    return OutfitStatus.accepted if worn_on is not None else OutfitStatus.pending
+
+
+def _responded_at(worn_on: date | None) -> datetime | None:
+    return datetime.now(UTC) if worn_on is not None else None
+
+
 class StudioService:
     CLONE_SOFT_IDEMPOTENCY_SECONDS = 5
 
@@ -124,7 +133,8 @@ class StudioService:
             occasion=occasion,
             scheduled_for=scheduled_for,
             source=OutfitSource.manual,
-            status=OutfitStatus.pending,
+            status=_worn_status(effective_worn),
+            responded_at=_responded_at(effective_worn),
             name=name,
             source_item_id=source_item_id,
             season=season,
@@ -196,7 +206,8 @@ class StudioService:
             occasion=original.occasion,
             scheduled_for=effective_date,
             source=OutfitSource.manual,
-            status=OutfitStatus.pending,
+            status=_worn_status(effective_date),
+            responded_at=_responded_at(effective_date),
             replaces_outfit_id=original.id,
         )
         self.db.add(replacement)
@@ -315,7 +326,8 @@ class StudioService:
             occasion=template.occasion,
             scheduled_for=target_date,
             source=OutfitSource.manual,
-            status=OutfitStatus.pending,
+            status=OutfitStatus.accepted,
+            responded_at=datetime.now(UTC),
             cloned_from_outfit_id=template.id,
             source_item_id=template.source_item_id,
             name=template.name,
