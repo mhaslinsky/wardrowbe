@@ -33,3 +33,27 @@ describe('BulkActionToolbar select-all label', () => {
     expect(screen.queryByText('bulkActions.selectAllMatching') !== null).toBe(offersMatching)
   })
 })
+
+describe('BulkActionToolbar placement', () => {
+  // The mobile nav is fixed to the bottom until the lg breakpoint, so the toolbar has to stay
+  // raised above it at every width below lg, tablets and unfolded foldables included.
+  it('drops to the page bottom only where the mobile nav is hidden', () => {
+    const { container } = render(
+      <BulkActionToolbar
+        selection={{ mode: 'some', selectedIds: none, excludedIds: none }}
+        totalItems={50}
+        pageItems={20}
+        onSelectAll={vi.fn()}
+        onSelectAllMatching={vi.fn()}
+        onClear={vi.fn()}
+        onDelete={vi.fn()}
+        variant="items"
+      />,
+    )
+    const classes = (container.firstElementChild as HTMLElement).className.split(/\s+/)
+    const lowered = classes.filter((name) => /^(sm|md|lg|xl):bottom-/.test(name))
+
+    expect(classes).toContain('bottom-20')
+    expect(lowered).toEqual(['lg:bottom-6'])
+  })
+})
