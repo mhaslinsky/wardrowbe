@@ -5,7 +5,7 @@ from email import message_from_bytes
 from email import policy as email_policy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -298,9 +298,12 @@ SETTINGS_READERS = (
 )
 
 
+OUTFIT_EMAIL_ID = UUID("00000000-0000-0000-0000-0000000000bb")
+
+
 def _outfit_email() -> EmailMessage:
     outfit = SimpleNamespace(
-        id=uuid4(),
+        id=OUTFIT_EMAIL_ID,
         scheduled_for=None,
         weather_data={"temperature": 20, "condition": HOSTILE_NAME},
         occasion="casual",
@@ -338,7 +341,7 @@ class TestAppLinks:
     @pytest.mark.parametrize(
         ("build", "link"),
         [
-            (_outfit_email, "https://x.com/dashboard/history"),
+            (_outfit_email, f"https://x.com/dashboard/outfits/{OUTFIT_EMAIL_ID}"),
             (_wash_email, "https://x.com/dashboard/wardrobe"),
             (_invite_email, "https://x.com/invite?token=tok"),
         ],
@@ -1062,7 +1065,7 @@ class TestDispatcherDelivery:
         )
         [attachment] = payload["attachments"]
         assert attachment["title"] == "Today's Outfit: Casual | 20°C Sunny"
-        assert attachment["title_link"].endswith("/dashboard/history")
+        assert attachment["title_link"].endswith(f"/dashboard/outfits/{outfit.id}")
         assert "Light layers" in attachment["text"]
 
     @pytest.mark.asyncio
@@ -1153,7 +1156,7 @@ class TestDispatcherDelivery:
             "https://ntfy.example.com/outfits",
         ]
         ntfy_call = post.call_args_list[1]
-        assert ntfy_call.kwargs["headers"]["Click"].endswith("/dashboard/history")
+        assert ntfy_call.kwargs["headers"]["Click"].endswith(f"/dashboard/outfits/{outfit.id}")
         assert "Light layers" in ntfy_call.kwargs["content"]
         email_send.assert_not_called()
         rows = (
