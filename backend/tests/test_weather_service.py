@@ -6,6 +6,7 @@ import httpx
 import pytest
 import redis.asyncio as aioredis
 
+from app.config import Settings
 from app.services.weather_service import (
     CACHE_PREFIX,
     GEOCODE_CACHE_PREFIX,
@@ -639,6 +640,109 @@ class TestGetTomorrowWeather:
             result = await weather_service.get_tomorrow_weather(40.71, -74.01)
 
         assert result.temperature == 22.5
+
+
+@pytest.fixture
+def ten_to_six(monkeypatch):
+    settings = Settings(_env_file=None, wearing_day_start_hour=10, wearing_day_end_hour=18)
+    monkeypatch.setattr("app.services.weather_service.get_settings", lambda: settings)
+
+
+# Oct 23 2026 as forecast: 3.5 C before dawn, 11 to 13 C from 10 AM to 6 PM, 14 C at 8 PM.
+TOMORROW_HOURS = [5.0, 4.5, 4.0, 4.0, 3.5, 3.5, 4.0, 5.0, 7.0, 9.0]  # 00:00 to 09:00
+TOMORROW_HOURS += [11.0, 11.5, 12.0, 12.5, 13.0, 13.0, 12.5, 12.0, 11.5]  # 10:00 to 18:00
+TOMORROW_HOURS += [12.0, 14.0, 10.0, 9.0, 8.0]  # 19:00 to 23:00
+
+
+def _tomorrow_hourly() -> dict:
+    times = [f"2026-02-28T{hour:02d}:00" for hour in range(24)]
+    times += [f"2026-03-01T{hour:02d}:00" for hour in range(24)]
+    temps = [1.0] * 24 + TOMORROW_HOURS
+    return {
+        "hourly": {
+            "time": times,
+            "temperature_2m": temps,
+            "apparent_temperature": [t - 1 for t in temps],
+        }
+    }
+
+
+def _route(hourly_response: httpx.Response | Exception):
+    """The daily request (has `daily`) gets the forecast; the hourly one gets `hourly_response`."""
+
+    async def get(*args, **kwargs):
+        if "daily" in kwargs["params"]:
+            return _mock_response(json_data=SAMPLE_FORECAST_RESPONSE)
+        if isinstance(hourly_response, Exception):
+            raise hourly_response
+        return hourly_response
+
+    return get
+
+
+class TestGetTomorrowWeatherWearingHours:
+    @pytest.mark.asyncio
+    async def test_uses_only_the_wearing_hours(self, weather_service, mock_redis, ten_to_six):
+        hourly = _mock_response(json_data=_tomorrow_hourly())
+        with patch("httpx.AsyncClient.get", side_effect=_route(hourly)) as mock_get:
+            result = await weather_service.get_tomorrow_weather(40.71, -74.01)
+
+        day = TOMORROW_HOURS[10:19]
+        assert result.window_min == pytest.approx(11.0)
+        assert result.window_max == pytest.approx(13.0)
+        assert result.temperature == pytest.approx(round(sum(day) / len(day), 1))
+        assert result.feels_like == pytest.approx(round(sum(day) / len(day) - 1, 1))
+        # The daily range is still reported as the day's range.
+        assert result.temp_min == pytest.approx(12.0)
+        assert result.temp_max == pytest.approx(22.0)
+        hourly_params = mock_get.call_args_list[1][1]["params"]
+        assert hourly_params["hourly"] == ["temperature_2m", "apparent_temperature"]
+        assert hourly_params["forecast_days"] == 2
+
+    @pytest.mark.asyncio
+    async def test_failed_hourly_request_falls_back_to_the_whole_day(
+        self, weather_service, mock_redis, ten_to_six
+    ):
+        with patch("httpx.AsyncClient.get", side_effect=_route(httpx.ConnectError("refused"))):
+            result = await weather_service.get_tomorrow_weather(40.71, -74.01)
+
+        assert result.window_min == pytest.approx(12.0)
+        assert result.window_max == pytest.approx(22.0)
+        assert result.temperature == 17.0
+
+    @pytest.mark.asyncio
+    async def test_too_few_wearing_hours_falls_back_to_the_whole_day(
+        self, weather_service, mock_redis, ten_to_six
+    ):
+        payload = _tomorrow_hourly()
+        payload["hourly"]["temperature_2m"] = [1.0] * 24 + [5.0] * 10 + [None] * 14
+        with patch("httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data=payload))):
+            result = await weather_service.get_tomorrow_weather(40.71, -74.01)
+
+        assert (result.window_min, result.window_max) == (pytest.approx(12.0), pytest.approx(22.0))
+
+
+class TestCurrentWeatherWearingHours:
+    @pytest.mark.asyncio
+    async def test_hours_before_the_day_starts_do_not_count(
+        self, weather_service, mock_redis, ten_to_six
+    ):
+        temps = [2.0, 3.0, 5.0, 11.0, 12.0, 13.0, 13.0, 12.0, 12.0, 11.0, 11.0, 11.5, 10.0]
+        temps += [4.0] * 11
+        response_data = {
+            "current": {
+                **SAMPLE_API_RESPONSE["current"],
+                "time": "2026-02-28T07:30",
+                "temperature_2m": 1.5,
+            },
+            "hourly": _hourly(7, temps),
+        }
+        with patch("httpx.AsyncClient.get", return_value=_mock_response(json_data=response_data)):
+            result = await weather_service.get_current_weather(40.71, -74.01, use_cache=False)
+
+        # 10:00 to 18:00 only: the 7 AM reading, 7 to 9 AM and 7 PM on are left out.
+        assert result.window_min == pytest.approx(11.0)
+        assert result.window_max == pytest.approx(13.0)
 
 
 class TestCheckHealth:

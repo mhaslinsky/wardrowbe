@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # only merges clients into one bucket; counting too many lets a client pick its own key.
     trusted_proxy_count: int = Field(default=0, ge=0)
 
+    # The hours (local, inclusive) an outfit has to work for. Outfit weather reads only the hourly
+    # temperatures inside them, so an overnight low doesn't pull a heavy coat into a mild day.
+    wearing_day_start_hour: int = Field(default=0, ge=0, le=23)
+    wearing_day_end_hour: int = Field(default=21, ge=0, le=23)
+
     # CORS
     cors_origins: list[str] = Field(default=["http://localhost:3000", "http://localhost:8081"])
 
