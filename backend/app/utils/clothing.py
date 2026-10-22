@@ -73,6 +73,21 @@ def lacks_top_under_overshirt(
     return "base_top" not in covered_body_slots(others, item_type_map)
 
 
+def top_to_wear_under(
+    ranked_ids: list[UUID],
+    chosen: set[UUID],
+    item_type_map: dict[UUID, str],
+    item_subtype_map: dict[UUID, str],
+) -> UUID | None:
+    """The best-ranked candidate that works as a top on its own, to put under an overshirt."""
+    for iid in ranked_ids:
+        if iid in chosen or (item_subtype_map.get(iid) or "").lower() in OVER_LAYER_SUBTYPES:
+            continue
+        if ITEM_ROLE.get(item_type_map.get(iid, "")) == "base_top":
+            return iid
+    return None
+
+
 def _seat_in_mid_layer(
     iid: UUID, slot: str, item_type_map: dict[UUID, str], claimed: dict[str, UUID]
 ) -> bool:

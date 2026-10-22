@@ -44,6 +44,7 @@ from app.utils.clothing import (
     deduplicate_by_body_slot,
     lacks_top_under_overshirt,
     remove_legwear,
+    top_to_wear_under,
 )
 from app.utils.garment_vocabulary import render_outfit_prompt
 from app.utils.preference_defaults import (
@@ -688,11 +689,13 @@ class RecommendationService:
                     logger.info(f"Adding missing mandatory item {mid} to outfit")
                     valid_ids.insert(0, mid)
 
-        # Deduplicate by body slot (e.g. prevent shorts + pants)
+        # Deduplicate by body slot (e.g. prevent shorts + pants). Every candidate's type is read,
+        # not only the chosen ones, so a missing top can be filled from the ranked list below.
+        ranked_ids = [number_map[number] for number in sorted(number_map)]
         items_result = (
             await self.db.execute(
                 select(ClothingItem.id, ClothingItem.type, ClothingItem.subtype).where(
-                    ClothingItem.id.in_(valid_ids)
+                    ClothingItem.id.in_(set(valid_ids) | set(ranked_ids))
                 )
             )
         ).all()
@@ -707,9 +710,16 @@ class RecommendationService:
             valid_ids = remove_legwear(valid_ids, item_type_map, mandatory_item_ids or set())
         if not valid_ids:
             raise EmptyOutfitError("AI did not select any valid items")
-        # The prompt says so too, but an overshirt worn as the only top still slips through.
+        # The prompt asks for a top under an overshirt, but the AI still sometimes skips it, and
+        # body-slot dedup can drop it. Adding the best-ranked top keeps every path (including a
+        # scheduled single outfit, which has no next option to fall back on) wearable.
         if lacks_top_under_overshirt(valid_ids, item_type_map, item_subtype_map):
-            raise EmptyOutfitError("AI used an overshirt as the only top")
+            under = top_to_wear_under(ranked_ids, set(valid_ids), item_type_map, item_subtype_map)
+            if under is None:
+                logger.warning("Overshirt chosen as the only top and no other top to add")
+            else:
+                logger.info(f"Adding top {under} under the overshirt the AI chose alone")
+                valid_ids.append(under)
         valid_ids = canonical_item_order(valid_ids, item_type_map)
 
         reasoning = outfit_data.get("headline") or outfit_data.get("reasoning")

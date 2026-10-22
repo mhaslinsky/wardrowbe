@@ -10,6 +10,7 @@ from app.utils.clothing import (
     deduplicate_by_body_slot,
     lacks_top_under_overshirt,
     remove_legwear,
+    top_to_wear_under,
 )
 from app.utils.garment_vocabulary import ROLES
 
@@ -477,3 +478,13 @@ def test_an_ordinary_shirt_alone_is_still_a_top():
     shirt, pants = _ids(2)
     types = {shirt: "shirt", pants: "pants"}
     assert not lacks_top_under_overshirt([shirt, pants], types, {shirt: "camp-collar"})
+
+
+def test_the_top_added_under_an_overshirt_is_the_best_ranked_real_top():
+    other_overshirt, sweater, tee, pants = _ids(4)
+    types = {other_overshirt: "shirt", sweater: "sweater", tee: "t-shirt", pants: "pants"}
+    subtypes = {other_overshirt: "chore-jacket"}
+    ranked = [pants, other_overshirt, sweater, tee]
+    assert top_to_wear_under(ranked, {pants}, types, subtypes) == sweater
+    assert top_to_wear_under(ranked, {pants, sweater}, types, subtypes) == tee
+    assert top_to_wear_under([pants, other_overshirt], set(), types, subtypes) is None

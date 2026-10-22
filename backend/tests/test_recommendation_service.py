@@ -975,8 +975,9 @@ class TestHotDayLegwear:
 
 
 class TestOvershirtNeedsATopUnderIt:
-    async def _outfits(self, db_session, user, ai_outfits):
+    async def _outfits(self, db_session, user, ai_content, single_outfit=False, extra=()):
         kinds = [("shirt", "overshirt"), ("t-shirt", None), ("pants", "chinos"), ("sneakers", None)]
+        kinds += list(extra)
         items = [
             ClothingItem(
                 user_id=user.id,
@@ -994,11 +995,7 @@ class TestOvershirtNeedsATopUnderIt:
         user.preferences = None
         ai = MagicMock()
         ai.generate_text = AsyncMock(
-            return_value=MagicMock(
-                content=json.dumps({"outfits": [{"items": o} for o in ai_outfits]}),
-                model="m",
-                endpoint="e",
-            )
+            return_value=MagicMock(content=json.dumps(ai_content), model="m", endpoint="e")
         )
         service = RecommendationService(db_session)
         with (
@@ -1016,15 +1013,42 @@ class TestOvershirtNeedsATopUnderIt:
                 weather_override=_weather(temp=12),
                 time_of_day=TimeOfDay.afternoon,
                 count=1,
+                single_outfit=single_outfit,
             )
         return items, [{oi.item_id for oi in o.items} for o in outfits]
 
     @pytest.mark.asyncio
-    async def test_an_overshirt_as_the_only_top_is_skipped(self, db_session, test_user):
-        items, outfits = await self._outfits(db_session, test_user, [[1, 3, 4], [1, 2, 3, 4]])
+    async def test_an_overshirt_as_the_only_top_gets_a_top_under_it(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session, test_user, {"outfits": [{"items": [1, 3, 4]}]}
+        )
         assert outfits == [{item.id for item in items}]
 
     @pytest.mark.asyncio
-    async def test_an_overshirt_over_a_tee_is_kept(self, db_session, test_user):
-        items, outfits = await self._outfits(db_session, test_user, [[1, 2, 3, 4]])
+    async def test_a_scheduled_single_outfit_gets_a_top_instead_of_failing(
+        self, db_session, test_user
+    ):
+        items, outfits = await self._outfits(
+            db_session, test_user, {"items": [1, 3, 4]}, single_outfit=True
+        )
+        assert outfits == [{item.id for item in items}]
+
+    @pytest.mark.asyncio
+    async def test_a_tee_dropped_for_a_cardigan_comes_back_under_the_overshirt(
+        self, db_session, test_user
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 5, 2, 3, 4]}]},
+            extra=[("cardigan", None)],
+        )
+        assert items[1].id in outfits[0]
+        assert items[0].id in outfits[0]
+
+    @pytest.mark.asyncio
+    async def test_an_overshirt_over_a_tee_is_kept_as_chosen(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session, test_user, {"outfits": [{"items": [1, 2, 3, 4]}]}
+        )
         assert outfits == [{item.id for item in items}]
