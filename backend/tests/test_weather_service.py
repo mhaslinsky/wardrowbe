@@ -722,6 +722,33 @@ class TestGetTomorrowWeatherWearingHours:
         assert (result.window_min, result.window_max) == (pytest.approx(12.0), pytest.approx(22.0))
 
 
+class TestWearingHoursSettings:
+    @pytest.mark.parametrize(("start", "end"), [(18, 10), (10, 10)])
+    def test_a_day_that_cannot_form_a_window_is_refused(self, start, end):
+        with pytest.raises(ValueError, match="WEARING_DAY_END_HOUR must be later"):
+            Settings(_env_file=None, wearing_day_start_hour=start, wearing_day_end_hour=end)
+
+    def test_ten_to_six_is_accepted(self):
+        settings = Settings(_env_file=None, wearing_day_start_hour=10, wearing_day_end_hour=18)
+        assert (settings.wearing_day_start_hour, settings.wearing_day_end_hour) == (10, 18)
+
+
+class TestTomorrowFallbackIsLogged:
+    @pytest.mark.asyncio
+    async def test_empty_hourly_arrays_fall_back_with_a_warning(
+        self, weather_service, mock_redis, ten_to_six, caplog
+    ):
+        payload = {"hourly": {"time": None, "temperature_2m": None}}
+        with (
+            caplog.at_level("WARNING", logger="app.services.weather_service"),
+            patch("httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data=payload))),
+        ):
+            result = await weather_service.get_tomorrow_weather(40.71, -74.01)
+
+        assert (result.window_min, result.window_max) == (pytest.approx(12.0), pytest.approx(22.0))
+        assert "Only 0 wearing hours forecast for 2026-03-01" in caplog.text
+
+
 class TestCurrentWeatherWearingHours:
     @pytest.mark.asyncio
     async def test_hours_before_the_day_starts_do_not_count(

@@ -543,6 +543,10 @@ class WeatherService:
             feels_like = sum(apparent) / len(apparent) if apparent else avg_temp
             window_min, window_max = min(hours), max(hours)
         else:
+            logger.warning(
+                f"Only {len(hours)} wearing hours forecast for {tomorrow.date}; "
+                "using the whole-day range"
+            )
             avg_temp = (tomorrow.temp_min + tomorrow.temp_max) / 2
             feels_like = tomorrow.temp_max
             window_min, window_max = tomorrow.temp_min, tomorrow.temp_max

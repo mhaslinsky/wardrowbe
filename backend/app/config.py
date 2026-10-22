@@ -2,7 +2,7 @@ import logging
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, field_validator
+from pydantic import Field, PostgresDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.utils.redis_url import parse_redis_url
@@ -56,6 +56,17 @@ class Settings(BaseSettings):
     # temperatures inside them, so an overnight low doesn't pull a heavy coat into a mild day.
     wearing_day_start_hour: int = Field(default=0, ge=0, le=23)
     wearing_day_end_hour: int = Field(default=21, ge=0, le=23)
+
+    # A day that wraps past midnight or spans a single hour would never form a window, and the
+    # weather would quietly fall back to the whole day, so refuse it at startup instead.
+    @model_validator(mode="after")
+    def wearing_day_spans_two_hours(self) -> "Settings":
+        if self.wearing_day_end_hour <= self.wearing_day_start_hour:
+            raise ValueError(
+                "WEARING_DAY_END_HOUR must be later than WEARING_DAY_START_HOUR "
+                f"(got {self.wearing_day_start_hour} to {self.wearing_day_end_hour})"
+            )
+        return self
 
     # CORS
     cors_origins: list[str] = Field(default=["http://localhost:3000", "http://localhost:8081"])
