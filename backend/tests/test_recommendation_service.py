@@ -972,3 +972,59 @@ class TestHotDayLegwear:
         )
         assert outfits == [{items[1].id, items[2].id, items[3].id}]
         assert self.pushed == [[2, 3]]
+
+
+class TestOvershirtNeedsATopUnderIt:
+    async def _outfits(self, db_session, user, ai_outfits):
+        kinds = [("shirt", "overshirt"), ("t-shirt", None), ("pants", "chinos"), ("sneakers", None)]
+        items = [
+            ClothingItem(
+                user_id=user.id,
+                type=kind,
+                subtype=subtype,
+                image_path=f"test/{uuid4()}.jpg",
+                status=ItemStatus.ready,
+                primary_color="navy",
+            )
+            for kind, subtype in kinds
+        ]
+        db_session.add_all(items)
+        await db_session.commit()
+        number_map = {n: item.id for n, item in enumerate(items, start=1)}
+        user.preferences = None
+        ai = MagicMock()
+        ai.generate_text = AsyncMock(
+            return_value=MagicMock(
+                content=json.dumps({"outfits": [{"items": o} for o in ai_outfits]}),
+                model="m",
+                endpoint="e",
+            )
+        )
+        service = RecommendationService(db_session)
+        with (
+            patch("app.services.recommendation_service.AIService", return_value=ai),
+            patch(
+                "app.services.recommendation_service.pop_suggestion", AsyncMock(return_value=None)
+            ),
+            patch("app.services.recommendation_service.push_suggestions", AsyncMock()),
+            patch.object(service, "_format_items_for_prompt", return_value=("", number_map)),
+            patch.object(service, "_get_today_rejected_item_ids", AsyncMock(return_value=set())),
+        ):
+            outfits = await service.generate_recommendations(
+                user=user,
+                occasion="casual",
+                weather_override=_weather(temp=12),
+                time_of_day=TimeOfDay.afternoon,
+                count=1,
+            )
+        return items, [{oi.item_id for oi in o.items} for o in outfits]
+
+    @pytest.mark.asyncio
+    async def test_an_overshirt_as_the_only_top_is_skipped(self, db_session, test_user):
+        items, outfits = await self._outfits(db_session, test_user, [[1, 3, 4], [1, 2, 3, 4]])
+        assert outfits == [{item.id for item in items}]
+
+    @pytest.mark.asyncio
+    async def test_an_overshirt_over_a_tee_is_kept(self, db_session, test_user):
+        items, outfits = await self._outfits(db_session, test_user, [[1, 2, 3, 4]])
+        assert outfits == [{item.id for item in items}]

@@ -8,6 +8,7 @@ from app.utils.clothing import (
     canonical_item_order,
     count_composition,
     deduplicate_by_body_slot,
+    lacks_top_under_overshirt,
     remove_legwear,
 )
 from app.utils.garment_vocabulary import ROLES
@@ -456,3 +457,23 @@ def test_remove_legwear_keeps_requested_tights_and_everything_else():
         [top, skirt, tights, requested_tights, shoes], item_type_map, {requested_tights}
     )
     assert kept == [top, skirt, requested_tights, shoes]
+
+
+@pytest.mark.parametrize("subtype", ["overshirt", "Chore-Jacket", "shirt-jacket", "shacket"])
+def test_an_overshirt_alone_lacks_a_top_under_it(subtype):
+    overshirt, pants, shoes = _ids(3)
+    types = {overshirt: "shirt", pants: "pants", shoes: "sneakers"}
+    assert lacks_top_under_overshirt([overshirt, pants, shoes], types, {overshirt: subtype})
+
+
+@pytest.mark.parametrize("under", ["t-shirt", "shirt", "sweater", "dress"])
+def test_an_overshirt_over_a_top_or_dress_is_complete(under):
+    overshirt, top, shoes = _ids(3)
+    types = {overshirt: "shirt", top: under, shoes: "sneakers"}
+    assert not lacks_top_under_overshirt([overshirt, top, shoes], types, {overshirt: "overshirt"})
+
+
+def test_an_ordinary_shirt_alone_is_still_a_top():
+    shirt, pants = _ids(2)
+    types = {shirt: "shirt", pants: "pants"}
+    assert not lacks_top_under_overshirt([shirt, pants], types, {shirt: "camp-collar"})

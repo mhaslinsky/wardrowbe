@@ -39,7 +39,12 @@ from app.services.weather_service import (
     WeatherService,
     WeatherServiceError,
 )
-from app.utils.clothing import canonical_item_order, deduplicate_by_body_slot, remove_legwear
+from app.utils.clothing import (
+    canonical_item_order,
+    deduplicate_by_body_slot,
+    lacks_top_under_overshirt,
+    remove_legwear,
+)
 from app.utils.garment_vocabulary import render_outfit_prompt
 from app.utils.preference_defaults import (
     DEFAULT_LAYERING_PREFERENCE,
@@ -684,10 +689,15 @@ class RecommendationService:
                     valid_ids.insert(0, mid)
 
         # Deduplicate by body slot (e.g. prevent shorts + pants)
-        items_result = await self.db.execute(
-            select(ClothingItem.id, ClothingItem.type).where(ClothingItem.id.in_(valid_ids))
-        )
+        items_result = (
+            await self.db.execute(
+                select(ClothingItem.id, ClothingItem.type, ClothingItem.subtype).where(
+                    ClothingItem.id.in_(valid_ids)
+                )
+            )
+        ).all()
         item_type_map = {row.id: (row.type or "").lower() for row in items_result}
+        item_subtype_map = {row.id: (row.subtype or "").lower() for row in items_result}
         valid_ids = deduplicate_by_body_slot(
             valid_ids, item_type_map, mandatory_item_ids=mandatory_item_ids
         )
@@ -697,6 +707,9 @@ class RecommendationService:
             valid_ids = remove_legwear(valid_ids, item_type_map, mandatory_item_ids or set())
         if not valid_ids:
             raise EmptyOutfitError("AI did not select any valid items")
+        # The prompt says so too, but an overshirt worn as the only top still slips through.
+        if lacks_top_under_overshirt(valid_ids, item_type_map, item_subtype_map):
+            raise EmptyOutfitError("AI used an overshirt as the only top")
         valid_ids = canonical_item_order(valid_ids, item_type_map)
 
         reasoning = outfit_data.get("headline") or outfit_data.get("reasoning")
