@@ -31,7 +31,7 @@
     "removeItem": "{name} entfernen"
   },
   "cards": {
-    "wearCount": "{count}-mal getragen",
+    "wearCount": "{count, plural, one {# Mal getragen} other {# Mal getragen}}",
     "history": "Verlauf",
     "record": "Eintrag {count}",
     "ai": "KI",

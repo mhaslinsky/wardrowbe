@@ -31,7 +31,7 @@
     "removeItem": "{name}を外す"
   },
   "cards": {
-    "wearCount": "着用 {count} 回",
+    "wearCount": "{count, plural, one {# 回着用} other {# 回着用}}",
     "history": "履歴",
     "record": "記録 {count}",
     "ai": "AI",

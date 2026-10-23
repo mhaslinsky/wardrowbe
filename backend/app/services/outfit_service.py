@@ -14,6 +14,7 @@ from app.models.outfit import (
     OutfitItem,
     OutfitSource,
     OutfitStatus,
+    UserFeedback,
 )
 from app.models.user import User
 
@@ -42,73 +43,114 @@ def _escape_like(term: str) -> str:
     return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def group_outfits(outfits: list[Outfit]) -> list[Outfit]:
-    ordered = sorted(outfits, key=lambda outfit: str(outfit.id))
-    ordered.sort(key=lambda outfit: outfit.created_at, reverse=True)
-    by_id = {outfit.id: outfit for outfit in ordered}
-    groups = {outfit.id: [outfit] for outfit in ordered}
-    assigned = set()
-    templates = [
-        outfit
-        for outfit in ordered
-        if outfit.source == OutfitSource.manual and outfit.scheduled_for is None
-    ]
-    template_ids = {outfit.id for outfit in templates}
-    for template in templates:
-        members = [
-            outfit
-            for outfit in ordered
-            if outfit.cloned_from_outfit_id == template.id
-            and outfit.source == OutfitSource.manual
-            and outfit.scheduled_for is not None
-            and outfit.id not in assigned
-        ]
-        parent = by_id.get(template.cloned_from_outfit_id)
-        if parent and parent.id not in template_ids and parent.id not in assigned:
-            members.append(parent)
-        groups[template.id].extend(members)
-        assigned.update(member.id for member in members)
+@dataclass
+class OutfitGroupRecord:
+    id: UUID
+    user_id: UUID
+    source: OutfitSource
+    status: OutfitStatus
+    occasion: str
+    scheduled_for: date | None
+    cloned_from_outfit_id: UUID | None
+    created_at: datetime
+    worn: bool
+    item_ids: frozenset[UUID]
 
-    ai_groups = {}
+
+@dataclass
+class OutfitGroup:
+    id: UUID
+    hidden_member_ids: list[UUID]
+    wear_count: int
+
+
+def _is_template(outfit: OutfitGroupRecord) -> bool:
+    return outfit.source == OutfitSource.manual and outfit.scheduled_for is None
+
+
+def _is_wear(outfit: OutfitGroupRecord) -> bool:
+    return (
+        outfit.scheduled_for is not None
+        and outfit.status == OutfitStatus.accepted
+        and outfit.cloned_from_outfit_id is not None
+    )
+
+
+def _saved_families(ordered, groups, hidden):
+    by_id = {outfit.id: outfit for outfit in ordered}
+    children = {}
     for outfit in ordered:
-        if outfit.id in assigned or outfit.id in template_ids:
+        children.setdefault(outfit.cloned_from_outfit_id, []).append(outfit)
+    templates = {outfit.id: outfit for outfit in ordered if _is_template(outfit)}
+    for template_id in templates:
+        wears = [child for child in children.get(template_id, []) if _is_wear(child)]
+        groups[template_id].extend(wears)
+        hidden.update(wear.id for wear in wears)
+    for parent_id, siblings in children.items():
+        parent = by_id.get(parent_id)
+        candidates = [child for child in siblings if child.id in templates]
+        if not parent or not candidates or parent.id in templates or _is_wear(parent):
             continue
-        item_ids = frozenset(item.item_id for item in outfit.items)
-        if outfit.source == OutfitSource.on_demand and item_ids:
-            key = (outfit.user_id, outfit.occasion, item_ids)
-            ai_groups.setdefault(key, []).append(outfit)
-    for members in ai_groups.values():
-        representative = next(
-            (
-                outfit
-                for outfit in members
-                if outfit.status == OutfitStatus.accepted
-                or (outfit.feedback and (outfit.feedback.worn_at or outfit.feedback.actually_worn))
+        owner = min(
+            candidates,
+            key=lambda template: (
+                len(groups[template.id]) == 1,
+                template.created_at,
+                str(template.id),
             ),
-            members[0],
+        )
+        groups[owner.id].append(parent)
+        hidden.add(parent.id)
+
+
+def _ai_sets(ordered, groups, hidden):
+    matching = {}
+    for outfit in ordered:
+        if outfit.id not in hidden and outfit.source == OutfitSource.on_demand and outfit.item_ids:
+            key = (outfit.user_id, outfit.occasion, outfit.item_ids)
+            matching.setdefault(key, []).append(outfit)
+    for members in matching.values():
+        representative = min(
+            members,
+            key=lambda outfit: (
+                0 if outfit.worn else 1 if outfit.status == OutfitStatus.accepted else 2,
+                -outfit.created_at.timestamp(),
+                str(outfit.id),
+            ),
         )
         groups[representative.id] = members
-        assigned.update(member.id for member in members if member.id != representative.id)
+        hidden.update(member.id for member in members if member.id != representative.id)
 
-    visible = []
-    for outfit in ordered:
-        if outfit.id in assigned:
-            continue
-        members = groups[outfit.id]
-        outfit.group_size = len(members)
-        outfit.hidden_member_ids = [member.id for member in members if member.id != outfit.id]
-        outfit.wear_count = sum(
-            member.scheduled_for is not None
-            and (
-                member.status == OutfitStatus.accepted
-                or bool(
-                    member.feedback and (member.feedback.worn_at or member.feedback.actually_worn)
-                )
-            )
-            for member in members
+
+def _visible_groups(ordered, groups, hidden) -> list[OutfitGroup]:
+    return [
+        OutfitGroup(
+            id=outfit.id,
+            hidden_member_ids=[member.id for member in groups[outfit.id] if member.id != outfit.id],
+            wear_count=sum(
+                member.scheduled_for is not None
+                and (member.status == OutfitStatus.accepted or member.worn)
+                for member in groups[outfit.id]
+            ),
         )
-        visible.append(outfit)
-    return visible
+        for outfit in ordered
+        if outfit.id not in hidden
+    ]
+
+
+def group_outfits(outfits: list[OutfitGroupRecord]) -> list[OutfitGroup]:
+    """Partition filtered records into cards, with each hidden id owned by exactly one card.
+
+    Wears belong to their direct template; shared parents prefer worn, then oldest templates.
+    Remaining AI sets prefer the newest worn, then accepted, then other record, with id ties.
+    """
+    ordered = sorted(outfits, key=lambda outfit: str(outfit.id))
+    ordered.sort(key=lambda outfit: outfit.created_at, reverse=True)
+    groups = {outfit.id: [outfit] for outfit in ordered}
+    hidden = set()
+    _saved_families(ordered, groups, hidden)
+    _ai_sets(ordered, groups, hidden)
+    return _visible_groups(ordered, groups, hidden)
 
 
 class OutfitService:
@@ -250,17 +292,55 @@ class OutfitService:
 
         if filters.group:
             result = await self.db.execute(
-                select(Outfit)
+                select(
+                    Outfit.id,
+                    Outfit.user_id,
+                    Outfit.source,
+                    Outfit.status,
+                    Outfit.occasion,
+                    Outfit.scheduled_for,
+                    Outfit.cloned_from_outfit_id,
+                    Outfit.created_at,
+                    or_(
+                        UserFeedback.worn_at.is_not(None), UserFeedback.actually_worn.is_(True)
+                    ).label("worn"),
+                    func.array_agg(OutfitItem.item_id)
+                    .filter(OutfitItem.item_id.is_not(None))
+                    .label("item_ids"),
+                )
+                .outerjoin(UserFeedback, UserFeedback.outfit_id == Outfit.id)
+                .outerjoin(OutfitItem, OutfitItem.outfit_id == Outfit.id)
                 .where(and_(*clauses))
+                .group_by(Outfit.id, UserFeedback.id)
+            )
+            records = []
+            for row in result:
+                values = dict(row._mapping)
+                values["item_ids"] = frozenset(values["item_ids"] or [])
+                records.append(OutfitGroupRecord(**values))
+            grouped = group_outfits(records)
+            start = (page - 1) * page_size
+            page_groups = grouped[start : start + page_size]
+            if not page_groups:
+                return [], len(grouped)
+            hydrated = await self.db.execute(
+                select(Outfit)
+                .where(Outfit.id.in_([group.id for group in page_groups]))
                 .options(
                     selectinload(Outfit.items).selectinload(OutfitItem.item),
                     selectinload(Outfit.feedback),
                     selectinload(Outfit.family_ratings).selectinload(FamilyOutfitRating.user),
                 )
             )
-            grouped = group_outfits(list(result.scalars().all()))
-            start = (page - 1) * page_size
-            return grouped[start : start + page_size], len(grouped)
+            by_id = {outfit.id: outfit for outfit in hydrated.scalars().all()}
+            outfits = []
+            for group in page_groups:
+                outfit = by_id[group.id]
+                outfit.group_size = 1 + len(group.hidden_member_ids)
+                outfit.hidden_member_ids = group.hidden_member_ids
+                outfit.wear_count = group.wear_count
+                outfits.append(outfit)
+            return outfits, len(grouped)
 
         count_query: Select = select(func.count()).select_from(Outfit).where(and_(*clauses))
         total = (await self.db.execute(count_query)).scalar_one()

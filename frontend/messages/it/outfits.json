@@ -31,7 +31,7 @@
     "removeItem": "Rimuovi {name}"
   },
   "cards": {
-    "wearCount": "Indossato {count} volte",
+    "wearCount": "Indossato {count, plural, one {# volta} other {# volte}}",
     "history": "Cronologia",
     "record": "Voce {count}",
     "ai": "IA",

@@ -31,7 +31,7 @@
     "removeItem": "Remove {name}"
   },
   "cards": {
-    "wearCount": "Worn {count} times",
+    "wearCount": "Worn {count, plural, one {# time} other {# times}}",
     "history": "History",
     "record": "Record {count}",
     "ai": "AI",

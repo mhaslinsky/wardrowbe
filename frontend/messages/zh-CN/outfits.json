@@ -31,7 +31,7 @@
     "removeItem": "移除 {name}"
   },
   "cards": {
-    "wearCount": "穿过 {count} 次",
+    "wearCount": "已穿着 {count, plural, one {# 次} other {# 次}}",
     "history": "历史记录",
     "record": "记录 {count}",
     "ai": "AI",

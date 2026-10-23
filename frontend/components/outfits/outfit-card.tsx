@@ -189,7 +189,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
         </div>
         <div className="p-3 space-y-1">
           {dirtyCount > 0 && <p className="text-xs text-amber-700">{t('piecesInWash', { count: dirtyCount })}</p>}
-          {outfit.wear_count != null && (
+          {outfit.wear_count != null && outfit.wear_count > 0 && (
             <p className="text-xs text-muted-foreground">{t('wearCount', { count: outfit.wear_count })}</p>
           )}
           {(outfit.hidden_member_ids?.length ?? 0) > 0 && (

@@ -186,6 +186,7 @@ class OutfitListResponse(BaseModel):
 
 
 class BulkOutfitFilters(BaseModel):
+    group: bool = False
     status_filter: str | None = None
     occasion: str | None = None
     date_from: date | None = None
@@ -697,6 +698,9 @@ async def bulk_delete_outfits(
     limit = get_settings().max_bulk_action_count
     next_cursor: UUID | None = None
     has_more = False
+
+    if request.select_all and request.filters and request.filters.group:
+        raise HTTPException(status_code=422, detail="Grouped selection is unavailable")
 
     if request.select_all:
         list_filters = OutfitListFilters(

@@ -31,7 +31,7 @@
     "removeItem": "{name} 제거"
   },
   "cards": {
-    "wearCount": "{count}회 착용",
+    "wearCount": "{count, plural, other {#회 착용}}",
     "history": "기록",
     "record": "기록 {count}",
     "ai": "AI",
