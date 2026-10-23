@@ -69,7 +69,7 @@ describe('mutation cache invalidation', () => {
 
   it.each([
     ['useUpdateItem', () => invalidatedKeys(useUpdateItem, { id: 'i1', data: {} }), ITEM_ONLY],
-    ['useLogWear', () => invalidatedKeys(useLogWear, { id: 'i1' }), ITEM_WEAR],
+    ['useLogWear', () => invalidatedKeys(useLogWear, { id: 'i1' }), [...ITEM_WEAR, ['outfits'], ['calendarOutfits']]],
     ['useAddItemImage', () => invalidatedKeys(useAddItemImage, { itemId: 'i1', file }), ITEM_ONLY],
     [
       'useDeleteItemImage',
@@ -84,7 +84,7 @@ describe('mutation cache invalidation', () => {
     [
       'useLogWash',
       () => invalidatedKeys(useLogWash, { id: 'i1' }),
-      [['items'], ['item', 'i1'], ['wash-history', 'i1']],
+      [['items'], ['item', 'i1'], ['wash-history', 'i1'], ['outfits'], ['calendarOutfits']],
     ],
     [
       'useRemoveBackground',
