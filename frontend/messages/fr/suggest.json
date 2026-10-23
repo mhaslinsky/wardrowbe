@@ -104,21 +104,5 @@
     "reset": "Réinitialiser",
     "temperature": "Température"
   },
-  "yourOutfit": "Votre tenue",
-  "inspiration": {
-    "title": "Inspiration",
-    "description": "Recréez un look avec vos vêtements.",
-    "photo": "Photo ou capture d’écran",
-    "create": "Recréer et enregistrer",
-    "working": "Recherche de vêtements…",
-    "saved": "Enregistré",
-    "loading": "Chargement…",
-    "empty": "Importez une photo pour commencer.",
-    "error": "Création impossible. Vérifiez l’image et votre localisation.",
-    "open": "Ouvrir la tenue",
-    "delete": "Supprimer",
-    "noMatch": "Aucune correspondance",
-    "strength": "Correspondance : {value}%",
-    "baseLayer": "Couche de base ajoutée"
-  }
+  "yourOutfit": "Votre tenue"
 }

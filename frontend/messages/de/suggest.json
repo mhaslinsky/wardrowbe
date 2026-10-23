@@ -104,21 +104,5 @@
     "reset": "Zurücksetzen",
     "temperature": "Temperatur"
   },
-  "yourOutfit": "Dein Outfit",
-  "inspiration": {
-    "title": "Inspiration",
-    "description": "Stelle einen Look mit deiner Kleidung nach.",
-    "photo": "Foto oder Screenshot",
-    "create": "Nachstellen und speichern",
-    "working": "Kleidung wird zugeordnet…",
-    "saved": "Gespeichert",
-    "loading": "Laden…",
-    "empty": "Lade zuerst ein Foto hoch.",
-    "error": "Look konnte nicht erstellt werden. Prüfe Bild und Standort.",
-    "open": "Outfit öffnen",
-    "delete": "Löschen",
-    "noMatch": "Kein Treffer",
-    "strength": "Übereinstimmung: {value}%",
-    "baseLayer": "Ergänzte Basisschicht"
-  }
+  "yourOutfit": "Dein Outfit"
 }

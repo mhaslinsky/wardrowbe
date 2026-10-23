@@ -104,21 +104,5 @@
     "reset": "Ripristina",
     "temperature": "Temperatura"
   },
-  "yourOutfit": "Il tuo outfit",
-  "inspiration": {
-    "title": "Ispirazione",
-    "description": "Ricrea un look con i tuoi vestiti.",
-    "photo": "Foto o screenshot",
-    "create": "Ricrea e salva",
-    "working": "Ricerca dei vestiti…",
-    "saved": "Salvato",
-    "loading": "Caricamento…",
-    "empty": "Carica una foto per iniziare.",
-    "error": "Impossibile ricreare il look. Controlla immagine e posizione.",
-    "open": "Apri outfit",
-    "delete": "Elimina",
-    "noMatch": "Nessuna corrispondenza",
-    "strength": "Corrispondenza: {value}%",
-    "baseLayer": "Strato di base aggiunto"
-  }
+  "yourOutfit": "Il tuo outfit"
 }

@@ -104,21 +104,5 @@
     "reset": "リセット",
     "temperature": "気温"
   },
-  "yourOutfit": "あなたのコーデ",
-  "inspiration": {
-    "title": "インスピレーション",
-    "description": "手持ちの服でコーディネートを再現します。",
-    "photo": "写真またはスクリーンショット",
-    "create": "再現して保存",
-    "working": "服を照合中…",
-    "saved": "保存しました",
-    "loading": "読み込み中…",
-    "empty": "写真をアップロードしてください。",
-    "error": "再現できませんでした。画像と現在地を確認してください。",
-    "open": "コーディネートを開く",
-    "delete": "削除",
-    "noMatch": "一致なし",
-    "strength": "一致度：{value}%",
-    "baseLayer": "追加したインナー"
-  }
+  "yourOutfit": "あなたのコーデ"
 }
