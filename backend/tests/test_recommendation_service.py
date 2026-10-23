@@ -975,8 +975,9 @@ class TestHotDayLegwear:
 
 
 class TestOvershirtNeedsATopUnderIt:
-    async def _outfits(self, db_session, user, ai_content, single_outfit=False, extra=()):
-        kinds = [("shirt", "overshirt"), ("t-shirt", None), ("pants", "chinos"), ("sneakers", None)]
+    async def _outfits(self, db_session, user, ai_content, single_outfit=False, extra=(), kinds=None):
+        if kinds is None:
+            kinds = [("shirt", "overshirt"), ("t-shirt", None), ("pants", "chinos"), ("sneakers", None)]
         kinds += list(extra)
         items = [
             ClothingItem(
@@ -1050,5 +1051,37 @@ class TestOvershirtNeedsATopUnderIt:
     async def test_an_overshirt_over_a_tee_is_kept_as_chosen(self, db_session, test_user):
         items, outfits = await self._outfits(
             db_session, test_user, {"outfits": [{"items": [1, 2, 3, 4]}]}
+        )
+        assert outfits == [{item.id for item in items}]
+
+    @pytest.mark.parametrize("layer", ["sweater", "hoodie", "cardigan"])
+    async def test_sweater_types_get_the_best_ranked_base_top(self, db_session, test_user, layer):
+        items, outfits = await self._outfits(
+            db_session, test_user, {"outfits": [{"items": [1, 4, 5]}]},
+            kinds=[(layer, None), ("shirt", "button-down"), ("t-shirt", None),
+                   ("pants", None), ("sneakers", None)],
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 3, 4]}]
+
+    @pytest.mark.parametrize("layer", ["sweater", "hoodie", "cardigan", "polo"])
+    @pytest.mark.parametrize("available", [True, False])
+    async def test_overshirt_replaces_thick_top_or_is_dropped(
+        self, db_session, test_user, layer, available
+    ):
+        kinds = [("shirt", "overshirt"), (layer, None), ("pants", None), ("sneakers", None)]
+        if available:
+            kinds += [("t-shirt", "long-sleeve"), ("shirt", "henley")]
+        items, outfits = await self._outfits(
+            db_session, test_user, {"outfits": [{"items": [1, 2, 3, 4]}]}, kinds=kinds,
+        )
+        expected = [0, 2, 3, 4] if available else [1, 2, 3]
+        assert outfits == [{items[index].id for index in expected}]
+
+    @pytest.mark.parametrize("outer", ["jacket", "coat"])
+    async def test_outerwear_over_sweater_and_tee_is_unchanged(self, db_session, test_user, outer):
+        items, outfits = await self._outfits(
+            db_session, test_user, {"outfits": [{"items": [1, 2, 3, 4, 5]}]},
+            kinds=[(outer, None), ("sweater", None), ("t-shirt", None),
+                   ("pants", None), ("sneakers", None)],
         )
         assert outfits == [{item.id for item in items}]
