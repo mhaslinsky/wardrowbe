@@ -1,10 +1,12 @@
+import asyncio
 from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import Select, func, select, text
 
 from app.models.item import ItemHistory
+from app.models.outfit import Outfit
 from app.services.studio_service import StudioService
 
 pytest_plugins = ["tests.test_studio_service"]
@@ -116,3 +118,89 @@ async def test_api_duplicate_and_dated_lists(client, db_session, test_user, auth
         defaulted = await client.post(endpoint, json={}, headers=auth_headers)
     assert defaulted.status_code == 200
     assert defaulted.json()["scheduled_for"] == "2026-10-23"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_wear_on_creates_one_row(
+    db_session, session_maker, studio_user, wardrobe_items
+):
+    template = await make_template(db_session, studio_user, wardrobe_items)
+    template_id = template.id
+    await db_session.commit()
+    release = asyncio.Event()
+    first_checked = asyncio.Event()
+    second_checked = asyncio.Event()
+
+    def pause_after_duplicate_check(session, checked):
+        execute = session.execute
+
+        async def execute_and_pause(statement, *args, **kwargs):
+            result = await execute(statement, *args, **kwargs)
+            if isinstance(statement, Select):
+                columns = statement.column_descriptions
+                if (
+                    len(columns) == 1
+                    and columns[0]["entity"] is Outfit
+                    and columns[0]["name"] == "id"
+                ):
+                    checked.set()
+                    await release.wait()
+            return result
+
+        session.execute = execute_and_pause
+
+    async def log_and_commit(session, checked):
+        try:
+            wear, already_logged = await StudioService(session).wear_on(
+                studio_user, template_id, date(2026, 10, 1)
+            )
+            await session.commit()
+            return wear.id, already_logged
+        finally:
+            checked.set()
+
+    async with session_maker() as first, session_maker() as second, session_maker() as observer:
+        second_pid = await second.scalar(text("SELECT pg_backend_pid()"))
+        pause_after_duplicate_check(first, first_checked)
+        pause_after_duplicate_check(second, second_checked)
+        first_call = asyncio.create_task(log_and_commit(first, first_checked))
+        second_call = None
+        try:
+            await first_checked.wait()
+            if first_call.done():
+                first_call.result()
+                pytest.fail("First call finished without pausing at the duplicate check")
+            second_call = asyncio.create_task(log_and_commit(second, second_checked))
+            # Release after Postgres reports a lock wait or the second duplicate check finishes.
+            while not second_checked.is_set():
+                if second_call.done():
+                    second_call.result()
+                waiting = await observer.scalar(
+                    text("SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = :pid AND NOT granted)"),
+                    {"pid": second_pid},
+                )
+                if waiting:
+                    break
+            release.set()
+            results = await asyncio.gather(first_call, second_call)
+        finally:
+            release.set()
+            for call in [first_call, second_call]:
+                if call is not None and not call.done():
+                    call.cancel()
+            await asyncio.gather(
+                *[call for call in [first_call, second_call] if call is not None],
+                return_exceptions=True,
+            )
+
+    count = await db_session.scalar(
+        select(func.count())
+        .select_from(Outfit)
+        .where(
+            Outfit.cloned_from_outfit_id == template_id,
+            Outfit.scheduled_for == date(2026, 10, 1),
+        )
+    )
+    assert count == 1
+    assert results[0][0] == results[1][0]
+    assert sorted(already_logged for _wear_id, already_logged in results) == [False, True]

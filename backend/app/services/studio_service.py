@@ -317,6 +317,7 @@ class StudioService:
     async def wear_on(
         self, user: User, template_id: UUID, scheduled_for: date | None
     ) -> tuple[Outfit, bool]:
+        """Return the wear and whether it was already logged for this template and date."""
         target_date = scheduled_for if scheduled_for is not None else get_user_today(user)
         if target_date > get_user_today(user):
             raise FutureWearDateError("Wear date cannot be in the future")
