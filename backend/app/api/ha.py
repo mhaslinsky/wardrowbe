@@ -20,6 +20,7 @@ from app.models.outfit import Outfit, OutfitSource, OutfitStatus, UserFeedback
 from app.models.user import User
 from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
+from app.utils.garment_vocabulary import types_for_role
 from app.utils.timezone import get_user_today
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ settings = get_settings()
 
 router = APIRouter(prefix="/ha", tags=["home-assistant"])
 
-FOOTWEAR_TYPES = frozenset({"shoes", "sneakers", "boots", "sandals"})
+FOOTWEAR_TYPES = frozenset(types_for_role("footwear"))
 
 
 def _error(status_code: int, error: str) -> JSONResponse:
@@ -127,13 +128,16 @@ async def laundry_done(request: Request, db: DbSession) -> JSONResponse:
     if user is None:
         return _error(status.HTTP_404_NOT_FOUND, "user_not_found")
 
+    # A concurrent call waits on these row locks, then rechecks needs_wash and washes nothing.
     result = await db.execute(
-        select(ClothingItem).where(
+        select(ClothingItem)
+        .where(
             ClothingItem.user_id == user.id,
             ClothingItem.is_archived.is_(False),
             ClothingItem.needs_wash.is_(True),
             ClothingItem.type.not_in(FOOTWEAR_TYPES),
         )
+        .with_for_update()
     )
     items = list(result.scalars().all())
     today = get_user_today(user)
