@@ -237,7 +237,7 @@ async def test_candidates_are_only_callers_active_ready_known_items(
         (test_user.id, ItemStatus.processing, False, "shirt"),
         (test_user.id, ItemStatus.ready, True, "shirt"),
         (test_user.id, ItemStatus.ready, False, "unknown"),
-        (test_user.id, ItemStatus.ready, False, None),
+        (test_user.id, ItemStatus.ready, False, ""),
     ]:
         db_session.add(
             ClothingItem(
