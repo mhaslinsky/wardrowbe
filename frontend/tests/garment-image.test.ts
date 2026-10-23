@@ -8,8 +8,8 @@ describe('garment image size', () => {
     expect(garmentImageUrl(images, 'card')).toBe('/medium')
     expect(garmentImageUrl(images, 'detail')).toBe('/original')
   })
-  it('falls back from medium to original and from thumb to medium', () => {
-    expect(garmentImageUrl({ ...images, medium_url: null }, 'card')).toBe('/original')
+  it('falls back from medium to thumb and from thumb to medium', () => {
+    expect(garmentImageUrl({ ...images, medium_url: null }, 'card')).toBe('/thumb')
     expect(garmentImageUrl({ ...images, thumbnail_url: null }, 'small')).toBe('/medium')
   })
   it('returns null for missing or empty images without retaining state', () => {
