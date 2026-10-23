@@ -976,7 +976,7 @@ class TestHotDayLegwear:
 
 class TestOvershirtNeedsATopUnderIt:
     async def _outfits(
-        self, db_session, user, ai_content, single_outfit=False, extra=(), kinds=None
+        self, db_session, user, ai_content, single_outfit=False, extra=(), kinds=None, pinned=()
     ):
         if kinds is None:
             kinds = [
@@ -1022,6 +1022,7 @@ class TestOvershirtNeedsATopUnderIt:
                 time_of_day=TimeOfDay.afternoon,
                 count=1,
                 single_outfit=single_outfit,
+                include_items=[items[index - 1].id for index in pinned] or None,
             )
         return items, [{oi.item_id for oi in o.items} for o in outfits]
 
@@ -1109,3 +1110,108 @@ class TestOvershirtNeedsATopUnderIt:
             ],
         )
         assert outfits == [{item.id for item in items}]
+
+    async def test_no_top_after_overshirt_fallback_is_rejected(self, db_session, test_user):
+        with pytest.raises(AIRecommendationError):
+            await self._outfits(
+                db_session,
+                test_user,
+                {"outfits": [{"items": [1, 2, 3]}]},
+                kinds=[("shirt", "overshirt"), ("pants", None), ("sneakers", None)],
+            )
+
+    async def test_overshirt_fallback_adds_best_ranked_non_thin_top(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3]}]},
+            kinds=[
+                ("shirt", "overshirt"),
+                ("pants", None),
+                ("sneakers", None),
+                ("polo", None),
+                ("sweater", None),
+            ],
+        )
+        assert outfits == [{items[index].id for index in [1, 2, 3]}]
+
+    @pytest.mark.parametrize("base", ["polo", "tank-top", "blouse"])
+    async def test_sweater_replaces_non_qualifying_base_top(self, db_session, test_user, base):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4, 5]}]},
+            kinds=[
+                ("hoodie", None),
+                (base, None),
+                ("coat", None),
+                ("pants", None),
+                ("sneakers", None),
+                ("t-shirt", None),
+                ("shirt", "henley"),
+            ],
+        )
+        assert outfits == [{items[index].id for index in [0, 2, 3, 4, 5]}]
+
+    @pytest.mark.parametrize("pinned", [(1,), (2,), (1, 2)])
+    async def test_layer_repair_preserves_pinned_items(self, db_session, test_user, pinned, caplog):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[
+                ("shirt", "overshirt"),
+                ("sweater", None),
+                ("pants", None),
+                ("sneakers", None),
+                ("t-shirt", None),
+            ],
+            pinned=pinned,
+        )
+        assert {items[index - 1].id for index in pinned} <= outfits[0]
+        assert items[4].id in outfits[0]
+        if pinned == (2,):
+            assert items[0].id not in outfits[0]
+        if pinned == (1, 2):
+            assert "pinned" in caplog.text.lower()
+
+    async def test_pinned_base_top_is_not_replaced(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[
+                ("hoodie", None),
+                ("polo", None),
+                ("pants", None),
+                ("sneakers", None),
+                ("t-shirt", None),
+            ],
+            pinned=(2,),
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 2, 3]}]
+
+    async def test_cardigan_alone_gets_best_ranked_base_top(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 4, 5]}]},
+            kinds=[
+                ("cardigan", "hooded"),
+                ("shirt", "henley"),
+                ("t-shirt", None),
+                ("pants", None),
+                ("sneakers", None),
+            ],
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 3, 4]}]
+
+    async def test_cannot_silently_drop_a_pinned_base_top_during_dedup(self, db_session, test_user):
+        with pytest.raises(AIRecommendationError):
+            await self._outfits(
+                db_session,
+                test_user,
+                {"outfits": [{"items": [1, 2, 3, 4]}]},
+                kinds=[("polo", None), ("t-shirt", None), ("pants", None), ("sneakers", None)],
+                pinned=(1, 2),
+            )

@@ -515,6 +515,8 @@ def test_layering_repair_preserves_the_rules_and_is_idempotent():
                 assert not {sweater, hoodie, cardigan, polo}.intersection(repaired)
             if {sweater, hoodie, cardigan}.intersection(repaired):
                 assert tee in repaired
+            assert len(set(repaired) & {polo, tee}) <= 1
+            assert len(set(repaired) & {*tops, coat}) <= 3
             assert repair_top_layers(repaired, ranked, types, subtypes) == repaired
 
 
@@ -536,3 +538,21 @@ def test_overshirts_use_henleys_but_not_button_shirts(subtype):
     assert repair_top_layers(
         [overshirt, button_shirt], [button_shirt, henley], types, subtypes
     ) == [overshirt, henley]
+
+
+def test_mixed_case_henley_is_eligible_under_an_overshirt():
+    overshirt, henley, tee = _ids(3)
+    types = {overshirt: "shirt", henley: "shirt", tee: "t-shirt"}
+    assert repair_top_layers(
+        [overshirt], [henley, tee], types, {overshirt: "overshirt", henley: "Henley"}
+    ) == [overshirt, henley]
+
+
+def test_overshirt_replacement_uses_highest_ranked_eligible_top():
+    overshirt, polo, henley, tee = _ids(4)
+    types = {overshirt: "shirt", polo: "polo", henley: "shirt", tee: "t-shirt"}
+    subtypes = {overshirt: "overshirt", henley: "henley"}
+    assert repair_top_layers([overshirt, polo], [polo, henley, tee], types, subtypes) == [
+        overshirt,
+        henley,
+    ]
