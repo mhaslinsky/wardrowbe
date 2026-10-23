@@ -11,9 +11,14 @@ from app.utils.redis_lock import get_redis
 
 logger = logging.getLogger(__name__)
 
-WEARING_DAY_END_HOUR = 21
 MIN_WINDOW_HOURS = 2
 settings = get_settings()
+
+
+def wearing_hours() -> tuple[int, int]:
+    """First and last local hour (inclusive) an outfit has to work for."""
+    current = get_settings()
+    return current.wearing_day_start_hour, current.wearing_day_end_hour
 
 
 @dataclass
@@ -31,8 +36,8 @@ class WeatherData:
     timestamp: datetime
     temp_min: float | None = None  # Today's forecast low, Celsius
     temp_max: float | None = None  # Today's forecast high, Celsius
-    # Range over the remaining wearing window (current hour through WEARING_DAY_END_HOUR local,
-    # or the whole day for a day-ahead forecast). None when fewer than MIN_WINDOW_HOURS remain,
+    # Range over the remaining wearing hours (see wearing_hours; for a day-ahead forecast, all of
+    # tomorrow's wearing hours). None when fewer than MIN_WINDOW_HOURS remain,
     # so that late-evening requests score against the current reading only.
     window_min: float | None = None
     window_max: float | None = None
@@ -370,6 +375,7 @@ class WeatherService:
         except ValueError:
             return None
 
+        start_hour, end_hour = wearing_hours()
         window: list[float] = []
         for slot_time, temp in zip(times, temps, strict=False):
             if temp is None:
@@ -378,15 +384,59 @@ class WeatherService:
                 slot = datetime.fromisoformat(slot_time)
             except ValueError:
                 continue
-            if slot.date() == now_local.date() and slot.hour <= WEARING_DAY_END_HOUR:
+            if slot.date() == now_local.date() and start_hour <= slot.hour <= end_hour:
                 window.append(temp)
 
         if len(window) < MIN_WINDOW_HOURS:
             return None
         current_temp = current.get("temperature_2m")
-        if current_temp is not None:
+        # Before the day starts, the reading outside is not a temperature the outfit will meet.
+        if current_temp is not None and start_hour <= now_local.hour <= end_hour:
             window.append(current_temp)
         return min(window), max(window)
+
+    async def _wearing_hours_forecast(
+        self, latitude: float, longitude: float, day: str
+    ) -> tuple[list[float], list[float]]:
+        """Hourly temperatures and apparent temperatures inside the wearing hours of `day`
+        (YYYY-MM-DD, local). Empty lists when the request fails, so callers fall back."""
+        params = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "hourly": ["temperature_2m", "apparent_temperature"],
+            "forecast_days": 2,
+            "timezone": "auto",
+        }
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            try:
+                response = await client.get(f"{self.base_url}/forecast", params=params)
+                response.raise_for_status()
+                hourly = response.json().get("hourly") or {}
+            except (httpx.HTTPError, ValueError) as e:
+                logger.warning(f"Hourly forecast unavailable, using the whole-day range: {e}")
+                return [], []
+
+        start_hour, end_hour = wearing_hours()
+        times = hourly.get("time") or []
+        temp_values = hourly.get("temperature_2m") or []
+        apparent_values = hourly.get("apparent_temperature") or []
+        temps: list[float] = []
+        apparent: list[float] = []
+        for index, slot_time in enumerate(times):
+            try:
+                slot = datetime.fromisoformat(slot_time)
+            except (TypeError, ValueError):
+                continue
+            if slot.date().isoformat() != day or not start_hour <= slot.hour <= end_hour:
+                continue
+            temp = temp_values[index] if index < len(temp_values) else None
+            if temp is None:
+                continue
+            temps.append(temp)
+            feel = apparent_values[index] if index < len(apparent_values) else None
+            if feel is not None:
+                apparent.append(feel)
+        return temps, apparent
 
     async def get_daily_forecast(
         self, latitude: float, longitude: float, days: int = 7
@@ -485,10 +535,21 @@ class WeatherService:
 
         tomorrow = forecasts[1]  # Index 0 is today, 1 is tomorrow
 
-        # Use average of min/max for the representative temperature
-        avg_temp = (tomorrow.temp_min + tomorrow.temp_max) / 2
-        # Use the max temp for feels_like (daytime outfit)
-        feels_like = tomorrow.temp_max
+        # The whole-day range runs from the overnight low, which no outfit is worn through;
+        # tomorrow's wearing hours are what the outfit has to handle.
+        hours, apparent = await self._wearing_hours_forecast(latitude, longitude, tomorrow.date)
+        if len(hours) >= MIN_WINDOW_HOURS:
+            avg_temp = sum(hours) / len(hours)
+            feels_like = sum(apparent) / len(apparent) if apparent else avg_temp
+            window_min, window_max = min(hours), max(hours)
+        else:
+            logger.warning(
+                f"Only {len(hours)} wearing hours forecast for {tomorrow.date}; "
+                "using the whole-day range"
+            )
+            avg_temp = (tomorrow.temp_min + tomorrow.temp_max) / 2
+            feels_like = tomorrow.temp_max
+            window_min, window_max = tomorrow.temp_min, tomorrow.temp_max
 
         return WeatherData(
             temperature=round(avg_temp, 1),
@@ -504,8 +565,8 @@ class WeatherService:
             timestamp=datetime.utcnow(),
             temp_min=tomorrow.temp_min,
             temp_max=tomorrow.temp_max,
-            window_min=tomorrow.temp_min,
-            window_max=tomorrow.temp_max,
+            window_min=window_min,
+            window_max=window_max,
         )
 
     async def check_health(self) -> dict:
