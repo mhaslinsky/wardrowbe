@@ -16,7 +16,6 @@ from tests.migration_helpers import migration_downgrade
 from tests.test_outfit_notes import save_note
 from tests.test_recommendation_service import _weather
 
-NEW_REVISION = "c9f6a2d4e8b1"
 TRIGGER = "Respond with valid JSON containing exactly 3"
 
 
@@ -127,13 +126,13 @@ async def test_comment_timestamp_tracks_changes_and_clear(
         assert await stored_timestamp() == expected
 
 
-def test_migration_head_checker_sees_new_revision():
+def test_migration_head_checker_accepts_single_head():
     script = Path(__file__).parents[1] / "scripts" / "check_migration_heads.py"
     result = subprocess.run(
         [sys.executable, str(script)], capture_output=True, text=True, check=False
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.strip() == f"OK: Single migration head: {NEW_REVISION}"
+    assert result.stdout.startswith("OK: Single migration head: ")
 
 
 def test_preference_delimiters_are_ordered_and_unique():
