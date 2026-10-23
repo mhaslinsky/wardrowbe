@@ -1,5 +1,5 @@
 from datetime import UTC, date, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -64,7 +64,10 @@ async def listed(client, auth_headers, **params):
 
 
 async def assert_partition(client, auth_headers, grouped, **filters):
-    raw = await listed(client, auth_headers, **filters)
+    raw = await listed(client, auth_headers, page_size=100, **filters)
+    if raw["has_more"]:
+        extra = await listed(client, auth_headers, page_size=100, page=2, **filters)
+        raw["outfits"].extend(extra["outfits"])
     represented = [
         member_id
         for card in grouped["outfits"]
@@ -213,6 +216,11 @@ async def test_grouping_filters_before_count_pagination_and_reset(
         ids["dirty"],
         ids["new"],
     ]
+    await assert_partition(
+        client,
+        auth_headers,
+        {"outfits": [card for page in pages for card in page["outfits"]], "total": 3},
+    )
     for params, expected in [
         ({"ready_to_wear": True}, {ids["template"], ids["new"]}),
         ({"status": "accepted", "is_lookbook": False}, {ids["wear"]}),
@@ -235,3 +243,106 @@ async def test_grouping_filters_before_count_pagination_and_reset(
         "/api/v1/outfits", headers=auth_headers, params={"group": "invalid"}
     )
     assert malformed.status_code == 422
+
+
+@pytest.mark.parametrize("siblings", [0, 1, 2])
+async def test_wears_belong_to_their_original_template(
+    client, db_session, test_user, auth_headers, siblings
+):
+    entries = [
+        ("original", {}),
+        ("first", {"source": OutfitSource.manual, "scheduled_for": None, "parent": "original"}),
+        (
+            "wear",
+            {"source": OutfitSource.manual, "parent": "first", "status": OutfitStatus.accepted},
+        ),
+    ]
+    if siblings == 0:
+        entries.append(
+            ("later", {"source": OutfitSource.manual, "scheduled_for": None, "parent": "wear"})
+        )
+    else:
+        entries.extend(
+            (
+                f"sibling-{index}",
+                {"source": OutfitSource.manual, "scheduled_for": None, "parent": "original"},
+            )
+            for index in range(siblings)
+        )
+    ids = await seed(db_session, test_user.id, entries)
+    grouped = await listed(client, auth_headers, group=True)
+    await assert_partition(client, auth_headers, grouped)
+    first = next(card for card in grouped["outfits"] if card["id"] == ids["first"])
+    assert first["wear_count"] == 1
+    assert set(first["hidden_member_ids"]) == {ids["original"], ids["wear"]}
+    assert grouped["total"] == len(entries) - 2
+
+
+async def test_worn_ai_tier_precedes_newer_accepted_record(
+    client, db_session, test_user, auth_headers
+):
+    ids = await seed(
+        db_session,
+        test_user.id,
+        [("worn", {"worn": True}), ("accepted", {"status": OutfitStatus.accepted})],
+    )
+    grouped = await listed(client, auth_headers, group=True)
+    await assert_partition(client, auth_headers, grouped)
+    assert grouped["outfits"][0]["id"] == ids["worn"]
+
+
+async def test_grouped_select_all_is_rejected_without_deleting_records(
+    client, db_session, test_user, auth_headers
+):
+    await seed(
+        db_session,
+        test_user.id,
+        [
+            ("original", {}),
+            (
+                "template",
+                {"source": OutfitSource.manual, "scheduled_for": None, "parent": "original"},
+            ),
+        ],
+    )
+    before = await listed(client, auth_headers)
+    grouped = await listed(client, auth_headers, group=True)
+    await assert_partition(client, auth_headers, grouped)
+    response = await client.post(
+        "/api/v1/outfits/bulk/delete",
+        headers=auth_headers,
+        json={"select_all": True, "filters": {"group": True}},
+    )
+    assert response.status_code == 422
+    after = await listed(client, auth_headers)
+    assert {card["id"] for card in before["outfits"]} == {card["id"] for card in after["outfits"]}
+
+
+async def test_grouped_page_hydrates_only_its_outfits(client, db_session, test_user, auth_headers):
+    from sqlalchemy import event
+
+    await seed(
+        db_session,
+        test_user.id,
+        [(str(index), {"source": OutfitSource.manual}) for index in range(200)],
+    )
+    db_session.expunge_all()
+    loaded = []
+
+    def track_loaded(outfit, context):
+        loaded.append(outfit.id)
+
+    event.listen(Outfit, "load", track_loaded)
+    try:
+        page = await listed(client, auth_headers, group=True, page_size=1)
+    finally:
+        event.remove(Outfit, "load", track_loaded)
+    assert page["total"] == 200
+    assert loaded == [UUID(page["outfits"][0]["id"])], (
+        f"Hydrated {len(loaded)} outfits for one card"
+    )
+    all_cards = []
+    for page_number in (1, 2):
+        result = await listed(client, auth_headers, group=True, page_size=100, page=page_number)
+        all_cards.extend(result["outfits"])
+    await assert_partition(client, auth_headers, {"outfits": all_cards, "total": 200})

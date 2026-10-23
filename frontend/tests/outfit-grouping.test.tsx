@@ -92,6 +92,17 @@ describe('grouped outfits', () => {
     expect(api.get).toHaveBeenCalledWith('/outfits', { params: expect.objectContaining({ group: 'true' }) })
   })
 
+  it.each(['unknown', 'constructor'])('normalizes filter=%s to All and disables bulk actions', async (filter) => {
+    nav.params = new URLSearchParams({ filter })
+    vi.mocked(api.get).mockResolvedValue({ outfits: [template], total: 1, page: 1, has_more: false })
+    render(<OutfitsPage />, { wrapper })
+    expect(await screen.findByText('Saved look')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'filters.all' })).toHaveClass('border-primary')
+    expect(screen.queryByRole('button', { name: 'bulkActions.select' })).not.toBeInTheDocument()
+    expect(api.get).toHaveBeenCalledWith('/outfits', { params: expect.objectContaining({ group: 'true' }) })
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
   it('shows wear count and links to every hidden record without nested anchors', () => {
     const { container } = render(<OutfitCard outfit={template} />, { wrapper })
     expect(screen.getByText('wearCount')).toBeInTheDocument()
