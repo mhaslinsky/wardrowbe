@@ -39,7 +39,9 @@
     "replacement": "Remplacement",
     "studio": "Studio",
     "woreInsteadFallback": "{occasion} (porté à la place)",
-    "worn": "Portées"
+    "worn": "Portées",
+    "inTheWash": "Au lavage",
+    "piecesInWash": "{count, plural, one {# pièce au lavage} other {# pièces au lavage}}"
   },
   "cloneToLookbook": {
     "defaultName": "{occasion} · {date}",
@@ -103,7 +105,8 @@
     "lookbook": "Lookbook",
     "pairings": "Associations",
     "replacements": "Remplacements",
-    "worn": "Portées"
+    "worn": "Portées",
+    "readyToWear": "Prêt à porter"
   },
   "itemPicker": {
     "loadingMore": "Chargement...",

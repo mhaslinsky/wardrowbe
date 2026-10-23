@@ -106,6 +106,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
   const getTitle = useOutfitTitle();
   const badge = getSourceBadge(outfit, t);
   const visibleItems = outfit.items.slice(0, 4);
+  const dirtyCount = outfit.items.filter(item => item.needs_wash).length;
   const overflow = outfit.items.length - visibleItems.length;
 
   const handleCheckboxClick = (e: React.MouseEvent) => {
@@ -161,6 +162,9 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
                     </span>
                   </div>
                 )}
+                {item.needs_wash && (
+                  <Badge className="absolute bottom-1 left-1 text-[10px]">{t('inTheWash')}</Badge>
+                )}
               </div>
             ))}
             {overflow > 0 && (
@@ -184,6 +188,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
           )}
         </div>
         <div className="p-3 space-y-1">
+          {dirtyCount > 0 && <p className="text-xs text-amber-700">{t('piecesInWash', { count: dirtyCount })}</p>}
           <h3 className="text-sm font-semibold leading-tight truncate">
             {getTitle(outfit)}
           </h3>

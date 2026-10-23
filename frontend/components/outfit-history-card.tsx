@@ -31,6 +31,7 @@ interface OutfitHistoryCardProps {
 export function OutfitHistoryCard({ outfit, onFeedback, onPreview }: OutfitHistoryCardProps) {
   const typeLabel = useTypeLabel();
   const t = useTranslations('history.card');
+  const wash = useTranslations('outfits.cards');
   const occasionLabel = useOccasionLabel();
   const acceptOutfit = useAcceptOutfit();
   const rejectOutfit = useRejectOutfit();
@@ -94,6 +95,7 @@ export function OutfitHistoryCard({ outfit, onFeedback, onPreview }: OutfitHisto
                   {typeLabel(item.type)}
                 </div>
               )}
+              {item.needs_wash && <Badge className="absolute bottom-0 left-0 text-[10px]">{wash('inTheWash')}</Badge>}
             </div>
           ))}
         </button>

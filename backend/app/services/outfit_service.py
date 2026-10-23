@@ -21,6 +21,7 @@ from app.models.user import User
 @dataclass
 class OutfitListFilters:
     user_id: UUID
+    ready_to_wear: bool = False
     status_filter: str | None = None
     occasion: str | None = None
     date_from: date | None = None
@@ -171,6 +172,11 @@ class OutfitService:
         self, filters: OutfitListFilters, page: int, page_size: int
     ) -> tuple[list[Outfit], int]:
         clauses = self._build_filter_clauses(filters)
+
+        if filters.ready_to_wear:
+            clauses.append(
+                ~Outfit.items.any(OutfitItem.item.has(ClothingItem.needs_wash.is_(True)))
+            )
 
         count_query: Select = select(func.count()).select_from(Outfit).where(and_(*clauses))
         total = (await self.db.execute(count_query)).scalar_one()

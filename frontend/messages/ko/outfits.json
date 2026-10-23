@@ -39,7 +39,9 @@
     "replacement": "대체",
     "studio": "스튜디오",
     "woreInsteadFallback": "{occasion} (대신 착용)",
-    "worn": "착용함"
+    "worn": "착용함",
+    "inTheWash": "세탁 중",
+    "piecesInWash": "{count}개 세탁 중"
   },
   "cloneToLookbook": {
     "defaultName": "{occasion} · {date}",
@@ -103,7 +105,8 @@
     "lookbook": "룩북",
     "pairings": "페어링",
     "replacements": "대체",
-    "worn": "착용함"
+    "worn": "착용함",
+    "readyToWear": "바로 입기"
   },
   "itemPicker": {
     "loadingMore": "더 불러오는 중...",

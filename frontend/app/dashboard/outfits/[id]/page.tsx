@@ -181,6 +181,7 @@ export default function OutfitDetailPage() {
                     </div>
                   )}
                 </div>
+                {item.needs_wash && <Badge>{t('cards.inTheWash')}</Badge>}
                 <p className="text-xs text-muted-foreground mt-1 truncate">
                   {item.name || typeLabel(item.type)}
                 </p>

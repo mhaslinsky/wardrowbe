@@ -84,6 +84,7 @@ class SuggestRequest(BaseModel):
 
 
 class OutfitItemResponse(BaseModel):
+    needs_wash: bool
     id: UUID
     type: str
     subtype: str | None = None
@@ -326,6 +327,7 @@ def outfit_to_response(
         item = outfit_item.item
         items.append(
             OutfitItemResponse(
+                needs_wash=item.needs_wash,
                 id=item.id,
                 type=item.type,
                 subtype=item.subtype,
@@ -622,6 +624,7 @@ async def list_outfits(
     source_type: str | None = Query(
         None, description="Legacy alias for item_type used by /pairings"
     ),
+    ready_to_wear: bool = Query(False),
     search: str | None = Query(None, max_length=50),
     occasions: str | None = Query(
         None, max_length=500, description="Comma-separated occasion keys the search also matches"
@@ -638,6 +641,7 @@ async def list_outfits(
 
     filters = OutfitListFilters(
         user_id=target_user_id,
+        ready_to_wear=ready_to_wear,
         status_filter=status_filter,
         occasion=occasion,
         date_from=date_from,

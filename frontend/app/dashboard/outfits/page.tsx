@@ -147,6 +147,7 @@ function OutfitsPageContent() {
   const view: ViewMode = urlView;
   const urlMonth = parseMonthParam(searchParams.get('month'));
 
+  const [readyToWear, setReadyToWear] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [defaultChecked, setDefaultChecked] = useState(false);
@@ -180,8 +181,8 @@ function OutfitsPageContent() {
 
   const occasionsMatching = useOccasionsMatching();
   const filters = useMemo(
-    () => chipToFilters(chip, debouncedSearch, occasionsMatching(debouncedSearch)),
-    [chip, debouncedSearch, occasionsMatching],
+    () => ({ ...chipToFilters(chip, debouncedSearch, occasionsMatching(debouncedSearch)), ready_to_wear: readyToWear }),
+    [chip, debouncedSearch, occasionsMatching, readyToWear],
   );
 
   const listQuery = useInfiniteOutfits(filters, GRID_PAGE_SIZE);
@@ -191,7 +192,7 @@ function OutfitsPageContent() {
   // can span loaded pages.
   useEffect(() => {
     setSelection({ mode: 'none', selectedIds: new Set(), excludedIds: new Set() });
-  }, [chip, debouncedSearch]);
+  }, [chip, debouncedSearch, readyToWear]);
 
   useEffect(() => {
     if (view === 'calendar') {
@@ -439,7 +440,7 @@ function OutfitsPageContent() {
               {t('viewCalendar')}
             </button>
           </div>
-          {view === 'list' && (
+          {view === 'list' && !readyToWear && (
             <Button
               variant={selectMode ? 'secondary' : 'outline'}
               onClick={handleToggleSelectMode}
@@ -460,6 +461,14 @@ function OutfitsPageContent() {
       {view === 'list' && (
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-pressed={readyToWear}
+            onClick={() => { setReadyToWear(previous => !previous); setSelectMode(false); }}
+            className={cn('rounded-full border-2 px-4 py-1.5 text-sm font-medium', readyToWear ? 'border-primary bg-primary/10 text-primary' : 'border-muted')}
+          >
+            {t('filters.readyToWear')}
+          </button>
           {CHIP_ORDER.map((c) => (
             <button
               key={c}

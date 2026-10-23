@@ -39,7 +39,9 @@
     "replacement": "替换",
     "studio": "工作室",
     "woreInsteadFallback": "{occasion}(改穿)",
-    "worn": "已穿着"
+    "worn": "已穿着",
+    "inTheWash": "待洗",
+    "piecesInWash": "{count}件待洗"
   },
   "cloneToLookbook": {
     "defaultName": "{occasion} · {date}",
@@ -103,7 +105,8 @@
     "lookbook": "造型册",
     "pairings": "搭配",
     "replacements": "替换",
-    "worn": "已穿着"
+    "worn": "已穿着",
+    "readyToWear": "可直接穿"
   },
   "itemPicker": {
     "loadingMore": "加载更多...",
