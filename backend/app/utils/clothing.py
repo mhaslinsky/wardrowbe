@@ -67,20 +67,6 @@ def covered_body_slots(item_ids: list[UUID], item_type_map: dict[UUID, str]) -> 
     }
 
 
-def lacks_top_under_overshirt(
-    item_ids: list[UUID], item_type_map: dict[UUID, str], item_subtype_map: dict[UUID, str]
-) -> bool:
-    """True when the outfit has an overshirt and nothing else covering the top: no shirt, tee or
-    sweater under it, and no dress or jumpsuit."""
-    overshirts = {
-        iid for iid in item_ids if (item_subtype_map.get(iid) or "").lower() in OVER_LAYER_SUBTYPES
-    }
-    if not overshirts:
-        return False
-    others = [iid for iid in item_ids if iid not in overshirts]
-    return "base_top" not in covered_body_slots(others, item_type_map)
-
-
 def top_to_wear_under(
     ranked_ids: list[UUID],
     chosen: set[UUID],
@@ -106,7 +92,7 @@ def prefer_ranked_layers(
     item_type_map: dict[UUID, str],
     mandatory_item_ids: set[UUID] | None = None,
 ) -> list[UUID]:
-    """Keep the best-ranked selected sweater-type layer, plus any requested layers."""
+    """Keep requested sweater-type layers, or the best-ranked selected one."""
     mandatory = mandatory_item_ids or set()
     layers = {item_id for item_id in item_ids if item_type_map.get(item_id) in NEEDS_BASE_TOP_TYPES}
     if len(layers) < 2:
@@ -152,6 +138,21 @@ class _LayerRepair:
     def best_base(self, thin: bool = False) -> UUID | None:
         return next((item_id for item_id in self.ranked_ids if self.is_base(item_id, thin)), None)
 
+    def can_add_base(self) -> bool:
+        pinned_upper = [
+            item_id
+            for item_id in self.item_ids
+            if item_id in self.mandatory
+            and (
+                self.is_under_layer(item_id)
+                or _item_role(item_id, self.item_type_map) == "outer_layer"
+            )
+        ]
+        if len(pinned_upper) >= 3:
+            logger.warning("Pinned layers leave no room for a base top")
+            return False
+        return True
+
     def fit_overshirt(self) -> None:
         overshirts = {item_id for item_id in self.item_ids if self.is_overshirt(item_id)}
         if not overshirts:
@@ -178,12 +179,24 @@ class _LayerRepair:
         if under is None:
             under = self.best_base(thin=True)
         if under is None:
+            others_cover_top = any(
+                self.is_under_layer(item_id) and item_id not in overshirts
+                for item_id in self.item_ids
+            )
+            fallback = top_to_wear_under(
+                self.ranked_ids, set(self.item_ids), self.item_type_map, self.item_subtype_map
+            )
+            if not others_cover_top and fallback is None:
+                logger.warning("No other top available; keeping the overshirt")
+                return
             logger.warning("No thin top available; keeping pinned overshirts only")
             self.item_ids = [
                 item_id
                 for item_id in self.item_ids
                 if item_id not in overshirts or item_id in self.mandatory
             ]
+            return
+        if under not in self.item_ids and not self.can_add_base():
             return
         self.item_ids = [
             item_id
@@ -208,6 +221,8 @@ class _LayerRepair:
             self.is_base(item_id) or _item_role(item_id, self.item_type_map) == "full_body"
             for item_id in covering
         ):
+            return
+        if not self.can_add_base():
             return
         _, slots = _assign_body_slots(self.item_ids, self.item_type_map, self.mandatory)
         current_base = slots.get("base_top")
@@ -256,15 +271,20 @@ class _LayerRepair:
             for item_id in self.item_ids
             if self.is_base(item_id) or _item_role(item_id, self.item_type_map) == "full_body"
         }
-        for item_id in reversed(upper):
+        removable = sorted(
+            (item_id for item_id in reversed(upper) if item_id not in protected),
+            key=lambda item_id: (
+                _item_role(item_id, self.item_type_map) == "outer_layer"
+                and not self.needs_base(item_id)
+            ),
+        )
+        for item_id in removable:
             if len(upper) <= 3:
                 break
-            if item_id not in protected:
-                self.item_ids.remove(item_id)
-                upper.remove(item_id)
+            self.item_ids.remove(item_id)
+            upper.remove(item_id)
         if len(upper) > 3:
             logger.warning("Pinned items exceed three upper-body layers")
-            self.item_ids = []
 
 
 def repair_top_layers(
@@ -281,9 +301,9 @@ def repair_top_layers(
     repair = _LayerRepair(kept, ranked_ids, item_type_map, item_subtype_map, mandatory & set(kept))
     had_top = any(repair.is_under_layer(item_id) for item_id in item_ids)
     repair.fit_overshirt()
-    repair.ensure_base_under_layer()
     if had_top:
         repair.ensure_top()
+    repair.ensure_base_under_layer()
     repair.cap_upper_layers()
     return repair.item_ids
 

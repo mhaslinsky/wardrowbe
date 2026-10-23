@@ -908,6 +908,12 @@ class RecommendationService:
                     logger.info("Cached suggestion uses items no longer available, skipping")
                     continue
 
+                number_map = {
+                    number: item_id
+                    for number, item_id in number_map.items()
+                    if item_id in candidate_ids
+                }
+
                 logger.info(f"Using cached suggestion for user {user.id}, occasion: {occasion}")
                 try:
                     outfit = await self._materialize_outfit(
