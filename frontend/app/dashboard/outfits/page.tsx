@@ -19,7 +19,6 @@ import {
   useBulkDeleteOutfits,
   useCalendarOutfits,
   useInfiniteOutfits,
-  useOutfits,
   type BulkOutfitOperationParams,
   type Outfit,
   type OutfitFilters,
@@ -129,6 +128,7 @@ function chipToFilters(chip: FilterChip, search: string, occasions: string[]): O
       return filters;
     case 'all':
     default:
+      filters.group = true;
       return filters;
   }
 }
@@ -150,7 +150,6 @@ function OutfitsPageContent() {
   const [readyToWear, setReadyToWear] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [defaultChecked, setDefaultChecked] = useState(false);
   const todayKey = useUserToday()();
   // Null until the user or URL picks a month, so that the calendar follows the profile timezone
   // once it loads instead of freezing on the browser's month from the first render.
@@ -195,34 +194,16 @@ function OutfitsPageContent() {
   }, [chip, debouncedSearch, readyToWear]);
 
   useEffect(() => {
-    if (view === 'calendar') {
+    if (view === 'calendar' || chip === 'all') {
       setSelectMode(false);
     }
-  }, [view]);
+  }, [view, chip]);
 
   const calendarQuery = useCalendarOutfits(
     monthRef.year,
     monthRef.month,
     view === 'calendar' ? filters : {},
   );
-
-  const lookbookProbe = useOutfits({ is_lookbook: true }, 1, 1);
-
-  useEffect(() => {
-    if (defaultChecked) return;
-    if (urlFilter !== 'all' || urlView === 'calendar') {
-      setDefaultChecked(true);
-      return;
-    }
-    if (lookbookProbe.data) {
-      if (lookbookProbe.data.total === 0) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('filter', 'my-looks');
-        router.replace(`/dashboard/outfits?${params.toString()}`);
-      }
-      setDefaultChecked(true);
-    }
-  }, [defaultChecked, lookbookProbe.data, urlFilter, urlView, searchParams, router]);
 
   const updateQuery = useCallback(
     (next: {
@@ -440,7 +421,7 @@ function OutfitsPageContent() {
               {t('viewCalendar')}
             </button>
           </div>
-          {view === 'list' && !readyToWear && (
+          {view === 'list' && chip !== 'all' && !readyToWear && (
             <Button
               variant={selectMode ? 'secondary' : 'outline'}
               onClick={handleToggleSelectMode}

@@ -31,6 +31,9 @@
     "removeItem": "移除 {name}"
   },
   "cards": {
+    "wearCount": "穿过 {count} 次",
+    "history": "历史记录",
+    "record": "记录 {count}",
     "ai": "AI",
     "external": "外部",
     "lookbookTemplate": "造型册模板",

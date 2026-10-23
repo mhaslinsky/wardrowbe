@@ -189,8 +189,23 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
         </div>
         <div className="p-3 space-y-1">
           {dirtyCount > 0 && <p className="text-xs text-amber-700">{t('piecesInWash', { count: dirtyCount })}</p>}
+          {outfit.wear_count != null && (
+            <p className="text-xs text-muted-foreground">{t('wearCount', { count: outfit.wear_count })}</p>
+          )}
+          {(outfit.hidden_member_ids?.length ?? 0) > 0 && (
+            <details onClick={(event) => event.stopPropagation()}>
+              <summary className="text-xs cursor-pointer">{t('history')}</summary>
+              {outfit.hidden_member_ids?.map((memberId, index) => (
+                <Link key={memberId} href={`/dashboard/outfits/${memberId}`} className="block text-xs underline">
+                  {t('record', { count: index + 1 })}
+                </Link>
+              ))}
+            </details>
+          )}
           <h3 className="text-sm font-semibold leading-tight truncate">
-            {getTitle(outfit)}
+            {outfit.hidden_member_ids?.length ? (
+              <Link href={`/dashboard/outfits/${outfit.id}`}>{getTitle(outfit)}</Link>
+            ) : getTitle(outfit)}
           </h3>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <Badge variant="outline" className="capitalize">
@@ -204,6 +219,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
   );
 
   if (selectMode || onClick) return content;
+  if (outfit.hidden_member_ids?.length) return content;
   return (
     <Link href={`/dashboard/outfits/${outfit.id}`} className="block">
       {content}

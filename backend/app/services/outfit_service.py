@@ -21,6 +21,7 @@ from app.models.user import User
 @dataclass
 class OutfitListFilters:
     user_id: UUID
+    group: bool = False
     ready_to_wear: bool = False
     status_filter: str | None = None
     occasion: str | None = None
@@ -39,6 +40,75 @@ class OutfitListFilters:
 
 def _escape_like(term: str) -> str:
     return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def group_outfits(outfits: list[Outfit]) -> list[Outfit]:
+    ordered = sorted(outfits, key=lambda outfit: str(outfit.id))
+    ordered.sort(key=lambda outfit: outfit.created_at, reverse=True)
+    by_id = {outfit.id: outfit for outfit in ordered}
+    groups = {outfit.id: [outfit] for outfit in ordered}
+    assigned = set()
+    templates = [
+        outfit
+        for outfit in ordered
+        if outfit.source == OutfitSource.manual and outfit.scheduled_for is None
+    ]
+    template_ids = {outfit.id for outfit in templates}
+    for template in templates:
+        members = [
+            outfit
+            for outfit in ordered
+            if outfit.cloned_from_outfit_id == template.id
+            and outfit.source == OutfitSource.manual
+            and outfit.scheduled_for is not None
+            and outfit.id not in assigned
+        ]
+        parent = by_id.get(template.cloned_from_outfit_id)
+        if parent and parent.id not in template_ids and parent.id not in assigned:
+            members.append(parent)
+        groups[template.id].extend(members)
+        assigned.update(member.id for member in members)
+
+    ai_groups = {}
+    for outfit in ordered:
+        if outfit.id in assigned or outfit.id in template_ids:
+            continue
+        item_ids = frozenset(item.item_id for item in outfit.items)
+        if outfit.source == OutfitSource.on_demand and item_ids:
+            key = (outfit.user_id, outfit.occasion, item_ids)
+            ai_groups.setdefault(key, []).append(outfit)
+    for members in ai_groups.values():
+        representative = next(
+            (
+                outfit
+                for outfit in members
+                if outfit.status == OutfitStatus.accepted
+                or (outfit.feedback and (outfit.feedback.worn_at or outfit.feedback.actually_worn))
+            ),
+            members[0],
+        )
+        groups[representative.id] = members
+        assigned.update(member.id for member in members if member.id != representative.id)
+
+    visible = []
+    for outfit in ordered:
+        if outfit.id in assigned:
+            continue
+        members = groups[outfit.id]
+        outfit.group_size = len(members)
+        outfit.hidden_member_ids = [member.id for member in members if member.id != outfit.id]
+        outfit.wear_count = sum(
+            member.scheduled_for is not None
+            and (
+                member.status == OutfitStatus.accepted
+                or bool(
+                    member.feedback and (member.feedback.worn_at or member.feedback.actually_worn)
+                )
+            )
+            for member in members
+        )
+        visible.append(outfit)
+    return visible
 
 
 class OutfitService:
@@ -177,6 +247,20 @@ class OutfitService:
             clauses.append(
                 ~Outfit.items.any(OutfitItem.item.has(ClothingItem.needs_wash.is_(True)))
             )
+
+        if filters.group:
+            result = await self.db.execute(
+                select(Outfit)
+                .where(and_(*clauses))
+                .options(
+                    selectinload(Outfit.items).selectinload(OutfitItem.item),
+                    selectinload(Outfit.feedback),
+                    selectinload(Outfit.family_ratings).selectinload(FamilyOutfitRating.user),
+                )
+            )
+            grouped = group_outfits(list(result.scalars().all()))
+            start = (page - 1) * page_size
+            return grouped[start : start + page_size], len(grouped)
 
         count_query: Select = select(func.count()).select_from(Outfit).where(and_(*clauses))
         total = (await self.db.execute(count_query)).scalar_one()

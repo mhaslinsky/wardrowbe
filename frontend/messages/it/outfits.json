@@ -31,6 +31,9 @@
     "removeItem": "Rimuovi {name}"
   },
   "cards": {
+    "wearCount": "Indossato {count} volte",
+    "history": "Cronologia",
+    "record": "Voce {count}",
     "ai": "IA",
     "external": "Esterno",
     "lookbookTemplate": "Modello lookbook",

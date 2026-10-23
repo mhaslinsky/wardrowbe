@@ -31,6 +31,9 @@
     "removeItem": "Remove {name}"
   },
   "cards": {
+    "wearCount": "Worn {count} times",
+    "history": "History",
+    "record": "Record {count}",
     "ai": "AI",
     "external": "External",
     "lookbookTemplate": "Lookbook template",
