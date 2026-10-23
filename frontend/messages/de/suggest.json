@@ -38,7 +38,9 @@
     "tellUsWhatYouWore": "Sag uns, was du getragen hast",
     "whatDidYouWear": "Was hast du stattdessen getragen?",
     "whatDidYouWearDesc": "Wähle die Stücke aus, die du tatsächlich getragen hast. Das hilft uns, deine Vorlieben zu lernen.",
-    "yesWoreIt": "Ja, ich habe es getragen"
+    "yesWoreIt": "Ja, ich habe es getragen",
+    "addNote": "Notiz hinzufügen",
+    "noteHint": "Notizen helfen bei zukünftigen Vorschlägen."
   },
   "generating": "Dein Look wird erstellt...",
   "getSuggestion": "Vorschlag erhalten",

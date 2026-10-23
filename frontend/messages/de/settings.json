@@ -144,5 +144,11 @@
     "unit": "Temperatureinheit"
   },
   "title": "Einstellungen",
-  "unsavedChanges": "Du hast ungespeicherte Änderungen. Diese Seite verlassen?"
+  "unsavedChanges": "Du hast ungespeicherte Änderungen. Diese Seite verlassen?",
+  "standingRules": {
+    "title": "Feste Regeln",
+    "description": "Eine Regel pro Zeile, bis zu 20 Regeln.",
+    "label": "Regeln",
+    "limit": "Bis zu 20 Regeln mit je 300 Zeichen."
+  }
 }

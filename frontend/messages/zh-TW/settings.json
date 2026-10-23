@@ -144,5 +144,11 @@
     "unit": "溫度單位"
   },
   "title": "設定",
-  "unsavedChanges": "你有未儲存的變更。確定要離開此頁面？"
+  "unsavedChanges": "你有未儲存的變更。確定要離開此頁面？",
+  "standingRules": {
+    "title": "固定規則",
+    "description": "每行一條，最多20條。",
+    "label": "規則",
+    "limit": "最多20條規則，每條不超過300個字元。"
+  }
 }

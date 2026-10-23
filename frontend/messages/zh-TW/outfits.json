@@ -68,7 +68,8 @@
     "undated": "未設日期",
     "wearToday": "今天穿",
     "wearTodayError": "記錄今天穿著失敗",
-    "wornCount": "已穿過 {count, plural, one {# 次} other {# 次}}"
+    "wornCount": "已穿過 {count, plural, one {# 次} other {# 次}}",
+    "addNote": "新增備註"
   },
   "details": {
     "addedItems": "已從 AI 新增 {count, plural, one {# 件單品} other {# 件單品}}",

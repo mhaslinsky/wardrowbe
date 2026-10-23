@@ -68,7 +68,8 @@
     "undated": "日付なし",
     "wearToday": "今日着る",
     "wearTodayError": "着用の記録に失敗しました",
-    "wornCount": "{count, plural, one {# 回着用} other {# 回着用}}"
+    "wornCount": "{count, plural, one {# 回着用} other {# 回着用}}",
+    "addNote": "メモを追加"
   },
   "details": {
     "addedItems": "AIが{count, plural, one {# 件のアイテム} other {# 件のアイテム}}を追加しました",

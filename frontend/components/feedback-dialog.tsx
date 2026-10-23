@@ -28,6 +28,7 @@ export type FeedbackTarget = Pick<Outfit, 'id' | 'items'> & {
 };
 
 interface FeedbackDialogProps {
+  noteOnly?: boolean;
   outfit: FeedbackTarget;
   open: boolean;
   onClose: () => void;
@@ -36,7 +37,7 @@ interface FeedbackDialogProps {
 type FeedbackStep = 'wear-question' | 'rating' | 'wore-instead';
 
 
-export function FeedbackDialog({ outfit, open, onClose }: FeedbackDialogProps) {
+export function FeedbackDialog({ outfit, open, onClose, noteOnly = false }: FeedbackDialogProps) {
   const typeLabel = useTypeLabel();
   const t = useTranslations('suggest.feedback');
   const tc = useTranslations('common');
@@ -78,7 +79,10 @@ export function FeedbackDialog({ outfit, open, onClose }: FeedbackDialogProps) {
       // Check if feedback already exists
       const hasFeedback = outfit.feedback?.rating != null;
 
-      if (hasFeedback) {
+      if (noteOnly) {
+        setStep('rating');
+        setActuallyWorn(null);
+      } else if (hasFeedback) {
         // Go straight to rating step if already has feedback
         setStep('rating');
         setActuallyWorn(true);
@@ -95,7 +99,7 @@ export function FeedbackDialog({ outfit, open, onClose }: FeedbackDialogProps) {
       setDebouncedSearch('');
       setPageCount(1);
     }
-  }, [open, outfit.id, outfit.feedback]);
+  }, [open, outfit.id, outfit.feedback, noteOnly]);
 
   // Load more items for infinite scroll
   const loadMore = useCallback(() => {
@@ -132,7 +136,7 @@ export function FeedbackDialog({ outfit, open, onClose }: FeedbackDialogProps) {
     try {
       await submitFeedback.mutateAsync({
         outfitId: outfit.id,
-        feedback: {
+        feedback: noteOnly ? { comment: comment.trim() } : {
           rating: rating > 0 ? rating : undefined,
           comment: comment.trim() || undefined,
           worn: actuallyWorn === true || undefined,
@@ -214,14 +218,14 @@ export function FeedbackDialog({ outfit, open, onClose }: FeedbackDialogProps) {
         {step === 'rating' && (
           <>
             <DialogHeader>
-              <DialogTitle>{t('rateThisOutfit')}</DialogTitle>
-              <DialogDescription>{t('howDidItWork')}</DialogDescription>
+              <DialogTitle>{noteOnly ? t('addNote') : t('rateThisOutfit')}</DialogTitle>
+              <DialogDescription>{noteOnly ? t('noteHint') : t('howDidItWork')}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div>
+              {!noteOnly && <div>
                 <label className="text-sm font-medium mb-2 block">{t('overallRating')}</label>
                 <StarRatingInput value={rating} onChange={setRating} />
-              </div>
+              </div>}
               <div>
                 <label className="text-sm font-medium mb-2 block">{t('commentsOptional')}</label>
                 <Textarea
@@ -232,7 +236,7 @@ export function FeedbackDialog({ outfit, open, onClose }: FeedbackDialogProps) {
               </div>
             </div>
             <div className="flex justify-between">
-              {!outfit.feedback?.rating && (
+              {!noteOnly && !outfit.feedback?.rating && (
                 <Button variant="ghost" onClick={() => setStep('wear-question')}>
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   {tc('back')}

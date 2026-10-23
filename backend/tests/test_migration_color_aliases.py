@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ClothingItem, User, UserPreference
@@ -99,13 +99,15 @@ async def test_remaps_and_deduplicates_colours_idempotently(
                     image_path="v.jpg",
                     primary_color="\u00a0\u200b\t ",
                 ),
-                UserPreference(
-                    user_id=user_id,
-                    color_favorites=["khaki", "tan", "NAVY", "charcoal", "Army Green"],
-                ),
             ]
         )
         await db_session.flush()
+        await db_session.execute(
+            text(
+                "INSERT INTO user_preferences (user_id, color_favorites) VALUES (:user_id, :favorites)"
+            ),
+            {"user_id": user_id, "favorites": ["khaki", "tan", "NAVY", "charcoal", "Army Green"]},
+        )
         # The ORM writes the column default for a None list, so NULL arrays need an explicit UPDATE.
         await db_session.execute(
             update(ClothingItem).where(ClothingItem.type == "scarf").values(colors=None)

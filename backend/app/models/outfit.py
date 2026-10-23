@@ -1,6 +1,6 @@
 import enum
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
@@ -12,7 +12,9 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    event,
     func,
+    inspect,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -176,6 +178,7 @@ class UserFeedback(Base):
     comfort_rating: Mapped[int | None] = mapped_column(Integer)
     style_rating: Mapped[int | None] = mapped_column(Integer)
     comment: Mapped[str | None] = mapped_column(Text)
+    comment_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     worn_at: Mapped[date | None] = mapped_column(Date)
     worn_with_modifications: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -215,3 +218,12 @@ class FamilyOutfitRating(Base):
     # Relationships
     outfit: Mapped["Outfit"] = relationship("Outfit", back_populates="family_ratings")
     user: Mapped["User"] = relationship("User")
+
+
+@event.listens_for(UserFeedback, "before_insert")
+@event.listens_for(UserFeedback, "before_update")
+def _update_comment_timestamp(_mapper, _connection, feedback: UserFeedback) -> None:
+    if inspect(feedback).attrs.comment.history.has_changes():
+        feedback.comment_updated_at = (
+            datetime.now(UTC) if feedback.comment and feedback.comment.strip() else None
+        )

@@ -8,6 +8,7 @@ from app.api.preferences import _build_preference_response
 from app.models import User, UserPreference
 
 DEFAULT_PREFERENCES_RESPONSE = {
+    "standing_rules": [],
     "color_favorites": [],
     "color_avoid": [],
     "style_profile": {"casual": 50, "formal": 50, "sporty": 50, "minimalist": 50, "bold": 50},

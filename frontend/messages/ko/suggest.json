@@ -38,7 +38,9 @@
     "tellUsWhatYouWore": "무엇을 입었는지 알려주세요",
     "whatDidYouWear": "대신 무엇을 입으셨나요?",
     "whatDidYouWearDesc": "실제로 입은 아이템을 선택해 주세요. 취향 파악에 도움이 돼요.",
-    "yesWoreIt": "네, 입었어요"
+    "yesWoreIt": "네, 입었어요",
+    "addNote": "메모 추가",
+    "noteHint": "메모가 다음 추천에 반영됩니다."
   },
   "generating": "코디를 만들고 있어요...",
   "getSuggestion": "추천 받기",
