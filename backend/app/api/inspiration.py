@@ -12,6 +12,7 @@ from app.models.outfit import Outfit
 from app.models.user import User
 from app.services.ai_service import AIDisabledError
 from app.services.inspiration_service import InspirationService
+from app.services.weather_service import WeatherServiceError
 from app.utils.auth import get_current_user, get_current_user_optional
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.signed_urls import verify_signature
@@ -23,6 +24,8 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 @router.post("", status_code=201)
 async def create_inspiration(db: DbSession, user: CurrentUser, image: UploadFile = File(...)):
     await rate_limit_by_user(str(user.id), "inspiration", max_requests=5, window_seconds=60)
+    if image.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(415, "Use JPEG, PNG or WebP")
     image_bytes = await image.read(10 * 1024 * 1024 + 1)
     if len(image_bytes) > 10 * 1024 * 1024:
         raise HTTPException(413, "Image exceeds 10 MB")
@@ -30,7 +33,7 @@ async def create_inspiration(db: DbSession, user: CurrentUser, image: UploadFile
         return await InspirationService(db).create(user, image_bytes)
     except AIDisabledError as error:
         raise HTTPException(503, "Image analysis is disabled") from error
-    except (ValidationError, RuntimeError) as error:
+    except (ValidationError, RuntimeError, WeatherServiceError) as error:
         raise HTTPException(502, "Image analysis failed") from error
     except (ValueError, OSError, UnidentifiedImageError, Image.DecompressionBombError) as error:
         raise HTTPException(422, "Use a valid image and set your location") from error
@@ -78,4 +81,4 @@ async def delete_inspiration(outfit_id: UUID, db: DbSession, user: CurrentUser):
         raise HTTPException(404, "Look not found")
     await db.delete(outfit)
     await db.commit()
-    service.image_path(user.id, outfit_id).unlink(missing_ok=True)
+    service.cleanup_image(outfit)

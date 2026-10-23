@@ -12,6 +12,7 @@ from app.api.auth import create_access_token
 from app.config import get_settings
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit
+from app.models.preference import UserPreference
 from app.models.user import User
 from app.services.ai_service import AIService
 from app.services.inspiration_service import InspirationService
@@ -26,6 +27,7 @@ async def inspiration(client, test_user, auth_headers, db_session, monkeypatch, 
     monkeypatch.setattr(settings, "ai_internal_enabled", True)
     monkeypatch.setattr(settings, "ai_vision_enabled", True)
     test_user.location_lat, test_user.location_lon = 40, -74
+    db_session.add(UserPreference(user_id=test_user.id, standing_rules=["No hats"]))
     await db_session.commit()
     weather = AsyncMock(
         return_value=WeatherData(20, 20, 50, 0, 0, 0, "clear", 0, True, 0, datetime.now(UTC))
@@ -84,6 +86,7 @@ async def test_all_gap_look_is_saved_and_can_be_compared(
     assert response.status_code == 201, response.text
     look = response.json()
     assert look["slots"][0]["no_match"] and look["slots"][0]["item_id"] is None
+    assert look["slots"][0]["match_strength"] == 0
     assert look["items"] == []
     saved = await db_session.get(Outfit, UUID(look["id"]))
     assert saved.scheduled_for is None
@@ -195,4 +198,20 @@ async def test_vision_instructions_are_separate_from_image(inspiration, db_sessi
     assert response.status_code == 201, response.text
     assert response.json()["slots"][0]["item_id"] == str(shirt.id)
     assert inspiration.prompts[0][0]["role"] == "system"
+    assert "boots" in inspiration.prompts[0][0]["content"]
+    assert "No hats" in inspiration.prompts[0][0]["content"]
     assert inspiration.prompts[0][1]["role"] == "user"
+
+
+@pytest.mark.parametrize("content_type,status", [("image/bmp", 415), ("image/jpeg", 422)])
+async def test_unsupported_format_is_rejected(inspiration, db_session, content_type, status):
+    shirt = clothing(inspiration.user.id)
+    db_session.add(shirt)
+    await db_session.commit()
+    inspiration.text = json.dumps({"slots": [slot(shirt.id)], "allowed_item_ids": [str(shirt.id)]})
+    buffer = BytesIO()
+    Image.new("RGB", (30, 40)).save(buffer, format="BMP")
+    response = await inspiration.upload(buffer.getvalue(), content_type)
+    assert response.status_code == status
+    assert inspiration.prompts == []
+    assert not list(inspiration.path.rglob("*.jpg"))

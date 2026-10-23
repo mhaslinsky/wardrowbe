@@ -30,6 +30,7 @@ from app.schemas.outfit import (
 )
 from app.services.ai_service import AIDisabledError
 from app.services.external_outfit_service import ExternalOutfitService
+from app.services.inspiration_service import InspirationService
 from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
 from app.services.outfit_service import OutfitListFilters, OutfitService
@@ -743,6 +744,7 @@ async def bulk_delete_outfits(
                 detail=f"Maximum {limit} outfits per bulk action",
             )
 
+    deleted_outfits = []
     for outfit_id in outfit_ids:
         try:
             result = await db.execute(
@@ -757,6 +759,7 @@ async def bulk_delete_outfits(
                 continue
 
             await db.delete(outfit)
+            deleted_outfits.append(outfit)
             deleted += 1
         except Exception as e:
             logger.error(f"Failed to delete outfit {outfit_id}: {e}")
@@ -764,6 +767,9 @@ async def bulk_delete_outfits(
             failed += 1
 
     await db.commit()
+
+    for outfit in deleted_outfits:
+        InspirationService(db).cleanup_image(outfit)
 
     return BulkDeleteOutfitsResponse(
         deleted=deleted,
@@ -909,6 +915,7 @@ async def delete_outfit(
 
     await db.delete(outfit)
     await db.commit()
+    InspirationService(db).cleanup_image(outfit)
 
 
 @router.post("/{outfit_id}/feedback", response_model=FeedbackResponse)

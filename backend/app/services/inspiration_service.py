@@ -8,16 +8,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models.outfit import Outfit
+from app.models.item import ClothingItem
+from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
 from app.services.ai_service import AIService, require_internal_ai
-from app.services.external_outfit_service import ExternalOutfitService
 from app.services.image_service import ImageService
 from app.services.item_scorer import get_season, score_items
 from app.services.preference_service import PreferenceService
 from app.services.recommendation_service import RecommendationService
+from app.services.studio_service import validate_item_ownership
 from app.utils.clothing import canonical_item_order, repair_top_layers
-from app.utils.garment_vocabulary import ITEM_ROLE
+from app.utils.garment_vocabulary import ITEM_ROLE, TYPES
 from app.utils.prompts import load_prompt
 from app.utils.signed_urls import sign_image_url
 from app.utils.timezone import get_user_today
@@ -42,14 +43,17 @@ class InspirationAnalysis(BaseModel):
 def parse_analysis(text: str) -> InspirationAnalysis:
     clean = text.strip()
     if clean.startswith("```") and clean.endswith("```"):
-        clean = clean.split("\n", 1)[1].rsplit("```", 1)[0]
+        clean = clean.partition("\n")[2].rsplit("```", 1)[0]
     return InspirationAnalysis.model_validate_json(clean)
 
 
-def match_slots(analysis: InspirationAnalysis, candidates: list) -> tuple[list, list]:
+def match_slots(
+    analysis: InspirationAnalysis, candidates: list[ClothingItem]
+) -> tuple[list[InspirationSlot], list[UUID]]:
     available = {item.id: item for item in candidates if item.id in analysis.allowed_item_ids}
     selected = []
     for slot in analysis.slots:
+        slot.type = slot.type.strip().lower()
         item = available.get(slot.item_id)
         if (
             slot.no_match
@@ -57,13 +61,13 @@ def match_slots(analysis: InspirationAnalysis, candidates: list) -> tuple[list, 
             or slot.match_strength < 0.5
             or slot.item_id in selected
             or ITEM_ROLE.get(slot.type) is None
-            or ITEM_ROLE.get(slot.type) != ITEM_ROLE.get(item.type)
+            or ITEM_ROLE.get(slot.type) != ITEM_ROLE.get(item.type.strip().lower())
         ):
             slot.item_id, slot.match_strength, slot.no_match = None, 0, True
         else:
             selected.append(item.id)
             slot.no_match = False
-    types = {item.id: item.type for item in available.values()}
+    types = {item.id: item.type.strip().lower() for item in available.values()}
     subtypes = {item.id: item.subtype for item in available.values()}
     repaired = repair_top_layers(selected, list(available), types, subtypes)
     for slot in analysis.slots:
@@ -78,6 +82,10 @@ class InspirationService:
 
     def image_path(self, user_id: UUID, outfit_id: UUID) -> Path:
         return Path(get_settings().storage_path) / "inspiration" / str(user_id) / f"{outfit_id}.jpg"
+
+    def cleanup_image(self, outfit: Outfit) -> None:
+        if (outfit.ai_raw_response or {}).get("inspiration"):
+            self.image_path(outfit.user_id, outfit.id).unlink(missing_ok=True)
 
     async def find(self, user_id: UUID, outfit_id: UUID) -> Outfit | None:
         return await self.db.scalar(
@@ -102,6 +110,8 @@ class InspirationService:
     async def create(self, user: User, image_bytes: bytes) -> dict:
         require_internal_ai("vision")
         with ImageService()._open_bounded(image_bytes, ".jpg") as original:
+            if original.format not in {"JPEG", "MPO", "PNG", "WEBP"}:
+                raise ValueError("Unsupported image format")
             image = ImageOps.exif_transpose(original).convert("RGB")
             image.thumbnail((1600, 1600))
         preferences = await PreferenceService(self.db).get_preferences(user.id)
@@ -126,7 +136,8 @@ class InspirationService:
             {},
             {},
         )
-        candidates = [entry.item for entry in scored]
+        ranks = {entry.item.id: rank for rank, entry in enumerate(scored)}
+        candidates.sort(key=lambda item: ranks.get(item.id, len(ranks)))
         wardrobe = [
             {
                 "id": str(item.id),
@@ -139,7 +150,12 @@ class InspirationService:
             for item in candidates
         ]
         notes = await recommendations._get_recent_outfit_notes(user)
-        prompt = load_prompt("inspiration") + "\n" + json.dumps(wardrobe)
+        prompt = load_prompt("inspiration") + "\nTypes: " + json.dumps(TYPES)
+        prompt += (
+            "\n<WARDROBE>\n"
+            + json.dumps(wardrobe).replace("<", "\\u003c").replace(">", "\\u003e")
+            + "\n</WARDROBE>"
+        )
         prompt += "\n" + recommendations._format_wearer_preferences(preferences, notes)
         ai = AIService(endpoints=preferences.ai_endpoints if preferences else None)
         path = self.image_path(user.id, uuid4())
@@ -149,16 +165,16 @@ class InspirationService:
             encoded = ai._preprocess_image(path)
             text, error, _ = await ai._call_with_fallback(
                 [
+                    {"role": "system", "content": prompt},
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": prompt},
                             {
                                 "type": "image_url",
                                 "image_url": {"url": f"data:image/jpeg;base64,{encoded}"},
                             },
                         ],
-                    }
+                    },
                 ],
                 "inspiration",
                 use_vision_model=True,
@@ -166,14 +182,20 @@ class InspirationService:
             if not text:
                 raise RuntimeError("Image analysis failed") from error
             slots, item_ids = match_slots(parse_analysis(text), candidates)
-            outfit = await ExternalOutfitService(self.db).create_suggestion(
-                user,
-                item_ids=item_ids,
+            if item_ids:
+                await validate_item_ownership(self.db, user.id, item_ids)
+            outfit = Outfit(
+                user_id=user.id,
                 occasion="casual",
                 name="Inspiration",
                 scheduled_for=None,
+                source=OutfitSource.external,
+                status=OutfitStatus.pending,
             )
-            outfit.scheduled_for = None
+            self.db.add(outfit)
+            await self.db.flush()
+            for position, item_id in enumerate(item_ids):
+                self.db.add(OutfitItem(outfit_id=outfit.id, item_id=item_id, position=position))
             outfit.ai_raw_response = {
                 "inspiration": {
                     "slots": [slot.model_dump(mode="json") for slot in slots],

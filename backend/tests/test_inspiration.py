@@ -1,16 +1,11 @@
 import json
-from io import BytesIO
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from PIL import Image
 from pydantic import ValidationError
 
-from app.models.item import ClothingItem, ItemStatus
-from app.models.preference import UserPreference
-from app.services.inspiration_service import InspirationService, match_slots, parse_analysis
+from app.services.inspiration_service import match_slots, parse_analysis
 
 
 def garment(matched_id=None, **values):
@@ -90,78 +85,13 @@ def test_layering_adds_base_and_prevents_reuse():
     assert slots[1].no_match
 
 
-async def test_create_list_image_delete_and_ownership(
-    client, test_user, auth_headers, db_session, monkeypatch, tmp_path
-):
-    import app.services.inspiration_service as service
-
-    monkeypatch.setattr(
-        service, "get_settings", lambda: SimpleNamespace(storage_path=str(tmp_path))
-    )
-    monkeypatch.setattr(service, "require_internal_ai", lambda capability: None)
-    shirt = ClothingItem(
-        user_id=test_user.id,
-        type="shirt",
-        primary_color="blue",
-        image_path="test/shirt.jpg",
-        status=ItemStatus.ready,
-        tags={},
-    )
-    db_session.add(shirt)
-    db_session.add(UserPreference(user_id=test_user.id, standing_rules=["No hats"]))
-    test_user.location_lat, test_user.location_lon = 40, -74
-    await db_session.commit()
-
-    async def vision(messages, task_name, **kwargs):
-        assert "No hats" in messages[0]["content"][0]["text"]
-        assert kwargs["use_vision_model"] is True
-        return analysis([garment(shirt.id)], [shirt]).model_dump_json(), None, None
-
-    monkeypatch.setattr(
-        service.RecommendationService, "get_candidate_items", AsyncMock(return_value=[shirt])
-    )
-    monkeypatch.setattr(
-        service.RecommendationService, "_get_recent_outfit_notes", AsyncMock(return_value=[])
-    )
-    monkeypatch.setattr(service, "score_items", lambda *args: [SimpleNamespace(item=shirt)])
-    monkeypatch.setattr(
-        service,
-        "AIService",
-        lambda **kwargs: SimpleNamespace(
-            _preprocess_image=lambda path: "photo", _call_with_fallback=vision
+def test_removed_layer_match_becomes_a_gap():
+    jeans, pants = item("jeans"), item("pants")
+    slots, chosen = match_slots(
+        analysis(
+            [garment(jeans.id, type="jeans"), garment(pants.id, type="pants")], [jeans, pants]
         ),
+        [jeans, pants],
     )
-    monkeypatch.setattr(
-        service.RecommendationService,
-        "__init__",
-        lambda self, db: setattr(
-            self,
-            "weather_service",
-            SimpleNamespace(get_current_weather=AsyncMock(return_value=None)),
-        ),
-    )
-
-    buffer = BytesIO()
-    Image.new("RGB", (30, 40), "blue").save(buffer, format="PNG")
-    response = await client.post(
-        "/api/v1/inspiration",
-        files={"image": ("look.png", buffer.getvalue(), "image/png")},
-        headers=auth_headers,
-    )
-    assert response.status_code == 201, response.text
-    look = response.json()
-    assert look["slots"][0]["item_id"] == str(shirt.id)
-    assert look["items"][0]["image_url"].startswith("/api/v1/images/")
-    assert (await client.get(look["image_url"])).status_code == 200
-    assert (await client.get(look["image_url"].split("?")[0])).status_code == 401
-    assert (await client.get("/api/v1/inspiration", headers=auth_headers)).json()[0]["id"] == look[
-        "id"
-    ]
-    assert (await client.get("/api/v1/inspiration")).status_code == 401
-    assert await InspirationService(db_session).find(uuid4(), look["id"]) is None
-    assert (
-        await client.delete(f"/api/v1/inspiration/{look['id']}", headers=auth_headers)
-    ).status_code == 204
-    assert not list(tmp_path.rglob("*.jpg"))
-    assert (await client.get(look["image_url"])).status_code == 404
-    assert (await client.get("/api/v1/inspiration", headers=auth_headers)).json() == []
+    assert chosen == [jeans.id]
+    assert slots[1].no_match and slots[1].item_id is None
