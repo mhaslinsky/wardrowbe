@@ -147,6 +147,11 @@ class TestCleanCutout:
         with pytest.raises(NoGarmentFound):
             clean_cutout(_photo(), _cutout(shapes=[(0, 0, 3, 3)]))
 
+    def test_only_sub_floor_components_are_rejected_after_filtering(self):
+        cutout = _cutout(shapes=[(10, 10, 19, 19), (40, 40, 49, 49)])
+        with pytest.raises(NoGarmentFound):
+            clean_cutout(_photo(), cutout)
+
     def test_a_result_of_another_size_is_scaled_to_the_photo(self):
         result = clean_cutout(_photo(), _cutout(size=(100, 100), shapes=[(20, 20, 80, 80)]))
 
@@ -203,6 +208,28 @@ class TestRedoFromOriginal:
 
         backup = item_with_image.image_path.rsplit(".", 1)[0] + "_orig.jpg"
         assert not svc.get_image_path(backup).exists()
+
+    @pytest.mark.asyncio
+    async def test_filtered_empty_mask_preserves_all_stored_images(
+        self, item_with_image: ClothingItem
+    ):
+        service = ImageService()
+        paths = service._save_all_sizes(_photo(), item_with_image.image_path)
+        before = {name: service.get_image_path(path).read_bytes() for name, path in paths.items()}
+        provider = _mock_provider()
+        provider.remove.side_effect = lambda image: _cutout(
+            shapes=[(10, 10, 19, 19), (40, 40, 49, 49)]
+        )
+        with (
+            patch("app.services.background_removal.get_provider", return_value=provider),
+            pytest.raises(NoGarmentFound),
+        ):
+            service.remove_background(item_with_image.image_path)
+        assert {
+            name: service.get_image_path(path).read_bytes() for name, path in paths.items()
+        } == before
+        backup = service.get_image_path(item_with_image.image_path.rsplit(".", 1)[0] + "_orig.jpg")
+        assert not backup.exists()
 
     @pytest.mark.asyncio
     async def test_partial_backup_write_cannot_be_restored(self, item_with_image: ClothingItem):

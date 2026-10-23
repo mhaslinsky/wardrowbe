@@ -51,6 +51,9 @@ def clean_cutout(original: Image.Image, cutout: Image.Image) -> Image.Image:
         dropped = ndimage.binary_dilation(solid & ~keep, structure=EIGHT_WAY, iterations=2)
         alpha[dropped & ~keep] = 0
 
+    if keep.mean() < MIN_COVERAGE:
+        raise NoGarmentFound("No garment found in the photo; the original was kept")
+
     holes = ndimage.binary_fill_holes(keep) & ~keep
     if holes.any():
         hole_labels, hole_count = ndimage.label(holes)
