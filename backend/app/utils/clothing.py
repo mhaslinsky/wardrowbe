@@ -97,8 +97,10 @@ def repair_top_layers(
     ranked_ids: list[UUID],
     item_type_map: dict[UUID, str],
     item_subtype_map: dict[UUID, str],
+    mandatory_item_ids: set[UUID] | None = None,
 ) -> list[UUID]:
     """Add missing base tops and keep overshirts over thin tops only."""
+    mandatory = mandatory_item_ids or set()
 
     def is_overshirt(item_id: UUID) -> bool:
         return (item_subtype_map.get(item_id) or "").lower() in OVER_LAYER_SUBTYPES
@@ -107,38 +109,121 @@ def repair_top_layers(
         kind = item_type_map.get(item_id, "")
         if is_overshirt(item_id) or kind not in _BASE_UNDER_TOP_TYPES:
             return False
-        return not thin_only or kind == "t-shirt" or item_subtype_map.get(item_id) == "henley"
+        return (
+            not thin_only
+            or kind == "t-shirt"
+            or (item_subtype_map.get(item_id) or "").lower() == "henley"
+        )
+
+    def is_top(item_id: UUID) -> bool:
+        return ITEM_ROLE.get(item_type_map.get(item_id, "")) in {
+            "base_top",
+            "mid_layer",
+            "full_body",
+        }
+
+    def replace_base_top(under: UUID) -> None:
+        kept[:] = [
+            item_id
+            for item_id in kept
+            if item_id == under
+            or item_id in mandatory
+            or is_overshirt(item_id)
+            or item_type_map.get(item_id) in _SWEATER_TYPES
+            or ITEM_ROLE.get(item_type_map.get(item_id, "")) != "base_top"
+        ]
+        if under not in kept:
+            kept.append(under)
 
     kept = list(item_ids)
     overshirts = {item_id for item_id in kept if is_overshirt(item_id)}
+    if overshirts:
+        incompatible_pins = {
+            item_id
+            for item_id in kept
+            if item_id in mandatory
+            and item_id not in overshirts
+            and is_top(item_id)
+            and not is_base_top(item_id, True)
+        }
+        if incompatible_pins:
+            logger.warning("Pinned tops conflict with overshirt layering")
+            kept = [
+                item_id for item_id in kept if item_id not in overshirts or item_id in mandatory
+            ]
+            overshirts.intersection_update(kept)
     if overshirts:
         under = next((item_id for item_id in kept if is_base_top(item_id, True)), None)
         if under is None:
             under = next((item_id for item_id in ranked_ids if is_base_top(item_id, True)), None)
         if under is None:
             logger.warning("No thin top available; dropping the overshirt")
-            kept = [item_id for item_id in kept if item_id not in overshirts]
+            kept = [
+                item_id for item_id in kept if item_id not in overshirts or item_id in mandatory
+            ]
+            if not any(is_top(item_id) and not is_overshirt(item_id) for item_id in kept):
+                fallback = top_to_wear_under(ranked_ids, set(kept), item_type_map, item_subtype_map)
+                if fallback is not None:
+                    kept.append(fallback)
+                elif not any(is_top(item_id) for item_id in kept):
+                    return []
         else:
             kept = [
                 item_id
                 for item_id in kept
                 if item_id in overshirts
+                or item_id in mandatory
                 or not (
                     item_type_map.get(item_id) in _SWEATER_TYPES
                     or ITEM_ROLE.get(item_type_map.get(item_id, "")) == "base_top"
                 )
                 or item_id == under
             ]
-            if under not in kept:
-                kept.append(under)
+            replace_base_top(under)
 
     if any(item_type_map.get(item_id) in _SWEATER_TYPES for item_id in kept):
         if not any(is_base_top(item_id) for item_id in kept):
+            pinned_base = any(
+                item_id in mandatory
+                and not is_overshirt(item_id)
+                and item_type_map.get(item_id) not in _SWEATER_TYPES
+                and ITEM_ROLE.get(item_type_map.get(item_id, "")) == "base_top"
+                for item_id in kept
+            )
             under = next((item_id for item_id in ranked_ids if is_base_top(item_id)), None)
-            if under is None:
+            if pinned_base:
+                logger.warning("Pinned base top conflicts with sweater layering")
+            elif under is None:
                 logger.warning("No base top available under the sweater or hoodie")
             else:
-                kept.append(under)
+                replace_base_top(under)
+
+    sweaters = [item_id for item_id in kept if item_type_map.get(item_id) in _SWEATER_TYPES]
+    chosen_sweater = next((item_id for item_id in sweaters if item_id in mandatory), None)
+    if chosen_sweater is None and sweaters:
+        chosen_sweater = sweaters[0]
+    kept = [
+        item_id
+        for item_id in kept
+        if item_id not in sweaters or item_id == chosen_sweater or item_id in mandatory
+    ]
+    bases = [
+        item_id
+        for item_id in kept
+        if not is_overshirt(item_id)
+        and item_type_map.get(item_id) not in _SWEATER_TYPES
+        and ITEM_ROLE.get(item_type_map.get(item_id, "")) == "base_top"
+    ]
+    chosen_base = next((item_id for item_id in bases if item_id in mandatory), None)
+    if chosen_base is None:
+        chosen_base = next((item_id for item_id in bases if is_base_top(item_id)), None)
+    if chosen_base is None and bases:
+        chosen_base = bases[0]
+    kept = [
+        item_id
+        for item_id in kept
+        if item_id not in bases or item_id == chosen_base or item_id in mandatory
+    ]
     return kept
 
 

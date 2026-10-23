@@ -710,9 +710,13 @@ class RecommendationService:
         if not valid_ids:
             raise EmptyOutfitError("AI did not select any valid items")
         # Repair after slot deduplication, which can discard the base top a layer needs.
-        valid_ids = repair_top_layers(valid_ids, ranked_ids, item_type_map, item_subtype_map)
+        valid_ids = repair_top_layers(
+            valid_ids, ranked_ids, item_type_map, item_subtype_map, mandatory_item_ids
+        )
         if not valid_ids:
             raise EmptyOutfitError("No wearable items remain after layering repair")
+        if mandatory_item_ids and not (mandatory_item_ids & set(ranked_ids)) <= set(valid_ids):
+            raise EmptyOutfitError("Requested items conflict with outfit slots")
         valid_ids = canonical_item_order(valid_ids, item_type_map)
 
         reasoning = outfit_data.get("headline") or outfit_data.get("reasoning")
