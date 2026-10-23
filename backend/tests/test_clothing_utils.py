@@ -492,7 +492,8 @@ def test_the_top_added_under_an_overshirt_is_the_best_ranked_real_top():
     assert top_to_wear_under([pants, other_overshirt], set(), types, subtypes) is None
 
 
-def test_layering_repair_preserves_the_rules_and_is_idempotent():
+@pytest.mark.parametrize("thin_ranked", [True, False])
+def test_layering_repair_preserves_the_rules_and_is_idempotent(thin_ranked):
     (
         overshirt,
         sweater,
@@ -543,6 +544,8 @@ def test_layering_repair_preserves_the_rules_and_is_idempotent():
         pants,
         overshirt,
     ]
+    if not thin_ranked:
+        ranked = [item_id for item_id in ranked if item_id not in {tee, best_tee}]
     for size in range(len(tops) + 1):
         for selected in combinations(tops, size):
             chosen = [*selected, pants, coat]
@@ -558,17 +561,18 @@ def test_layering_repair_preserves_the_rules_and_is_idempotent():
                 seated = deduplicate_by_body_slot(repaired, types, pins)
                 assert seated == repaired
                 if overshirt in repaired:
-                    assert set(repaired) & {tee, best_tee}
-                    assert not {
-                        sweater,
-                        hoodie,
-                        cardigan,
-                        polo,
-                        shirt,
-                        dress,
-                        jumpsuit,
-                    }.intersection(repaired)
-                    if tee not in selected:
+                    if thin_ranked or tee in selected:
+                        assert set(repaired) & {tee, best_tee}
+                        assert not {
+                            sweater,
+                            hoodie,
+                            cardigan,
+                            polo,
+                            shirt,
+                            dress,
+                            jumpsuit,
+                        }.intersection(repaired)
+                    if thin_ranked and tee not in selected:
                         assert best_tee in repaired
                 if {sweater, hoodie, cardigan}.intersection(repaired):
                     if polo not in pins:
@@ -663,3 +667,28 @@ def test_two_sweaters_keep_the_best_ranked_selected_layer():
         cardigan,
         tee,
     ]
+
+
+def test_fallback_sweater_gets_a_base_before_repair_finishes():
+    overshirt, pants, sweater, shirt = _ids(4)
+    types = {overshirt: "shirt", pants: "pants", sweater: "sweater", shirt: "shirt"}
+    subtypes = {overshirt: "overshirt", shirt: "button-down"}
+    ranked = [sweater, shirt, pants, overshirt]
+    repaired = repair_top_layers([overshirt, pants], ranked, types, subtypes)
+    assert repaired == [pants, sweater, shirt]
+    assert repair_top_layers(repaired, ranked, types, subtypes) == repaired
+
+
+@pytest.mark.parametrize("middle", ["cardigan", "vest"])
+def test_three_pinned_layers_are_never_emptied_or_given_a_fourth(middle, caplog):
+    sweater, layer, coat, tee = _ids(4)
+    types = {sweater: "sweater", layer: middle, coat: "coat", tee: "t-shirt"}
+    selected = [sweater, layer, coat]
+    assert repair_top_layers(selected, [tee], types, {}, set(selected)) == selected
+    assert "pinned" in caplog.text.lower()
+
+
+def test_layer_cap_keeps_outerwear_and_removes_an_unpinned_mid_layer():
+    sweater, vest, jacket, tee = _ids(4)
+    types = {sweater: "sweater", vest: "vest", jacket: "jacket", tee: "t-shirt"}
+    assert repair_top_layers([sweater, vest, jacket], [tee], types, {}) == [sweater, jacket, tee]

@@ -985,6 +985,8 @@ class TestOvershirtNeedsATopUnderIt:
         kinds=None,
         pinned=(),
         number_map=None,
+        cached=None,
+        unavailable=None,
     ):
         if kinds is None:
             kinds = [
@@ -1006,20 +1008,38 @@ class TestOvershirtNeedsATopUnderIt:
             for kind, subtype in kinds
         ]
         db_session.add_all(items)
+        if unavailable:
+            item_number, reason = unavailable
+            if reason == "needs_wash":
+                items[item_number - 1].needs_wash = True
+            elif reason == "archived":
+                items[item_number - 1].is_archived = True
         await db_session.commit()
         if number_map is None:
             number_map = {index + 1: index for index in range(len(items))}
         number_map = {number: items[index].id for number, index in number_map.items()}
         user.preferences = None
+        if cached is not None:
+            cached = {
+                "items": cached,
+                "_number_map": {
+                    str(number): str(item_id) for number, item_id in number_map.items()
+                },
+                "_context": suggestion_context(
+                    _weather(temp=12), TimeOfDay.afternoon, None, user.body_measurements
+                ),
+            }
         ai = MagicMock()
         ai.generate_text = AsyncMock(
             return_value=MagicMock(content=json.dumps(ai_content), model="m", endpoint="e")
         )
+        self.ai = ai
         service = RecommendationService(db_session)
         with (
             patch("app.services.recommendation_service.AIService", return_value=ai),
             patch(
-                "app.services.recommendation_service.pop_suggestion", AsyncMock(return_value=None)
+                "app.services.recommendation_service.pop_suggestion",
+                AsyncMock(side_effect=[cached, None]),
             ),
             patch("app.services.recommendation_service.push_suggestions", AsyncMock()),
             patch.object(service, "_format_items_for_prompt", return_value=("", number_map)),
@@ -1033,6 +1053,9 @@ class TestOvershirtNeedsATopUnderIt:
                 count=1,
                 single_outfit=single_outfit,
                 include_items=[items[index - 1].id for index in pinned] or None,
+                exclude_items=[items[unavailable[0] - 1].id]
+                if unavailable and unavailable[1] == "excluded"
+                else None,
             )
         return items, [{oi.item_id for oi in o.items} for o in outfits]
 
@@ -1287,3 +1310,69 @@ class TestOvershirtNeedsATopUnderIt:
             number_map={30: 0, 10: 1, 20: 2, 40: 3},
         )
         assert outfits == [{items[index].id for index in [1, 2, 3]}]
+
+    async def test_fallback_sweater_receives_a_button_shirt(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2]}]},
+            kinds=[
+                ("shirt", "overshirt"),
+                ("pants", None),
+                ("sweater", None),
+                ("shirt", "button-down"),
+            ],
+            number_map={30: 0, 40: 1, 10: 2, 20: 3},
+            cached=[30, 40],
+        )
+        assert outfits == [{items[index].id for index in [1, 2, 3]}]
+        self.ai.generate_text.assert_not_called()
+
+    @pytest.mark.parametrize("middle", ["cardigan", "vest"])
+    async def test_include_items_with_three_layers_still_returns_an_outfit(
+        self, db_session, test_user, middle
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[
+                ("sweater", None),
+                (middle, None),
+                ("coat", None),
+                ("pants", None),
+                ("t-shirt", None),
+            ],
+            pinned=(1, 2, 3),
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 2, 3]}]
+
+    @pytest.mark.parametrize("reason", ["needs_wash", "archived", "excluded"])
+    async def test_cached_layer_repair_does_not_add_unavailable_candidates(
+        self, db_session, test_user, reason
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": []},
+            cached=[1, 4],
+            unavailable=(2, reason),
+            kinds=[("shirt", "overshirt"), ("t-shirt", None), ("t-shirt", None), ("pants", None)],
+        )
+        assert outfits == [{items[index].id for index in [0, 2, 3]}]
+        self.ai.generate_text.assert_not_called()
+
+    async def test_materialization_caps_mid_layers_before_outerwear(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[
+                ("sweater", None),
+                ("vest", None),
+                ("jacket", None),
+                ("pants", None),
+                ("t-shirt", None),
+            ],
+        )
+        assert outfits == [{items[index].id for index in [0, 2, 3, 4]}]
