@@ -5,8 +5,6 @@ import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/font/google', () => ({ Inter: () => ({ variable: 'inter' }) }));
-vi.mock('next-intl/server', () => ({ getLocale: async () => 'en', getMessages: async () => ({}) }));
-vi.mock('next-intl', () => ({ NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock('@/app/providers', () => ({ Providers: ({ children }: { children: React.ReactNode }) => children }));
 
 import RootLayout, { viewport } from '@/app/layout';
@@ -32,7 +30,9 @@ describe('installable app', () => {
   it('sends credentials when the browser requests the manifest', async () => {
     const html = renderToStaticMarkup(await RootLayout({ children: <div /> }));
     const document = new DOMParser().parseFromString(html, 'text/html');
-    const manifestLink = document.querySelector('link[rel="manifest"]');
+    const manifestLinks = document.querySelectorAll('link[rel="manifest"]');
+    expect(manifestLinks).toHaveLength(1);
+    const manifestLink = manifestLinks[0];
     expect(manifestLink?.getAttribute('href')).toBe('/manifest.json');
     expect(manifestLink?.getAttribute('crossorigin')).toBe('use-credentials');
     expect(viewport.themeColor).toBe('#1a1a1a');
