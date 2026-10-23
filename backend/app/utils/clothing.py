@@ -15,6 +15,10 @@ ROLE_SLOTS: dict[str, frozenset[str]] = {
 # The slots an outfit must cover; a suit's own slot is optional like an outer layer.
 BODY_SLOTS = frozenset({"base_top", "bottom"})
 
+# Shirts cut to be worn open over another top. They stay type shirt so they wash and score like
+# shirts, but one of them is never the outfit's only top.
+OVER_LAYER_SUBTYPES = frozenset({"overshirt", "chore-jacket", "shirt-jacket", "shacket"})
+
 
 @dataclass(frozen=True)
 class WardrobeComposition:
@@ -53,6 +57,35 @@ def covered_body_slots(item_ids: list[UUID], item_type_map: dict[UUID, str]) -> 
         for slot in _slots_for_type(item_type_map.get(iid, ""))
         if slot in BODY_SLOTS
     }
+
+
+def lacks_top_under_overshirt(
+    item_ids: list[UUID], item_type_map: dict[UUID, str], item_subtype_map: dict[UUID, str]
+) -> bool:
+    """True when the outfit has an overshirt and nothing else covering the top: no shirt, tee or
+    sweater under it, and no dress or jumpsuit."""
+    overshirts = {
+        iid for iid in item_ids if (item_subtype_map.get(iid) or "").lower() in OVER_LAYER_SUBTYPES
+    }
+    if not overshirts:
+        return False
+    others = [iid for iid in item_ids if iid not in overshirts]
+    return "base_top" not in covered_body_slots(others, item_type_map)
+
+
+def top_to_wear_under(
+    ranked_ids: list[UUID],
+    chosen: set[UUID],
+    item_type_map: dict[UUID, str],
+    item_subtype_map: dict[UUID, str],
+) -> UUID | None:
+    """The best-ranked candidate that works as a top on its own, to put under an overshirt."""
+    for iid in ranked_ids:
+        if iid in chosen or (item_subtype_map.get(iid) or "").lower() in OVER_LAYER_SUBTYPES:
+            continue
+        if ITEM_ROLE.get(item_type_map.get(iid, "")) == "base_top":
+            return iid
+    return None
 
 
 def _seat_in_mid_layer(
