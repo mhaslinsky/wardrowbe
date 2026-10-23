@@ -14,6 +14,24 @@ ITEM_ROLE: dict[str, str] = {entry["value"]: entry["role"] for entry in _DATA["t
 CAN_BE_MID_LAYER_TYPES: frozenset[str] = frozenset(
     entry["value"] for entry in _DATA["types"] if entry.get("can_be_mid_layer")
 )
+NEEDS_BASE_TOP_TYPES = frozenset(
+    entry["value"] for entry in _DATA["types"] if entry.get("needs_base_top")
+)
+BASE_UNDER_LAYER_TYPES = frozenset(
+    entry["value"]
+    for entry in _DATA["types"]
+    if entry["role"] == "base_top" and entry.get("base_under_layer")
+)
+THIN_BASE_TOP_TYPES = frozenset(
+    entry["value"]
+    for entry in _DATA["types"]
+    if entry["role"] == "base_top" and entry.get("thin_base_top")
+)
+THIN_BASE_SUBTYPES = {
+    entry["value"]: frozenset(entry["thin_base_subtypes"])
+    for entry in _DATA["types"]
+    if entry["role"] == "base_top" and entry.get("thin_base_subtypes")
+}
 DEFAULT_WASH_INTERVALS: dict[str, int] = {
     entry["value"]: entry["wash_interval"] for entry in _DATA["types"]
 }

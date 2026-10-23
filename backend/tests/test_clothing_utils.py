@@ -493,31 +493,84 @@ def test_the_top_added_under_an_overshirt_is_the_best_ranked_real_top():
 
 
 def test_layering_repair_preserves_the_rules_and_is_idempotent():
-    overshirt, sweater, hoodie, cardigan, polo, tee, pants, coat = _ids(8)
+    (
+        overshirt,
+        sweater,
+        hoodie,
+        cardigan,
+        polo,
+        tee,
+        shirt,
+        dress,
+        jumpsuit,
+        best_tee,
+        pants,
+        coat,
+    ) = _ids(12)
+    tops = [overshirt, sweater, hoodie, cardigan, polo, tee, shirt, dress, jumpsuit]
     types = dict(
         zip(
-            [overshirt, sweater, hoodie, cardigan, polo, tee, pants, coat],
-            ["shirt", "sweater", "hoodie", "cardigan", "polo", "t-shirt", "pants", "coat"],
+            [*tops, best_tee, pants, coat],
+            [
+                "shirt",
+                "sweater",
+                "hoodie",
+                "cardigan",
+                "polo",
+                "t-shirt",
+                "shirt",
+                "dress",
+                "jumpsuit",
+                "t-shirt",
+                "pants",
+                "coat",
+            ],
             strict=True,
         )
     )
-    subtypes = {overshirt: "overshirt"}
-    ranked = [polo, sweater, tee, pants, coat]
-    tops = [overshirt, sweater, hoodie, cardigan, polo, tee]
+    subtypes = {overshirt: "overshirt", shirt: "button-down"}
+    ranked = [
+        polo,
+        best_tee,
+        cardigan,
+        jumpsuit,
+        shirt,
+        tee,
+        sweater,
+        hoodie,
+        dress,
+        coat,
+        pants,
+        overshirt,
+    ]
     for size in range(len(tops) + 1):
         for selected in combinations(tops, size):
             chosen = [*selected, pants, coat]
-            repaired = repair_top_layers(chosen, ranked, types, subtypes)
-            assert pants in repaired and coat in repaired
-            assert len(repaired) == len(set(repaired))
-            if overshirt in repaired:
-                assert tee in repaired
-                assert not {sweater, hoodie, cardigan, polo}.intersection(repaired)
-            if {sweater, hoodie, cardigan}.intersection(repaired):
-                assert tee in repaired
-            assert len(set(repaired) & {polo, tee}) <= 1
-            assert len(set(repaired) & {*tops, coat}) <= 3
-            assert repair_top_layers(repaired, ranked, types, subtypes) == repaired
+            for pins in [set(), *[{item_id} for item_id in selected]]:
+                repaired = repair_top_layers(chosen, ranked, types, subtypes, pins)
+                assert pins <= set(repaired)
+                assert len(repaired) == len(set(repaired))
+                assert set(repaired) & {*tops, best_tee}
+                assert len(set(repaired) & {*tops, best_tee, coat}) <= 3
+                seated = deduplicate_by_body_slot(repaired, types, pins)
+                assert seated == repaired
+                if overshirt in repaired:
+                    assert set(repaired) & {tee, best_tee}
+                    assert not {
+                        sweater,
+                        hoodie,
+                        cardigan,
+                        polo,
+                        shirt,
+                        dress,
+                        jumpsuit,
+                    }.intersection(repaired)
+                    if tee not in selected:
+                        assert best_tee in repaired
+                if {sweater, hoodie, cardigan}.intersection(repaired):
+                    if polo not in pins:
+                        assert set(repaired) & {tee, best_tee, shirt, dress, jumpsuit}
+                assert repair_top_layers(repaired, ranked, types, subtypes, pins) == repaired
 
 
 def test_layering_repair_handles_empty_and_missing_candidates():

@@ -42,6 +42,7 @@ from app.services.weather_service import (
 from app.utils.clothing import (
     canonical_item_order,
     deduplicate_by_body_slot,
+    prefer_ranked_layers,
     remove_legwear,
     repair_top_layers,
 )
@@ -700,6 +701,7 @@ class RecommendationService:
         ).all()
         item_type_map = {row.id: (row.type or "").lower() for row in items_result}
         item_subtype_map = {row.id: (row.subtype or "").lower() for row in items_result}
+        valid_ids = prefer_ranked_layers(valid_ids, ranked_ids, item_type_map, mandatory_item_ids)
         valid_ids = deduplicate_by_body_slot(
             valid_ids, item_type_map, mandatory_item_ids=mandatory_item_ids
         )
