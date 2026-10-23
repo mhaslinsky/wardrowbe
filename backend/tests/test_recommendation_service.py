@@ -975,8 +975,26 @@ class TestHotDayLegwear:
 
 
 class TestOvershirtNeedsATopUnderIt:
-    async def _outfits(self, db_session, user, ai_content, single_outfit=False, extra=()):
-        kinds = [("shirt", "overshirt"), ("t-shirt", None), ("pants", "chinos"), ("sneakers", None)]
+    async def _outfits(
+        self,
+        db_session,
+        user,
+        ai_content,
+        single_outfit=False,
+        extra=(),
+        kinds=None,
+        pinned=(),
+        number_map=None,
+        cached=None,
+        unavailable=None,
+    ):
+        if kinds is None:
+            kinds = [
+                ("shirt", "overshirt"),
+                ("t-shirt", None),
+                ("pants", "chinos"),
+                ("sneakers", None),
+            ]
         kinds += list(extra)
         items = [
             ClothingItem(
@@ -990,22 +1008,52 @@ class TestOvershirtNeedsATopUnderIt:
             for kind, subtype in kinds
         ]
         db_session.add_all(items)
+        if unavailable:
+            item_number, reason = unavailable
+            if reason == "needs_wash":
+                items[item_number - 1].needs_wash = True
+            elif reason == "archived":
+                items[item_number - 1].is_archived = True
         await db_session.commit()
-        number_map = {n: item.id for n, item in enumerate(items, start=1)}
+        if number_map is None:
+            number_map = {index + 1: index for index in range(len(items))}
+        number_map = {number: items[index].id for number, index in number_map.items()}
         user.preferences = None
+        if cached is not None:
+            cached = {
+                "items": cached,
+                "_number_map": {
+                    str(number): str(item_id) for number, item_id in number_map.items()
+                },
+                "_context": suggestion_context(
+                    _weather(temp=12), TimeOfDay.afternoon, None, user.body_measurements
+                ),
+            }
         ai = MagicMock()
         ai.generate_text = AsyncMock(
             return_value=MagicMock(content=json.dumps(ai_content), model="m", endpoint="e")
         )
+        self.ai = ai
         service = RecommendationService(db_session)
         with (
             patch("app.services.recommendation_service.AIService", return_value=ai),
             patch(
-                "app.services.recommendation_service.pop_suggestion", AsyncMock(return_value=None)
+                "app.services.recommendation_service.pop_suggestion",
+                AsyncMock(side_effect=[cached, None]),
             ),
             patch("app.services.recommendation_service.push_suggestions", AsyncMock()),
             patch.object(service, "_format_items_for_prompt", return_value=("", number_map)),
-            patch.object(service, "_get_today_rejected_item_ids", AsyncMock(return_value=set())),
+            patch.object(
+                service,
+                "_get_today_rejected_item_ids",
+                AsyncMock(
+                    return_value=(
+                        {items[unavailable[0] - 1].id}
+                        if unavailable and unavailable[1] == "excluded"
+                        else set()
+                    )
+                ),
+            ),
         ):
             outfits = await service.generate_recommendations(
                 user=user,
@@ -1014,6 +1062,7 @@ class TestOvershirtNeedsATopUnderIt:
                 time_of_day=TimeOfDay.afternoon,
                 count=1,
                 single_outfit=single_outfit,
+                include_items=[items[index - 1].id for index in pinned] or None,
             )
         return items, [{oi.item_id for oi in o.items} for o in outfits]
 
@@ -1052,3 +1101,289 @@ class TestOvershirtNeedsATopUnderIt:
             db_session, test_user, {"outfits": [{"items": [1, 2, 3, 4]}]}
         )
         assert outfits == [{item.id for item in items}]
+
+    @pytest.mark.parametrize("layer", ["sweater", "hoodie", "cardigan"])
+    async def test_sweater_types_get_the_best_ranked_base_top(self, db_session, test_user, layer):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 4, 5]}]},
+            kinds=[
+                (layer, None),
+                ("shirt", "button-down"),
+                ("t-shirt", None),
+                ("pants", None),
+                ("sneakers", None),
+            ],
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 3, 4]}]
+
+    @pytest.mark.parametrize("layer", ["sweater", "hoodie", "cardigan", "polo"])
+    @pytest.mark.parametrize("available", [True, False])
+    async def test_overshirt_replaces_thick_top_or_is_dropped(
+        self, db_session, test_user, layer, available
+    ):
+        kinds = [("shirt", "overshirt"), (layer, None), ("pants", None), ("sneakers", None)]
+        if available:
+            kinds += [("t-shirt", "long-sleeve"), ("shirt", "henley")]
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=kinds,
+        )
+        expected = [0, 2, 3, 4] if available else [1, 2, 3]
+        assert outfits == [{items[index].id for index in expected}]
+
+    @pytest.mark.parametrize("outer", ["jacket", "coat"])
+    async def test_outerwear_over_sweater_and_tee_is_unchanged(self, db_session, test_user, outer):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4, 5]}]},
+            kinds=[
+                (outer, None),
+                ("sweater", None),
+                ("t-shirt", None),
+                ("pants", None),
+                ("sneakers", None),
+            ],
+        )
+        assert outfits == [{item.id for item in items}]
+
+    async def test_overshirt_only_fallback_still_materializes_a_scheduled_outfit(
+        self, db_session, test_user, caplog
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"items": [1, 2, 3]},
+            single_outfit=True,
+            kinds=[("shirt", "overshirt"), ("pants", None), ("sneakers", None)],
+        )
+        assert outfits == [{item.id for item in items}]
+        assert "warning" in caplog.text.lower()
+
+    async def test_overshirt_fallback_adds_best_ranked_non_thin_top(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3]}]},
+            kinds=[
+                ("shirt", "overshirt"),
+                ("pants", None),
+                ("sneakers", None),
+                ("polo", None),
+                ("sweater", None),
+            ],
+        )
+        assert outfits == [{items[index].id for index in [1, 2, 3]}]
+
+    @pytest.mark.parametrize("base", ["polo", "tank-top", "blouse"])
+    async def test_sweater_replaces_non_qualifying_base_top(self, db_session, test_user, base):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4, 5]}]},
+            kinds=[
+                ("hoodie", None),
+                (base, None),
+                ("coat", None),
+                ("pants", None),
+                ("sneakers", None),
+                ("t-shirt", None),
+                ("shirt", "henley"),
+            ],
+        )
+        assert outfits == [{items[index].id for index in [0, 2, 3, 4, 5]}]
+
+    @pytest.mark.parametrize("pinned", [(1,), (2,), (1, 2)])
+    async def test_layer_repair_preserves_pinned_items(self, db_session, test_user, pinned, caplog):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[
+                ("shirt", "overshirt"),
+                ("sweater", None),
+                ("pants", None),
+                ("sneakers", None),
+                ("t-shirt", None),
+            ],
+            pinned=pinned,
+        )
+        assert {items[index - 1].id for index in pinned} <= outfits[0]
+        assert items[4].id in outfits[0]
+        if pinned == (2,):
+            assert items[0].id not in outfits[0]
+        if pinned == (1, 2):
+            assert "pinned" in caplog.text.lower()
+
+    async def test_pinned_base_top_is_not_replaced(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[
+                ("hoodie", None),
+                ("polo", None),
+                ("pants", None),
+                ("sneakers", None),
+                ("t-shirt", None),
+            ],
+            pinned=(2,),
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 2, 3]}]
+
+    async def test_cardigan_alone_gets_best_ranked_base_top(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 4, 5]}]},
+            kinds=[
+                ("cardigan", "hooded"),
+                ("shirt", "henley"),
+                ("t-shirt", None),
+                ("pants", None),
+                ("sneakers", None),
+            ],
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 3, 4]}]
+
+    async def test_unrelated_pinned_slot_conflict_keeps_existing_dedup_behavior(
+        self, db_session, test_user
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[("polo", None), ("t-shirt", None), ("pants", None), ("sneakers", None)],
+            pinned=(1, 2),
+        )
+        assert outfits == [{items[index].id for index in [0, 2, 3]}]
+
+    @pytest.mark.parametrize("outer", ["coat", "sweater"])
+    async def test_materialization_keeps_a_shirt_in_the_middle(self, db_session, test_user, outer):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[("t-shirt", None), ("shirt", "button-down"), ("pants", None), (outer, None)],
+        )
+        assert items[1].id in outfits[0]
+
+    @pytest.mark.parametrize("full_body", ["dress", "jumpsuit"])
+    @pytest.mark.parametrize("layer", ["cardigan", "hoodie"])
+    async def test_materialization_keeps_one_piece_layering(
+        self, db_session, test_user, full_body, layer
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3]}]},
+            kinds=[(full_body, None), (layer, None), ("sneakers", None), ("t-shirt", None)],
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 2]}]
+
+    async def test_materialization_uses_rank_order_not_candidate_insertion(
+        self, db_session, test_user
+    ):
+        from app.utils.clothing import repair_top_layers
+
+        def repair_with_reversed_rows(selected, ranked, types, subtypes, mandatory):
+            reversed_rows = {item_id: types[item_id] for item_id in reversed(ranked)}
+            return repair_top_layers(selected, ranked, reversed_rows, subtypes, mandatory)
+
+        with patch(
+            "app.services.recommendation_service.repair_top_layers",
+            side_effect=repair_with_reversed_rows,
+        ):
+            items, outfits = await self._outfits(
+                db_session,
+                test_user,
+                {"outfits": [{"items": [20, 40]}]},
+                kinds=[
+                    ("shirt", "overshirt"),
+                    ("t-shirt", None),
+                    ("t-shirt", None),
+                    ("pants", None),
+                ],
+                number_map={20: 0, 30: 1, 10: 2, 40: 3},
+            )
+        assert outfits == [{items[index].id for index in [0, 2, 3]}]
+
+    async def test_materialization_keeps_best_ranked_selected_sweater(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [30, 10, 20, 40]}]},
+            kinds=[("sweater", None), ("cardigan", None), ("t-shirt", None), ("pants", None)],
+            number_map={30: 0, 10: 1, 20: 2, 40: 3},
+        )
+        assert outfits == [{items[index].id for index in [1, 2, 3]}]
+
+    async def test_fallback_sweater_receives_a_button_shirt(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2]}]},
+            kinds=[
+                ("shirt", "overshirt"),
+                ("pants", None),
+                ("sweater", None),
+                ("shirt", "button-down"),
+            ],
+            number_map={30: 0, 40: 1, 10: 2, 20: 3},
+            cached=[30, 40],
+        )
+        assert outfits == [{items[index].id for index in [1, 2, 3]}]
+        self.ai.generate_text.assert_not_called()
+
+    @pytest.mark.parametrize("middle", ["cardigan", "vest"])
+    async def test_include_items_with_three_layers_still_returns_an_outfit(
+        self, db_session, test_user, middle
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[
+                ("sweater", None),
+                (middle, None),
+                ("coat", None),
+                ("pants", None),
+                ("t-shirt", None),
+            ],
+            pinned=(1, 2, 3),
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 2, 3]}]
+
+    @pytest.mark.parametrize("reason", ["needs_wash", "archived", "excluded"])
+    async def test_cached_layer_repair_does_not_add_unavailable_candidates(
+        self, db_session, test_user, reason
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": []},
+            cached=[1, 4],
+            unavailable=(2, reason),
+            kinds=[("shirt", "overshirt"), ("t-shirt", None), ("t-shirt", None), ("pants", None)],
+        )
+        assert outfits == [{items[index].id for index in [0, 2, 3]}]
+        self.ai.generate_text.assert_not_called()
+
+    async def test_materialization_caps_mid_layers_before_outerwear(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[
+                ("sweater", None),
+                ("vest", None),
+                ("jacket", None),
+                ("pants", None),
+                ("t-shirt", None),
+            ],
+        )
+        assert outfits == [{items[index].id for index in [0, 2, 3, 4]}]

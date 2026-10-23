@@ -42,9 +42,9 @@ from app.services.weather_service import (
 from app.utils.clothing import (
     canonical_item_order,
     deduplicate_by_body_slot,
-    lacks_top_under_overshirt,
+    prefer_ranked_layers,
     remove_legwear,
-    top_to_wear_under,
+    repair_top_layers,
 )
 from app.utils.garment_vocabulary import render_outfit_prompt
 from app.utils.preference_defaults import (
@@ -701,6 +701,7 @@ class RecommendationService:
         ).all()
         item_type_map = {row.id: (row.type or "").lower() for row in items_result}
         item_subtype_map = {row.id: (row.subtype or "").lower() for row in items_result}
+        valid_ids = prefer_ranked_layers(valid_ids, ranked_ids, item_type_map, mandatory_item_ids)
         valid_ids = deduplicate_by_body_slot(
             valid_ids, item_type_map, mandatory_item_ids=mandatory_item_ids
         )
@@ -710,16 +711,12 @@ class RecommendationService:
             valid_ids = remove_legwear(valid_ids, item_type_map, mandatory_item_ids or set())
         if not valid_ids:
             raise EmptyOutfitError("AI did not select any valid items")
-        # The prompt asks for a top under an overshirt, but the AI still sometimes skips it, and
-        # body-slot dedup can drop it. Adding the best-ranked top keeps every path (including a
-        # scheduled single outfit, which has no next option to fall back on) wearable.
-        if lacks_top_under_overshirt(valid_ids, item_type_map, item_subtype_map):
-            under = top_to_wear_under(ranked_ids, set(valid_ids), item_type_map, item_subtype_map)
-            if under is None:
-                logger.warning("Overshirt chosen as the only top and no other top to add")
-            else:
-                logger.info(f"Adding top {under} under the overshirt the AI chose alone")
-                valid_ids.append(under)
+        # Repair after slot deduplication, which can discard the base top a layer needs.
+        valid_ids = repair_top_layers(
+            valid_ids, ranked_ids, item_type_map, item_subtype_map, mandatory_item_ids
+        )
+        if not valid_ids:
+            raise EmptyOutfitError("No wearable items remain after layering repair")
         valid_ids = canonical_item_order(valid_ids, item_type_map)
 
         reasoning = outfit_data.get("headline") or outfit_data.get("reasoning")
@@ -910,6 +907,12 @@ class RecommendationService:
                 if not cached_item_ids <= candidate_ids:
                     logger.info("Cached suggestion uses items no longer available, skipping")
                     continue
+
+                number_map = {
+                    number: item_id
+                    for number, item_id in number_map.items()
+                    if item_id in candidate_ids
+                }
 
                 logger.info(f"Using cached suggestion for user {user.id}, occasion: {occasion}")
                 try:
