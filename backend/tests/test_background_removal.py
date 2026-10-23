@@ -29,7 +29,21 @@ class TestRembgProvider:
         with (
             patch.dict(
                 "sys.modules",
-                {"rembg": MagicMock(new_session=mock_new_session, remove=mock_remove)},
+                {
+                    "rembg": MagicMock(new_session=mock_new_session, remove=mock_remove),
+                    "onnxruntime": MagicMock(
+                        SessionOptions=lambda: type(
+                            "SessionOptions",
+                            (),
+                            {
+                                "intra_op_num_threads": 8,
+                                "inter_op_num_threads": 8,
+                                "enable_cpu_mem_arena": True,
+                                "enable_mem_pattern": True,
+                            },
+                        )()
+                    ),
+                },
             ),
         ):
             result = provider.remove(_make_rgb_image())
@@ -52,7 +66,21 @@ class TestRembgProvider:
         with (
             patch.dict(
                 "sys.modules",
-                {"rembg": MagicMock(new_session=mock_new_session, remove=mock_remove)},
+                {
+                    "rembg": MagicMock(new_session=mock_new_session, remove=mock_remove),
+                    "onnxruntime": MagicMock(
+                        SessionOptions=lambda: type(
+                            "SessionOptions",
+                            (),
+                            {
+                                "intra_op_num_threads": 8,
+                                "inter_op_num_threads": 8,
+                                "enable_cpu_mem_arena": True,
+                                "enable_mem_pattern": True,
+                            },
+                        )()
+                    ),
+                },
             ),
         ):
             provider.remove(_make_rgb_image())
@@ -68,7 +96,21 @@ class TestRembgProvider:
         with (
             patch.dict(
                 "sys.modules",
-                {"rembg": MagicMock(new_session=mock_new_session, remove=mock_remove)},
+                {
+                    "rembg": MagicMock(new_session=mock_new_session, remove=mock_remove),
+                    "onnxruntime": MagicMock(
+                        SessionOptions=lambda: type(
+                            "SessionOptions",
+                            (),
+                            {
+                                "intra_op_num_threads": 8,
+                                "inter_op_num_threads": 8,
+                                "enable_cpu_mem_arena": True,
+                                "enable_mem_pattern": True,
+                            },
+                        )()
+                    ),
+                },
             ),
         ):
             provider.remove(_make_rgb_image())

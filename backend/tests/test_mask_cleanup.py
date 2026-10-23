@@ -86,6 +86,23 @@ class TestCleanCutout:
         result = clean_cutout(_photo((1000, 1000)), cutout)
         assert result.getpixel((900, 120))[3] == 255
 
+    @pytest.mark.parametrize("shape", ["vertical", "diagonal", "curved"])
+    def test_keeps_thin_straps_in_any_orientation(self, shape):
+        cutout = _cutout(size=(1000, 1000), shapes=[(100, 100, 800, 800)])
+        draw = ImageDraw.Draw(cutout)
+        if shape == "vertical":
+            draw.line([(900, 100), (900, 160)], fill=(*SHIRT, 255), width=3)
+        elif shape == "diagonal":
+            draw.line([(900, 100), (940, 140)], fill=(*SHIRT, 255), width=3)
+        else:
+            draw.arc((900, 100, 960, 180), 0, 270, fill=(*SHIRT, 255), width=3)
+        result = clean_cutout(_photo((1000, 1000)), cutout)
+        region = (850, 50, 999, 250)
+        assert (
+            result.getchannel("A").crop(region).tobytes()
+            == cutout.getchannel("A").crop(region).tobytes()
+        )
+
     def test_keeps_a_small_elongated_opening(self):
         cutout = _cutout(holes=[(90, 60, 100, 120)])
         result = clean_cutout(_photo(), cutout)

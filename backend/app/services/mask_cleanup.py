@@ -46,14 +46,12 @@ def clean_cutout(original: Image.Image, cutout: Image.Image) -> Image.Image:
     keep = solid
     if count > 1:
         sizes = ndimage.sum_labels(solid, labels, index=np.arange(1, count + 1))
-        elongated = np.array(
-            [
-                max(region[0].stop - region[0].start, region[1].stop - region[1].start)
-                >= 3 * min(region[0].stop - region[0].start, region[1].stop - region[1].start)
-                for region in ndimage.find_objects(labels)
-            ]
+        # A strap stays thin along its path even when it bends or runs diagonally.
+        radii = ndimage.maximum(
+            ndimage.distance_transform_edt(solid), labels, index=np.arange(1, count + 1)
         )
-        kept_ids = np.flatnonzero((sizes >= sizes.max() * KEEP_RATIO) | elongated) + 1
+        thin = (sizes >= 50) & (sizes >= 12 * radii**2)
+        kept_ids = np.flatnonzero((sizes >= sizes.max() * KEEP_RATIO) | thin) + 1
         keep = np.isin(labels, kept_ids)
         # The soft edge around a dropped speck goes with it.
         dropped = ndimage.binary_dilation(solid & ~keep, structure=EIGHT_WAY, iterations=2)
