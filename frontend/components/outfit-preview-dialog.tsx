@@ -15,6 +15,7 @@ import { useRotateImage } from '@/lib/hooks/use-items';
 import { FamilyRatingForm, FamilyRatingsDisplay } from '@/components/family-ratings';
 import { toast } from 'sonner';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import { useLocale, useTranslations } from 'next-intl';
 import { formatShortDate } from '@/lib/utils';
 import { useOccasionLabel, useSubtypeLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
@@ -112,10 +113,10 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
             <Link href={`/dashboard/wardrobe?item=${currentItem.id}`} className="block">
               {/* Image - smaller on mobile */}
               <div className="relative aspect-square w-full max-h-[280px] sm:max-h-[350px]">
-                {currentItem.image_url ? (
+                {garmentImageUrl(currentItem, 'detail') ? (
                   <Image
                     key={`${currentItem.id}-${imageKey}`}
-                    src={currentItem.image_url}
+                    src={garmentImageUrl(currentItem, 'detail')!}
                     alt={currentItem.name || typeLabel(currentItem.type)}
                     fill
                     className="object-contain"
@@ -230,18 +231,18 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
                     key={item.id}
                     type="button"
                     onClick={() => setCurrentIndex(index)}
-                    className={`relative w-14 h-14 rounded overflow-hidden flex-shrink-0 border-2 transition-colors ${
+                    className={`relative w-14 h-14 rounded overflow-hidden flex-shrink-0 border-2 bg-muted transition-colors ${
                       index === currentIndex
                         ? 'border-primary'
                         : 'border-transparent hover:border-muted-foreground/50'
                     }`}
                   >
-                    {item.thumbnail_url ? (
+                    {garmentImageUrl(item, 'small') ? (
                       <Image
-                        src={item.thumbnail_url}
+                        src={garmentImageUrl(item, 'small')!}
                         alt={item.name || typeLabel(item.type)}
                         fill
-                        className="object-cover"
+                        className="object-contain"
                         sizes="56px"
                       />
                     ) : (

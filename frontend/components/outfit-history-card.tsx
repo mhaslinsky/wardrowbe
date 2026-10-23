@@ -18,6 +18,7 @@ import { useAcceptOutfit, useRejectOutfit, type Outfit, type WoreInsteadItem } f
 import { useOccasionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
 import { SourceBadge } from '@/components/shared/source-badge';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import { useTranslations } from 'next-intl';
 import { StarRatingDisplay } from '@/components/shared/star-rating';
 
@@ -80,12 +81,12 @@ export function OutfitHistoryCard({ outfit, onFeedback, onPreview }: OutfitHisto
               key={item.id}
               className="w-16 h-16 rounded-lg bg-muted overflow-hidden relative border shadow-sm group-hover:shadow-md transition-shadow"
             >
-              {item.thumbnail_url ? (
+              {garmentImageUrl(item, 'small') ? (
                 <Image
-                  src={item.thumbnail_url}
+                  src={garmentImageUrl(item, 'small')!}
                   alt={item.name || typeLabel(item.type)}
                   fill
-                  className="object-cover"
+                  className="object-contain"
                   sizes="64px"
                 />
               ) : (
@@ -135,12 +136,12 @@ export function OutfitHistoryCard({ outfit, onFeedback, onPreview }: OutfitHisto
                     className="w-14 h-14 rounded-lg bg-muted overflow-hidden relative border hover:ring-2 ring-primary transition-all"
                     title={item.name || typeLabel(item.type)}
                   >
-                    {item.thumbnail_url ? (
+                    {garmentImageUrl(item, 'small') ? (
                       <Image
-                        src={item.thumbnail_url}
+                        src={garmentImageUrl(item, 'small')!}
                         alt={item.name || typeLabel(item.type)}
                         fill
-                        className="object-cover"
+                        className="object-contain"
                         sizes="56px"
                       />
                     ) : (

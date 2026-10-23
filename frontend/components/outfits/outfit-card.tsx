@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import {
   BookmarkCheck,
   Bot,
@@ -144,12 +145,12 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
                 key={`${item.id}-${idx}`}
                 className="relative rounded overflow-hidden bg-background"
               >
-                {item.thumbnail_url || item.image_url ? (
+                {garmentImageUrl(item, 'card') ? (
                   <Image
-                    src={(item.thumbnail_url || item.image_url)!}
+                    src={garmentImageUrl(item, 'card')!}
                     alt={item.name || typeLabel(item.type)}
                     fill
-                    className="object-cover"
+                    className="object-contain"
                     sizes="(max-width: 640px) 25vw, 15vw"
                     loading="lazy"
                   />
