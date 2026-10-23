@@ -1,13 +1,16 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createQueryClient } from '@/lib/query-client';
+import { toast } from 'sonner';
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 import SelfiePage from '@/app/dashboard/selfie/page';
 
 const fetchMock = vi.mocked(fetch);
 let revoke: ReturnType<typeof vi.fn>;
 function mount() {
-  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  const client = createQueryClient();
   return render(<QueryClientProvider client={client}><SelfiePage /></QueryClientProvider>);
 }
 function choose() {
@@ -20,6 +23,7 @@ function reply(body: unknown, status = 200) {
 }
 beforeEach(() => {
   fetchMock.mockReset();
+  vi.mocked(toast.error).mockClear();
   revoke = vi.fn();
   URL.createObjectURL = vi.fn(() => 'blob:selfie');
   URL.revokeObjectURL = revoke;
@@ -45,10 +49,11 @@ describe('selfie analysis', () => {
     mount(); choose();
     expect(await screen.findByText('noneFound')).toBeInTheDocument();
   });
-  it.each([[503, 'aiOff'], [502, 'aiError']])('shows error %s', async (status, key) => {
+  it.each([[503, 'aiOff'], [502, 'aiError'], [400, 'invalidPhoto'], [413, 'photoTooLarge'], [429, 'rateLimit']])('shows error %s', async (status, key) => {
     fetchMock.mockResolvedValue(reply({ detail: 'Unavailable' }, status as number));
     mount(); choose();
     expect(await screen.findByText(key as string)).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
   });
   it('disables replacement during analysis and clears old matches on a new photo', async () => {
     let resolve!: (response: Response) => void;

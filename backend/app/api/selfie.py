@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import tempfile
 from io import BytesIO
@@ -6,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from PIL import Image
+from pillow_heif import register_heif_opener
 from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
@@ -16,7 +18,7 @@ from app.models.item import ClothingItem, ItemStatus
 from app.models.user import User
 from app.schemas.item import ItemResponse
 from app.services.ai_service import AIDisabledError, get_ai_service
-from app.services.image_service import ImageService
+from app.services.image_service import ALLOWED_MIME_TYPES
 from app.services.selfie_service import candidates_for, match_selfie
 from app.utils.auth import get_current_user
 from app.utils.rate_limit import rate_limit_by_user
@@ -53,18 +55,9 @@ async def recognise_outfit(
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(error)
         ) from None
-    if not ImageService().validate_image(content, image.content_type or "application/octet-stream"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid image file. Supported formats: JPEG, PNG, WebP, HEIC",
-        )
-    # Header only: a small file can still decode to a huge bitmap, so the pixel ceiling the
-    # uploads use is checked before the photo is ever decoded.
-    if _pixels(content) > settings.max_image_megapixels * 1_000_000:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"The photo is over {settings.max_image_megapixels:g} megapixels",
-        )
+    await asyncio.to_thread(
+        _validate_photo, content, image.content_type, settings.max_image_megapixels
+    )
     try:
         ai = get_ai_service()
     except AIDisabledError:
@@ -111,6 +104,28 @@ def _pixels(content: bytes) -> int:
     try:
         with Image.open(BytesIO(content)) as photo:
             width, height = photo.size
+    except Image.DecompressionBombError:
+        raise HTTPException(status_code=413, detail="Photo is too large") from None
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid image file") from None
     return width * height
+
+
+def _validate_photo(content: bytes, content_type: str | None, max_megapixels: float) -> None:
+    if content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported image format")
+    register_heif_opener()
+    # Reject oversized headers before verify or load can decode pixels.
+    if _pixels(content) > max_megapixels * 1_000_000:
+        raise HTTPException(status_code=413, detail="Photo is too large")
+    try:
+        with Image.open(BytesIO(content)) as photo:
+            if photo.format not in {"JPEG", "PNG", "WEBP", "HEIF", "HEIC"}:
+                raise ValueError("Unsupported image format")
+            photo.verify()
+        with Image.open(BytesIO(content)) as photo:
+            photo.load()
+    except Image.DecompressionBombError:
+        raise HTTPException(status_code=413, detail="Photo is too large") from None
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file") from None

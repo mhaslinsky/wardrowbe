@@ -8,5 +8,8 @@
   "pickHint": "Am besten ein Ganzkörperfoto im Spiegel.",
   "subtitle": "Finde passende Kleidungsstücke in deinem Outfit-Foto.",
   "title": "Outfit-Selfie",
-  "working": "Kleidungsstücke werden gesucht…"
+  "working": "Kleidungsstücke werden gesucht…",
+  "invalidPhoto": "Wähle ein gültiges Foto.",
+  "photoTooLarge": "Wähle ein kleineres Foto.",
+  "rateLimit": "Versuche es gleich noch einmal."
 }

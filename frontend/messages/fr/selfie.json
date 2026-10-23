@@ -8,5 +8,8 @@
   "pickHint": "Une photo en pied dans le miroir fonctionne le mieux.",
   "subtitle": "Retrouve les vêtements de ta garde-robe sur ta photo.",
   "title": "Selfie de tenue",
-  "working": "Recherche des vêtements…"
+  "working": "Recherche des vêtements…",
+  "invalidPhoto": "Choisis une photo valide.",
+  "photoTooLarge": "Choisis une photo plus petite.",
+  "rateLimit": "Réessaie dans un instant."
 }

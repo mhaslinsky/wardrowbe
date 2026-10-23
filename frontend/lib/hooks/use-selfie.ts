@@ -13,6 +13,7 @@ export interface SelfieResult {
 export function useSelfieRecognition() {
   const { data: session } = useSession();
   return useMutation({
+    meta: { toastsOwnErrors: true },
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('image', file);

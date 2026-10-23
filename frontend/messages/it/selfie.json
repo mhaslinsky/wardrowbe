@@ -8,5 +8,8 @@
   "pickHint": "Funziona meglio una foto a figura intera allo specchio.",
   "subtitle": "Trova i capi del guardaroba nella foto.",
   "title": "Selfie outfit",
-  "working": "Ricerca dei capi…"
+  "working": "Ricerca dei capi…",
+  "invalidPhoto": "Scegli una foto valida.",
+  "photoTooLarge": "Scegli una foto più piccola.",
+  "rateLimit": "Riprova tra poco."
 }

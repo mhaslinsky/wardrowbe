@@ -8,5 +8,8 @@
   "pickHint": "A full-length mirror photo works best.",
   "subtitle": "Find wardrobe matches in your outfit photo.",
   "title": "Outfit selfie",
-  "working": "Finding wardrobe matches…"
+  "working": "Finding wardrobe matches…",
+  "invalidPhoto": "Choose a valid photo.",
+  "photoTooLarge": "Choose a smaller photo.",
+  "rateLimit": "Try again shortly."
 }

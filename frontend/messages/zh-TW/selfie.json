@@ -8,5 +8,8 @@
   "pickHint": "對鏡全身照效果最好。",
   "subtitle": "辨識照片中屬於你衣櫥的衣物。",
   "title": "穿搭自拍",
-  "working": "正在辨識衣物…"
+  "working": "正在辨識衣物…",
+  "invalidPhoto": "請選擇有效的照片。",
+  "photoTooLarge": "請選擇較小的照片。",
+  "rateLimit": "請稍後重試。"
 }

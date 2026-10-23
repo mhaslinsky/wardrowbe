@@ -25,12 +25,12 @@ export default function SelfiePage() {
     if (next) recognise.mutate(next);
   };
 
-  const errorText =
-    recognise.error instanceof ApiError && recognise.error.status === 503
-      ? t('aiOff')
-      : recognise.error
-        ? t('aiError')
-        : null;
+  const errorKeys: Record<number, string> = {
+    400: 'invalidPhoto', 413: 'photoTooLarge', 429: 'rateLimit', 503: 'aiOff',
+  };
+  const errorText = recognise.error
+    ? t(recognise.error instanceof ApiError ? (errorKeys[recognise.error.status] ?? 'aiError') : 'aiError')
+    : null;
   const matches = recognise.data?.matches ?? [];
 
   return (
@@ -100,7 +100,7 @@ export default function SelfiePage() {
                             src={item.thumbnail_url}
                             alt={item.name || typeLabel(item.type)}
                             fill
-                            className="object-cover"
+                            className="object-contain"
                             sizes="160px"
                           />
                         )}
