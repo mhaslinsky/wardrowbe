@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.utils.garment_vocabulary import CAN_BE_MID_LAYER_TYPES, ITEM_ROLE, ROLES
+from app.utils.garment_vocabulary import CAN_BE_MID_LAYER_TYPES, ITEM_ROLE, ROLES, types_for_role
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,60 @@ def top_to_wear_under(
         if ITEM_ROLE.get(item_type_map.get(iid, "")) == "base_top":
             return iid
     return None
+
+
+_SWEATER_TYPES = frozenset(ITEM_ROLE).intersection({"sweater", "hoodie", "cardigan"})
+_BASE_UNDER_TOP_TYPES = frozenset(types_for_role("base_top")).intersection({"shirt", "t-shirt"})
+
+
+def repair_top_layers(
+    item_ids: list[UUID],
+    ranked_ids: list[UUID],
+    item_type_map: dict[UUID, str],
+    item_subtype_map: dict[UUID, str],
+) -> list[UUID]:
+    """Add missing base tops and keep overshirts over thin tops only."""
+
+    def is_overshirt(item_id: UUID) -> bool:
+        return (item_subtype_map.get(item_id) or "").lower() in OVER_LAYER_SUBTYPES
+
+    def is_base_top(item_id: UUID, thin_only: bool = False) -> bool:
+        kind = item_type_map.get(item_id, "")
+        if is_overshirt(item_id) or kind not in _BASE_UNDER_TOP_TYPES:
+            return False
+        return not thin_only or kind == "t-shirt" or item_subtype_map.get(item_id) == "henley"
+
+    kept = list(item_ids)
+    overshirts = {item_id for item_id in kept if is_overshirt(item_id)}
+    if overshirts:
+        under = next((item_id for item_id in kept if is_base_top(item_id, True)), None)
+        if under is None:
+            under = next((item_id for item_id in ranked_ids if is_base_top(item_id, True)), None)
+        if under is None:
+            logger.warning("No thin top available; dropping the overshirt")
+            kept = [item_id for item_id in kept if item_id not in overshirts]
+        else:
+            kept = [
+                item_id
+                for item_id in kept
+                if item_id in overshirts
+                or not (
+                    item_type_map.get(item_id) in _SWEATER_TYPES
+                    or ITEM_ROLE.get(item_type_map.get(item_id, "")) == "base_top"
+                )
+                or item_id == under
+            ]
+            if under not in kept:
+                kept.append(under)
+
+    if any(item_type_map.get(item_id) in _SWEATER_TYPES for item_id in kept):
+        if not any(is_base_top(item_id) for item_id in kept):
+            under = next((item_id for item_id in ranked_ids if is_base_top(item_id)), None)
+            if under is None:
+                logger.warning("No base top available under the sweater or hoodie")
+            else:
+                kept.append(under)
+    return kept
 
 
 def _seat_in_mid_layer(
