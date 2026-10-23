@@ -1,4 +1,5 @@
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,6 +21,17 @@ def _make_rgb_image(w=100, h=100):
     return Image.new("RGB", (w, h), (200, 150, 100))
 
 
+def _onnxruntime_stub():
+    return MagicMock(
+        SessionOptions=lambda: SimpleNamespace(
+            intra_op_num_threads=8,
+            inter_op_num_threads=8,
+            enable_cpu_mem_arena=True,
+            enable_mem_pattern=True,
+        )
+    )
+
+
 class TestRembgProvider:
     def test_remove_calls_rembg(self):
         provider = RembgProvider(model="u2net")
@@ -29,12 +41,21 @@ class TestRembgProvider:
         with (
             patch.dict(
                 "sys.modules",
-                {"rembg": MagicMock(new_session=mock_new_session, remove=mock_remove)},
+                {
+                    "rembg": MagicMock(new_session=mock_new_session, remove=mock_remove),
+                    "onnxruntime": _onnxruntime_stub(),
+                },
             ),
         ):
             result = provider.remove(_make_rgb_image())
 
-        mock_new_session.assert_called_once_with("u2net")
+        mock_new_session.assert_called_once()
+        assert mock_new_session.call_args.args == ("u2net",)
+        options = mock_new_session.call_args.kwargs["sess_opts"]
+        assert options.intra_op_num_threads == 1
+        assert options.inter_op_num_threads == 1
+        assert not options.enable_cpu_mem_arena
+        assert not options.enable_mem_pattern
         mock_remove.assert_called_once()
         assert result.mode == "RGBA"
 
@@ -46,7 +67,10 @@ class TestRembgProvider:
         with (
             patch.dict(
                 "sys.modules",
-                {"rembg": MagicMock(new_session=mock_new_session, remove=mock_remove)},
+                {
+                    "rembg": MagicMock(new_session=mock_new_session, remove=mock_remove),
+                    "onnxruntime": _onnxruntime_stub(),
+                },
             ),
         ):
             provider.remove(_make_rgb_image())
@@ -62,12 +86,21 @@ class TestRembgProvider:
         with (
             patch.dict(
                 "sys.modules",
-                {"rembg": MagicMock(new_session=mock_new_session, remove=mock_remove)},
+                {
+                    "rembg": MagicMock(new_session=mock_new_session, remove=mock_remove),
+                    "onnxruntime": _onnxruntime_stub(),
+                },
             ),
         ):
             provider.remove(_make_rgb_image())
 
-        mock_new_session.assert_called_once_with("isnet-general-use")
+        mock_new_session.assert_called_once()
+        assert mock_new_session.call_args.args == ("isnet-general-use",)
+        options = mock_new_session.call_args.kwargs["sess_opts"]
+        assert options.intra_op_num_threads == 1
+        assert options.inter_op_num_threads == 1
+        assert not options.enable_cpu_mem_arena
+        assert not options.enable_mem_pattern
 
 
 class TestHttpProvider:

@@ -25,9 +25,15 @@ class RembgProvider(BackgroundRemovalProvider):
 
     def _get_session(self):
         if self._session is None:
+            import onnxruntime
             from rembg import new_session
 
-            self._session = new_session(self.model)
+            options = onnxruntime.SessionOptions()
+            options.intra_op_num_threads = 1
+            options.inter_op_num_threads = 1
+            options.enable_cpu_mem_arena = False
+            options.enable_mem_pattern = False
+            self._session = new_session(self.model, sess_opts=options)
         return self._session
 
     def remove(self, image: Image.Image) -> Image.Image:

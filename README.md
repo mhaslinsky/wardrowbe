@@ -399,7 +399,7 @@ If browser geolocation is denied or unavailable, an optional fallback can approx
 
 ### Background Removal
 
-Works out of the box: the backend image ships rembg with the default `u2net` model already downloaded.
+Works out of the box: the backend image ships rembg with the default `u2net` model already downloaded. The cut-out is cleaned afterwards: small holes the model punched into a print are filled back in, loose bits of background are dropped, and a result that lost the garment entirely keeps the original photo.
 
 <details>
 <summary>Other rembg models, or an HTTP provider</summary>
