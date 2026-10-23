@@ -228,7 +228,7 @@ async def test_candidates_are_only_callers_active_ready_known_items(
     from tests.identity_helpers import add_users_with_identities
 
     other = User(
-        id=uuid4(), email="selfie-other@example.com", name="Other", external_id=str(uuid4())
+        id=uuid4(), email="selfie-other@example.com", display_name="Other", external_id=str(uuid4())
     )
     await add_users_with_identities(db_session, other)
     for owner, status, archived, item_type in [
