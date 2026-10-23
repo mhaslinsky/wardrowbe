@@ -13,13 +13,13 @@ from app.models.preference import UserPreference
 from app.services.inspiration_service import InspirationService, match_slots, parse_analysis
 
 
-def garment(item_id=None, **values):
+def garment(matched_id=None, **values):
     return {
         "type": "shirt",
         "color": "blue",
         "fit": "regular",
         "pattern": "solid",
-        "item_id": str(item_id) if item_id else None,
+        "item_id": str(matched_id) if matched_id else None,
         "match_strength": 0.9,
         **values,
     }
