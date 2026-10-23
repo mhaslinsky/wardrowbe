@@ -1,13 +1,15 @@
 """Add per-user standing outfit rules."""
 
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision = "b8e4f1c2d3a5"
-down_revision = "a7d3c9e1f5b2"
-branch_labels = None
-depends_on = None
+revision: str = "b8e4f1c2d3a5"
+down_revision: str | None = "a7d3c9e1f5b2"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
