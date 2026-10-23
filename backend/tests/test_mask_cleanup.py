@@ -39,6 +39,18 @@ class TestCleanCutout:
 
         assert result.getpixel((100, 100)) == (*SHIRT, 255)
 
+    def test_cleanup_is_idempotent_and_does_not_change_inputs(self):
+        photo = _photo()
+        cutout = _cutout(shapes=[(40, 40, 160, 160), (2, 2, 6, 6)], holes=[(90, 90, 110, 110)])
+        original_bytes = photo.tobytes(), cutout.tobytes()
+        cleaned = clean_cutout(photo, cutout)
+        assert clean_cutout(photo, cleaned).tobytes() == cleaned.tobytes()
+        assert (photo.tobytes(), cutout.tobytes()) == original_bytes
+
+    def test_fully_transparent_result_is_rejected(self):
+        with pytest.raises(NoGarmentFound):
+            clean_cutout(_photo(), _cutout(shapes=[]))
+
     def test_keeps_a_large_opening(self):
         # A bag handle: the gap inside is a real opening, not fabric.
         cut = _cutout(shapes=[(20, 20, 180, 180)], holes=[(50, 50, 150, 150)])
@@ -135,8 +147,8 @@ class TestRedoFromOriginal:
 
         # The second run sees the red shirt again, not the first run's blue result.
         width, height = seen[1].size
-        r, g, b = seen[1].getpixel((width // 2, height // 2))
-        assert r > 150 and b < 100
+        red, green, blue = seen[1].getpixel((width // 2, height // 2))
+        assert red > 150 and blue < 100
 
     @pytest.mark.asyncio
     async def test_failed_removal_leaves_no_backup(self, item: ClothingItem):
@@ -168,6 +180,30 @@ class TestRedoFromOriginal:
         backup = svc.get_image_path(item.image_path.rsplit(".", 1)[0] + "_orig.jpg")
         assert not backup.exists()
         assert not list(backup.parent.glob("*.tmp"))
+
+    @pytest.mark.asyncio
+    async def test_partial_backup_write_cannot_be_restored(self, item: ClothingItem):
+        service = ImageService()
+        original = service.get_image_path(item.image_path).read_bytes()
+
+        def interrupted_copy(source, destination):
+            destination.write_bytes(b"partial JPEG")
+            raise OSError("disk full")
+
+        with (
+            patch(
+                "app.services.background_removal.get_provider",
+                return_value=_recording_provider([]),
+            ),
+            patch("app.services.image_service.shutil.copy2", side_effect=interrupted_copy),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            service.remove_background(item.image_path)
+
+        backup = service.get_image_path(item.image_path.rsplit(".", 1)[0] + "_orig.jpg")
+        assert not backup.exists()
+        assert not list(backup.parent.glob(".*.tmp"))
+        assert service.get_image_path(item.image_path).read_bytes() == original
 
     @pytest.mark.asyncio
     async def test_a_failed_rotation_leaves_the_backup_as_it_was(self, item: ClothingItem):
