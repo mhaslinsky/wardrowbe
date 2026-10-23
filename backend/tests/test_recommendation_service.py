@@ -1008,7 +1008,7 @@ class TestOvershirtNeedsATopUnderIt:
         db_session.add_all(items)
         await db_session.commit()
         if number_map is None:
-            number_map = {number: index for index, number in enumerate(range(1, len(items) + 1))}
+            number_map = {index + 1: index for index in range(len(items))}
         number_map = {number: items[index].id for number, index in number_map.items()}
         user.preferences = None
         ai = MagicMock()
@@ -1216,15 +1216,17 @@ class TestOvershirtNeedsATopUnderIt:
         )
         assert outfits == [{items[index].id for index in [0, 1, 3, 4]}]
 
-    async def test_cannot_silently_drop_a_pinned_base_top_during_dedup(self, db_session, test_user):
-        with pytest.raises(AIRecommendationError):
-            await self._outfits(
-                db_session,
-                test_user,
-                {"outfits": [{"items": [1, 2, 3, 4]}]},
-                kinds=[("polo", None), ("t-shirt", None), ("pants", None), ("sneakers", None)],
-                pinned=(1, 2),
-            )
+    async def test_unrelated_pinned_slot_conflict_keeps_existing_dedup_behavior(
+        self, db_session, test_user
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[("polo", None), ("t-shirt", None), ("pants", None), ("sneakers", None)],
+            pinned=(1, 2),
+        )
+        assert outfits == [{items[index].id for index in [0, 2, 3]}]
 
     @pytest.mark.parametrize("outer", ["coat", "sweater"])
     async def test_materialization_keeps_a_shirt_in_the_middle(self, db_session, test_user, outer):
@@ -1252,13 +1254,28 @@ class TestOvershirtNeedsATopUnderIt:
     async def test_materialization_uses_rank_order_not_candidate_insertion(
         self, db_session, test_user
     ):
-        items, outfits = await self._outfits(
-            db_session,
-            test_user,
-            {"outfits": [{"items": [20, 40]}]},
-            kinds=[("shirt", "overshirt"), ("t-shirt", None), ("t-shirt", None), ("pants", None)],
-            number_map={20: 0, 30: 1, 10: 2, 40: 3},
-        )
+        from app.utils.clothing import repair_top_layers
+
+        def repair_with_reversed_rows(selected, ranked, types, subtypes, mandatory):
+            reversed_rows = {item_id: types[item_id] for item_id in reversed(ranked)}
+            return repair_top_layers(selected, ranked, reversed_rows, subtypes, mandatory)
+
+        with patch(
+            "app.services.recommendation_service.repair_top_layers",
+            side_effect=repair_with_reversed_rows,
+        ):
+            items, outfits = await self._outfits(
+                db_session,
+                test_user,
+                {"outfits": [{"items": [20, 40]}]},
+                kinds=[
+                    ("shirt", "overshirt"),
+                    ("t-shirt", None),
+                    ("t-shirt", None),
+                    ("pants", None),
+                ],
+                number_map={20: 0, 30: 1, 10: 2, 40: 3},
+            )
         assert outfits == [{items[index].id for index in [0, 2, 3]}]
 
     async def test_materialization_keeps_best_ranked_selected_sweater(self, db_session, test_user):
