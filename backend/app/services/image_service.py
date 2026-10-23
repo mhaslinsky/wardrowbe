@@ -279,9 +279,10 @@ class ImageService:
 
         image = Image.open(source_full).convert("RGB")
         provider = background_removal.get_provider()
-        # Bound model and cleanup buffers while preserving the original photo pixels.
+        # Bound local model buffers; remote providers receive the full image.
         working = image.copy()
-        working.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+        if isinstance(provider, background_removal.RembgProvider):
+            working.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
         result = clean_cutout(working, provider.remove(working))
         if working.size != image.size:
             alpha = result.getchannel("A").resize(image.size, Image.Resampling.LANCZOS)

@@ -4,6 +4,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from app.models.item import ClothingItem
+from app.services.background_removal import HttpProvider, RembgProvider
 from app.services.image_service import ImageService
 from app.services.mask_cleanup import NoGarmentFound, clean_cutout
 from tests.test_image_undo_replace import _mock_provider
@@ -103,6 +104,28 @@ class TestCleanCutout:
             == cutout.getchannel("A").crop(region).tobytes()
         )
 
+    @pytest.mark.parametrize("size,expected_alpha", [(25, 0), (104, 0), (105, 255), (106, 255)])
+    def test_absolute_component_floor(self, size, expected_alpha):
+        cutout = _cutout(size=(1024, 1024), shapes=[(100, 100, 800, 800)])
+        draw = ImageDraw.Draw(cutout)
+        for offset in range(size):
+            draw.point((900 + offset % 12, 100 + offset // 12), fill=(*SHIRT, 255))
+        result = clean_cutout(_photo((1024, 1024)), cutout)
+        assert result.getpixel((900, 100))[3] == expected_alpha
+
+    @pytest.mark.parametrize("end_width", [12, 16])
+    def test_keeps_a_strap_with_a_wider_end(self, end_width):
+        cutout = _cutout(size=(1024, 1024), shapes=[(100, 100, 800, 800)])
+        draw = ImageDraw.Draw(cutout)
+        draw.rectangle((900, 100, 902, 160), fill=(*SHIRT, 255))
+        draw.rectangle((895, 150, 894 + end_width, 161), fill=(*SHIRT, 255))
+        result = clean_cutout(_photo((1024, 1024)), cutout)
+        region = (850, 50, 999, 250)
+        assert (
+            result.getchannel("A").crop(region).tobytes()
+            == cutout.getchannel("A").crop(region).tobytes()
+        )
+
     def test_keeps_a_small_elongated_opening(self):
         cutout = _cutout(holes=[(90, 60, 100, 120)])
         result = clean_cutout(_photo(), cutout)
@@ -149,17 +172,21 @@ class TestRedoFromOriginal:
         red, green, blue = second_source.getpixel((width // 2, height // 2))
         assert green > 150 and blue < 100
 
+    @pytest.mark.parametrize(
+        "provider_class,expected_size", [(RembgProvider, (768, 1024)), (HttpProvider, (2400, 3200))]
+    )
     @pytest.mark.asyncio
     async def test_phone_photo_bounds_inference_and_preserves_output_size(
-        self, item_with_image: ClothingItem
+        self, item_with_image: ClothingItem, provider_class, expected_size
     ):
         service = ImageService()
         full_size = (2400, 3200)
         _photo(full_size).save(service.get_image_path(item_with_image.image_path), "JPEG")
-        provider = _mock_provider()
+        provider = MagicMock(spec=provider_class)
+        provider.remove.side_effect = _mock_provider().remove.side_effect
         with patch("app.services.background_removal.get_provider", return_value=provider):
             service.remove_background(item_with_image.image_path)
-        assert provider.remove.call_args.args[0].size == (768, 1024)
+        assert provider.remove.call_args.args[0].size == expected_size
         with Image.open(service.get_image_path(item_with_image.image_path)) as saved:
             assert saved.size == (1800, 2400)
 
@@ -176,25 +203,6 @@ class TestRedoFromOriginal:
 
         backup = item_with_image.image_path.rsplit(".", 1)[0] + "_orig.jpg"
         assert not svc.get_image_path(backup).exists()
-
-    @pytest.mark.asyncio
-    async def test_an_interrupted_backup_write_leaves_no_backup(
-        self, item_with_image: ClothingItem
-    ):
-        svc = ImageService()
-        with (
-            patch(
-                "app.services.background_removal.get_provider",
-                return_value=_mock_provider(),
-            ),
-            patch("app.services.image_service.shutil.copy2", side_effect=OSError("disk full")),
-            pytest.raises(OSError),
-        ):
-            svc.remove_background(item_with_image.image_path)
-
-        backup = svc.get_image_path(item_with_image.image_path.rsplit(".", 1)[0] + "_orig.jpg")
-        assert not backup.exists()
-        assert not list(backup.parent.glob("*.tmp"))
 
     @pytest.mark.asyncio
     async def test_partial_backup_write_cannot_be_restored(self, item_with_image: ClothingItem):

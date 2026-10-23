@@ -10,11 +10,10 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-# Less opaque area than this and the model lost the garment altogether. Low enough for a
-# ring or an earring photographed from a distance (0.5% of a 12 MP photo is 60,000 pixels).
+# Reject near-empty results while allowing small garments at the working resolution.
 MIN_COVERAGE = 0.005
-# Small elongated pieces can be straps, even below the relative area cutoff.
-KEEP_RATIO = 0.02
+# Prefer leaving background specks over deleting a detached garment part.
+MIN_COMPONENT_PIXELS = 105
 # Only compact holes with garment-colored source pixels are repaired.
 MAX_HOLE_RATIO = 0.10
 OPAQUE = 128
@@ -46,12 +45,7 @@ def clean_cutout(original: Image.Image, cutout: Image.Image) -> Image.Image:
     keep = solid
     if count > 1:
         sizes = ndimage.sum_labels(solid, labels, index=np.arange(1, count + 1))
-        # A strap stays thin along its path even when it bends or runs diagonally.
-        radii = ndimage.maximum(
-            ndimage.distance_transform_edt(solid), labels, index=np.arange(1, count + 1)
-        )
-        thin = (sizes >= 50) & (sizes >= 12 * radii**2)
-        kept_ids = np.flatnonzero((sizes >= sizes.max() * KEEP_RATIO) | thin) + 1
+        kept_ids = np.flatnonzero(sizes >= MIN_COMPONENT_PIXELS) + 1
         keep = np.isin(labels, kept_ids)
         # The soft edge around a dropped speck goes with it.
         dropped = ndimage.binary_dilation(solid & ~keep, structure=EIGHT_WAY, iterations=2)
@@ -73,7 +67,7 @@ def clean_cutout(original: Image.Image, cutout: Image.Image) -> Image.Image:
                 continue
             if hole_sizes[hole_id - 1] > keep.sum() * MAX_HOLE_RATIO:
                 continue
-            hole_color = np.median(source_pixels[hole_labels == hole_id], axis=0)
+            hole_color = np.median(source_pixels[region][hole_labels[region] == hole_id], axis=0)
             garment_distance = np.linalg.norm(hole_color - garment_color)
             if garment_distance > 60:
                 continue

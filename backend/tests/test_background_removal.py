@@ -1,4 +1,5 @@
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,6 +21,17 @@ def _make_rgb_image(w=100, h=100):
     return Image.new("RGB", (w, h), (200, 150, 100))
 
 
+def _onnxruntime_stub():
+    return MagicMock(
+        SessionOptions=lambda: SimpleNamespace(
+            intra_op_num_threads=8,
+            inter_op_num_threads=8,
+            enable_cpu_mem_arena=True,
+            enable_mem_pattern=True,
+        )
+    )
+
+
 class TestRembgProvider:
     def test_remove_calls_rembg(self):
         provider = RembgProvider(model="u2net")
@@ -31,18 +43,7 @@ class TestRembgProvider:
                 "sys.modules",
                 {
                     "rembg": MagicMock(new_session=mock_new_session, remove=mock_remove),
-                    "onnxruntime": MagicMock(
-                        SessionOptions=lambda: type(
-                            "SessionOptions",
-                            (),
-                            {
-                                "intra_op_num_threads": 8,
-                                "inter_op_num_threads": 8,
-                                "enable_cpu_mem_arena": True,
-                                "enable_mem_pattern": True,
-                            },
-                        )()
-                    ),
+                    "onnxruntime": _onnxruntime_stub(),
                 },
             ),
         ):
@@ -68,18 +69,7 @@ class TestRembgProvider:
                 "sys.modules",
                 {
                     "rembg": MagicMock(new_session=mock_new_session, remove=mock_remove),
-                    "onnxruntime": MagicMock(
-                        SessionOptions=lambda: type(
-                            "SessionOptions",
-                            (),
-                            {
-                                "intra_op_num_threads": 8,
-                                "inter_op_num_threads": 8,
-                                "enable_cpu_mem_arena": True,
-                                "enable_mem_pattern": True,
-                            },
-                        )()
-                    ),
+                    "onnxruntime": _onnxruntime_stub(),
                 },
             ),
         ):
@@ -98,18 +88,7 @@ class TestRembgProvider:
                 "sys.modules",
                 {
                     "rembg": MagicMock(new_session=mock_new_session, remove=mock_remove),
-                    "onnxruntime": MagicMock(
-                        SessionOptions=lambda: type(
-                            "SessionOptions",
-                            (),
-                            {
-                                "intra_op_num_threads": 8,
-                                "inter_op_num_threads": 8,
-                                "enable_cpu_mem_arena": True,
-                                "enable_mem_pattern": True,
-                            },
-                        )()
-                    ),
+                    "onnxruntime": _onnxruntime_stub(),
                 },
             ),
         ):
