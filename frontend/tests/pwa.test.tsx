@@ -40,13 +40,17 @@ describe('installable app', () => {
 
   it('keeps the maskable artwork inside the central safe circle on an opaque background', async () => {
     const { data, info } = await sharp(resolve(publicRoot, 'icon-maskable-512.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let unsafePixels = 0;
     for (let row = 0; row < info.height; row++) {
       for (let column = 0; column < info.width; column++) {
         const offset = (row * info.width + column) * 4;
         if (Math.hypot(column - 255.5, row - 255.5) > 204.8) {
-          expect([...data.subarray(offset, offset + 4)]).toEqual([26, 26, 26, 255]);
+          if (data[offset] !== 26 || data[offset + 1] !== 26 || data[offset + 2] !== 26 || data[offset + 3] !== 255) {
+            unsafePixels++;
+          }
         }
       }
     }
+    expect(unsafePixels).toBe(0);
   });
 });
