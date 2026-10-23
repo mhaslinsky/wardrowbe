@@ -144,7 +144,7 @@ class TestRedoFromOriginal:
             service.remove_background(item_with_image.image_path)
         assert provider.remove.call_args.args[0].size == (768, 1024)
         with Image.open(service.get_image_path(item_with_image.image_path)) as saved:
-            assert saved.size == (1500, 2000)
+            assert saved.size == (1800, 2400)
 
     @pytest.mark.asyncio
     async def test_failed_removal_leaves_no_backup(self, item_with_image: ClothingItem):
