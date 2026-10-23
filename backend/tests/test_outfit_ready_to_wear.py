@@ -13,6 +13,7 @@ async def test_ready_to_wear_filters_before_pagination_and_resets(
         type="t-shirt",
         status=ItemStatus.ready,
         needs_wash=False,
+        image_path="test/clean.jpg",
     )
     dirty = ClothingItem(
         id=uuid4(),
@@ -20,6 +21,7 @@ async def test_ready_to_wear_filters_before_pagination_and_resets(
         type="shirt",
         status=ItemStatus.ready,
         needs_wash=True,
+        image_path="test/dirty.jpg",
     )
     outfits = [
         Outfit(
