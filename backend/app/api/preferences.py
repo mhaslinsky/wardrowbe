@@ -29,7 +29,7 @@ router = APIRouter(prefix="/users/me/preferences", tags=["Preferences"])
 
 def _build_preference_response(preferences) -> PreferenceResponse:
     return PreferenceResponse(
-        standing_rules=preferences.standing_rules,
+        standing_rules=preferences.standing_rules if preferences.standing_rules is not None else [],
         color_favorites=preferences.color_favorites
         if preferences.color_favorites is not None
         else [],
