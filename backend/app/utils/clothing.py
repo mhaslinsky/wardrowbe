@@ -116,7 +116,9 @@ def repair_top_layers(
         )
 
     def is_top(item_id: UUID) -> bool:
-        return ITEM_ROLE.get(item_type_map.get(item_id, "")) in {
+        return item_type_map.get(item_id) in _SWEATER_TYPES or ITEM_ROLE.get(
+            item_type_map.get(item_id, "")
+        ) in {
             "base_top",
             "mid_layer",
             "full_body",
