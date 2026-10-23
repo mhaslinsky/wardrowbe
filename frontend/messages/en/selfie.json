@@ -1,0 +1,12 @@
+{
+  "aiError": "The AI could not read the photo. Try again in a moment.",
+  "aiOff": "The AI is turned off on this server.",
+  "found": "{count, plural, one {Found # item of yours} other {Found # items of yours}}",
+  "noneFound": "No clothes from your wardrobe were recognised.",
+  "photoAlt": "Your outfit photo",
+  "pick": "Take or choose a photo",
+  "pickHint": "A full-length mirror photo works best.",
+  "subtitle": "Find wardrobe matches in your outfit photo.",
+  "title": "Outfit selfie",
+  "working": "Finding wardrobe matches…"
+}

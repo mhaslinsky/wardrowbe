@@ -1,0 +1,12 @@
+{
+  "aiError": "L'IA non è riuscita a leggere la foto. Riprova tra poco.",
+  "aiOff": "L'IA è disattivata su questo server.",
+  "found": "{count, plural, one {Trovato # capo tuo} other {Trovati # capi tuoi}}",
+  "noneFound": "Non ho riconosciuto capi del tuo guardaroba.",
+  "photoAlt": "La foto del tuo outfit",
+  "pick": "Scatta o scegli una foto",
+  "pickHint": "Funziona meglio una foto a figura intera allo specchio.",
+  "subtitle": "Trova i capi del guardaroba nella foto.",
+  "title": "Selfie outfit",
+  "working": "Ricerca dei capi…"
+}

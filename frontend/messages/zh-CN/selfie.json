@@ -1,0 +1,12 @@
+{
+  "aiError": "AI 无法读取照片，请稍后重试。",
+  "aiOff": "此服务器已关闭 AI。",
+  "found": "{count, plural, other {找到你的 # 件衣物}}",
+  "noneFound": "没有认出你衣橱里的衣物。",
+  "photoAlt": "你的穿搭照片",
+  "pick": "拍摄或选择照片",
+  "pickHint": "对镜全身照效果最好。",
+  "subtitle": "识别照片中属于你衣橱的衣物。",
+  "title": "穿搭自拍",
+  "working": "正在识别衣物…"
+}

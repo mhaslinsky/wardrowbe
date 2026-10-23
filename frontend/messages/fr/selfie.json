@@ -1,0 +1,12 @@
+{
+  "aiError": "L'IA n'a pas pu lire la photo. Réessaie dans un instant.",
+  "aiOff": "L'IA est désactivée sur ce serveur.",
+  "found": "{count, plural, one {# vêtement à toi trouvé} other {# vêtements à toi trouvés}}",
+  "noneFound": "Aucun vêtement de ta garde-robe reconnu.",
+  "photoAlt": "La photo de ta tenue",
+  "pick": "Prendre ou choisir une photo",
+  "pickHint": "Une photo en pied dans le miroir fonctionne le mieux.",
+  "subtitle": "Retrouve les vêtements de ta garde-robe sur ta photo.",
+  "title": "Selfie de tenue",
+  "working": "Recherche des vêtements…"
+}
