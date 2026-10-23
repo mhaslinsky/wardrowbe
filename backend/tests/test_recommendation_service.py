@@ -1043,7 +1043,17 @@ class TestOvershirtNeedsATopUnderIt:
             ),
             patch("app.services.recommendation_service.push_suggestions", AsyncMock()),
             patch.object(service, "_format_items_for_prompt", return_value=("", number_map)),
-            patch.object(service, "_get_today_rejected_item_ids", AsyncMock(return_value=set())),
+            patch.object(
+                service,
+                "_get_today_rejected_item_ids",
+                AsyncMock(
+                    return_value=(
+                        {items[unavailable[0] - 1].id}
+                        if unavailable and unavailable[1] == "excluded"
+                        else set()
+                    )
+                ),
+            ),
         ):
             outfits = await service.generate_recommendations(
                 user=user,
@@ -1053,9 +1063,6 @@ class TestOvershirtNeedsATopUnderIt:
                 count=1,
                 single_outfit=single_outfit,
                 include_items=[items[index - 1].id for index in pinned] or None,
-                exclude_items=[items[unavailable[0] - 1].id]
-                if unavailable and unavailable[1] == "excluded"
-                else None,
             )
         return items, [{oi.item_id for oi in o.items} for o in outfits]
 
