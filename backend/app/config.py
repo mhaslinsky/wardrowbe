@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     # so that Remote-* identity headers are only trusted when the proxy sent them.
     forward_auth_secret: str | None = Field(default=None)
 
+    # Home Assistant sends this as X-HA-Token to the /api/v1/ha actions; if unset, all requests
+    # are rejected.
+    wardrowbe_ha_token: str | None = Field(default=None)
+    ha_user_email: str = Field(default="mhaslinsky@gmail.com")
+
     # AI capability switches.
     # ai_internal_enabled is the master switch; ai_vision_enabled / ai_text_enabled
     # inherit it when left unset (None). Defaults preserve current behavior
