@@ -27,6 +27,13 @@ class TestParseMatches:
     def test_falls_back_to_a_bare_list_of_numbers(self):
         assert parse_matches("3, 1", 3) == [2, 0]
         assert parse_matches("matches: [3, 1]", 3) == [2, 0]
+        assert parse_matches("[3, 1]", 3) == [2, 0]
+        assert parse_matches("matches: 3, 1", 3) == [2, 0]
+
+    @pytest.mark.parametrize("answer", ["matches: [1, 2", "matches: 1, 2]", "[1, 2", "1, 2]"])
+    def test_unpaired_fallback_brackets_are_rejected(self, answer):
+        with pytest.raises(ValueError):
+            parse_matches(answer, 2)
 
     def test_numbers_in_prose_are_not_matches(self):
         with pytest.raises(ValueError):
@@ -302,7 +309,8 @@ async def test_authentication_required(client):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "answer", ['{"matches": [1', '{"items": []}', "I cannot analyze this image.", ""]
+    "answer",
+    ['{"matches": [1', '{"items": []}', "I cannot analyze this image.", "", "matches: [1, 2"],
 )
 async def test_invalid_model_reply_is_502(client, test_user, auth_headers, db_session, answer):
     db_session.add(

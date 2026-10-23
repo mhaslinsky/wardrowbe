@@ -28,9 +28,10 @@ def describe(item: ClothingItem) -> str:
     return text
 
 
-# An answer that is only a list of numbers ("3, 7" or "matches: [3, 7]"), the one shape read
-# without JSON; prose with numbers in it ("it is 2 pm, I see 1 shirt") is not.
-BARE_LIST = re.compile(r"^\s*(?:matches\s*:)?\s*\[?\s*\d+(?:\s*,\s*\d+)*\s*\]?\s*\.?\s*$", re.I)
+# Paired brackets keep a truncated completion from becoming a successful match list.
+BARE_LIST = re.compile(
+    r"^\s*(?:matches\s*:)?\s*(?P<opening>\[)?\s*\d+(?:\s*,\s*\d+)*\s*(?(opening)\])\s*\.?\s*$", re.I
+)
 
 
 def _as_number(value: object) -> int | None:
