@@ -30,6 +30,10 @@ class OutfitWornImmutableError(Exception):
     pass
 
 
+class FutureWearDateError(ValueError):
+    pass
+
+
 class OutfitNotTemplateError(Exception):
     pass
 
@@ -307,10 +311,21 @@ class StudioService:
         return await self._reload_outfit(clone.id)
 
     async def wear_today(self, user: User, template_id: UUID, scheduled_for: date | None) -> Outfit:
+        wear, _already_logged = await self.wear_on(user, template_id, scheduled_for)
+        return wear
+
+    async def wear_on(
+        self, user: User, template_id: UUID, scheduled_for: date | None
+    ) -> tuple[Outfit, bool]:
+        target_date = scheduled_for if scheduled_for is not None else get_user_today(user)
+        if target_date > get_user_today(user):
+            raise FutureWearDateError("Wear date cannot be in the future")
+
         result = await self.db.execute(
             select(Outfit)
             .where(and_(Outfit.id == template_id, Outfit.user_id == user.id))
             .options(selectinload(Outfit.items).selectinload(OutfitItem.item))
+            .with_for_update(of=Outfit)
         )
         template = result.scalar_one_or_none()
         if template is None:
@@ -319,7 +334,20 @@ class StudioService:
         if template.scheduled_for is not None:
             raise OutfitNotTemplateError("wear_today requires a lookbook template")
 
-        target_date = scheduled_for if scheduled_for is not None else get_user_today(user)
+        # Lock the template before checking, so concurrent requests reuse the same dated wear.
+        existing = await self.db.execute(
+            select(Outfit.id)
+            .where(
+                Outfit.user_id == user.id,
+                Outfit.cloned_from_outfit_id == template.id,
+                Outfit.scheduled_for == target_date,
+                Outfit.feedback.has(worn_at=target_date),
+            )
+            .order_by(Outfit.created_at)
+        )
+        existing_id = existing.scalars().first()
+        if existing_id is not None:
+            return await self._reload_outfit(existing_id), True
 
         wear = Outfit(
             user_id=user.id,
@@ -359,7 +387,7 @@ class StudioService:
         )
 
         await self.db.flush()
-        return await self._reload_outfit(wear.id)
+        return await self._reload_outfit(wear.id), False
 
     async def patch_outfit(
         self,

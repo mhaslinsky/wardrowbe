@@ -20,6 +20,9 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FeedbackDialog } from '@/components/feedback-dialog';
@@ -50,6 +53,10 @@ export default function OutfitDetailPage() {
   const wearTodayMutation = useWearToday(outfitId ?? '');
   const getUserToday = useUserToday();
 
+  const [wearDate, setWearDate] = useState('');
+  const [wearOpen, setWearOpen] = useState(false);
+  const today = getUserToday();
+
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
 
@@ -73,12 +80,15 @@ export default function OutfitDetailPage() {
   }
 
   const handleWearToday = async () => {
+    if (!wearDate || wearDate > today) return;
     try {
-      const result = await wearTodayMutation.mutateAsync({ scheduled_for: getUserToday() });
-      toast.success(t('detail.addedToToday'));
+      const result = await wearTodayMutation.mutateAsync({ scheduled_for: wearDate });
+      const alreadyLogged = (result as typeof result & { already_logged?: boolean }).already_logged;
+      toast.success(t(alreadyLogged ? 'detail.alreadyLogged' : 'detail.wearSaved'));
+      setWearOpen(false);
       router.push(`/dashboard/outfits/${result.id}`);
     } catch (error) {
-      toast.error(getErrorMessage(error, t('detail.wearTodayError')));
+      toast.error(getErrorMessage(error, t('detail.wearDateError')));
     }
   };
 
@@ -193,18 +203,32 @@ export default function OutfitDetailPage() {
         </CardContent>
       </Card>
 
+      <Dialog open={wearOpen} onOpenChange={setWearOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t('detail.wearOn')}</DialogTitle></DialogHeader>
+          <Label htmlFor="wear-date">{t('detail.wearDate')}</Label>
+          <Input id="wear-date" type="date" value={wearDate} max={today}
+            onChange={(event) => setWearDate(event.target.value)} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWearOpen(false)}>{tc('cancel')}</Button>
+            <Button onClick={handleWearToday} disabled={!wearDate || wearDate > today || wearTodayMutation.isPending}>
+              {t('detail.logWear')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => setFeedbackOpen(true)}>
           {t('detail.addNote')}
         </Button>
         {isTemplate && (
-          <Button onClick={handleWearToday} disabled={wearTodayMutation.isPending}>
+          <Button onClick={() => { setWearDate(getUserToday()); setWearOpen(true); }} disabled={wearTodayMutation.isPending}>
             {wearTodayMutation.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <CalendarPlus className="h-4 w-4 mr-2" />
             )}
-            {t('detail.wearToday')}
+            {t('detail.wearOn')}
           </Button>
         )}
         {!isTemplate && (

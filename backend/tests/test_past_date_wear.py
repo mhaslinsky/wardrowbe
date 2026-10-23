@@ -72,3 +72,47 @@ async def test_wash_boundary(
     assert item.wears_since_wash == expected_count
     assert item.needs_wash is expected_dirty
     assert item.last_worn_at == wear.scheduled_for
+
+
+@pytest.mark.asyncio
+async def test_api_duplicate_and_dated_lists(client, db_session, test_user, auth_headers):
+    from tests.test_outfit_wear_history import _items
+
+    item_ids = await _items(db_session, test_user.id)
+    created = await client.post(
+        "/api/v1/outfits/studio",
+        json={"items": item_ids, "occasion": "casual"},
+        headers=auth_headers,
+    )
+    assert created.status_code == 201
+    template_id = created.json()["id"]
+    endpoint = f"/api/v1/outfits/{template_id}/wear-today"
+    with patch("app.services.studio_service.get_user_today", return_value=date(2026, 10, 23)):
+        first = await client.post(
+            endpoint, json={"scheduled_for": "2026-10-01"}, headers=auth_headers
+        )
+        second = await client.post(
+            endpoint, json={"scheduled_for": "2026-10-01"}, headers=auth_headers
+        )
+    assert first.status_code == second.status_code == 200
+    assert first.json()["already_logged"] is False
+    assert second.json()["already_logged"] is True
+    assert first.json()["id"] == second.json()["id"]
+    assert first.json()["feedback"]["worn_at"] == "2026-10-01"
+    for filters in [
+        {"date_from": "2026-10-01", "date_to": "2026-10-01"},
+        {"status_filter": "accepted"},
+    ]:
+        listed = await client.get("/api/v1/outfits", params=filters, headers=auth_headers)
+        assert listed.status_code == 200
+        assert first.json()["id"] in {outfit["id"] for outfit in listed.json()["outfits"]}
+    for payload, expected in [
+        ({"scheduled_for": "2999-01-01"}, 400),
+        ({"scheduled_for": "not-a-date"}, 422),
+    ]:
+        rejected = await client.post(endpoint, json=payload, headers=auth_headers)
+        assert rejected.status_code == expected
+    with patch("app.services.studio_service.get_user_today", return_value=date(2026, 10, 23)):
+        defaulted = await client.post(endpoint, json={}, headers=auth_headers)
+    assert defaulted.status_code == 200
+    assert defaulted.json()["scheduled_for"] == "2026-10-23"
