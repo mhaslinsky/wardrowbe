@@ -226,6 +226,20 @@ def repair_top_layers(
         for item_id in kept
         if item_id not in bases or item_id == chosen_base or item_id in mandatory
     ]
+    upper_layers = [
+        item_id
+        for item_id in kept
+        if ITEM_ROLE.get(item_type_map.get(item_id, "")) in {"base_top", "mid_layer", "outer_layer"}
+    ]
+    for item_id in reversed(upper_layers):
+        if len(upper_layers) <= 3:
+            break
+        if item_id not in mandatory and item_id != chosen_base:
+            kept.remove(item_id)
+            upper_layers.remove(item_id)
+    if len(upper_layers) > 3:
+        logger.warning("Pinned items exceed three upper-body layers")
+        return []
     return kept
 
 
