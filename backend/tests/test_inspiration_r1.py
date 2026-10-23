@@ -34,7 +34,7 @@ async def inspiration(client, test_user, auth_headers, db_session, monkeypatch, 
     state = SimpleNamespace(text=None, prompts=[], weather=weather, path=tmp_path, user=test_user)
     state.text = json.dumps({"slots": [slot()], "allowed_item_ids": []})
 
-    async def vision(messages, task_name, **kwargs):
+    async def vision(self, messages, task_name, **kwargs):
         state.prompts.append(messages)
         return state.text, None, None
 
