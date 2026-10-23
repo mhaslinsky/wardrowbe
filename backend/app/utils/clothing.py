@@ -279,9 +279,11 @@ def repair_top_layers(
     selected = prefer_ranked_layers(item_ids, ranked_ids, item_type_map, mandatory)
     kept = deduplicate_by_body_slot(selected, item_type_map, mandatory)
     repair = _LayerRepair(kept, ranked_ids, item_type_map, item_subtype_map, mandatory & set(kept))
+    had_top = any(repair.is_under_layer(item_id) for item_id in item_ids)
     repair.fit_overshirt()
     repair.ensure_base_under_layer()
-    repair.ensure_top()
+    if had_top:
+        repair.ensure_top()
     repair.cap_upper_layers()
     return repair.item_ids
 

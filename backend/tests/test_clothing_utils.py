@@ -550,7 +550,10 @@ def test_layering_repair_preserves_the_rules_and_is_idempotent():
                 repaired = repair_top_layers(chosen, ranked, types, subtypes, pins)
                 assert pins <= set(repaired)
                 assert len(repaired) == len(set(repaired))
-                assert set(repaired) & {*tops, best_tee}
+                if selected:
+                    assert set(repaired) & {*tops, best_tee}
+                else:
+                    assert repaired == chosen
                 assert len(set(repaired) & {*tops, best_tee, coat}) <= 3
                 seated = deduplicate_by_body_slot(repaired, types, pins)
                 assert seated == repaired
