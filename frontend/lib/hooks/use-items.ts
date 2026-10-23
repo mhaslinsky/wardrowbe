@@ -221,6 +221,10 @@ export function useUpdateItem() {
     },
     onSettled: (_data, _error, variables) => {
       invalidateItemCaches(queryClient, variables.id);
+      if (variables.data.needs_wash !== undefined) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.outfits.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.calendarOutfits.all });
+      }
     },
   });
 }
@@ -368,6 +372,8 @@ export function useLogWear() {
     },
     onSuccess: (_, variables) => {
       invalidateItemWearCaches(queryClient, variables.id);
+      queryClient.invalidateQueries({ queryKey: queryKeys.outfits.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.calendarOutfits.all });
     },
   });
 }
@@ -395,6 +401,8 @@ export function useLogWash() {
       queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.item(variables.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.washHistory(variables.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.outfits.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.calendarOutfits.all });
     },
   });
 }

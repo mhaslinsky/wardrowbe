@@ -279,7 +279,6 @@ export function useCalendarOutfits(year: number, month: number, filters: OutfitF
     date_to,
   };
 
-  if (filters.ready_to_wear) params.ready_to_wear = String(filters.ready_to_wear);
   if (filters.status) params.status = filters.status;
   if (filters.occasion) params.occasion = filters.occasion;
 
