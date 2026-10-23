@@ -34,7 +34,13 @@ class TestRembgProvider:
         ):
             result = provider.remove(_make_rgb_image())
 
-        mock_new_session.assert_called_once_with("u2net")
+        mock_new_session.assert_called_once()
+        assert mock_new_session.call_args.args == ("u2net",)
+        options = mock_new_session.call_args.kwargs["sess_opts"]
+        assert options.intra_op_num_threads == 1
+        assert options.inter_op_num_threads == 1
+        assert not options.enable_cpu_mem_arena
+        assert not options.enable_mem_pattern
         mock_remove.assert_called_once()
         assert result.mode == "RGBA"
 
@@ -67,7 +73,13 @@ class TestRembgProvider:
         ):
             provider.remove(_make_rgb_image())
 
-        mock_new_session.assert_called_once_with("isnet-general-use")
+        mock_new_session.assert_called_once()
+        assert mock_new_session.call_args.args == ("isnet-general-use",)
+        options = mock_new_session.call_args.kwargs["sess_opts"]
+        assert options.intra_op_num_threads == 1
+        assert options.inter_op_num_threads == 1
+        assert not options.enable_cpu_mem_arena
+        assert not options.enable_mem_pattern
 
 
 class TestHttpProvider:
