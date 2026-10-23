@@ -2,7 +2,7 @@ from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy import and_, case, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes, selectinload
 
@@ -485,8 +485,14 @@ class ItemService:
                     last_worn_at=func.greatest(
                         func.coalesce(ClothingItem.last_worn_at, worn_at), worn_at
                     ),
-                    wears_since_wash=ClothingItem.wears_since_wash + 1,
-                    needs_wash=ClothingItem.wears_since_wash + 1 >= effective_interval,
+                    wears_since_wash=case(
+                        (ClothingItem.last_washed_at > worn_at, ClothingItem.wears_since_wash),
+                        else_=ClothingItem.wears_since_wash + 1,
+                    ),
+                    needs_wash=case(
+                        (ClothingItem.last_washed_at > worn_at, ClothingItem.needs_wash),
+                        else_=ClothingItem.wears_since_wash + 1 >= effective_interval,
+                    ),
                 )
             )
             history = ItemHistory(

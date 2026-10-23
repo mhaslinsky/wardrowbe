@@ -39,6 +39,7 @@ from app.services.recommendation_service import (
     RecommendationService,
 )
 from app.services.studio_service import (
+    FutureWearDateError,
     ItemOwnershipError,
     OutfitNotTemplateError,
     OutfitWornImmutableError,
@@ -175,6 +176,10 @@ class OutfitResponse(BaseModel):
     family_rating_count: int | None = None
     is_starter_suggestion: bool = False
     created_at: datetime
+
+
+class WearOutfitResponse(OutfitResponse):
+    already_logged: bool
 
 
 class OutfitListResponse(BaseModel):
@@ -1364,23 +1369,25 @@ async def clone_outfit_to_lookbook(
     return outfit_to_response(full)
 
 
-@router.post("/{outfit_id}/wear-today", response_model=OutfitResponse)
+@router.post("/{outfit_id}/wear-today", response_model=WearOutfitResponse)
 async def wear_outfit_today(
     outfit_id: UUID,
     request: WearTodayRequest,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
-) -> OutfitResponse:
+) -> WearOutfitResponse:
     _check_studio_kill_switch()
     await rate_limit_by_user(str(current_user.id), "wear_today", max_requests=10, window_seconds=60)
 
     service = StudioService(db)
     try:
-        wear = await service.wear_today(
+        wear, already_logged = await service.wear_on(
             user=current_user,
             template_id=outfit_id,
             scheduled_for=request.scheduled_for,
         )
+    except FutureWearDateError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from None
     except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1396,11 +1403,14 @@ async def wear_outfit_today(
         ) from None
 
     await db.commit()
-    await _run_learning_safely(db, wear.id, current_user.id)
+    if not already_logged:
+        await _run_learning_safely(db, wear.id, current_user.id)
     await clear_suggestions(current_user.id, wear.occasion)
 
     full = await service.get_full_outfit(wear.id)
-    return outfit_to_response(full)
+    return WearOutfitResponse(
+        **outfit_to_response(full).model_dump(), already_logged=already_logged
+    )
 
 
 @router.patch("/{outfit_id}", response_model=OutfitResponse)
