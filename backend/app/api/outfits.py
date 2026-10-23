@@ -149,6 +149,9 @@ class FamilyRatingResponse(BaseModel):
 
 
 class OutfitResponse(BaseModel):
+    group_size: int = 1
+    wear_count: int | None = None
+    hidden_member_ids: list[UUID] = Field(default_factory=list)
     id: UUID
     occasion: str
     scheduled_for: date | None = None
@@ -183,6 +186,7 @@ class OutfitListResponse(BaseModel):
 
 
 class BulkOutfitFilters(BaseModel):
+    group: bool = False
     status_filter: str | None = None
     occasion: str | None = None
     date_from: date | None = None
@@ -624,6 +628,7 @@ async def list_outfits(
     source_type: str | None = Query(
         None, description="Legacy alias for item_type used by /pairings"
     ),
+    group: bool = Query(False),
     ready_to_wear: bool = Query(False),
     search: str | None = Query(None, max_length=50),
     occasions: str | None = Query(
@@ -641,6 +646,7 @@ async def list_outfits(
 
     filters = OutfitListFilters(
         user_id=target_user_id,
+        group=group,
         ready_to_wear=ready_to_wear,
         status_filter=status_filter,
         occasion=occasion,
@@ -663,7 +669,12 @@ async def list_outfits(
 
     wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
 
-    outfit_responses = [outfit_to_response(o, wore_instead_map) for o in outfits]
+    outfit_responses = [outfit_to_response(outfit, wore_instead_map) for outfit in outfits]
+    if group:
+        for outfit, response in zip(outfits, outfit_responses, strict=True):
+            response.group_size = outfit.group_size
+            response.wear_count = outfit.wear_count
+            response.hidden_member_ids = outfit.hidden_member_ids
 
     return OutfitListResponse(
         outfits=outfit_responses,
@@ -687,6 +698,9 @@ async def bulk_delete_outfits(
     limit = get_settings().max_bulk_action_count
     next_cursor: UUID | None = None
     has_more = False
+
+    if request.select_all and request.filters and request.filters.group:
+        raise HTTPException(status_code=422, detail="Grouped selection is unavailable")
 
     if request.select_all:
         list_filters = OutfitListFilters(

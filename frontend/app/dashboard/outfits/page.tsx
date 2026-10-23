@@ -19,7 +19,6 @@ import {
   useBulkDeleteOutfits,
   useCalendarOutfits,
   useInfiniteOutfits,
-  useOutfits,
   type BulkOutfitOperationParams,
   type Outfit,
   type OutfitFilters,
@@ -129,6 +128,7 @@ function chipToFilters(chip: FilterChip, search: string, occasions: string[]): O
       return filters;
     case 'all':
     default:
+      filters.group = true;
       return filters;
   }
 }
@@ -139,7 +139,8 @@ function OutfitsPageContent() {
   const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const rawFilter = (searchParams.get('filter') as FilterChip) || 'all';
+  const requestedFilter = searchParams.get('filter') as FilterChip;
+  const rawFilter: FilterChip = CHIP_ORDER.includes(requestedFilter) ? requestedFilter : 'all';
   const urlView: ViewMode = searchParams.get('view') === 'calendar' ? 'calendar' : 'list';
   const urlFilter: FilterChip =
     urlView === 'calendar' && rawFilter === 'my-looks' ? 'all' : rawFilter;
@@ -150,7 +151,6 @@ function OutfitsPageContent() {
   const [readyToWear, setReadyToWear] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [defaultChecked, setDefaultChecked] = useState(false);
   const todayKey = useUserToday()();
   // Null until the user or URL picks a month, so that the calendar follows the profile timezone
   // once it loads instead of freezing on the browser's month from the first render.
@@ -195,34 +195,16 @@ function OutfitsPageContent() {
   }, [chip, debouncedSearch, readyToWear]);
 
   useEffect(() => {
-    if (view === 'calendar') {
+    if (view === 'calendar' || filters.group) {
       setSelectMode(false);
     }
-  }, [view]);
+  }, [view, filters.group]);
 
   const calendarQuery = useCalendarOutfits(
     monthRef.year,
     monthRef.month,
     view === 'calendar' ? filters : {},
   );
-
-  const lookbookProbe = useOutfits({ is_lookbook: true }, 1, 1);
-
-  useEffect(() => {
-    if (defaultChecked) return;
-    if (urlFilter !== 'all' || urlView === 'calendar') {
-      setDefaultChecked(true);
-      return;
-    }
-    if (lookbookProbe.data) {
-      if (lookbookProbe.data.total === 0) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('filter', 'my-looks');
-        router.replace(`/dashboard/outfits?${params.toString()}`);
-      }
-      setDefaultChecked(true);
-    }
-  }, [defaultChecked, lookbookProbe.data, urlFilter, urlView, searchParams, router]);
 
   const updateQuery = useCallback(
     (next: {
@@ -324,6 +306,7 @@ function OutfitsPageContent() {
   const calendarError = calendarQuery.isError;
 
   const handleToggleSelectMode = () => {
+    if (filters.group) return;
     setSelectMode((prev) => {
       if (prev) {
         setSelection({ mode: 'none', selectedIds: new Set(), excludedIds: new Set() });
@@ -333,6 +316,7 @@ function OutfitsPageContent() {
   };
 
   const handleSelect = (id: string, checked: boolean) => {
+    if (filters.group) return;
     setSelection((prev) => {
       if (prev.mode === 'all') {
         const next = new Set(prev.excludedIds);
@@ -354,6 +338,7 @@ function OutfitsPageContent() {
   };
 
   const handleSelectPage = () => {
+    if (filters.group) return;
     setSelection((prev) => {
       const pageFullySelected =
         (prev.mode === 'all' && prev.excludedIds.size === 0) ||
@@ -366,6 +351,7 @@ function OutfitsPageContent() {
   };
 
   const handleSelectAllMatching = () => {
+    if (filters.group) return;
     setSelection({ mode: 'all', selectedIds: new Set(), excludedIds: new Set() });
   };
 
@@ -385,6 +371,7 @@ function OutfitsPageContent() {
   };
 
   const handleBulkDelete = async () => {
+    if (filters.group) return;
     const params = getBulkParams();
     try {
       const result = await bulkDeleteOutfits.mutateAsync(params);
@@ -440,7 +427,7 @@ function OutfitsPageContent() {
               {t('viewCalendar')}
             </button>
           </div>
-          {view === 'list' && !readyToWear && (
+          {view === 'list' && !filters.group && !readyToWear && (
             <Button
               variant={selectMode ? 'secondary' : 'outline'}
               onClick={handleToggleSelectMode}
@@ -539,7 +526,7 @@ function OutfitsPageContent() {
                     <OutfitCard
                       key={outfit.id}
                       outfit={outfit}
-                      selectMode={selectMode}
+                      selectMode={selectMode && !filters.group}
                       selected={isSelected}
                       onSelect={handleSelect}
                     />
@@ -634,7 +621,7 @@ function OutfitsPageContent() {
         </div>
       )}
 
-      {selectMode && (
+      {selectMode && !filters.group && (
         <BulkActionToolbar
           selection={selection}
           totalItems={total}

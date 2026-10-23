@@ -31,6 +31,9 @@
     "removeItem": "Supprimer {name}"
   },
   "cards": {
+    "wearCount": "Portée {count, plural, one {# fois} other {# fois}}",
+    "history": "Historique",
+    "record": "Entrée {count}",
     "ai": "IA",
     "external": "Externe",
     "lookbookTemplate": "Modèle de lookbook",

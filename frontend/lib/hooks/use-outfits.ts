@@ -8,7 +8,7 @@ import {
 import { useSession } from 'next-auth/react';
 import { api } from '@/lib/api';
 import { useSetTokenIfAvailable, applySessionToken } from '@/lib/hooks/use-session-token';
-import type { FamilyRating, Outfit, OutfitStatus } from '@/lib/types';
+import type { FamilyRating, Outfit as BaseOutfit, OutfitStatus } from '@/lib/types';
 import { formatDateKey } from '@/lib/utils';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@/lib/pagination';
 import { queryKeys } from '@/lib/hooks/query-keys';
@@ -16,13 +16,18 @@ import { invalidateEveryItemWearCache, invalidateOutfitCaches } from '@/lib/hook
 
 export type {
   FeedbackSummary,
-  Outfit,
   OutfitItem,
   OutfitSource,
   OutfitStatus,
   WeatherData,
   WoreInsteadItem,
 } from '@/lib/types';
+
+export type Outfit = BaseOutfit & {
+  group_size?: number;
+  wear_count?: number | null;
+  hidden_member_ids?: string[];
+};
 
 export interface OutfitListResponse {
   outfits: Outfit[];
@@ -33,6 +38,7 @@ export interface OutfitListResponse {
 }
 
 export interface OutfitFilters {
+  group?: boolean;
   ready_to_wear?: boolean;
   status?: OutfitStatus;
   occasion?: string;
@@ -82,6 +88,7 @@ function outfitListParams(filters: OutfitFilters, page: number, pageSize: number
     page_size: String(pageSize),
   };
 
+  if (filters.group) params.group = String(filters.group);
   if (filters.ready_to_wear) params.ready_to_wear = String(filters.ready_to_wear);
   if (filters.status) params.status = filters.status;
   if (filters.occasion) params.occasion = filters.occasion;
