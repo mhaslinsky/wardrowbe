@@ -1144,14 +1144,18 @@ class TestOvershirtNeedsATopUnderIt:
         )
         assert outfits == [{item.id for item in items}]
 
-    async def test_no_top_after_overshirt_fallback_is_rejected(self, db_session, test_user):
-        with pytest.raises(AIRecommendationError):
-            await self._outfits(
-                db_session,
-                test_user,
-                {"outfits": [{"items": [1, 2, 3]}]},
-                kinds=[("shirt", "overshirt"), ("pants", None), ("sneakers", None)],
-            )
+    async def test_overshirt_only_fallback_still_materializes_a_scheduled_outfit(
+        self, db_session, test_user, caplog
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"items": [1, 2, 3]},
+            single_outfit=True,
+            kinds=[("shirt", "overshirt"), ("pants", None), ("sneakers", None)],
+        )
+        assert outfits == [{item.id for item in items}]
+        assert "warning" in caplog.text.lower()
 
     async def test_overshirt_fallback_adds_best_ranked_non_thin_top(self, db_session, test_user):
         items, outfits = await self._outfits(
