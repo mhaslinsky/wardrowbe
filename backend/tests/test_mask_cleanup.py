@@ -1,15 +1,13 @@
-from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
-import pytest_asyncio
 from PIL import Image, ImageDraw
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.item import ClothingItem, ItemStatus
-from app.models.user import User
+from app.models.item import ClothingItem
 from app.services.image_service import ImageService
 from app.services.mask_cleanup import NoGarmentFound, clean_cutout
+from tests.test_image_undo_replace import _mock_provider
+from tests.test_image_undo_replace import item_with_image as item_with_image
 
 SHIRT = (200, 40, 40)
 
@@ -79,6 +77,26 @@ class TestCleanCutout:
 
         assert result.getpixel((174, 65))[3] == 255
 
+    @pytest.mark.parametrize("width,length", [(2, 61), (3, 400)])
+    def test_keeps_a_thin_detached_strap(self, width, length):
+        cutout = _cutout(
+            size=(1000, 1000),
+            shapes=[(100, 100, 800, 800), (900, 100, 899 + width, 99 + length)],
+        )
+        result = clean_cutout(_photo((1000, 1000)), cutout)
+        assert result.getpixel((900, 120))[3] == 255
+
+    def test_keeps_a_small_elongated_opening(self):
+        cutout = _cutout(holes=[(90, 60, 100, 120)])
+        result = clean_cutout(_photo(), cutout)
+        assert result.getpixel((95, 90))[3] == 0
+
+    def test_keeps_a_compact_background_colored_opening(self):
+        photo = _photo()
+        ImageDraw.Draw(photo).rectangle((90, 90, 110, 110), fill=(240, 240, 240))
+        result = clean_cutout(photo, _cutout(holes=[(90, 90, 110, 110)]))
+        assert result.getpixel((100, 100))[3] == 0
+
     def test_accepts_a_small_garment(self):
         # A ring in the middle of the photo covers about 1% of it.
         result = clean_cutout(_photo(), _cutout(shapes=[(90, 90, 110, 110)]))
@@ -97,61 +115,25 @@ class TestCleanCutout:
         assert result.getpixel((5, 5))[3] == 0
 
 
-def _jpeg_bytes() -> bytes:
-    buf = BytesIO()
-    _photo((800, 500)).save(buf, format="JPEG", quality=95)
-    return buf.getvalue()
-
-
-@pytest_asyncio.fixture
-async def item(db_session: AsyncSession, test_user: User) -> ClothingItem:
-    paths = await ImageService().process_and_store(
-        user_id=test_user.id, image_data=_jpeg_bytes(), original_filename="shirt.jpg"
-    )
-    item = ClothingItem(
-        user_id=test_user.id,
-        type="shirt",
-        image_path=paths["image_path"],
-        medium_path=paths["medium_path"],
-        thumbnail_path=paths["thumbnail_path"],
-        image_hash=paths["image_hash"],
-        status=ItemStatus.ready,
-    )
-    db_session.add(item)
-    await db_session.commit()
-    await db_session.refresh(item)
-    return item
-
-
-def _recording_provider(seen: list):
-    provider = MagicMock()
-
-    def remove(img):
-        seen.append(img.copy())
-        return Image.new("RGBA", img.size, (0, 0, 255, 255))
-
-    provider.remove.side_effect = remove
-    return provider
-
-
 class TestRedoFromOriginal:
     @pytest.mark.asyncio
-    async def test_second_removal_starts_from_the_original_photo(self, item: ClothingItem):
+    async def test_second_removal_starts_from_the_original_photo(
+        self, item_with_image: ClothingItem
+    ):
         svc = ImageService()
-        seen: list[Image.Image] = []
-        with patch(
-            "app.services.background_removal.get_provider", return_value=_recording_provider(seen)
-        ):
-            svc.remove_background(item.image_path)
-            svc.remove_background(item.image_path)
+        provider = _mock_provider()
+        with patch("app.services.background_removal.get_provider", return_value=provider):
+            svc.remove_background(item_with_image.image_path)
+            svc.remove_background(item_with_image.image_path)
 
-        # The second run sees the red shirt again, not the first run's blue result.
-        width, height = seen[1].size
-        red, green, blue = seen[1].getpixel((width // 2, height // 2))
-        assert red > 150 and blue < 100
+        # A repeat run must use the green original rather than the blue cutout.
+        second_source = provider.remove.call_args_list[1].args[0]
+        width, height = second_source.size
+        red, green, blue = second_source.getpixel((width // 2, height // 2))
+        assert green > 150 and blue < 100
 
     @pytest.mark.asyncio
-    async def test_failed_removal_leaves_no_backup(self, item: ClothingItem):
+    async def test_failed_removal_leaves_no_backup(self, item_with_image: ClothingItem):
         svc = ImageService()
         provider = MagicMock()
         provider.remove.side_effect = lambda img: Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -159,32 +141,34 @@ class TestRedoFromOriginal:
             patch("app.services.background_removal.get_provider", return_value=provider),
             pytest.raises(NoGarmentFound),
         ):
-            svc.remove_background(item.image_path)
+            svc.remove_background(item_with_image.image_path)
 
-        backup = item.image_path.rsplit(".", 1)[0] + "_orig.jpg"
+        backup = item_with_image.image_path.rsplit(".", 1)[0] + "_orig.jpg"
         assert not svc.get_image_path(backup).exists()
 
     @pytest.mark.asyncio
-    async def test_an_interrupted_backup_write_leaves_no_backup(self, item: ClothingItem):
+    async def test_an_interrupted_backup_write_leaves_no_backup(
+        self, item_with_image: ClothingItem
+    ):
         svc = ImageService()
         with (
             patch(
                 "app.services.background_removal.get_provider",
-                return_value=_recording_provider([]),
+                return_value=_mock_provider(),
             ),
             patch("app.services.image_service.shutil.copy2", side_effect=OSError("disk full")),
             pytest.raises(OSError),
         ):
-            svc.remove_background(item.image_path)
+            svc.remove_background(item_with_image.image_path)
 
-        backup = svc.get_image_path(item.image_path.rsplit(".", 1)[0] + "_orig.jpg")
+        backup = svc.get_image_path(item_with_image.image_path.rsplit(".", 1)[0] + "_orig.jpg")
         assert not backup.exists()
         assert not list(backup.parent.glob("*.tmp"))
 
     @pytest.mark.asyncio
-    async def test_partial_backup_write_cannot_be_restored(self, item: ClothingItem):
+    async def test_partial_backup_write_cannot_be_restored(self, item_with_image: ClothingItem):
         service = ImageService()
-        original = service.get_image_path(item.image_path).read_bytes()
+        original = service.get_image_path(item_with_image.image_path).read_bytes()
 
         def interrupted_copy(source, destination):
             destination.write_bytes(b"partial JPEG")
@@ -193,49 +177,49 @@ class TestRedoFromOriginal:
         with (
             patch(
                 "app.services.background_removal.get_provider",
-                return_value=_recording_provider([]),
+                return_value=_mock_provider(),
             ),
             patch("app.services.image_service.shutil.copy2", side_effect=interrupted_copy),
             pytest.raises(OSError, match="disk full"),
         ):
-            service.remove_background(item.image_path)
+            service.remove_background(item_with_image.image_path)
 
-        backup = service.get_image_path(item.image_path.rsplit(".", 1)[0] + "_orig.jpg")
+        backup = service.get_image_path(item_with_image.image_path.rsplit(".", 1)[0] + "_orig.jpg")
         assert not backup.exists()
         assert not list(backup.parent.glob(".*.tmp"))
-        assert service.get_image_path(item.image_path).read_bytes() == original
+        assert service.get_image_path(item_with_image.image_path).read_bytes() == original
 
     @pytest.mark.asyncio
-    async def test_a_failed_rotation_leaves_the_backup_as_it_was(self, item: ClothingItem):
+    async def test_a_failed_rotation_leaves_the_backup_as_it_was(
+        self, item_with_image: ClothingItem
+    ):
         svc = ImageService()
-        with patch(
-            "app.services.background_removal.get_provider", return_value=_recording_provider([])
-        ):
-            svc.remove_background(item.image_path)
-        backup = svc.get_image_path(item.image_path.rsplit(".", 1)[0] + "_orig.jpg")
+        svc._save_all_sizes(_photo((800, 500)), item_with_image.image_path)
+        with patch("app.services.background_removal.get_provider", return_value=_mock_provider()):
+            svc.remove_background(item_with_image.image_path)
+        backup = svc.get_image_path(item_with_image.image_path.rsplit(".", 1)[0] + "_orig.jpg")
         before = Image.open(backup).size
 
         with (
             patch.object(ImageService, "_save_all_sizes", side_effect=OSError("disk full")),
             pytest.raises(OSError),
         ):
-            svc.rotate_image(item.image_path, "cw")
+            svc.rotate_image(item_with_image.image_path, "cw")
 
         # The photo was not turned, so neither is its backup.
         assert Image.open(backup).size == before
 
     @pytest.mark.asyncio
-    async def test_rotation_turns_the_backup_too(self, item: ClothingItem):
+    async def test_rotation_turns_the_backup_too(self, item_with_image: ClothingItem):
         svc = ImageService()
-        with patch(
-            "app.services.background_removal.get_provider", return_value=_recording_provider([])
-        ):
-            result = svc.remove_background(item.image_path)
+        svc._save_all_sizes(_photo((800, 500)), item_with_image.image_path)
+        with patch("app.services.background_removal.get_provider", return_value=_mock_provider()):
+            result = svc.remove_background(item_with_image.image_path)
         backup_full = svc.get_image_path(result["original_backup_path"])
         with Image.open(backup_full) as before:
             width, height = before.size
 
-        svc.rotate_image(item.image_path, "cw")
+        svc.rotate_image(item_with_image.image_path, "cw")
 
         with Image.open(backup_full) as after:
             assert after.size == (height, width)

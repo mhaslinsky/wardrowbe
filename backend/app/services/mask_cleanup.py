@@ -13,11 +13,9 @@ from scipy import ndimage
 # Less opaque area than this and the model lost the garment altogether. Low enough for a
 # ring or an earring photographed from a distance (0.5% of a 12 MP photo is 60,000 pixels).
 MIN_COVERAGE = 0.005
-# Pieces smaller than this share of the biggest one are background specks. Generous
-# enough that the second shoe of a pair, a sock, a strap or a detached hood is kept.
+# Small elongated pieces can be straps, even below the relative area cutoff.
 KEEP_RATIO = 0.02
-# Holes up to this share of the garment are fabric the model missed; bigger ones are
-# real openings, such as the space inside a bag handle.
+# Only compact holes with garment-colored source pixels are repaired.
 MAX_HOLE_RATIO = 0.10
 OPAQUE = 128
 EIGHT_WAY = np.ones((3, 3), dtype=bool)
@@ -48,7 +46,14 @@ def clean_cutout(original: Image.Image, cutout: Image.Image) -> Image.Image:
     keep = solid
     if count > 1:
         sizes = ndimage.sum_labels(solid, labels, index=np.arange(1, count + 1))
-        kept_ids = np.flatnonzero(sizes >= sizes.max() * KEEP_RATIO) + 1
+        elongated = np.array(
+            [
+                max(region[0].stop - region[0].start, region[1].stop - region[1].start)
+                >= 3 * min(region[0].stop - region[0].start, region[1].stop - region[1].start)
+                for region in ndimage.find_objects(labels)
+            ]
+        )
+        kept_ids = np.flatnonzero((sizes >= sizes.max() * KEEP_RATIO) | elongated) + 1
         keep = np.isin(labels, kept_ids)
         # The soft edge around a dropped speck goes with it.
         dropped = ndimage.binary_dilation(solid & ~keep, structure=EIGHT_WAY, iterations=2)
@@ -58,7 +63,27 @@ def clean_cutout(original: Image.Image, cutout: Image.Image) -> Image.Image:
     if holes.any():
         hole_labels, hole_count = ndimage.label(holes)
         hole_sizes = ndimage.sum_labels(holes, hole_labels, index=np.arange(1, hole_count + 1))
-        small_ids = np.flatnonzero(hole_sizes <= keep.sum() * MAX_HOLE_RATIO) + 1
+        source_pixels = np.asarray(rgb, dtype=np.float32)
+        garment_color = np.median(source_pixels[keep], axis=0)
+        exterior = ~(keep | holes)
+        background_color = np.median(source_pixels[exterior], axis=0) if exterior.any() else None
+        small_ids = []
+        for hole_id, region in enumerate(ndimage.find_objects(hole_labels), start=1):
+            height = region[0].stop - region[0].start
+            width = region[1].stop - region[1].start
+            if max(height, width) >= 3 * min(height, width):
+                continue
+            if hole_sizes[hole_id - 1] > keep.sum() * MAX_HOLE_RATIO:
+                continue
+            hole_color = np.median(source_pixels[hole_labels == hole_id], axis=0)
+            garment_distance = np.linalg.norm(hole_color - garment_color)
+            if garment_distance > 60:
+                continue
+            if background_color is not None and garment_distance >= np.linalg.norm(
+                hole_color - background_color
+            ):
+                continue
+            small_ids.append(hole_id)
         filled = np.isin(hole_labels, small_ids)
         pixels[filled, :3] = np.asarray(rgb, dtype=np.uint8)[filled]
         alpha[filled] = 255
