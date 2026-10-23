@@ -18,6 +18,7 @@ import { useItemPages } from '@/lib/hooks/use-items';
 import { cn } from '@/lib/utils';
 import { GRID_PAGE_SIZE } from '@/lib/pagination';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import { useTranslations } from 'next-intl';
 import { StarRatingInput } from '@/components/shared/star-rating';
 import { useTypeLabel } from '@/lib/hooks/use-translated-constants';
@@ -292,17 +293,17 @@ export function FeedbackDialog({ outfit, open, onClose }: FeedbackDialogProps) {
                       type="button"
                       onClick={() => toggleItemSelection(item.id)}
                       className={cn(
-                        'relative aspect-square rounded-lg overflow-hidden border-2 transition-all',
+                        'relative aspect-square rounded-lg overflow-hidden border-2 transition-all bg-muted',
                         selectedItems.includes(item.id)
                           ? 'border-primary ring-2 ring-primary/20'
                           : 'border-border hover:border-muted-foreground/50'
                       )}
                     >
                       <Image
-                        src={item.thumbnail_url || item.image_url || item.image_path}
+                        src={garmentImageUrl(item, 'card') || item.image_path}
                         alt={item.name || typeLabel(item.type)}
                         fill
-                        className="object-cover"
+                        className="object-contain"
                         sizes="(max-width: 640px) 33vw, 25vw"
                         loading="lazy"
                       />

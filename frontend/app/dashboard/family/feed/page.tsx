@@ -21,6 +21,7 @@ import { SourceBadge } from '@/components/shared/source-badge';
 import { FamilyRatingForm, FamilyRatingsDisplay } from '@/components/family-ratings';
 import { OutfitPreviewDialog } from '@/components/outfit-preview-dialog';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { formatDate } from '@/lib/utils';
@@ -87,12 +88,12 @@ function FeedOutfitCard({
               key={item.id}
               className="w-20 h-20 rounded-lg bg-muted overflow-hidden relative border shadow-sm group-hover:shadow-md transition-shadow"
             >
-              {item.thumbnail_url ? (
+              {garmentImageUrl(item, 'small') ? (
                 <Image
-                  src={item.thumbnail_url}
+                  src={garmentImageUrl(item, 'small')!}
                   alt={item.name || typeLabel(item.type)}
                   fill
-                  className="object-cover"
+                  className="object-contain"
                   sizes="80px"
                 />
               ) : (

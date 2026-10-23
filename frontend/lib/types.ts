@@ -286,6 +286,7 @@ export interface OutfitItem {
   thumbnail_path: string | null;
   image_url: string | null;
   thumbnail_url: string | null;
+  medium_url?: string | null;
   layer_type: string | null;
   position: number;
 }

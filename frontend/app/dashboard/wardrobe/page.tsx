@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, Heart, Grid3X3, Loader2, AlertCircle, RefreshCw, Droplets, ArrowUpDown, SlidersHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -105,12 +106,12 @@ function ItemCard({
       onClick={onClick}
     >
       <div className="relative aspect-square bg-muted">
-        {item.thumbnail_url ? (
+        {garmentImageUrl(item, 'card') ? (
           <Image
-            src={item.thumbnail_url}
+            src={garmentImageUrl(item, 'card')!}
             alt={item.name || typeLabel(item.type)}
             fill
-            className="object-cover"
+            className="object-contain"
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
           />
         ) : (

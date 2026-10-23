@@ -92,6 +92,7 @@ class OutfitItemResponse(BaseModel):
     colors: list[str] = []
     image_path: str | None = None
     thumbnail_path: str | None = None
+    medium_path: str | None = None
     layer_type: str | None = None
     position: int
 
@@ -104,6 +105,11 @@ class OutfitItemResponse(BaseModel):
     @property
     def thumbnail_url(self) -> str | None:
         return sign_optional(self.thumbnail_path)
+
+    @computed_field
+    @property
+    def medium_url(self) -> str | None:
+        return sign_optional(self.medium_path)
 
 
 class WoreInsteadItem(BaseModel):
@@ -328,6 +334,7 @@ def outfit_to_response(
                 colors=item.colors or [],
                 image_path=item.image_path,
                 thumbnail_path=item.thumbnail_path,
+                medium_path=item.medium_path,
                 layer_type=outfit_item.layer_type,
                 position=outfit_item.position,
             )

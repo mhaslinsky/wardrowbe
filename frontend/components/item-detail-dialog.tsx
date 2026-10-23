@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import { useRouter } from 'next/navigation';
 import {
   Heart,
@@ -310,7 +311,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
   const isAnalyzing = reanalyzeItem.isPending || item.status === 'processing';
 
   // Use signed URL from backend for better quality in detail view
-  const imageUrl = item.image_url || item.image_path;
+  const imageUrl = garmentImageUrl(item, 'detail') || item.image_path;
   const colorInfo = clothingColors.find((c) => c.value === item.primary_color);
   const typeInfo = clothingTypes.find((type) => type.value === item.type);
   const unrecognizedType = item.type === 'unknown' ? item.ai_unrecognized_type : null;
@@ -520,7 +521,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                         src={currentImage.url}
                         alt={item.name || typeLabel(item.type)}
                         fill
-                        className="object-cover"
+                        className="object-contain"
                         sizes="(max-width: 640px) 100vw, 50vw"
                       />
                       {allImages.length > 1 && (

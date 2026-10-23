@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import { useParams, useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import {
@@ -164,12 +165,12 @@ export default function OutfitDetailPage() {
                 className="group"
               >
                 <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
-                  {item.thumbnail_url || item.image_url ? (
+                  {garmentImageUrl(item, 'card') ? (
                     <Image
-                      src={(item.thumbnail_url || item.image_url)!}
+                      src={garmentImageUrl(item, 'card')!}
                       alt={item.name || typeLabel(item.type)}
                       fill
-                      className="object-cover transition-transform group-hover:scale-105"
+                      className="object-contain"
                       sizes="(max-width: 640px) 33vw, 20vw"
                     />
                   ) : (
