@@ -38,6 +38,23 @@ function clientWithFeatures(features: Record<string, unknown> = { background_rem
   return client
 }
 
+async function waitForDrain(action: () => void | Promise<void>): Promise<void> {
+  let started = false
+  let unsubscribe = () => {}
+  const completed = new Promise<void>((resolve) => {
+    unsubscribe = manager.subscribe((state) => {
+      if (state.draining) started = true
+      if (started && !state.draining) resolve()
+    })
+  })
+  try {
+    await action()
+    await completed
+  } finally {
+    unsubscribe()
+  }
+}
+
 beforeEach(() => {
   globalThis.indexedDB = new IDBFactory()
   vi.restoreAllMocks()
@@ -404,10 +421,7 @@ describe('failure classification', () => {
         results: names.map((filename) => ({ filename, success: true })),
       })
     })
-    await manager.retryAll()
-    for (let i = 0; i < 10; i++) {
-      await new Promise((r) => setTimeout(r, 0))
-    }
+    await waitForDrain(() => manager.retryAll())
 
     expect(sent).toEqual(['flaky.jpg'])
     const remaining = (await manager.getState()).terminalRecords
@@ -444,6 +458,8 @@ describe('backoff reschedule', () => {
       )
       expect(scheduled).toBeDefined()
       const [callback] = scheduled!
+      const timerIndex = timeoutSpy.mock.calls.indexOf(scheduled!)
+      clearTimeout(timeoutSpy.mock.results[timerIndex].value)
 
       vi.mocked(fetch).mockResolvedValueOnce(
         jsonResponse({
@@ -455,12 +471,8 @@ describe('backoff reschedule', () => {
       )
       now += 5000 // past the one-attempt backoff window the timer was armed for
 
-      // Nothing external calls startDrain() here - only the manager's own
-      // reschedule, fired by invoking the timer callback it armed.
-      ;(callback as () => void)()
-      for (let i = 0; i < 10; i++) {
-        await new Promise((r) => setTimeout(r, 0))
-      }
+      // Only the scheduled callback resumes the drain.
+      await waitForDrain(() => (callback as () => void)())
 
       expect(await getPendingUploads()).toHaveLength(0)
     } finally {
@@ -492,13 +504,7 @@ describe('retry/dismiss actions', () => {
         results: [{ filename: 'bad.jpg', success: true }],
       })
     )
-    await manager.retry(id)
-    // retry() kicks off startDrain() without awaiting it (a UI action
-    // shouldn't block on the network) - give the background chain enough
-    // ticks to reach fetch, resolve, and settle the record.
-    for (let i = 0; i < 10; i++) {
-      await new Promise((r) => setTimeout(r, 0))
-    }
+    await waitForDrain(() => manager.retry(id))
 
     expect(await getPendingUploads()).toHaveLength(0)
   })
