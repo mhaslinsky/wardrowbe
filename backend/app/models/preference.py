@@ -61,6 +61,9 @@ class UserPreference(Base):
     prefer_underused_items: Mapped[bool] = mapped_column(
         Boolean, default=DEFAULT_PREFER_UNDERUSED_ITEMS
     )
+    standing_rules: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default="[]", nullable=False
+    )
     variety_level: Mapped[str] = mapped_column(String(20), default=DEFAULT_VARIETY_LEVEL)
 
     # Restrictions

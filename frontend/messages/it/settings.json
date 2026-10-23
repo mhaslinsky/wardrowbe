@@ -144,5 +144,11 @@
     "unit": "Unità di temperatura"
   },
   "title": "Impostazioni",
-  "unsavedChanges": "Hai modifiche non salvate. Uscire da questa pagina?"
+  "unsavedChanges": "Hai modifiche non salvate. Uscire da questa pagina?",
+  "standingRules": {
+    "title": "Regole fisse",
+    "description": "Una regola per riga, fino a 20 regole.",
+    "label": "Regole",
+    "limit": "Massimo 20 regole di 300 caratteri ciascuna."
+  }
 }

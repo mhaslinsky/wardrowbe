@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, Field
 
 from app.schemas.color import ColorList
 from app.schemas.outfit import Occasion
@@ -24,6 +26,17 @@ from app.utils.scales import (
     STYLE_SCORE_MAX,
     STYLE_SCORE_MIN,
 )
+
+
+def trim_standing_rules(rules: list[str]) -> list[str]:
+    return [rule.strip() for rule in rules if rule.strip()]
+
+
+StandingRules = Annotated[
+    list[Annotated[str, Field(max_length=300)]],
+    Field(max_length=20),
+    AfterValidator(trim_standing_rules),
+]
 
 
 class AIEndpoint(BaseModel):
@@ -68,6 +81,8 @@ class StyleProfile(BaseModel):
 
 
 class PreferenceBase(BaseModel):
+    standing_rules: StandingRules = Field(default_factory=list)
+
     # Color preferences
     color_favorites: list[str] = Field(default_factory=list, description="Favorite colors")
     color_avoid: list[str] = Field(default_factory=list, description="Colors to avoid")
@@ -137,6 +152,8 @@ class PreferenceCreate(PreferenceBase):
 
 
 class PreferenceUpdate(BaseModel):
+    standing_rules: StandingRules = Field(default_factory=list)
+
     color_favorites: ColorList | None = None
     color_avoid: ColorList | None = None
     style_profile: StyleProfile | None = None

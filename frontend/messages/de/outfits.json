@@ -68,7 +68,8 @@
     "undated": "Ohne Datum",
     "wearToday": "Heute tragen",
     "wearTodayError": "Konnte nicht als heute getragen markiert werden",
-    "wornCount": "{count, plural, one {# Mal getragen} other {# Mal getragen}}"
+    "wornCount": "{count, plural, one {# Mal getragen} other {# Mal getragen}}",
+    "addNote": "Notiz hinzufügen"
   },
   "details": {
     "addedItems": "{count, plural, one {# Stück} other {# Stücke}} von der KI hinzugefügt",

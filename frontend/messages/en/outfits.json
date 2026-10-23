@@ -68,7 +68,8 @@
     "undated": "Undated",
     "wearToday": "Wear today",
     "wearTodayError": "Failed to wear today",
-    "wornCount": "Worn {count, plural, one {# time} other {# times}}"
+    "wornCount": "Worn {count, plural, one {# time} other {# times}}",
+    "addNote": "Add note"
   },
   "details": {
     "addedItems": "Added {count, plural, one {# item} other {# items}} from AI",

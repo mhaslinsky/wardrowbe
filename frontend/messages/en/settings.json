@@ -144,5 +144,11 @@
     "unit": "Temperature Unit"
   },
   "title": "Settings",
-  "unsavedChanges": "You have unsaved changes. Leave this page?"
+  "unsavedChanges": "You have unsaved changes. Leave this page?",
+  "standingRules": {
+    "title": "Standing rules",
+    "description": "One rule per line, up to 20 rules.",
+    "label": "Rules",
+    "limit": "Use up to 20 rules of 300 characters each."
+  }
 }

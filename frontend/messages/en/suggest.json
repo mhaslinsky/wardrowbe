@@ -38,7 +38,9 @@
     "tellUsWhatYouWore": "Tell us what you wore",
     "whatDidYouWear": "What did you wear instead?",
     "whatDidYouWearDesc": "Select the items you actually wore. This helps us learn your preferences.",
-    "yesWoreIt": "Yes, I wore it"
+    "yesWoreIt": "Yes, I wore it",
+    "addNote": "Add note",
+    "noteHint": "Notes guide future suggestions."
   },
   "generating": "Creating your look...",
   "getSuggestion": "Get Suggestion",

@@ -38,7 +38,9 @@
     "tellUsWhatYouWore": "告訴我們你穿了什麼",
     "whatDidYouWear": "你改穿了什麼？",
     "whatDidYouWearDesc": "選擇你實際穿的單品，幫助我們學習你的偏好。",
-    "yesWoreIt": "是的，我穿了"
+    "yesWoreIt": "是的，我穿了",
+    "addNote": "新增備註",
+    "noteHint": "備註將用於今後的推薦。"
   },
   "generating": "正在為你打造穿搭...",
   "getSuggestion": "取得建議",

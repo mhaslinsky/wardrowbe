@@ -151,6 +151,7 @@ export interface AIEndpoint {
 }
 
 export interface Preferences {
+  standing_rules: string[];
   color_favorites: string[];
   color_avoid: string[];
   style_profile: StyleProfile;

@@ -38,7 +38,9 @@
     "tellUsWhatYouWore": "実際に何を着たか教えてください",
     "whatDidYouWear": "代わりに何を着ましたか？",
     "whatDidYouWearDesc": "実際に着たアイテムを選択してください。好みの学習に役立ちます。",
-    "yesWoreIt": "はい、着ました"
+    "yesWoreIt": "はい、着ました",
+    "addNote": "メモを追加",
+    "noteHint": "メモは今後の提案に反映されます。"
   },
   "generating": "コーデを作成中...",
   "getSuggestion": "提案を取得",

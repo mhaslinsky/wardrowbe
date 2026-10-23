@@ -68,7 +68,8 @@
     "undated": "Non daté",
     "wearToday": "Porter aujourd'hui",
     "wearTodayError": "Échec du marquage comme portée aujourd’hui",
-    "wornCount": "Portée {count, plural, one {# fois} other {# fois}}"
+    "wornCount": "Portée {count, plural, one {# fois} other {# fois}}",
+    "addNote": "Ajouter une note"
   },
   "details": {
     "addedItems": "{count, plural, one {# article ajouté} other {# articles ajoutés}} par l’IA",

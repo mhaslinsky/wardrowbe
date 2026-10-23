@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { Loader2, Save, RotateCcw, Check, Plus, Trash2, ChevronUp, ChevronDown, Server, MapPin, Navigation, Ruler } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -183,6 +184,7 @@ export default function SettingsPage() {
 
   const [formData, setFormData] = useState<Partial<Preferences>>({});
   const occasions = useOccasionOptions([formData.default_occasion, preferences?.default_occasion]);
+  const [standingRulesText, setStandingRulesText] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
   const [endpointTests, setEndpointTests] = useState<Record<number, EndpointTestResult>>({});
 
@@ -479,6 +481,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (preferences) {
       setFormData(preferences);
+      setStandingRulesText((preferences.standing_rules || []).join('\n'));
       setHasChanges(false);
     }
   }, [preferences]);
@@ -513,7 +516,12 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     try {
-      await updatePreferences.mutateAsync(formData);
+      const rules = standingRulesText.split('\n').map((rule) => rule.trim()).filter(Boolean);
+      if (rules.length > 20 || rules.some((rule) => rule.length > 300)) {
+        toast.error(t('standingRules.limit'));
+        return;
+      }
+      await updatePreferences.mutateAsync({ ...formData, standing_rules: rules });
       setHasChanges(false);
     } catch (error) {
       console.error('Failed to save preferences:', error);
@@ -931,6 +939,22 @@ export default function SettingsPage() {
                 );
               })()}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('standingRules.title')}</CardTitle>
+            <CardDescription>{t('standingRules.description')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Label htmlFor="standing-rules">{t('standingRules.label')}</Label>
+            <Textarea
+              id="standing-rules"
+              rows={5}
+              value={standingRulesText}
+              onChange={(event) => { setStandingRulesText(event.target.value); setHasChanges(true); }}
+            />
           </CardContent>
         </Card>
 

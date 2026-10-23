@@ -68,7 +68,8 @@
     "undated": "날짜 없음",
     "wearToday": "오늘 입기",
     "wearTodayError": "오늘 입기 기록 실패",
-    "wornCount": "{count, plural, other {#회 착용}}"
+    "wornCount": "{count, plural, other {#회 착용}}",
+    "addNote": "메모 추가"
   },
   "details": {
     "addedItems": "AI가 {count, plural, other {아이템 #개}}를 추가했어요",

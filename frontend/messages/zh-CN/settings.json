@@ -144,5 +144,11 @@
     "unit": "温度单位"
   },
   "title": "设置",
-  "unsavedChanges": "您有未保存的更改。确定离开此页面？"
+  "unsavedChanges": "您有未保存的更改。确定离开此页面？",
+  "standingRules": {
+    "title": "固定规则",
+    "description": "每行一条，最多20条。",
+    "label": "规则",
+    "limit": "最多20条规则，每条不超过300个字符。"
+  }
 }

@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FeedbackDialog } from '@/components/feedback-dialog';
 import { SourceBadge } from '@/components/shared/source-badge';
 import { LineageCard } from '@/components/shared/lineage-card';
 import { CloneToLookbookDialog } from '@/components/shared/clone-to-lookbook-dialog';
@@ -49,6 +50,7 @@ export default function OutfitDetailPage() {
   const wearTodayMutation = useWearToday(outfitId ?? '');
   const getUserToday = useUserToday();
 
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
 
   const isTemplate =
@@ -192,6 +194,9 @@ export default function OutfitDetailPage() {
       </Card>
 
       <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => setFeedbackOpen(true)}>
+          {t('detail.addNote')}
+        </Button>
         {isTemplate && (
           <Button onClick={handleWearToday} disabled={wearTodayMutation.isPending}>
             {wearTodayMutation.isPending ? (
@@ -276,6 +281,8 @@ export default function OutfitDetailPage() {
           </AlertDescription>
         </Alert>
       )}
+
+      {feedbackOpen && <FeedbackDialog outfit={outfit} open={feedbackOpen} noteOnly onClose={() => setFeedbackOpen(false)} />}
 
       {!isTemplate && (
         <CloneToLookbookDialog

@@ -68,7 +68,8 @@
     "undated": "Non datato",
     "wearToday": "Indossa oggi",
     "wearTodayError": "Impossibile segnare come indossato oggi",
-    "wornCount": "Indossato {count, plural, one {# volta} other {# volte}}"
+    "wornCount": "Indossato {count, plural, one {# volta} other {# volte}}",
+    "addNote": "Aggiungi nota"
   },
   "details": {
     "addedItems": "{count, plural, one {# capo aggiunto dall’IA} other {# capi aggiunti dall’IA}}",
