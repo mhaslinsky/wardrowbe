@@ -556,3 +556,15 @@ def test_overshirt_replacement_uses_highest_ranked_eligible_top():
         overshirt,
         henley,
     ]
+
+
+def test_pinned_layer_conflict_drops_extra_unpinned_outerwear():
+    overshirt, hoodie, coat, tee = _ids(4)
+    types = {overshirt: "shirt", hoodie: "hoodie", coat: "coat", tee: "t-shirt"}
+    assert repair_top_layers(
+        [overshirt, hoodie, coat],
+        [tee],
+        types,
+        {overshirt: "overshirt"},
+        mandatory_item_ids={overshirt, hoodie},
+    ) == [overshirt, hoodie, tee]
