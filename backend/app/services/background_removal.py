@@ -19,15 +19,21 @@ class BackgroundRemovalProvider(ABC):
 # rembg is imported lazily because it is an optional extra (requirements-extras.txt): a
 # module-level import would break every install that uses the http provider or none.
 class RembgProvider(BackgroundRemovalProvider):
-    def __init__(self, model: str = "birefnet-general-lite"):
+    def __init__(self, model: str = "u2net"):
         self.model = model
         self._session = None
 
     def _get_session(self):
         if self._session is None:
+            import onnxruntime
             from rembg import new_session
 
-            self._session = new_session(self.model)
+            options = onnxruntime.SessionOptions()
+            options.intra_op_num_threads = 1
+            options.inter_op_num_threads = 1
+            options.enable_cpu_mem_arena = False
+            options.enable_mem_pattern = False
+            self._session = new_session(self.model, sess_opts=options)
         return self._session
 
     def remove(self, image: Image.Image) -> Image.Image:

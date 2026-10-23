@@ -133,6 +133,20 @@ class TestRedoFromOriginal:
         assert green > 150 and blue < 100
 
     @pytest.mark.asyncio
+    async def test_phone_photo_bounds_inference_and_preserves_output_size(
+        self, item_with_image: ClothingItem
+    ):
+        service = ImageService()
+        full_size = (2400, 3200)
+        _photo(full_size).save(service.get_image_path(item_with_image.image_path), "JPEG")
+        provider = _mock_provider()
+        with patch("app.services.background_removal.get_provider", return_value=provider):
+            service.remove_background(item_with_image.image_path)
+        assert provider.remove.call_args.args[0].size == (768, 1024)
+        with Image.open(service.get_image_path(item_with_image.image_path)) as saved:
+            assert saved.size == (1500, 2000)
+
+    @pytest.mark.asyncio
     async def test_failed_removal_leaves_no_backup(self, item_with_image: ClothingItem):
         svc = ImageService()
         provider = MagicMock()

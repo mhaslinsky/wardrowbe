@@ -279,7 +279,14 @@ class ImageService:
 
         image = Image.open(source_full).convert("RGB")
         provider = background_removal.get_provider()
-        result = clean_cutout(image, provider.remove(image))
+        # Bound model and cleanup buffers while preserving the original photo pixels.
+        working = image.copy()
+        working.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+        result = clean_cutout(working, provider.remove(working))
+        if working.size != image.size:
+            alpha = result.getchannel("A").resize(image.size, Image.Resampling.LANCZOS)
+            result = image.convert("RGBA")
+            result.putalpha(alpha)
 
         # First removal wins: a second removal must not overwrite the true
         # original with an already-processed image
