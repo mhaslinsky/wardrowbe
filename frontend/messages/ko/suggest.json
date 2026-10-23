@@ -104,5 +104,21 @@
     "reset": "초기화",
     "temperature": "기온"
   },
-  "yourOutfit": "오늘의 코디"
+  "yourOutfit": "오늘의 코디",
+  "inspiration": {
+    "title": "스타일 영감",
+    "description": "내 옷으로 마음에 드는 스타일을 재현하세요.",
+    "photo": "사진 또는 스크린샷",
+    "create": "재현하고 저장",
+    "working": "옷 찾는 중…",
+    "saved": "저장됨",
+    "loading": "불러오는 중…",
+    "empty": "사진을 업로드하세요.",
+    "error": "스타일을 재현하지 못했습니다. 이미지와 위치를 확인하세요.",
+    "open": "코디 열기",
+    "delete": "삭제",
+    "noMatch": "일치하는 옷 없음",
+    "strength": "일치도: {value}%",
+    "baseLayer": "추가된 기본 레이어"
+  }
 }

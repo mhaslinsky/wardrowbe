@@ -104,5 +104,21 @@
     "reset": "重設",
     "temperature": "溫度"
   },
-  "yourOutfit": "你的穿搭"
+  "yourOutfit": "你的穿搭",
+  "inspiration": {
+    "title": "靈感穿搭",
+    "description": "用自己的衣服重現喜歡的穿搭。",
+    "photo": "照片或截圖",
+    "create": "重現並儲存",
+    "working": "正在配對衣服…",
+    "saved": "已儲存",
+    "loading": "載入中…",
+    "empty": "上傳照片以開始。",
+    "error": "無法重現穿搭。請檢查圖片和位置。",
+    "open": "查看穿搭",
+    "delete": "刪除",
+    "noMatch": "無符合項目",
+    "strength": "符合度：{value}%",
+    "baseLayer": "新增的打底層"
+  }
 }

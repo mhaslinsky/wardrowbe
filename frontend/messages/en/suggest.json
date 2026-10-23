@@ -104,5 +104,21 @@
     "reset": "Reset",
     "temperature": "Temperature"
   },
-  "yourOutfit": "Your Outfit"
+  "yourOutfit": "Your Outfit",
+  "inspiration": {
+    "title": "Inspiration",
+    "description": "Recreate a look from your own clothes.",
+    "photo": "Photo or screenshot",
+    "create": "Recreate and save",
+    "working": "Matching clothes…",
+    "saved": "Saved",
+    "loading": "Loading…",
+    "empty": "Upload a photo to start.",
+    "error": "Could not recreate this look. Check your image and location.",
+    "open": "Open outfit",
+    "delete": "Delete",
+    "noMatch": "No match",
+    "strength": "Match: {value}%",
+    "baseLayer": "Added base layer"
+  }
 }
