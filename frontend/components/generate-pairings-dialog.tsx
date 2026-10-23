@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { useGeneratePairings } from '@/lib/hooks/use-pairings';
 import { Item, Pairing } from '@/lib/types';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useColorLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
@@ -72,7 +73,7 @@ export function GeneratePairingsDialog({
 
   if (!item) return null;
 
-  const imageUrl = item.thumbnail_url || item.image_url || item.image_path;
+  const imageUrl = garmentImageUrl(item, 'small') || item.image_path;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -97,7 +98,7 @@ export function GeneratePairingsDialog({
                   src={imageUrl}
                   alt={item.name || typeLabel(item.type)}
                   fill
-                  className="object-cover"
+                  className="object-contain"
                   sizes="64px"
                 />
               </div>
@@ -155,14 +156,14 @@ export function GeneratePairingsDialog({
                   {pairing.items.slice(0, 3).map((pairingItem) => (
                     <div
                       key={pairingItem.id}
-                      className="w-8 h-8 rounded overflow-hidden relative"
+                      className="w-8 h-8 rounded overflow-hidden relative bg-muted"
                     >
-                      {pairingItem.thumbnail_url ? (
+                      {garmentImageUrl(pairingItem, 'small') ? (
                         <Image
-                          src={pairingItem.thumbnail_url}
+                          src={garmentImageUrl(pairingItem, 'small')!}
                           alt={typeLabel(pairingItem.type)}
                           fill
-                          className="object-cover"
+                          className="object-contain"
                           sizes="32px"
                         />
                       ) : (

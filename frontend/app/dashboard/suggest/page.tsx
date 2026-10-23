@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -338,12 +339,12 @@ function OutfitCard({
                       {t('baseItem.basePiece')}
                     </Badge>
                   )}
-                  {item.thumbnail_url ? (
+                  {garmentImageUrl(item, 'card') ? (
                     <Image
-                      src={item.thumbnail_url}
+                      src={garmentImageUrl(item, 'card')!}
                       alt={item.name || typeLabel(item.type)}
                       fill
-                      className="object-cover group-hover:scale-105 transition-transform"
+                      className="object-contain"
                       sizes="(max-width: 640px) 50vw, 33vw"
                     />
                   ) : (
@@ -787,12 +788,12 @@ function SuggestContent() {
                   <div className="flex items-center justify-between p-3 rounded-xl border bg-card/80 shadow-sm gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative w-14 h-14 rounded-lg overflow-hidden border bg-muted flex-shrink-0">
-                        {selectedItem.thumbnail_url || selectedItem.image_url ? (
+                        {garmentImageUrl(selectedItem, 'small') ? (
                           <Image
-                            src={(selectedItem.thumbnail_url || selectedItem.image_url)!}
+                            src={garmentImageUrl(selectedItem, 'small')!}
                             alt={selectedItem.name || typeLabel(selectedItem.type)}
                             fill
-                            className="object-cover"
+                            className="object-contain"
                             sizes="56px"
                           />
                         ) : (

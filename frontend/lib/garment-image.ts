@@ -13,7 +13,7 @@ export function garmentImageUrl(
     return image.thumbnail_url || image.medium_url || image.image_url || null;
   }
   if (size === 'card') {
-    return image.medium_url || image.image_url || image.thumbnail_url || null;
+    return image.medium_url || image.thumbnail_url || image.image_url || null;
   }
   return image.image_url || image.medium_url || image.thumbnail_url || null;
 }

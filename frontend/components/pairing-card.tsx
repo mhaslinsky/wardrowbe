@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useDeletePairing } from '@/lib/hooks/use-pairings';
 import { Pairing } from '@/lib/types';
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import { useTranslations } from 'next-intl';
 import { StarRatingDisplay } from '@/components/shared/star-rating';
 import { useTypeLabel } from '@/lib/hooks/use-translated-constants';
@@ -74,12 +75,12 @@ export function PairingCard({ pairing, onFeedback, onPreview }: PairingCardProps
             <p className="text-xs text-muted-foreground mb-1">{t('builtAround')}</p>
             <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20">
               <div className="w-12 h-12 rounded-md bg-muted overflow-hidden relative border-2 border-primary/30">
-                {pairing.source_item.thumbnail_url ? (
+                {garmentImageUrl(pairing.source_item, 'small') ? (
                   <Image
-                    src={pairing.source_item.thumbnail_url}
+                    src={garmentImageUrl(pairing.source_item, 'small')!}
                     alt={pairing.source_item.name || pairing.source_item.type}
                     fill
-                    className="object-cover"
+                    className="object-contain"
                     sizes="48px"
                   />
                 ) : (
@@ -113,12 +114,12 @@ export function PairingCard({ pairing, onFeedback, onPreview }: PairingCardProps
               key={item.id}
               className="w-14 h-14 rounded-lg bg-muted overflow-hidden relative border shadow-sm group-hover:shadow-md transition-shadow"
             >
-              {item.thumbnail_url ? (
+              {garmentImageUrl(item, 'small') ? (
                 <Image
-                  src={item.thumbnail_url}
+                  src={garmentImageUrl(item, 'small')!}
                   alt={item.name || typeLabel(item.type)}
                   fill
-                  className="object-cover"
+                  className="object-contain"
                   sizes="56px"
                 />
               ) : (

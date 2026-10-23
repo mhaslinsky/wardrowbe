@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { garmentImageUrl } from '@/lib/garment-image';
 import { X } from 'lucide-react';
 
 import { useRoleLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
@@ -49,13 +50,13 @@ export function CanvasPanel({ items, onRemove }: CanvasPanelProps) {
               <X className="h-3 w-3" />
             </button>
             <div className="aspect-square rounded-lg overflow-hidden border-2 border-primary/50 bg-background">
-              {item.thumbnail_url || item.image_url ? (
+              {garmentImageUrl(item, 'small') ? (
                 <Image
-                  src={(item.thumbnail_url || item.image_url)!}
+                  src={garmentImageUrl(item, 'small')!}
                   alt={item.name || typeLabel(item.type)}
                   width={96}
                   height={96}
-                  className="object-cover w-full h-full"
+                  className="object-contain w-full h-full"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
