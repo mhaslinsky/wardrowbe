@@ -23,6 +23,7 @@ vi.mock('next-auth/react', () => ({
 }))
 
 vi.mock('next-intl', () => ({
+  NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children,
   useLocale: () => 'en',
   useFormatter: () => ({
     number: (value: number) => String(value),
@@ -39,6 +40,7 @@ vi.mock('next-intl', () => ({
 }))
 
 vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
   getTranslations: async () => {
     const t = (key: string) => key;
     t.raw = (key: string) => key;

@@ -28,6 +28,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  themeColor: '#1a1a1a',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -44,6 +45,9 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={LOCALE_METADATA[locale as SupportedLocale]?.dir ?? 'ltr'} suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" crossOrigin="use-credentials" />
+      </head>
       <body className={`${inter.variable} font-sans`}>
         <NextIntlClientProvider messages={messages} locale={locale}>
           <Providers>{children}</Providers>
