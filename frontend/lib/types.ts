@@ -276,6 +276,7 @@ export interface FamilyRating {
 }
 
 export interface OutfitItem {
+  needs_wash: boolean;
   id: string;
   type: string;
   subtype: string | null;

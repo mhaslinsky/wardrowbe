@@ -8,25 +8,37 @@ async def test_ready_to_wear_filters_before_pagination_and_resets(
     client, db_session, test_user, auth_headers
 ):
     clean = ClothingItem(
-        id=uuid4(), user_id=test_user.id, type="t-shirt", status=ItemStatus.ready,
+        id=uuid4(),
+        user_id=test_user.id,
+        type="t-shirt",
+        status=ItemStatus.ready,
         needs_wash=False,
     )
     dirty = ClothingItem(
-        id=uuid4(), user_id=test_user.id, type="shirt", status=ItemStatus.ready,
+        id=uuid4(),
+        user_id=test_user.id,
+        type="shirt",
+        status=ItemStatus.ready,
         needs_wash=True,
     )
     outfits = [
-        Outfit(user_id=test_user.id, occasion="casual", source=OutfitSource.manual,
-               status=OutfitStatus.pending)
+        Outfit(
+            user_id=test_user.id,
+            occasion="casual",
+            source=OutfitSource.manual,
+            status=OutfitStatus.pending,
+        )
         for _ in range(3)
     ]
     db_session.add_all([clean, dirty, *outfits])
     await db_session.flush()
-    db_session.add_all([
-        OutfitItem(outfit_id=outfits[0].id, item_id=clean.id, position=0),
-        OutfitItem(outfit_id=outfits[1].id, item_id=clean.id, position=0),
-        OutfitItem(outfit_id=outfits[1].id, item_id=dirty.id, position=1),
-    ])
+    db_session.add_all(
+        [
+            OutfitItem(outfit_id=outfits[0].id, item_id=clean.id, position=0),
+            OutfitItem(outfit_id=outfits[1].id, item_id=clean.id, position=0),
+            OutfitItem(outfit_id=outfits[1].id, item_id=dirty.id, position=1),
+        ]
+    )
     await db_session.commit()
     response = await client.get("/api/v1/outfits", headers=auth_headers)
     assert response.status_code == 200

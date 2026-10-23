@@ -3,6 +3,8 @@ import { resolve } from 'node:path'
 import { render, screen } from '@testing-library/react'
 import { NextIntlClientProvider } from 'next-intl'
 import { describe, expect, it, vi } from 'vitest'
+import { OutfitCard } from '@/components/outfits/outfit-card'
+import type { Outfit } from '@/lib/hooks/use-outfits'
 import OutfitDetailPage from '@/app/dashboard/outfits/[id]/page'
 
 vi.unmock('next-intl')
@@ -51,5 +53,18 @@ describe('outfit wash detail', () => {
     const en = Object.fromEntries(['outfits', 'common', 'history', 'constants'].map(namespace => [namespace, messages('en', namespace)]))
     render(<NextIntlClientProvider locale="en" messages={en}><OutfitDetailPage /></NextIntlClientProvider>)
     expect(screen.getAllByText('In the wash')).toHaveLength(1)
+  })
+})
+
+describe('outfit wash card', () => {
+  it('counts dirty pieces and omits the line when clean', () => {
+    const en = Object.fromEntries(['outfits', 'common', 'history', 'constants'].map(namespace => [namespace, messages('en', namespace)]))
+    const { rerender } = render(<NextIntlClientProvider locale="en" messages={en}><OutfitCard outfit={outfit as unknown as Outfit} /></NextIntlClientProvider>)
+    expect(screen.getByText('1 piece in the wash')).toBeInTheDocument()
+    expect(screen.getAllByText('In the wash')).toHaveLength(1)
+    const clean = { ...outfit, items: outfit.items.map(item => ({ ...item, needs_wash: false })) }
+    rerender(<NextIntlClientProvider locale="en" messages={en}><OutfitCard outfit={clean as unknown as Outfit} /></NextIntlClientProvider>)
+    expect(screen.queryByText('In the wash')).not.toBeInTheDocument()
+    expect(screen.queryByText('1 piece in the wash')).not.toBeInTheDocument()
   })
 })

@@ -39,7 +39,9 @@
     "replacement": "差し替え",
     "studio": "スタジオ",
     "woreInsteadFallback": "{occasion}(代わりに着用)",
-    "worn": "着用済み"
+    "worn": "着用済み",
+    "inTheWash": "洗濯中",
+    "piecesInWash": "{count}点が洗濯中"
   },
   "cloneToLookbook": {
     "defaultName": "{occasion}・{date}",
@@ -103,7 +105,8 @@
     "lookbook": "ルックブック",
     "pairings": "ペアリング",
     "replacements": "差し替え",
-    "worn": "着用済み"
+    "worn": "着用済み",
+    "readyToWear": "着用可能"
   },
   "itemPicker": {
     "loadingMore": "読み込み中...",
