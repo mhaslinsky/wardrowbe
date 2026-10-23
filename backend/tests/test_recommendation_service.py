@@ -976,7 +976,15 @@ class TestHotDayLegwear:
 
 class TestOvershirtNeedsATopUnderIt:
     async def _outfits(
-        self, db_session, user, ai_content, single_outfit=False, extra=(), kinds=None, pinned=()
+        self,
+        db_session,
+        user,
+        ai_content,
+        single_outfit=False,
+        extra=(),
+        kinds=None,
+        pinned=(),
+        number_map=None,
     ):
         if kinds is None:
             kinds = [
@@ -999,7 +1007,9 @@ class TestOvershirtNeedsATopUnderIt:
         ]
         db_session.add_all(items)
         await db_session.commit()
-        number_map = {n: item.id for n, item in enumerate(items, start=1)}
+        if number_map is None:
+            number_map = {number: index for index, number in enumerate(range(1, len(items) + 1))}
+        number_map = {number: items[index].id for number, index in number_map.items()}
         user.preferences = None
         ai = MagicMock()
         ai.generate_text = AsyncMock(
@@ -1215,3 +1225,48 @@ class TestOvershirtNeedsATopUnderIt:
                 kinds=[("polo", None), ("t-shirt", None), ("pants", None), ("sneakers", None)],
                 pinned=(1, 2),
             )
+
+    @pytest.mark.parametrize("outer", ["coat", "sweater"])
+    async def test_materialization_keeps_a_shirt_in_the_middle(self, db_session, test_user, outer):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3, 4]}]},
+            kinds=[("t-shirt", None), ("shirt", "button-down"), ("pants", None), (outer, None)],
+        )
+        assert items[1].id in outfits[0]
+
+    @pytest.mark.parametrize("full_body", ["dress", "jumpsuit"])
+    @pytest.mark.parametrize("layer", ["cardigan", "hoodie"])
+    async def test_materialization_keeps_one_piece_layering(
+        self, db_session, test_user, full_body, layer
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 2, 3]}]},
+            kinds=[(full_body, None), (layer, None), ("sneakers", None), ("t-shirt", None)],
+        )
+        assert outfits == [{items[index].id for index in [0, 1, 2]}]
+
+    async def test_materialization_uses_rank_order_not_candidate_insertion(
+        self, db_session, test_user
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [20, 40]}]},
+            kinds=[("shirt", "overshirt"), ("t-shirt", None), ("t-shirt", None), ("pants", None)],
+            number_map={20: 0, 30: 1, 10: 2, 40: 3},
+        )
+        assert outfits == [{items[index].id for index in [0, 2, 3]}]
+
+    async def test_materialization_keeps_best_ranked_selected_sweater(self, db_session, test_user):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [30, 10, 20, 40]}]},
+            kinds=[("sweater", None), ("cardigan", None), ("t-shirt", None), ("pants", None)],
+            number_map={30: 0, 10: 1, 20: 2, 40: 3},
+        )
+        assert outfits == [{items[index].id for index in [1, 2, 3]}]

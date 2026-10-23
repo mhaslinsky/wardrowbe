@@ -568,3 +568,42 @@ def test_pinned_layer_conflict_drops_extra_unpinned_outerwear():
         {overshirt: "overshirt"},
         mandatory_item_ids={overshirt, hoodie},
     ) == [overshirt, hoodie, tee]
+
+
+@pytest.mark.parametrize("outer", ["coat", "sweater"])
+def test_repair_preserves_a_shirt_seated_in_the_middle(outer):
+    tee, shirt, pants, layer = _ids(4)
+    types = {tee: "t-shirt", shirt: "shirt", pants: "pants", layer: outer}
+    selected = deduplicate_by_body_slot([tee, shirt, pants, layer], types)
+    assert repair_top_layers(selected, [tee, shirt, layer], types, {}) == selected
+
+
+@pytest.mark.parametrize("full_body", ["dress", "jumpsuit"])
+@pytest.mark.parametrize("layer", ["cardigan", "hoodie"])
+def test_a_full_body_garment_covers_the_base_under_a_layer(full_body, layer):
+    one_piece, over, tee = _ids(3)
+    types = {one_piece: full_body, over: layer, tee: "t-shirt"}
+    assert repair_top_layers([one_piece, over], [tee, one_piece, over], types, {}) == [
+        one_piece,
+        over,
+    ]
+
+
+def test_repair_uses_rank_order_instead_of_type_map_insertion_order():
+    overshirt, polo, lower_ranked, best = _ids(4)
+    types = {overshirt: "shirt", polo: "polo", lower_ranked: "t-shirt", best: "t-shirt"}
+    assert repair_top_layers(
+        [overshirt, polo],
+        [best, lower_ranked, polo, overshirt],
+        types,
+        {overshirt: "overshirt"},
+    ) == [overshirt, best]
+
+
+def test_two_sweaters_keep_the_best_ranked_selected_layer():
+    sweater, cardigan, tee = _ids(3)
+    types = {sweater: "sweater", cardigan: "cardigan", tee: "t-shirt"}
+    assert repair_top_layers([sweater, cardigan], [cardigan, tee, sweater], types, {}) == [
+        cardigan,
+        tee,
+    ]
