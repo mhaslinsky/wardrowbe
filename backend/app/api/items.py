@@ -559,15 +559,7 @@ async def bulk_delete_items(
                 continue
 
             item = await photos.lock_photo(db, item)
-            image_service.delete_images(
-                {
-                    "image_path": item.image_path,
-                    "medium_path": item.medium_path,
-                    "thumbnail_path": item.thumbnail_path,
-                    "original_backup_path": item.original_image_path,
-                    **photos.retained_paths(item),
-                }
-            )
+            image_service.delete_images(photos.retained_paths(item))
 
             await item_service.delete(item)
             deleted += 1
@@ -598,7 +590,7 @@ async def bulk_redraw_photos(
         item_service, user_id, request, "redraw-photo", limit=20
     )
     results = []
-    for item_id in item_ids:
+    for item_id in dict.fromkeys(item_ids):
         try:
             item = await item_service.get_by_id(item_id, user_id)
             if item is None:
@@ -607,7 +599,7 @@ async def bulk_redraw_photos(
             item = await item_service.get_by_id(item_id, user_id)
             if item is None:
                 raise HTTPException(404, "Item deleted during redraw")
-            results.append({"id": str(item_id), "status": (item.photo_redraw or {})["status"]})
+            results.append({"id": str(item_id), "status": (item.photo_redraw or {}).get("status")})
         except Exception as error:
             await db.rollback()
             results.append(
@@ -1359,15 +1351,7 @@ async def delete_item(
 
     item = await photos.lock_photo(db, item)
     image_service = ImageService()
-    image_service.delete_images(
-        {
-            "image_path": item.image_path,
-            "medium_path": item.medium_path,
-            "thumbnail_path": item.thumbnail_path,
-            "original_backup_path": item.original_image_path,
-            **photos.retained_paths(item),
-        }
-    )
+    image_service.delete_images(photos.retained_paths(item))
 
     await item_service.delete(item)
 
@@ -1911,6 +1895,7 @@ async def restore_item_original(
     try:
         image_service = ImageService()
         photos.prepare_photo_edit(item)
+        photos.retain_backup(item)
         await asyncio.to_thread(
             image_service.restore_original, item.image_path, item.original_image_path
         )
@@ -1979,15 +1964,8 @@ async def replace_item_image(
     }
 
     if item.photo_redraw:
-        item.photo_redraw = {
-            **item.photo_redraw,
-            "retained": [*item.photo_redraw.get("retained", []), *filter(None, old_paths.values())],
-            "selected": "custom",
-        }
         old_paths = {}
-    item.image_path = image_paths["image_path"]
-    item.medium_path = image_paths["medium_path"]
-    item.thumbnail_path = image_paths["thumbnail_path"]
+    photos.set_active_photo(item, image_paths, "custom")
     item.image_hash = image_paths["image_hash"]
     item.original_image_path = None
     await db.commit()
@@ -2172,6 +2150,9 @@ async def set_primary_image(
             detail="Image not found",
         )
 
+    if item.photo_redraw:
+        item = await photos.lock_photo(db, item)
+
     # Swap paths: current primary -> additional, additional -> primary
     old_primary = {
         "image_path": item.image_path,
@@ -2179,9 +2160,15 @@ async def set_primary_image(
         "medium_path": item.medium_path,
     }
 
-    item.image_path = item_image.image_path
-    item.thumbnail_path = item_image.thumbnail_path
-    item.medium_path = item_image.medium_path
+    photos.set_active_photo(
+        item,
+        {
+            "image_path": item_image.image_path,
+            "thumbnail_path": item_image.thumbnail_path,
+            "medium_path": item_image.medium_path,
+        },
+        "custom",
+    )
 
     item_image.image_path = old_primary["image_path"]
     item_image.thumbnail_path = old_primary["thumbnail_path"]

@@ -226,7 +226,7 @@ async def test_retained_photos_survive_edits_and_delete_with_item(
     if action == "replace":
         assert response.json()["photo_redraw"]["selected"] == "custom"
     if action == "remove-background":
-        assert response.json()["original_image_path"] in response.json()["photo_redraw"]["retained"]
+        assert response.json()["original_image_path"] in response.json()["photo_redraw"]["files"]
     if action == "restore-original":
         assert "A" in Image.open(service.get_image_path(response.json()["image_path"])).getbands()
     if action == "remove-background":
@@ -305,7 +305,7 @@ async def test_changes_during_generation(
             with pytest.raises(RuntimeError):
                 await client.post(f"/api/v1/items/{item_id}/redraw-photo", headers=auth_headers)
             response = await client.get(f"/api/v1/items/{item_id}", headers=auth_headers)
-            assert original_path in response.json()["photo_redraw"]["retained"]
+            assert original_path in response.json()["photo_redraw"]["files"]
             await client.delete(f"/api/v1/items/{item_id}", headers=auth_headers)
             assert not ImageService().get_image_path(original_path).exists()
             return
@@ -553,17 +553,13 @@ async def test_bulk_cap_rate_and_missing_lock(client, auth_headers, photo_item):
 async def test_photo_file_ownership_sequences(
     actions, deletion, client, auth_headers, photo_item, db_session
 ):
-    from app.services.photo_redraw_service import PHOTO_FIELDS, select_photo
+    from app.services.photo_redraw_service import PhotoRedrawService
 
     service = ImageService()
-    original = service.copy_photo({field: getattr(photo_item, field) for field in PHOTO_FIELDS})
-    photo_item.photo_redraw = {
-        "status": "generated",
-        "original": original,
-        "redrawn": service.store_cutout(garment(), photo_item.user_id),
-    }
-    select_photo(photo_item, "redrawn")
-    await db_session.commit()
+    with patch.object(
+        PhotoRedrawService, "generate", AsyncMock(return_value=(garment(), {"status": "generated"}))
+    ):
+        await PhotoRedrawService().redraw(db_session, photo_item)
     directory = service.get_image_path(photo_item.image_path).parent
     for action in actions:
         if action == "select":
@@ -585,6 +581,7 @@ async def test_photo_file_ownership_sequences(
 @pytest.mark.asyncio
 async def test_assessment_failure_requires_paid_retry(photo_item, db_session):
     from fastapi import HTTPException
+
     from app.services.photo_redraw_service import PhotoRedrawService
 
     async def assessment(service, image, prompt, modality):
@@ -606,9 +603,10 @@ async def test_skipped_assessment_preserves_concurrent_replace(
     client, auth_headers, photo_item, db_session, test_user
 ):
     from sqlalchemy.ext.asyncio import async_sessionmaker
+    from starlette.datastructures import UploadFile
+
     from app.api.items import replace_item_image
     from app.services.photo_redraw_service import PhotoRedrawService
-    from starlette.datastructures import UploadFile
 
     async def generate(source):
         async with async_sessionmaker(db_session.bind, expire_on_commit=False)() as other:
@@ -690,3 +688,24 @@ async def test_checkerboard_pixels_retained_by_cutout_are_rejected():
     ):
         with pytest.raises(ValueError, match="checkerboard"):
             await PhotoRedrawService().generate(Image.new("RGB", (64, 64), GREEN))
+
+
+@pytest.mark.asyncio
+async def test_retry_generates_from_current_photo(photo_item, db_session):
+    from app.services.photo_redraw_service import PHOTO_FIELDS, PhotoRedrawService, set_active_photo
+
+    service = ImageService()
+    original = service.copy_photo({field: getattr(photo_item, field) for field in PHOTO_FIELDS})
+    photo_item.photo_redraw = {"status": "failed", "paid": True, "original": original}
+    replacement = service.copy_photo(original)
+    Image.new("RGB", (64, 64), RED).save(service.get_image_path(replacement["image_path"]))
+    set_active_photo(photo_item, replacement, "custom")
+    await db_session.commit()
+
+    async def inspect(source):
+        pixel = source.convert("RGB").getpixel((32, 32))
+        assert pixel[0] > 200 and pixel[1] < 50
+        return None, {"status": "skipped"}
+
+    with patch.object(PhotoRedrawService, "generate", side_effect=inspect):
+        await PhotoRedrawService().redraw(db_session, photo_item, retry=True)

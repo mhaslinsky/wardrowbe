@@ -61,12 +61,33 @@ def stale_claim(photo) -> bool:
 
 
 def retained_paths(item) -> dict[str, str]:
-    """List saved photos and edit backups that item deletion must remove."""
+    """Return the item's complete photo ownership set, including older metadata."""
     photo = item.photo_redraw or {}
-    paths = list(photo.get("retained", []))
-    for name in ("original", "redrawn"):
+    paths = [*photo.get("files", []), *photo.get("retained", [])]
+    for name in ("original", "redrawn", "live"):
         paths.extend(photo.get(name, {}).values())
-    return {str(index): path for index, path in enumerate(paths) if path}
+    paths.extend(getattr(item, field) for field in PHOTO_FIELDS)
+    paths.append(item.original_image_path)
+    return {str(index): path for index, path in enumerate(dict.fromkeys(paths)) if path}
+
+
+def set_active_photo(item, new_paths, selected) -> None:
+    """Register outgoing and incoming files before changing the active photo."""
+    if item.photo_redraw:
+        photo = dict(item.photo_redraw)
+        photo["files"] = list(
+            dict.fromkeys(
+                [
+                    *retained_paths(item).values(),
+                    *(new_paths.get(field) for field in PHOTO_FIELDS if new_paths.get(field)),
+                ]
+            )
+        )
+        photo["selected"] = selected
+        item.photo_redraw = photo
+    for field in PHOTO_FIELDS:
+        if field in new_paths:
+            setattr(item, field, new_paths[field])
 
 
 def live_paths(item) -> dict[str, str]:
@@ -76,48 +97,39 @@ def live_paths(item) -> dict[str, str]:
 
 
 def select_photo(item, choice: str) -> dict[str, str]:
-    """Select a saved photo using disposable copies; repeat selections do nothing."""
-    photo = dict(item.photo_redraw or {})
+    """Select saved photo copies; selecting the active choice does nothing."""
+    photo = item.photo_redraw or {}
     if not photo.get(choice):
         raise HTTPException(400, "Photo unavailable")
     if photo.get("selected") == choice:
         return {}
     paths = ImageService().copy_photo(photo[choice])
-    retained = list(photo.get("retained", []))
-    if not live_paths(item):
-        retained.extend(getattr(item, field) for field in PHOTO_FIELDS if getattr(item, field))
-    if item.original_image_path:
-        retained.append(item.original_image_path)
-    for field, path in paths.items():
-        setattr(item, field, path)
+    set_active_photo(item, paths, choice)
     item.original_image_path = None
-    item.photo_redraw = {
-        **photo,
-        "retained": list(dict.fromkeys(retained)),
-        "selected": choice,
-        "live": paths,
-    }
+    item.photo_redraw = {**item.photo_redraw, "live": paths}
     return paths
 
 
 def retain_backup(item) -> None:
-    """Keep edit backups reachable until the item is deleted."""
+    """Register edit outputs and their backup with the same photo owner."""
     if item.photo_redraw:
         path = f"{item.image_path.rsplit('.', 1)[0]}_orig.jpg"
         if ImageService().get_image_path(path).exists():
             item.photo_redraw = {
                 **item.photo_redraw,
-                "retained": list(dict.fromkeys([*item.photo_redraw.get("retained", []), path])),
+                "files": list(dict.fromkeys([*retained_paths(item).values(), path])),
             }
+        set_active_photo(item, {field: getattr(item, field) for field in PHOTO_FIELDS}, "custom")
 
 
 def prepare_photo_edit(item) -> dict[str, str]:
-    """Copy a protected original before an existing edit overwrites its active path."""
-    if not item.photo_redraw or live_paths(item):
+    """Protect saved photos and register working copies before an edit."""
+    if not item.photo_redraw:
         return {}
-    paths = ImageService().copy_photo({field: getattr(item, field) for field in PHOTO_FIELDS})
-    for field, path in paths.items():
-        setattr(item, field, path)
+    paths = {field: getattr(item, field) for field in PHOTO_FIELDS}
+    if not live_paths(item):
+        paths = ImageService().copy_photo(paths)
+    set_active_photo(item, paths, "custom")
     item.photo_redraw = {**item.photo_redraw, "live": paths}
     return paths
 
@@ -130,6 +142,30 @@ def cutout(image: Image.Image) -> Image.Image:
     if result.getchannel("A").getextrema() != (0, 255):
         raise ValueError("Cutout has no transparent background or opaque garment")
     return result
+
+
+def reject_checkerboard(source: Image.Image, result: Image.Image) -> None:
+    """Reject periodic gray background tiles that remain opaque after cutout."""
+    rgb = np.asarray(source.convert("RGB").resize(result.size), dtype=float)
+    gray = (rgb.max(axis=2) - rgb.min(axis=2) < 12) & (rgb.mean(axis=2) > 160)
+    light = rgb.mean(axis=2) > 224
+    borders = [
+        (gray[0], light[0]),
+        (gray[-1], light[-1]),
+        (gray[:, 0], light[:, 0]),
+        (gray[:, -1], light[:, -1]),
+    ]
+    alternating = sum(
+        bool(neutral.mean() > 0.9 and np.count_nonzero(bright[1:] != bright[:-1]) >= 4)
+        for neutral, bright in borders
+    )
+    edge = np.zeros(gray.shape, dtype=bool)
+    border = max(1, min(gray.shape) // 8)
+    edge[:border] = edge[-border:] = True
+    edge[:, :border] = edge[:, -border:] = True
+    retained = (np.asarray(result.getchannel("A")) >= 200) & gray & edge
+    if alternating >= 3 and retained.mean() > 0.005:
+        raise ValueError("Generated photo retains a checkerboard background")
 
 
 def garment_color(image: Image.Image) -> tuple[float, float]:
@@ -199,6 +235,8 @@ class PhotoRedrawService:
         buffer = BytesIO()
         source.save(buffer, "PNG")
         image = buffer.getvalue()
+        if self.mark_paid is not None:
+            await self.mark_paid()
         assessment = await self.request(image, load_prompt("photo_redraw_assessment"), "TEXT")
         text = "".join(
             part.get("text", "") for part in assessment["candidates"][0]["content"]["parts"]
@@ -210,8 +248,6 @@ class PhotoRedrawService:
         if not gate.needs_redraw or gate.confidence < 0.85:
             return None, {**metadata, "status": "skipped"}
         mask = await asyncio.to_thread(cutout, source)
-        if self.mark_paid is not None:
-            await self.mark_paid()
         payload = await self.request(image, load_prompt("photo_redraw"), "IMAGE")
         parts = payload["candidates"][0]["content"]["parts"]
         inline = next(part["inlineData"] for part in parts if "inlineData" in part)
@@ -219,6 +255,7 @@ class PhotoRedrawService:
             base64.b64decode(inline["data"], validate=True), ".png"
         )
         result = await asyncio.to_thread(cutout, decoded)
+        await asyncio.to_thread(reject_checkerboard, decoded, result)
         check = await asyncio.to_thread(color_check, mask, result)
         return result, {
             **metadata,
@@ -228,7 +265,7 @@ class PhotoRedrawService:
         }
 
     async def redraw(self, db, item, retry=False) -> None:
-        """Persist one claim; failed image-generation attempts need explicit paid retry."""
+        """Persist one claim; failures after assessment starts need explicit paid retry."""
         item_id = item.id
         settings = get_settings()
         if not settings.ai_image_model or not settings.ai_api_key:
@@ -269,22 +306,17 @@ class PhotoRedrawService:
         try:
             active_paths = {field: getattr(item, field) for field in PHOTO_FIELDS}
             original = previous.get("original") or service.copy_photo(active_paths)
-            retained = [
-                *previous.get("retained", []),
-                *previous.get("redrawn", {}).values(),
-                *filter(None, active_paths.values()),
-            ]
             metadata.update(
                 original=original,
                 selected=previous.get("selected", "original"),
-                retained=list(dict.fromkeys(retained)),
+                files=list(dict.fromkeys([*retained_paths(item).values(), *original.values()])),
             )
             item.photo_redraw = dict(metadata)
+            set_active_photo(item, active_paths, metadata["selected"])
+            metadata = dict(item.photo_redraw)
             await db.commit()
-            source = service._open_bounded(
-                service.get_image_path(original["image_path"]).read_bytes(), ".png"
-            )
             source_path = item.image_path
+            source = service._open_bounded(service.get_image_path(source_path).read_bytes(), ".png")
             source_hash = hashlib.sha256(service.get_image_path(source_path).read_bytes()).digest()
             result, details = await self.generate(source)
             current = await lock_photo(db, item_id, missing_ok=True)
@@ -298,7 +330,11 @@ class PhotoRedrawService:
                 raise HTTPException(409, "Photo claim changed")
             metadata.update(
                 details,
-                retained=current.photo_redraw.get("retained", []),
+                files=list(
+                    dict.fromkeys([*metadata.get("files", []), *retained_paths(current).values()])
+                ),
+                selected=current.photo_redraw.get("selected", "original"),
+                live=current.photo_redraw.get("live", {}),
                 provider_calls=self.calls,
                 usage=self.usage,
             )
@@ -308,6 +344,9 @@ class PhotoRedrawService:
                     asyncio.to_thread(service.store_cutout, result, item.user_id)
                 )
                 metadata["redrawn"] = await asyncio.shield(pending_store)
+                metadata["files"] = list(
+                    dict.fromkeys([*metadata["files"], *metadata["redrawn"].values()])
+                )
                 if (
                     current.image_path != source_path
                     or hashlib.sha256(service.get_image_path(source_path).read_bytes()).digest()
@@ -337,6 +376,15 @@ class PhotoRedrawService:
                     **metadata,
                     "status": "failed",
                     "error": type(error).__name__,
+                    "files": list(
+                        dict.fromkeys(
+                            [
+                                *metadata.get("files", []),
+                                *retained_paths(current).values(),
+                                *metadata.get("redrawn", {}).values(),
+                            ]
+                        )
+                    ),
                     "retained": current.photo_redraw.get("retained", []),
                     "live": current.photo_redraw.get("live", {}),
                     "selected": current.photo_redraw.get("selected", "original"),
