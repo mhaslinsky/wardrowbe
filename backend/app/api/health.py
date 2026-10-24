@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.database import DbSession
 from app.services.ai_service import get_ai_service
 from app.services.background_removal import get_provider
+from app.services.photo_redraw_service import photo_redraw_enabled
 
 router = APIRouter()
 
@@ -64,6 +65,7 @@ async def readiness_check(db: DbSession) -> dict[str, Any]:
 @router.get("/health/features")
 async def feature_check() -> dict[str, Any]:
     features: dict[str, Any] = {
+        "photo_redraw": photo_redraw_enabled(),
         "max_upload_size_mb": get_settings().max_upload_size_mb,
         "max_bulk_upload_count": get_settings().max_bulk_upload_count,
     }

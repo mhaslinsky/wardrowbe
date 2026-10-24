@@ -28,7 +28,8 @@ import { AddItemDialog } from '@/components/add-item-dialog';
 import { AnalysisQueuePanel } from '@/components/analysis-queue-panel';
 import { ItemDetailDialog } from '@/components/item-detail-dialog';
 import { BulkActionToolbar, BulkSelection } from '@/components/bulk-action-toolbar';
-import { useItems, useItem, useItemTypes, useReanalyzeItem, useCancelAnalysis, useBulkDeleteItems, useBulkReanalyzeItems, useBulkCancelAnalysis, useBulkRotateItems, useBulkRemoveBackgroundItems, useRemoveBackground, useTaggingProgress, BulkOperationParams, tagProcessingLabel, formatAnalyzingElapsed, deriveQueueSummary } from '@/lib/hooks/use-items';
+import { useBulkRedrawPhotos, useItems, useItem, useItemTypes, useReanalyzeItem, useCancelAnalysis, useBulkDeleteItems, useBulkReanalyzeItems, useBulkCancelAnalysis, useBulkRotateItems, useBulkRemoveBackgroundItems, useRemoveBackground, useTaggingProgress, BulkOperationParams, tagProcessingLabel, formatAnalyzingElapsed, deriveQueueSummary } from '@/lib/hooks/use-items';
+import { useFeatures } from '@/lib/hooks/use-features';
 import { useUserTimezone } from '@/lib/hooks/use-user';
 import { colorSwatch, normalizeColor } from '@/lib/colors';
 import { Item } from '@/lib/types';
@@ -430,6 +431,8 @@ export default function WardrobePage() {
   const { data: itemTypes } = useItemTypes();
   const reanalyze = useReanalyzeItem();
   const cancelAnalysis = useCancelAnalysis();
+  const bulkRedraw = useBulkRedrawPhotos();
+  const { data: features } = useFeatures();
   const bulkDelete = useBulkDeleteItems();
   const bulkReanalyze = useBulkReanalyzeItems();
   const bulkCancelAnalysis = useBulkCancelAnalysis();
@@ -442,8 +445,9 @@ export default function WardrobePage() {
 
   // Get selected item: try from list first, then fetch individually (for deep-link from outfit pages)
   const listItem = detailItemId ? items.find((i) => i.id === detailItemId) || null : null;
-  const { data: fetchedItem } = useItem(detailItemId && !listItem ? detailItemId : '');
-  const detailItem = listItem || fetchedItem || null;
+  const { data: fetchedItem } = useItem(detailItemId || '');
+  const detailItem = fetchedItem && (!listItem || fetchedItem.updated_at >= listItem.updated_at)
+    ? fetchedItem : listItem;
 
   // Wardrobe-wide, from the server: counting the current page only capped the
   // badge at the page size, so a 100-image upload still read "20 analyzing".
@@ -554,6 +558,18 @@ export default function WardrobePage() {
       return {
         item_ids: Array.from(selection.selectedIds),
       };
+    }
+  };
+
+  const handleBulkRedraw = async (retry: boolean) => {
+    try {
+      const results = await bulkRedraw.mutateAsync({ ...getBulkParams(), retry });
+      const failed = results.filter((result) => result.error).length;
+      const generated = results.filter((result) => result.status === 'generated').length;
+      toast.success(t('photoRedraw.bulkResult', { generated, failed }));
+      if (failed) toast.info(t('photoRedraw.bulkFailed'));
+    } catch {
+      toast.error(t('photoRedraw.bulkError'));
     }
   };
 
@@ -941,6 +957,8 @@ export default function WardrobePage() {
         onReanalyze={handleBulkReanalyze}
         onRotate={handleBulkRotate}
         onRemoveBackground={handleBulkRemoveBackground}
+        onRedraw={features?.photo_redraw === true ? handleBulkRedraw : undefined}
+        isRedrawing={bulkRedraw.isPending}
         isDeleting={bulkDelete.isPending}
         isReanalyzing={bulkReanalyze.isPending}
         isRotating={bulkRotate.isPending}

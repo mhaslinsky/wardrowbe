@@ -18,6 +18,15 @@ export interface ItemTags {
   source_url?: string;
 }
 
+export interface PhotoRedraw {
+  status: string;
+  claim_stale?: boolean;
+  selected?: 'original' | 'redrawn' | 'custom';
+  paid?: boolean;
+  provider_calls?: number;
+  started_at?: string;
+}
+
 export interface Item {
   id: string;
   user_id: string;
@@ -33,6 +42,8 @@ export interface Item {
   thumbnail_path?: string;
   medium_path?: string;
   original_image_path?: string | null;
+  photo_redraw?: PhotoRedraw | null;
+  photo_choices?: Partial<Record<'original' | 'redrawn', string>>;
   image_url?: string;
   thumbnail_url?: string;
   medium_url?: string;

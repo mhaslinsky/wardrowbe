@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Trash2, RefreshCw, Loader2, CheckSquare, Square, MinusSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RotateCcw, RotateCw, Eraser } from 'lucide-react';
+import { X, Trash2, RefreshCw, Loader2, CheckSquare, Square, MinusSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RotateCcw, RotateCw, Eraser, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -13,6 +13,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { RedrawConfirmation } from '@/components/photo-redraw-controls';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 export interface BulkSelection {
@@ -34,6 +36,8 @@ interface BulkActionToolbarProps {
   onReanalyze?: () => void;
   onRotate?: (direction: 'cw' | 'ccw') => void;
   onRemoveBackground?: () => void;
+  onRedraw?: (retry: boolean) => void;
+  isRedrawing?: boolean;
   isDeleting?: boolean;
   isReanalyzing?: boolean;
   isRotating?: boolean;
@@ -59,6 +63,8 @@ export function BulkActionToolbar({
   onReanalyze,
   onRotate,
   onRemoveBackground,
+  onRedraw,
+  isRedrawing = false,
   isDeleting = false,
   isReanalyzing = false,
   isRotating = false,
@@ -66,6 +72,10 @@ export function BulkActionToolbar({
   variant = 'items',
   pagination,
 }: BulkActionToolbarProps) {
+  const [redrawConfirm, setRedrawConfirm] = useState(false);
+  const [retryRedraw, setRetryRedraw] = useState(false);
+  useEffect(() => { setRedrawConfirm(false); setRetryRedraw(false); }, [selection]);
+  const tr = useTranslations('wardrobe.photoRedraw');
   const t = useTranslations('common');
   const tWardrobe = useTranslations('wardrobe');
   const tOutfits = useTranslations('outfits');
@@ -204,6 +214,14 @@ export function BulkActionToolbar({
               </Button>
             </>
           )}
+          {onRedraw && <>
+            <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" disabled={isRedrawing}
+              aria-label={tr('redraw')} onClick={() => setRedrawConfirm(true)}>
+              {isRedrawing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            </Button>
+            <RedrawConfirmation open={redrawConfirm} onOpenChange={setRedrawConfirm} count={selectedCount}
+              paidRetry={retryRedraw} onRetryChange={setRetryRedraw} onConfirm={() => { setRedrawConfirm(false); onRedraw(retryRedraw); }} />
+          </>}
           {onRemoveBackground && (
             <AlertDialog>
               <AlertDialogTrigger asChild>

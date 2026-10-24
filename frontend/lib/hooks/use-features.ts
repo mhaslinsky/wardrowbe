@@ -8,6 +8,7 @@ import { queryKeys } from '@/lib/hooks/query-keys';
 import { SLOW_STALE_TIME } from '@/lib/hooks/query-timing';
 
 interface Features {
+  photo_redraw?: boolean;
   background_removal: boolean;
   max_upload_size_mb: number;
   max_bulk_upload_count?: number;

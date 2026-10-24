@@ -277,5 +277,27 @@
     "daysAgo": "{days}日前に着用",
     "today": "今日着用",
     "yesterday": "昨日着用"
+  },
+  "photoRedraw": {
+    "redraw": "写真を再描画",
+    "retry": "再描画を再試行",
+    "useOriginal": "元の写真を使う",
+    "useRedrawn": "再描画した写真を使う",
+    "redrawn": "再描画済み",
+    "switchBack": "「再描画済み」をタップすると元の写真に戻ります。",
+    "confirmTitle": "写真{count}枚を再描画しますか？",
+    "paidConfirm": "選択した写真ごとにAI料金が発生する場合があります。",
+    "paidRetry": "課金済みの写真を再試行すると追加のAI料金が発生します。",
+    "includeRetries": "有料の再試行を含める",
+    "generating": "写真を再描画中",
+    "skipped": "再描画は不要です",
+    "color_drift": "使用する前に再描画した写真の色を確認してください。",
+    "source_changed": "再描画中に写真が変更されました",
+    "failed": "再描画に失敗しました",
+    "error": "写真の更新に失敗しました",
+    "conflict": "写真が変更されました。現在の状態を確認してください。",
+    "bulkResult": "再描画済み：{generated}。失敗：{failed}。",
+    "bulkFailed": "失敗したアイテムを開いて写真を確認してください。",
+    "bulkError": "再描画が停止しました。再試行する前にアイテムを確認してください。"
   }
 }
