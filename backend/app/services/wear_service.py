@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from functools import wraps
 from uuid import UUID
 
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,6 +17,14 @@ from app.utils.timezone import get_user_today
 
 
 class ItemOwnershipError(Exception):
+    pass
+
+
+class FutureWearDateError(ValueError):
+    pass
+
+
+class OutfitNotTemplateError(Exception):
     pass
 
 
@@ -33,23 +43,149 @@ class DayLogged:
     existing_ids: list[UUID]
 
 
-def require_wear(result: Created | AlreadyThis | DayLogged) -> Outfit:
-    """Unwrap Created/AlreadyThis or raise 409 for DayLogged; the caller commits."""
-    if isinstance(result, DayLogged):
-        raise HTTPException(
+def map_wear_error(
+    error: DayLogged
+    | HTTPException
+    | ItemOwnershipError
+    | LookupError
+    | FutureWearDateError
+    | OutfitNotTemplateError,
+    *,
+    ha: bool = False,
+    worn_on: date | None = None,
+) -> HTTPException | JSONResponse:
+    """Map wear failures and DayLogged consistently for HTTP or HA."""
+    if isinstance(error, DayLogged):
+        if ha:
+            if worn_on is None:
+                raise ValueError("HA's logged-day response requires a wear date")
+            return JSONResponse(
+                {
+                    "ok": True,
+                    "outfit_id": str(error.existing_ids[0]),
+                    "date": str(worn_on),
+                    "already_logged": True,
+                }
+            )
+        return HTTPException(
             409,
             detail={
                 "error_code": "DAY_LOGGED",
                 "message": "A wear is already logged for this day",
-                "existing_ids": [str(outfit_id) for outfit_id in result.existing_ids],
+                "existing_ids": [str(outfit_id) for outfit_id in error.existing_ids],
             },
         )
+    if isinstance(error, ItemOwnershipError):
+        mapped = HTTPException(
+            403,
+            detail={
+                "error_code": "OUTFIT_ITEM_OWNERSHIP",
+                "message": "One or more items do not belong to you",
+            },
+        )
+    elif isinstance(error, LookupError):
+        mapped = HTTPException(
+            404, detail={"error_code": "OUTFIT_NOT_FOUND", "message": "Outfit not found"}
+        )
+    elif isinstance(error, FutureWearDateError):
+        mapped = HTTPException(422, detail=str(error))
+    elif isinstance(error, OutfitNotTemplateError):
+        mapped = HTTPException(
+            400, detail={"error_code": "OUTFIT_NOT_TEMPLATE", "message": str(error)}
+        )
+    else:
+        mapped = error
+    if ha:
+        detail = mapped.detail
+        return JSONResponse(
+            status_code=mapped.status_code,
+            content={
+                "ok": False,
+                "error": detail["error_code"] if isinstance(detail, dict) else str(detail),
+            },
+        )
+    return mapped
+
+
+def wear_http(*, ha: bool = False):
+    """Apply the shared error mapping at the wear route boundary."""
+
+    def decorate(function):
+        @wraps(function)
+        async def wrapped(*args, **kwargs):
+            try:
+                return await function(*args, **kwargs)
+            except (
+                HTTPException,
+                ItemOwnershipError,
+                LookupError,
+                FutureWearDateError,
+                OutfitNotTemplateError,
+            ) as error:
+                mapped = map_wear_error(error, ha=ha)
+                if isinstance(mapped, HTTPException):
+                    raise mapped from None
+                return mapped
+
+        return wrapped
+
+    return decorate
+
+
+def require_wear(result: Created | AlreadyThis | DayLogged) -> Outfit:
+    """Unwrap Created/AlreadyThis or raise 409 for DayLogged; the caller commits."""
+    if isinstance(result, DayLogged):
+        raise map_wear_error(result)
     return result.outfit
 
 
 class WearService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def begin(
+        self,
+        user: User | None = None,
+        worn_on: date | None = None,
+        *,
+        ha_email: str | None = None,
+        authorized: bool = True,
+    ) -> None:
+        """Lock writer entry before account/date discovery; the caller commits."""
+        if not authorized:
+            raise HTTPException(401, detail="unauthorized")
+        # HA and feedback must discover their account or wear date after locking writer entry.
+        if user is None:
+            result = await self.db.execute(
+                text(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(id::text || ':wear-entry', 0)) "
+                    "FROM users WHERE email = :email"
+                ),
+                {"email": ha_email},
+            )
+            if result.first() is None:
+                raise HTTPException(404, detail="user_not_found")
+        else:
+            await self.db.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                {"key": f"{user.id}:wear-entry"},
+            )
+            if worn_on is not None and worn_on > get_user_today(user):
+                raise FutureWearDateError("Wear date cannot be in the future")
+
+    @staticmethod
+    def date_for(user: User, outfit: Outfit, requested: date | None = None) -> date:
+        """Choose the requested date, existing wear date, or eligible suggestion date."""
+        if requested is not None:
+            return requested
+        if outfit.feedback is not None and outfit.feedback.worn_at is not None:
+            return outfit.feedback.worn_at
+        today = get_user_today(user)
+        return (
+            outfit.scheduled_for
+            if outfit.scheduled_for is not None and outfit.scheduled_for <= today
+            else today
+        )
 
     async def lock_day(self, user_id: UUID, worn_on: date) -> None:
         await self.db.execute(

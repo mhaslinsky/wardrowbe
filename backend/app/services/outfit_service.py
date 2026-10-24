@@ -189,7 +189,9 @@ class OutfitService:
         if filters.worn is not None:
             predicate = Outfit.feedback.has(UserFeedback.worn_at.is_not(None))
             clauses.append(predicate if filters.worn else ~predicate)
-        if filters.status_filter and "pending" in filters.status_filter.split(","):
+        if filters.status_filter and "pending" in [
+            part.strip() for part in filters.status_filter.split(",")
+        ]:
             clauses.append(~func.coalesce(Outfit.ai_raw_response.has_key("inspiration"), False))
 
         if filters.ready_to_wear:

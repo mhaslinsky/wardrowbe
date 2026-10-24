@@ -109,7 +109,7 @@ async def test_api_duplicate_and_dated_lists(client, db_session, test_user, auth
         assert listed.status_code == 200
         assert first.json()["id"] in {outfit["id"] for outfit in listed.json()["outfits"]}
     for payload, expected in [
-        ({"scheduled_for": "2999-01-01"}, 400),
+        ({"scheduled_for": "2999-01-01"}, 422),
         ({"scheduled_for": "not-a-date"}, 422),
     ]:
         rejected = await client.post(endpoint, json=payload, headers=auth_headers)

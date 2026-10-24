@@ -178,7 +178,7 @@ async def test_only_ready_items_can_be_worn(client, db_session, auth_headers, we
     response = await client.post(
         f"/api/v1/outfits/{chosen.id}/wore", headers=auth_headers, json={"date": str(today)}
     )
-    assert response.status_code == 422
+    assert response.status_code == 403
 
 
 @pytest.mark.parametrize("check", ["limit", "skip"])

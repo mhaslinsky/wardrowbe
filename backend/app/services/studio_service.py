@@ -17,20 +17,19 @@ from app.models.outfit import (
 )
 from app.models.user import User
 from app.services.learning_service import LearningService
-from app.services.wear_service import AlreadyThis, ItemOwnershipError, WearService, require_wear
+from app.services.wear_service import (
+    AlreadyThis,
+    ItemOwnershipError,
+    OutfitNotTemplateError,
+    WearService,
+    require_wear,
+)
+from app.services.wear_service import FutureWearDateError as FutureWearDateError
 from app.utils.clothing import canonical_item_order
 from app.utils.timezone import get_user_today
 
 
 class OutfitWornImmutableError(Exception):
-    pass
-
-
-class FutureWearDateError(ValueError):
-    pass
-
-
-class OutfitNotTemplateError(Exception):
     pass
 
 
@@ -112,8 +111,8 @@ class StudioService:
         notes: str | None = None,
     ) -> Outfit:
         if mark_worn:
+            await WearService(self.db).begin(user, scheduled_for)
             scheduled_for = scheduled_for or get_user_today(user)
-            await WearService(self.db).lock_day(user.id, scheduled_for)
         items = await validate_item_ownership(self.db, user.id, item_ids)
         ordered = self._order_items_canonically(items)
 
@@ -162,9 +161,9 @@ class StudioService:
         comment: str | None,
         scheduled_for: date | None,
     ) -> Outfit:
+        await WearService(self.db).begin(user, scheduled_for)
         original = await WearService(self.db)._load(user.id, original_outfit_id)
-        target_date = scheduled_for or original.scheduled_for or get_user_today(user)
-        await WearService(self.db).lock_day(user.id, target_date)
+        target_date = WearService.date_for(user, original, scheduled_for)
         result = await WearService(self.db).log_worn(
             user,
             original,
@@ -254,11 +253,8 @@ class StudioService:
         self, user: User, template_id: UUID, scheduled_for: date | None
     ) -> tuple[Outfit, bool]:
         """Return the wear and whether it was already logged for this template and date."""
+        await WearService(self.db).begin(user, scheduled_for)
         target_date = scheduled_for if scheduled_for is not None else get_user_today(user)
-        if target_date > get_user_today(user):
-            raise FutureWearDateError("Wear date cannot be in the future")
-
-        await WearService(self.db).lock_day(user.id, target_date)
         template = await WearService(self.db)._load(user.id, template_id)
         if template.scheduled_for is not None:
             raise OutfitNotTemplateError("wear_today requires a lookbook template")

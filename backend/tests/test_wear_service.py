@@ -1,6 +1,5 @@
 import asyncio
 from datetime import timedelta
-from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -215,72 +214,6 @@ async def test_skip_and_double_day(db_session, studio_user, wardrobe_items):
     )
     assert isinstance(result, DayLogged)
     assert set(result.existing_ids) == {chosen.id, manual.id}
-
-
-@pytest.mark.parametrize("writer", ["wear-today", "wore-instead", "studio", "feedback", "ha"])
-@pytest.mark.parametrize("wore_first", [False, True])
-async def test_writers_share_day_guard(
-    client, db_session, test_user, auth_headers, writer, wore_first
-):
-    ids = [UUID(value) for value in await _items(db_session, test_user.id)]
-    today = get_user_today(test_user)
-    chosen = await source(db_session, test_user, ids[:1], day=today)
-    rival = await source(
-        db_session,
-        test_user,
-        ids[1:],
-        day=None if writer == "wear-today" else today,
-        kind="manual" if writer == "wear-today" else "scheduled",
-    )
-    await db_session.commit()
-
-    async def wore():
-        return await client.post(
-            f"/api/v1/outfits/{chosen.id}/wore",
-            headers=auth_headers,
-            json={"date": today.isoformat()},
-        )
-
-    async def other():
-        if writer == "ha":
-            with (
-                patch("app.api.ha.settings.wardrowbe_ha_token", "test-token"),
-                patch("app.api.ha.settings.ha_user_email", test_user.email),
-            ):
-                return await client.post(
-                    "/api/v1/ha/wore-today", headers={"x-ha-token": "test-token"}
-                )
-        endpoint = f"/api/v1/outfits/{rival.id}/{writer}"
-        body = {}
-        if writer == "studio":
-            endpoint = "/api/v1/outfits/studio"
-            body = {
-                "items": [str(value) for value in ids[1:]],
-                "occasion": "casual",
-                "mark_worn": True,
-            }
-        elif writer == "wore-instead":
-            body = {"items": [str(ids[2])], "scheduled_for": today.isoformat()}
-        elif writer == "feedback":
-            body = {"worn": True}
-        return await client.post(endpoint, headers=auth_headers, json=body)
-
-    first = await (wore() if wore_first else other())
-    assert first.status_code in (200, 201), first.text
-    second = await (other() if wore_first else wore())
-    assert second.status_code == (200 if writer == "ha" and wore_first else 409), second.text
-    if writer == "ha" and wore_first:
-        assert second.json()["already_logged"] is True
-    assert (
-        await db_session.scalar(
-            select(func.count())
-            .select_from(Outfit)
-            .where(
-                Outfit.user_id == test_user.id, Outfit.feedback.has(UserFeedback.worn_at == today)
-            )
-        )
-        == 1
-    )
 
 
 async def test_accept_is_not_worn_and_inspiration_not_pending(

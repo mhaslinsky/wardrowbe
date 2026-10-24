@@ -12,7 +12,7 @@ from sqlalchemy import event, func, select, text
 
 from app.database import get_db
 from app.main import app
-from app.models.item import ClothingItem, ItemHistory
+from app.models.item import ClothingItem, ItemHistory, ItemStatus
 from app.models.outfit import Outfit, UserFeedback
 from app.services.item_service import ItemService
 from app.services.wear_service import AlreadyThis, WearService
@@ -126,10 +126,14 @@ async def test_writer_first_sql_is_advisory_lock(writer_client, writer):
 
 
 @pytest.mark.parametrize("writer", WRITERS)
-async def test_all_writers_map_archived_items(writer_client, db_session, writer_cases, writer):
+@pytest.mark.parametrize("state", ["archived", "processing"])
+async def test_all_writers_map_archived_items(
+    writer_client, db_session, writer_cases, writer, state
+):
     ids, today, outfits = writer_cases
     item = await db_session.get(ClothingItem, ids[0])
-    item.is_archived = True
+    item.is_archived = state == "archived"
+    item.status = ItemStatus.processing if state == "processing" else ItemStatus.ready
     await db_session.commit()
     send, records = writer_client
     response = await send(writer)
@@ -138,10 +142,19 @@ async def test_all_writers_map_archived_items(writer_client, db_session, writer_
     assert detail == "OUTFIT_ITEM_OWNERSHIP"
 
 
-async def test_feedback_swap_uses_suggestion_date(client, db_session, test_user, auth_headers):
+@pytest.mark.parametrize("source_offset,expected_offset", [(-1, -1), (0, 0), (1, 0), (None, 0)])
+async def test_feedback_swap_uses_suggestion_date(
+    client, db_session, test_user, auth_headers, source_offset, expected_offset
+):
     ids = [UUID(value) for value in await _items(db_session, test_user.id)]
-    yesterday = get_user_today(test_user) - timedelta(days=1)
-    original = await source(db_session, test_user, ids[:2], day=yesterday)
+    today = get_user_today(test_user)
+    expected_date = today + timedelta(days=expected_offset)
+    original = await source(
+        db_session,
+        test_user,
+        ids[:2],
+        day=None if source_offset is None else today + timedelta(days=source_offset),
+    )
     await db_session.commit()
     response = await client.post(
         f"/api/v1/outfits/{original.id}/feedback",
@@ -149,14 +162,14 @@ async def test_feedback_swap_uses_suggestion_date(client, db_session, test_user,
         json={"actually_worn": False, "wore_instead_items": [str(ids[2])]},
     )
     assert response.status_code == 200
-    assert response.json()["worn_at"] == str(yesterday)
+    assert response.json()["worn_at"] == str(expected_date)
     assert (
         await db_session.scalar(
             select(ItemHistory.worn_at).where(
                 ItemHistory.outfit_id == UUID(response.json()["outfit_id"])
             )
         )
-        == yesterday
+        == expected_date
     )
 
 
