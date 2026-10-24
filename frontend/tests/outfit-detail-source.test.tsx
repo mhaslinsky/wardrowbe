@@ -60,7 +60,7 @@ describe('outfit detail source label', () => {
       </NextIntlClientProvider>,
     )
     for (const item of outfit.items) {
-      expect(screen.getByRole('link', { name: new RegExp(item.name) })).toHaveAttribute(
+      expect(screen.getByText(item.name, { selector: 'a p' }).closest('a')).toHaveAttribute(
         'href', `/dashboard/wardrobe?item=${item.id}`,
       )
     }
@@ -96,7 +96,7 @@ describe('outfit detail source label', () => {
         <OutfitDetailPage />
       </NextIntlClientProvider>,
     )
-    expect(screen.getByRole('heading', { name: `${de.constants.occasions.casual} (stattdessen getragen)` })).toBeInTheDocument()
+    expect(screen.getByText(`${de.constants.occasions.casual} (stattdessen getragen)`, { selector: 'h1' })).toBeInTheDocument()
     outfit.name = 'Look'
     outfit.replaces_outfit_id = null
   })

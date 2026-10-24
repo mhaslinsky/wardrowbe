@@ -55,6 +55,6 @@ it.each([null, '2026-10-05'])('opens note feedback for outfit dated %s', (schedu
   outfit.scheduled_for = scheduled
   const en = Object.fromEntries(['outfits', 'common', 'history', 'constants'].map(namespace => [namespace, messages('en', namespace)]))
   render(<NextIntlClientProvider locale="en" messages={en}><OutfitDetailPage /></NextIntlClientProvider>)
-  fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+  fireEvent.click(screen.getByText('Add note', { selector: 'button' }))
   expect(screen.getByTestId('note-dialog')).toHaveTextContent('o1:true')
 })

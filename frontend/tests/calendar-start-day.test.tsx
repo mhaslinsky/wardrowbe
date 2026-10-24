@@ -31,6 +31,10 @@ vi.mock('@/lib/hooks/use-outfits', () => {
     useBulkDeleteOutfits: () => ({ mutateAsync: vi.fn(), isPending: false }),
   }
 })
+vi.mock('@/components/ui/select', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/components/ui/select')>(),
+  Select: () => null,
+}))
 vi.mock('@/components/outfit-calendar', () => ({
   OutfitCalendar: (props: { year: number; month: number; selectedDate: Date | null }) => {
     calendarProps.push(props)
