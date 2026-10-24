@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
-from sqlalchemy import or_, select, text
+from sqlalchemy import or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -340,8 +340,8 @@ class WearService:
         await ItemService(self.db).record_wears(
             user.id, effective_ids, worn_on, occasion=wear.occasion, outfit_id=wear.id
         )
-        result = await self.db.execute(
-            select(Outfit)
+        await self.db.execute(
+            update(Outfit)
             .where(
                 Outfit.user_id == user.id,
                 Outfit.id != wear.id,
@@ -352,9 +352,8 @@ class WearService:
                 Outfit.status.in_([OutfitStatus.pending, OutfitStatus.sent, OutfitStatus.viewed]),
                 ~Outfit.feedback.has(UserFeedback.worn_at.is_not(None)),
             )
-            .options(selectinload(Outfit.feedback))
+            .values(status=OutfitStatus.skipped)
+            .execution_options(synchronize_session="fetch")
         )
-        for suggestion in result.scalars():
-            suggestion.status = OutfitStatus.skipped
         await self.db.flush()
         return Created(wear)
