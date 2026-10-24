@@ -359,11 +359,14 @@ class ImageService:
     def copy_photo(self, paths: dict[str, str]) -> dict[str, str]:
         copied = {}
         try:
-            for field, source in paths.items():
-                if source:
-                    target = str(Path(source).parent / self._generate_filename(Path(source).suffix))
+            source_path = Path(paths["image_path"])
+            filename = self._generate_filename(source_path.suffix)
+            base = str(source_path.parent / Path(filename).stem)
+            for variant in VARIANTS:
+                if source := paths.get(variant.path_field):
+                    target = f"{base}{variant.suffix}{source_path.suffix}"
                     shutil.copy2(self.get_image_path(source), self.get_image_path(target))
-                    copied[field] = target
+                    copied[variant.path_field] = target
             return copied
         except BaseException:
             self.delete_images(copied)

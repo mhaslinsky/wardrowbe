@@ -183,6 +183,9 @@ async def test_retained_photos_survive_edits_and_delete_with_item(
                 assert removal.status_code == 200, removal.text
             response = await client.post(prefix + "/" + action, json={}, headers=auth_headers)
     assert response.status_code == (400 if action == "rotate" else 200), response.text
+    if action == "remove-background":
+        thumbnail = service.get_image_path(response.json()["thumbnail_path"])
+        assert Image.open(thumbnail).convert("RGB").getpixel((32, 32)) == (0, 0, 255)
     assert all(
         service.get_image_path(path).read_bytes() == content for path, content in immutable.items()
     )
