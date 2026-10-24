@@ -80,3 +80,23 @@ describe('photo redraw controls', () => {
     expect(screen.queryByRole('button', { name: 'confirm' })).toBeNull();
   });
 });
+
+it('enables switching and confirmed paid retry for an expired generating claim', async () => {
+  show({ photo_redraw: { status: 'generating', claim_stale: true, paid: true, selected: 'original' },
+    photo_choices: { original: '/original', redrawn: '/redrawn' } });
+  fireEvent.click(screen.getByRole('button', { name: 'useRedrawn' }));
+  await waitFor(() => expect(mocks.choose).toHaveBeenCalledWith({ id: 'one', choice: 'redrawn' }));
+  fireEvent.click(screen.getByRole('button', { name: 'retry' }));
+  expect(mocks.redraw).not.toHaveBeenCalled();
+  expect(screen.getByText('paidRetry')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'confirm' }));
+  await waitFor(() => expect(mocks.redraw).toHaveBeenCalledWith({ id: 'one', retry: true }));
+});
+
+it.each([false, undefined])('keeps a generating claim busy when claim_stale is %s', (claim_stale) => {
+  show({ photo_redraw: { status: 'generating', claim_stale, selected: 'original' },
+    photo_choices: { original: '/original', redrawn: '/redrawn' } });
+  expect(screen.queryByRole('button', { name: 'retry' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'useRedrawn' })).toBeDisabled();
+  expect(screen.getByText('generating')).toBeInTheDocument();
+});

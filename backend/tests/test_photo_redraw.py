@@ -813,3 +813,54 @@ async def test_retry_validation_failure_keeps_paid_history(photo_item, db_sessio
     with pytest.raises(HTTPException) as error:
         await PhotoRedrawService().redraw(db_session, photo_item)
     assert error.value.status_code == 409
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "age_seconds,claim_stale",
+    [(901, True), (900, False), (899, False), (None, True)],
+)
+async def test_claim_stale_matches_reclaim_decision(
+    age_seconds, claim_stale, client, auth_headers, photo_item, db_session, monkeypatch
+):
+    from datetime import UTC, datetime, timedelta
+
+    from app.services import photo_redraw_service as photos
+
+    now = datetime(2026, 10, 24, 12, tzinfo=UTC)
+
+    class ClaimClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz)
+
+    monkeypatch.setattr(photos, "datetime", ClaimClock)
+    photo_item.photo_redraw = {
+        "status": "generating",
+        "paid": True,
+        **(
+            {"started_at": (now - timedelta(seconds=age_seconds)).isoformat()}
+            if age_seconds is not None
+            else {}
+        ),
+    }
+    await db_session.commit()
+    prefix = f"/api/v1/items/{photo_item.id}"
+    response = await client.get(prefix, headers=auth_headers)
+    assert response.status_code == 200
+    exposed = response.json()["photo_redraw"]["claim_stale"]
+    assert exposed is claim_stale
+    await db_session.refresh(photo_item)
+    assert "claim_stale" not in photo_item.photo_redraw
+    with patch.object(
+        photos.PhotoRedrawService, "generate", AsyncMock(return_value=(None, {"status": "skipped"}))
+    ) as generate:
+        reclaimed = await client.post(
+            prefix + "/redraw-photo", json={"retry": True}, headers=auth_headers
+        )
+    assert (reclaimed.status_code == 200) is exposed
+    assert generate.await_count == int(exposed)
+    if exposed:
+        assert reclaimed.json()["photo_redraw"]["claim_stale"] is False
+    else:
+        assert reclaimed.status_code == 409
