@@ -3,9 +3,11 @@ from datetime import timedelta
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import selectinload
 
+from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit, OutfitSource, UserFeedback
 from app.models.user import User
 from app.services.recommendation_service import RecommendationService
@@ -14,24 +16,35 @@ from app.services.weather_service import DailyForecast
 from app.utils.timezone import get_user_today
 
 
-@pytest.fixture
-def day_generation(monkeypatch):
+@pytest_asyncio.fixture
+async def day_generation(monkeypatch, db_session, test_user):
     calls = []
+    items = [
+        ClothingItem(
+            user_id=test_user.id, type=kind, image_path="test.jpg", status=ItemStatus.ready
+        )
+        for kind in ["shirt", "pants"]
+    ]
+    db_session.add_all(items)
+    await db_session.commit()
+    number_map = {number: item.id for number, item in enumerate(items, start=1)}
 
     async def generate(service, **kwargs):
         calls.append(kwargs)
+        outfits = []
         for number in range(kwargs["count"]):
-            service.db.add(
-                Outfit(
-                    user_id=kwargs["user"].id,
-                    occasion=kwargs["occasion"],
-                    scheduled_for=kwargs["scheduled_date"],
-                    source=OutfitSource.on_demand,
-                    reasoning=f"Option {number}",
+            outfits.append(
+                await service._materialize_outfit(
+                    {"items": [1, 2], "headline": f"Option {number}"},
+                    kwargs["user"],
+                    kwargs["weather_override"],
+                    kwargs["occasion"],
+                    OutfitSource.on_demand,
+                    number_map,
+                    scheduled_date=kwargs["scheduled_date"],
                 )
             )
-        await service.db.flush()
-        return []
+        return outfits
 
     monkeypatch.setattr(RecommendationService, "generate_recommendations", generate)
     return calls
@@ -88,7 +101,6 @@ async def test_readonly_days(db_session, test_user, day_generation, offset, logg
         db_session.add(
             UserFeedback(
                 outfit_id=outfit.id,
-                user_id=test_user.id,
                 worn_at=day,
                 actually_worn=True,
                 accepted=True,
@@ -194,3 +206,52 @@ async def test_route_malformed_date(client, auth_headers, value):
         "/api/v1/outfits/suggest-options", json={"date": value}, headers=auth_headers
     )
     assert response.status_code == 422
+
+
+async def test_missing_forecast_writes_nothing(db_session, test_user, day_generation):
+    await prepare(db_session, test_user)
+    service = RecommendationService(db_session)
+    service.weather_service.get_daily_forecast = AsyncMock(return_value=[])
+    with pytest.raises(ValueError, match="Forecast unavailable"):
+        await service.top_up_day(test_user, get_user_today(test_user), "casual")
+    assert day_generation == []
+    assert service._defer_commit is False
+
+
+async def test_generation_failure_rolls_back_and_resets(
+    db_session, test_user, day_generation, monkeypatch
+):
+    await prepare(db_session, test_user)
+    user_id = test_user.id
+    day = get_user_today(test_user)
+    service = RecommendationService(db_session)
+    forecast(service, day)
+    original = service.generate_recommendations
+
+    async def fail_after_materializing(**kwargs):
+        await original(**kwargs)
+        raise ValueError("Generation failed")
+
+    monkeypatch.setattr(service, "generate_recommendations", fail_after_materializing)
+    with pytest.raises(ValueError, match="Generation failed"):
+        await service.top_up_day(test_user, day, "casual")
+    assert service._defer_commit is False
+    assert (
+        await db_session.scalar(
+            select(func.count())
+            .select_from(Outfit)
+            .where(Outfit.user_id == user_id, Outfit.scheduled_for == day)
+        )
+        == 0
+    )
+
+
+async def test_route_dated_dispatch(client, auth_headers, test_user, monkeypatch):
+    top_up = AsyncMock(return_value=[])
+    monkeypatch.setattr(RecommendationService, "top_up_day", top_up)
+    day = get_user_today(test_user) + timedelta(days=7)
+    response = await client.post(
+        "/api/v1/outfits/suggest-options", json={"date": day.isoformat()}, headers=auth_headers
+    )
+    assert response.status_code == 200
+    assert top_up.call_args.kwargs["day"] == day
