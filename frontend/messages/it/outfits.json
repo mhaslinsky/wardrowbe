@@ -195,13 +195,12 @@
     "saved": "Outfit salvati",
     "past": "Outfit passati",
     "empty": "Nessun outfit",
-    "loading": "Caricamento",
-    "more": "Carica altro",
     "wore": "Ho indossato questo",
     "swap": "Cambia un capo",
     "logged": "Registrato",
     "alreadyLogged": "Già registrato: {name}",
     "failed": "Salvataggio non riuscito",
-    "dismiss": "Ignora"
+    "dismiss": "Ignora",
+    "generateFailed": "Impossibile ottenere le opzioni"
   }
 }

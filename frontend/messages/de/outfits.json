@@ -195,13 +195,12 @@
     "saved": "Gespeicherte Outfits",
     "past": "Frühere Outfits",
     "empty": "Keine Outfits",
-    "loading": "Laden",
-    "more": "Mehr laden",
     "wore": "Das habe ich getragen",
     "swap": "Teil tauschen",
     "logged": "Gespeichert",
     "alreadyLogged": "Bereits gespeichert: {name}",
     "failed": "Speichern fehlgeschlagen",
-    "dismiss": "Verwerfen"
+    "dismiss": "Verwerfen",
+    "generateFailed": "Optionen konnten nicht geladen werden"
   }
 }

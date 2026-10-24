@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import { garmentImageUrl } from '@/lib/garment-image';
 import Link from 'next/link';
@@ -52,7 +52,7 @@ import { ItemPicker } from '@/components/shared/item-picker';
 import { OccasionChips } from '@/components/shared/occasion-chips';
 import { useOccasionLabel, useWeatherConditionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
 import { useItem } from '@/lib/hooks/use-items';
-import { api, ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
 import { applySessionToken } from '@/lib/hooks/use-session-token';
 import { ClothingTypeValue, CurrentWeather, Item, Outfit, SuggestRequest } from '@/lib/types';
 import { useWeather } from '@/lib/hooks/use-weather';
@@ -61,7 +61,7 @@ import { cn, formatShortDate } from '@/lib/utils';
 import { TempUnit, formatTemp, displayValue, toF, toCelsius } from '@/lib/temperature';
 
 import { DayOutfits, WearActions } from '@/components/day-outfits';
-import { useUserToday } from '@/lib/hooks/use-user';
+import { useDaySelection, useGenerateDayOptions } from '@/lib/hooks/use-day-outfits';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -281,6 +281,10 @@ function OutfitCard({
   t,
   onReject,
   showActions = true,
+  date,
+  onWearSuccess,
+  onWearPendingChange,
+  wearPending,
   badgeLabel,
 }: {
   outfit: Outfit;
@@ -289,9 +293,12 @@ function OutfitCard({
   t: Translator;
   onReject?: () => void;
   showActions?: boolean;
+  date: string;
+  onWearSuccess: () => void;
+  onWearPendingChange: (pending: boolean) => void;
+  wearPending: boolean;
   badgeLabel?: string;
 }) {
-  const today = useUserToday()();
   const typeLabel = useTypeLabel();
   return (
     <Card className="overflow-hidden flex flex-col h-full">
@@ -382,13 +389,14 @@ function OutfitCard({
                 variant="ghost"
                 size="sm"
                 onClick={onReject}
+                disabled={wearPending}
                 className="h-8 px-2.5 text-muted-foreground hover:text-destructive"
                 aria-label={t('dismissOutfit')}
               >
                 <ThumbsDown className="h-4 w-4" />
               </Button>
             )}
-            <WearActions outfit={outfit} date={today} />
+            <WearActions outfit={outfit} date={date} disabled={wearPending} onSuccess={onWearSuccess} onPendingChange={onWearPendingChange} />
           </div>
         )}
       </CardContent>
@@ -408,6 +416,10 @@ function OutfitResultsView({
   onReject,
   onTryAnother,
   onNewRequest,
+  date,
+  onWearSuccess,
+  onWearPendingChange,
+  wearPending,
   t,
 }: {
   outfits: Outfit[];
@@ -421,9 +433,12 @@ function OutfitResultsView({
   onReject: (outfit?: Outfit) => void;
   onTryAnother: () => void;
   onNewRequest: () => void;
+  date: string;
+  onWearSuccess: () => void;
+  onWearPendingChange: (pending: boolean) => void;
+  wearPending: boolean;
   t: Translator;
 }) {
-  const today = useUserToday()();
   const locale = useLocale();
   const conditionLabel = useWeatherConditionLabel();
   const occasionLabel = useOccasionLabel();
@@ -444,7 +459,7 @@ function OutfitResultsView({
             </span>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={onNewRequest}>
+        <Button variant="ghost" size="sm" disabled={wearPending} onClick={onNewRequest}>
           {t('startOver')}
         </Button>
       </div>
@@ -517,11 +532,15 @@ function OutfitResultsView({
                 badgeLabel={t('options.optionNumber', { number: idx + 1 })}
                 onReject={() => onReject(opt)}
                 showActions={true}
+                date={date}
+                onWearSuccess={onWearSuccess}
+                onWearPendingChange={onWearPendingChange}
+                wearPending={wearPending}
               />
             ))}
           </div>
           <div className="flex gap-3 justify-center pt-2">
-            <Button variant="outline" size="lg" onClick={onTryAnother} className="gap-2">
+            <Button variant="outline" size="lg" disabled={wearPending} onClick={onTryAnother} className="gap-2">
               <RefreshCw className="h-4 w-4" />
               {t('options.generateNew')}
             </Button>
@@ -538,16 +557,20 @@ function OutfitResultsView({
             badgeLabel={outfits.length > 1 ? t('options.optionNumber', { number: activeOptionIndex + 1 }) : undefined}
             onReject={() => onReject(currentOutfit)}
             showActions={false}
+            date={date}
+            onWearSuccess={onWearSuccess}
+            onWearPendingChange={onWearPendingChange}
+            wearPending={wearPending}
           />
 
           {/* Action buttons */}
           <div className="flex gap-3 justify-center">
-            <Button variant="outline" size="lg" onClick={onTryAnother} className="gap-2">
+            <Button variant="outline" size="lg" disabled={wearPending} onClick={onTryAnother} className="gap-2">
               <RefreshCw className="h-4 w-4" />
               {outfits.length > 1 ? t('options.generateNew') : t('tryAnother')}
             </Button>
-            <WearActions outfit={currentOutfit} date={today} />
-            <Button variant="ghost" size="lg" onClick={() => onReject(currentOutfit)} className="px-3" aria-label={t('dismissOutfit')}>
+            <WearActions outfit={currentOutfit} date={date} disabled={wearPending} onSuccess={onWearSuccess} onPendingChange={onWearPendingChange} />
+            <Button variant="ghost" size="lg" disabled={wearPending} onClick={() => onReject(currentOutfit)} className="px-3" aria-label={t('dismissOutfit')}>
               <ThumbsDown className="h-4 w-4" />
             </Button>
           </div>
@@ -559,12 +582,11 @@ function OutfitResultsView({
 
 // suggest-options materialises all three looks up front, so any the user walks away from
 // would otherwise sit in history as pending forever.
-async function discardAlternatives(outfits: Outfit[], keepId?: string) {
-  await Promise.allSettled(
-    outfits
-      .filter((o) => o.id !== keepId)
-      .map((o) => api.post(`/outfits/${o.id}/skip`))
-  );
+async function discardAlternatives(outfits: Outfit[]) {
+  await Promise.all(outfits.filter((outfit) => !outfit.feedback?.worn_at).map(async (outfit) => {
+    const current = await api.get<Outfit>(`/outfits/${outfit.id}`);
+    if (!current.feedback?.worn_at) await api.post(`/outfits/${outfit.id}/skip`);
+  }));
 }
 
 const BASE_ITEM_FILTER_TYPES = [
@@ -574,6 +596,7 @@ const BASE_ITEM_FILTER_TYPES = [
 function SuggestContent() {
   const typeLabel = useTypeLabel();
   const t = useTranslations('suggest');
+  const dayMessages = useTranslations('outfits.day');
   const tCommon = useTranslations('common');
   const tTypes = useTranslations('constants.types');
   const searchParams = useSearchParams();
@@ -589,7 +612,12 @@ function SuggestContent() {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [isItemPickerOpen, setIsItemPickerOpen] = useState(false);
   const [filterType, setFilterType] = useState<string | undefined>(undefined);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const { date, today, setDate, ready } = useDaySelection();
+  const generation = useGenerateDayOptions();
+  const isGenerating = generation.isPending;
+  const currentDate = useRef(date);
+  currentDate.current = date;
+  const [wearPending, setWearPending] = useState(false);
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [activeOptionIndex, setActiveOptionIndex] = useState<number>(0);
   const [isCompareAll, setIsCompareAll] = useState(false);
@@ -609,15 +637,15 @@ function SuggestContent() {
   }, [prefs, occasionInitialized, selectedOccasion]);
 
   const handleGenerate = async () => {
-    if (!selectedOccasion) return;
+    if (!selectedOccasion || !ready || date < today) return;
 
     applySessionToken(session);
 
-    setIsGenerating(true);
     setError(null);
 
     try {
-      const request: SuggestRequest = {
+      const request: SuggestRequest & { date: string } = {
+        date,
         occasion: selectedOccasion,
         include_items: selectedItem ? [selectedItem.id] : [],
       };
@@ -632,37 +660,40 @@ function SuggestContent() {
         };
       }
 
-      const result = await api.post<Outfit[]>('/outfits/suggest-options', request);
+      const result = await generation.mutateAsync(request);
+      if (currentDate.current !== request.date) return;
       setOutfits(result);
       setActiveOptionIndex(0);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError(t('error'));
-      }
+      if (currentDate.current !== date) return;
+      setError(dayMessages('generateFailed'));
       console.error('Suggestion error:', err);
-    } finally {
-      setIsGenerating(false);
     }
   };
 
   const handleTryAnother = async () => {
-    await discardAlternatives(outfits);
+    if (wearPending) return;
+    try {
+      await discardAlternatives(outfits);
+    } catch { setError(dayMessages('failed')); return; }
     setOutfits([]);
     handleGenerate();
   };
 
   const handleReject = async (targetOutfit?: Outfit) => {
     const outfitToReject = targetOutfit || outfits[activeOptionIndex];
-    if (!outfitToReject) return;
+    if (!outfitToReject || wearPending || outfitToReject.feedback?.worn_at) return;
 
     applySessionToken(session);
 
     try {
+      const current = await api.get<Outfit>(`/outfits/${outfitToReject.id}`);
+      if (current.feedback?.worn_at) { setOutfits([]); return; }
       await api.post(`/outfits/${outfitToReject.id}/reject`);
     } catch (err) {
+      setError(dayMessages('failed'));
       console.error('Reject error:', err);
+      return;
     }
 
     const remaining = outfits.filter((o) => o.id !== outfitToReject.id);
@@ -676,7 +707,10 @@ function SuggestContent() {
   };
 
   const handleNewRequest = async () => {
-    await discardAlternatives(outfits);
+    if (wearPending) return;
+    try {
+      await discardAlternatives(outfits);
+    } catch { setError(dayMessages('failed')); return; }
     setOutfits([]);
     setActiveOptionIndex(0);
     setIsCompareAll(false);
@@ -691,7 +725,7 @@ function SuggestContent() {
         isCompareAll && outfits.length > 0 ? "max-w-5xl" : "max-w-2xl"
       )}
     >
-      <DayOutfits />
+      <DayOutfits date={date} onDateChange={setDate} />
       {/* Page header with greeting */}
       <div className="text-center space-y-1">
         <h1 className="text-2xl font-bold tracking-tight">{t(getGreetingKey())}</h1>
@@ -832,7 +866,7 @@ function SuggestContent() {
                   size="lg"
                   className="w-full gap-2"
                   onClick={handleGenerate}
-                  disabled={!selectedOccasion || isGenerating}
+                  disabled={!ready || date < today || !selectedOccasion || isGenerating}
                 >
                   {isGenerating ? (
                     <>
@@ -863,6 +897,10 @@ function SuggestContent() {
           onReject={handleReject}
           onTryAnother={handleTryAnother}
           onNewRequest={handleNewRequest}
+          date={date}
+          onWearSuccess={() => { setOutfits([]); setSelectedOccasion(null); }}
+          onWearPendingChange={setWearPending}
+          wearPending={wearPending}
           t={t}
         />
       )}

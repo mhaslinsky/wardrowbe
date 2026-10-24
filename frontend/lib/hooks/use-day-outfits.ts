@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { useUserProfile, useUserToday } from '@/lib/hooks/use-user';
+import type { SuggestRequest } from '@/lib/types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { useInfiniteOutfits, type Outfit } from '@/lib/hooks/use-outfits';
@@ -32,4 +35,21 @@ export async function loggedOutfitName(error: unknown): Promise<string | null> {
   if (detail?.error_code !== 'DAY_LOGGED' || !detail.existing_ids?.[0]) return null;
   const outfit = await api.get<Outfit>(`/outfits/${detail.existing_ids[0]}`);
   return outfit.name || outfit.occasion;
+}
+
+export function useDaySelection() {
+  const { data: profile } = useUserProfile();
+  const today = useUserToday()();
+  const [selectedDate, setDate] = useState<string | null>(null);
+  return { date: selectedDate ?? today, today, setDate, ready: !!profile };
+}
+
+export function useGenerateDayOptions() {
+  useSetTokenIfAvailable();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: SuggestRequest & { date: string }) =>
+      api.post<Outfit[]>('/outfits/suggest-options', request),
+    onSuccess: () => invalidateOutfitCaches(queryClient),
+  });
 }

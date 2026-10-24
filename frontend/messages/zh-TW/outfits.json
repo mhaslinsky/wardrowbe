@@ -195,13 +195,12 @@
     "saved": "已儲存穿搭",
     "past": "過去的穿搭",
     "empty": "暫無穿搭",
-    "loading": "載入中",
-    "more": "載入更多",
     "wore": "我穿了這套",
     "swap": "替換單品",
     "logged": "已記錄",
     "alreadyLogged": "已記錄：{name}",
     "failed": "儲存失敗",
-    "dismiss": "略過"
+    "dismiss": "略過",
+    "generateFailed": "無法取得選項"
   }
 }

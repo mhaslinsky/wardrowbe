@@ -195,13 +195,12 @@
     "saved": "Saved outfits",
     "past": "Past outfits",
     "empty": "No outfits",
-    "loading": "Loading",
-    "more": "Load more",
     "wore": "I wore this",
     "swap": "Swap a piece",
     "logged": "Logged",
     "alreadyLogged": "Already logged: {name}",
     "failed": "Could not save",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "generateFailed": "Could not get options"
   }
 }

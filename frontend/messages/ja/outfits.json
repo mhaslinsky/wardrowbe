@@ -195,13 +195,12 @@
     "saved": "保存したコーデ",
     "past": "過去のコーデ",
     "empty": "コーデがありません",
-    "loading": "読み込み中",
-    "more": "もっと見る",
     "wore": "これを着ました",
     "swap": "アイテムを交換",
     "logged": "記録済み",
     "alreadyLogged": "記録済み: {name}",
     "failed": "保存できませんでした",
-    "dismiss": "閉じる"
+    "dismiss": "閉じる",
+    "generateFailed": "候補を取得できませんでした"
   }
 }

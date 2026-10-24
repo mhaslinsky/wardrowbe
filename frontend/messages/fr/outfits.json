@@ -195,13 +195,12 @@
     "saved": "Tenues enregistrées",
     "past": "Tenues passées",
     "empty": "Aucune tenue",
-    "loading": "Chargement",
-    "more": "Voir plus",
     "wore": "J’ai porté ça",
     "swap": "Changer une pièce",
     "logged": "Enregistré",
     "alreadyLogged": "Déjà enregistré : {name}",
     "failed": "Échec de l’enregistrement",
-    "dismiss": "Ignorer"
+    "dismiss": "Ignorer",
+    "generateFailed": "Impossible de charger les options"
   }
 }

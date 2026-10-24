@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { api, ApiError } from '@/lib/api'
-import { loggedOutfitName, useLogDayWear } from '@/lib/hooks/use-day-outfits'
+import { loggedOutfitName, useLogDayWear, useGenerateDayOptions } from '@/lib/hooks/use-day-outfits'
 
 vi.mock('@/lib/api', async (original) => ({
   ...(await original<typeof import('@/lib/api')>()),
@@ -41,4 +41,15 @@ it('resolves the conflict name against the existing outfit', async () => {
 it.each([new Error('offline'), new ApiError('other', 409, {}), new ApiError('bad', 422, null), new ApiError('missing', 409, { detail: { error_code: 'DAY_LOGGED', existing_ids: [] } })])('does not treat malformed or unrelated errors as a logged day: %s', async (error) => {
   expect(await loggedOutfitName(error)).toBeNull()
   expect(api.get).not.toHaveBeenCalled()
+})
+
+it('generates dated options through the shared hook and refreshes day caches', async () => {
+  vi.mocked(api.post).mockResolvedValue([])
+  const client = new QueryClient()
+  const invalidate = vi.spyOn(client, 'invalidateQueries')
+  const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  const { result } = renderHook(useGenerateDayOptions, { wrapper })
+  await act(() => result.current.mutateAsync({ date: '2026-10-25', occasion: 'casual' }))
+  expect(api.post).toHaveBeenCalledWith('/outfits/suggest-options', { date: '2026-10-25', occasion: 'casual' })
+  expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toContainEqual(['outfits'])
 })
