@@ -8,6 +8,7 @@ from app.api.families import router as families_router
 from app.api.ha import router as ha_router
 from app.api.health import router as health_router
 from app.api.images import router as images_router
+from app.api.inspiration import router as inspiration_router
 from app.api.items import router as items_router
 from app.api.learning import router as learning_router
 from app.api.notifications import router as notifications_router
@@ -25,6 +26,7 @@ api_router.include_router(auth_router)
 api_router.include_router(users_router)
 api_router.include_router(items_router)
 api_router.include_router(images_router)
+api_router.include_router(inspiration_router)
 api_router.include_router(preferences_router)
 api_router.include_router(families_router)
 api_router.include_router(weather_router)
