@@ -1772,7 +1772,7 @@ async def rotate_item_image(
             # duration, which on a large image is seconds of dead API.
             await asyncio.to_thread(image_service.rotate_image, item.image_path, direction)
             photos.retain_backup(item)
-        await db.refresh(item)
+        await db.refresh(item, attribute_names=["updated_at"])
         return ItemResponse.model_validate(item)
     except ValueError as e:
         raise HTTPException(
