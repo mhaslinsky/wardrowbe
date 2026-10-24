@@ -79,6 +79,9 @@ class WearService:
     async def _root(self, user_id: UUID, outfit: Outfit) -> Outfit:
         seen = {outfit.id}
         while parent_id := outfit.cloned_from_outfit_id or outfit.replaces_outfit_id:
+            # A saved template starts its own wear history, even when copied from a suggestion.
+            if outfit.source == OutfitSource.manual and outfit.scheduled_for is None:
+                return outfit
             if parent_id in seen:
                 raise HTTPException(422, detail="Invalid outfit lineage")
             seen.add(parent_id)
