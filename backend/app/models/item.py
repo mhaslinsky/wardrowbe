@@ -65,6 +65,7 @@ class ClothingItem(Base):
     thumbnail_path: Mapped[str | None] = mapped_column(String(500))
     medium_path: Mapped[str | None] = mapped_column(String(500))
     original_image_path: Mapped[str | None] = mapped_column(String(500))
+    photo_redraw: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     image_hash: Mapped[str | None] = mapped_column(String(16), index=True)  # pHash hex string
     # Client-generated idempotency key for the durable bulk-upload queue (frontend
     # IndexedDB record id). Unique per user when set, enforced by a partial index

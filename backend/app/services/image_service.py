@@ -255,8 +255,14 @@ class ImageService:
         paths = {}
         for variant in VARIANTS:
             # The original is written back to image_path itself so that the stored path stays valid.
-            path = image_path if variant is ORIGINAL else f"{base_path}{variant.suffix}.jpg"
-            (self.storage_path / path).write_bytes(self.encode_variant(image, variant))
+            extension = ".png" if image_path.endswith(".png") else ".jpg"
+            path = image_path if variant is ORIGINAL else f"{base_path}{variant.suffix}{extension}"
+            if extension == ".png":
+                resized = image.copy()
+                resized.thumbnail(variant.box, Image.Resampling.LANCZOS)
+                resized.save(self.storage_path / path, "PNG")
+            else:
+                (self.storage_path / path).write_bytes(self.encode_variant(image, variant))
             paths[variant.path_field] = path
         return paths
 
@@ -308,7 +314,9 @@ class ImageService:
         if not backup_full.exists():
             raise ValueError(f"Backup not found: {backup_path}")
 
-        image = Image.open(backup_full).convert("RGB")
+        image = Image.open(backup_full)
+        if image.format != "PNG":
+            image = image.convert("RGB")
         paths = self._save_all_sizes(image, image_path)
         backup_full.unlink()
         return paths
@@ -331,7 +339,9 @@ class ImageService:
 
         angle = -90 if direction == "cw" else 90  # PIL rotates counter-clockwise by default
 
-        image = _flatten_to_rgb(Image.open(original_full))
+        image = Image.open(original_full)
+        if not image_path.endswith(".png"):
+            image = _flatten_to_rgb(image)
 
         rotated = image.rotate(angle, expand=True)
 
@@ -341,9 +351,46 @@ class ImageService:
         backup_full = self.storage_path / f"{image_path.rsplit('.', 1)[0]}_orig.jpg"
         backup = None
         if backup_full.exists():
-            backup = _flatten_to_rgb(Image.open(backup_full)).rotate(angle, expand=True)
+            backup = Image.open(backup_full)
+            if backup.format != "PNG":
+                backup = _flatten_to_rgb(backup)
+            backup = backup.rotate(angle, expand=True)
 
         paths = self._save_all_sizes(rotated, image_path)
         if backup is not None:
-            _replace_atomically(backup_full, lambda tmp: backup.save(tmp, "JPEG", quality=95))
+            _replace_atomically(
+                backup_full,
+                lambda tmp: backup.save(
+                    tmp, "PNG" if backup.mode == "RGBA" else "JPEG", quality=95
+                ),
+            )
         return paths
+
+    def copy_photo(self, paths: dict[str, str]) -> dict[str, str]:
+        """Copy all photo variants using a shared new basename."""
+        copied = {}
+        try:
+            source_path = Path(paths["image_path"])
+            filename = self._generate_filename(source_path.suffix)
+            base = str(source_path.parent / Path(filename).stem)
+            for variant in VARIANTS:
+                if source := paths.get(variant.path_field):
+                    target = f"{base}{variant.suffix}{source_path.suffix}"
+                    shutil.copy2(self.get_image_path(source), self.get_image_path(target))
+                    copied[variant.path_field] = target
+            return copied
+        except BaseException:
+            self.delete_images(copied)
+            raise
+
+    def store_cutout(self, image: Image.Image, user_id: uuid.UUID) -> dict[str, str]:
+        """Store transparent PNG variants, removing partial writes on failure."""
+        relative = str(Path(str(user_id)) / self._generate_filename(".png"))
+        try:
+            return self._save_all_sizes(image, relative)
+        except BaseException:
+            base = relative.rsplit(".", 1)[0]
+            self.delete_images(
+                {variant.path_field: f"{base}{variant.suffix}.png" for variant in VARIANTS}
+            )
+            raise

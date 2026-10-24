@@ -275,6 +275,7 @@ Upgrading from a release before sign-in identities (the `user_identities` table)
 | `NEXTAUTH_SECRET` | NextAuth session encryption. The frontend refuses to start with a value beginning `change-me-in-production` when `OIDC_ISSUER_URL` or `FORWARD_AUTH_SECRET` is set | Yes |
 | `AI_BASE_URL` | AI service URL | Yes |
 | `AI_API_KEY` | AI API key (if required) | Depends |
+| `AI_IMAGE_MODEL` | Gemini photo redraw model; empty disables redraw. Uses `AI_API_KEY`. | Empty |
 | `APP_URL` | Public app URL used in notification and invite links (default: `http://localhost:3000`) | No |
 | `LOG_LEVEL` | Log level for the API and workers (default: INFO) | No |
 
