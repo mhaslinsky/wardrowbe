@@ -264,6 +264,7 @@ async def test_generation_failure_rolls_back_and_resets(
         )
         == 0
     )
+    await db_session.refresh(test_user)
     await db_session.refresh(test_user, ["preferences"])
     monkeypatch.setattr(service, "generate_recommendations", original)
     await service.generate_recommendations(
