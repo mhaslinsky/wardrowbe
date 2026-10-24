@@ -80,3 +80,13 @@ async def plan_trip(
         raise HTTPException(422, detail=str(error)) from error
     except (httpx.HTTPError, WeatherServiceError) as error:
         raise HTTPException(503, detail="Trip weather unavailable") from error
+
+
+@router.delete("/{trip_id}", status_code=204)
+async def delete_trip(
+    trip_id: UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    db: DbSession,
+) -> None:
+    if not await TripService(db).delete(user.id, trip_id):
+        raise HTTPException(404, detail="Trip not found")
