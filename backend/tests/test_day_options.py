@@ -15,7 +15,6 @@ from app.services.wear_service import WearService
 from app.services.weather_service import DailyForecast
 from app.utils.timezone import get_user_today
 
-
 TEST_HANG_CEILING_SECONDS = 20
 
 
