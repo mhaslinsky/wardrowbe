@@ -1,0 +1,82 @@
+{
+  "id": "8b0d968c-534c-421c-9d83-6f9ade6e58ca",
+  "image_url": "/api/v1/inspiration/8b0d968c-534c-421c-9d83-6f9ade6e58ca/image",
+  "slots": [
+    {
+      "type": "jacket",
+      "color": "brown",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": null,
+      "match_strength": 0,
+      "no_match": true
+    },
+    {
+      "type": "t-shirt",
+      "color": "white",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": "d7675ebf-4479-4736-ba6a-acc8e7a2aedb",
+      "match_strength": 0.8,
+      "no_match": false
+    },
+    {
+      "type": "scarf",
+      "color": "navy",
+      "fit": "regular",
+      "pattern": "printed",
+      "item_id": null,
+      "match_strength": 0,
+      "no_match": true
+    },
+    {
+      "type": "belt",
+      "color": "brown",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": "d559034f-a6e9-4eae-a406-397cf09bb0ac",
+      "match_strength": 0.9,
+      "no_match": false
+    },
+    {
+      "type": "jeans",
+      "color": "blue",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": "78617a33-bf38-4c20-b1e3-13ea057556ef",
+      "match_strength": 0.9,
+      "no_match": false
+    },
+    {
+      "type": "boots",
+      "color": "brown",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": "01751776-f87c-4309-b0c2-94bac68ab3e1",
+      "match_strength": 0.85,
+      "no_match": false
+    }
+  ],
+  "items": [
+    {
+      "id": "d7675ebf-4479-4736-ba6a-acc8e7a2aedb",
+      "name": "white t-shirt",
+      "image_url": "/api/v1/images/d7675ebf-4479-4736-ba6a-acc8e7a2aedb.jpg"
+    },
+    {
+      "id": "d559034f-a6e9-4eae-a406-397cf09bb0ac",
+      "name": "brown belt",
+      "image_url": "/api/v1/images/d559034f-a6e9-4eae-a406-397cf09bb0ac.jpg"
+    },
+    {
+      "id": "78617a33-bf38-4c20-b1e3-13ea057556ef",
+      "name": "blue jeans",
+      "image_url": "/api/v1/images/78617a33-bf38-4c20-b1e3-13ea057556ef.jpg"
+    },
+    {
+      "id": "01751776-f87c-4309-b0c2-94bac68ab3e1",
+      "name": "brown boots",
+      "image_url": "/api/v1/images/01751776-f87c-4309-b0c2-94bac68ab3e1.jpg"
+    }
+  ]
+}

@@ -10,5 +10,11 @@
   "open": "Open outfit",
   "noMatch": "No match",
   "strength": "Match: {value}%",
-  "baseLayer": "Added base layer"
+  "baseLayer": "Added base layer",
+  "invalidPhoto": "Choose a valid photo.",
+  "photoTooLarge": "Choose a smaller photo.",
+  "rateLimit": "Try again shortly.",
+  "unavailable": "Matching is unavailable.",
+  "photoAlt": "Inspiration photo",
+  "deleteConfirm": "Delete this look?"
 }

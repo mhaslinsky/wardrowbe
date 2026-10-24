@@ -9,6 +9,7 @@
   "family": "家庭",
   "familyFeed": "家庭動態",
   "history": "歷史紀錄",
+  "inspiration": "靈感穿搭",
   "notifications": "通知",
   "openSidebar": "開啟側邊欄",
   "outfits": "穿搭",
@@ -21,6 +22,5 @@
   "suggestOutfit": "建議穿搭",
   "toggleTheme": "切換主題",
   "userFallback": "使用者",
-  "wardrobe": "衣櫥",
-  "inspiration": "靈感穿搭"
+  "wardrobe": "衣櫥"
 }

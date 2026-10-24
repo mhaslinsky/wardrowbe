@@ -9,6 +9,7 @@
   "family": "Familie",
   "familyFeed": "Familien-Feed",
   "history": "Verlauf",
+  "inspiration": "Inspiration",
   "notifications": "Benachrichtigungen",
   "openSidebar": "Seitenleiste öffnen",
   "outfits": "Outfits",
@@ -21,6 +22,5 @@
   "suggestOutfit": "Outfit vorschlagen",
   "toggleTheme": "Design wechseln",
   "userFallback": "Benutzer",
-  "wardrobe": "Kleiderschrank",
-  "inspiration": "Inspiration"
+  "wardrobe": "Kleiderschrank"
 }

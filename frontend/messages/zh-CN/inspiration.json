@@ -10,5 +10,11 @@
   "open": "查看穿搭",
   "noMatch": "无匹配",
   "strength": "匹配度：{value}%",
-  "baseLayer": "添加的打底层"
+  "baseLayer": "添加的打底层",
+  "invalidPhoto": "请选择有效的照片。",
+  "photoTooLarge": "请选择较小的照片。",
+  "rateLimit": "请稍后重试。",
+  "unavailable": "匹配暂不可用。",
+  "photoAlt": "穿搭参考照片",
+  "deleteConfirm": "删除此穿搭？"
 }

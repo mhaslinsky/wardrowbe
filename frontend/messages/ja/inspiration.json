@@ -10,5 +10,11 @@
   "open": "コーディネートを開く",
   "noMatch": "一致なし",
   "strength": "一致度：{value}%",
-  "baseLayer": "追加したインナー"
+  "baseLayer": "追加したインナー",
+  "invalidPhoto": "有効な写真を選んでください。",
+  "photoTooLarge": "小さい写真を選んでください。",
+  "rateLimit": "少し待ってから再試行してください。",
+  "unavailable": "マッチングを利用できません。",
+  "photoAlt": "参考写真",
+  "deleteConfirm": "このコーディネートを削除しますか？"
 }

@@ -1,5 +1,9 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
+import type { Session } from 'next-auth'
+
+export const sessionMock = { data: null as Session | null, status: 'unauthenticated' as 'loading' | 'authenticated' | 'unauthenticated' }
+export const translationMock = { includeNamespace: false }
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -13,10 +17,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('next-auth/react', () => ({
-  useSession: () => ({
-    data: null,
-    status: 'unauthenticated',
-  }),
+  useSession: () => sessionMock,
   signIn: vi.fn(),
   signOut: vi.fn(),
   SessionProvider: ({ children }: { children: React.ReactNode }) => children,
@@ -29,8 +30,8 @@ vi.mock('next-intl', () => ({
     number: (value: number) => String(value),
     list: (items: string[]) => items.join(', '),
   }),
-  useTranslations: () => {
-    const t = (key: string) => key;
+  useTranslations: (namespace?: string) => {
+    const t = (key: string) => translationMock.includeNamespace && namespace ? `${namespace}.${key}` : key;
     t.raw = (key: string) => key;
     t.rich = (key: string) => key;
     t.markup = (key: string) => key;

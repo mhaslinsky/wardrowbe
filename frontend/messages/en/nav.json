@@ -9,6 +9,7 @@
   "family": "Family",
   "familyFeed": "Family Feed",
   "history": "History",
+  "inspiration": "Inspiration",
   "notifications": "Notifications",
   "openSidebar": "Open sidebar",
   "outfits": "Outfits",
@@ -21,6 +22,5 @@
   "suggestOutfit": "Suggest Outfit",
   "toggleTheme": "Toggle theme",
   "userFallback": "User",
-  "wardrobe": "Wardrobe",
-  "inspiration": "Inspiration"
+  "wardrobe": "Wardrobe"
 }

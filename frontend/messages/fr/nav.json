@@ -9,6 +9,7 @@
   "family": "Famille",
   "familyFeed": "Fil famille",
   "history": "Historique",
+  "inspiration": "Inspiration",
   "notifications": "Notifications",
   "openSidebar": "Ouvrir le menu",
   "outfits": "Tenues",
@@ -21,6 +22,5 @@
   "suggestOutfit": "Suggérer une tenue",
   "toggleTheme": "Changer de thème",
   "userFallback": "Utilisateur",
-  "wardrobe": "Garde-robe",
-  "inspiration": "Inspiration"
+  "wardrobe": "Garde-robe"
 }

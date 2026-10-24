@@ -10,5 +10,11 @@
   "open": "Outfit öffnen",
   "noMatch": "Kein Treffer",
   "strength": "Übereinstimmung: {value}%",
-  "baseLayer": "Ergänzte Basisschicht"
+  "baseLayer": "Ergänzte Basisschicht",
+  "invalidPhoto": "Wähle ein gültiges Foto.",
+  "photoTooLarge": "Wähle ein kleineres Foto.",
+  "rateLimit": "Versuche es gleich noch einmal.",
+  "unavailable": "Zuordnung nicht verfügbar.",
+  "photoAlt": "Inspirationsfoto",
+  "deleteConfirm": "Diesen Look löschen?"
 }

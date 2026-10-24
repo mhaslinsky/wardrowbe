@@ -10,5 +10,11 @@
   "open": "Ouvrir la tenue",
   "noMatch": "Aucune correspondance",
   "strength": "Correspondance : {value}%",
-  "baseLayer": "Couche de base ajoutée"
+  "baseLayer": "Couche de base ajoutée",
+  "invalidPhoto": "Choisis une photo valide.",
+  "photoTooLarge": "Choisis une photo plus petite.",
+  "rateLimit": "Réessaie dans un instant.",
+  "unavailable": "Correspondance indisponible.",
+  "photoAlt": "Photo d’inspiration",
+  "deleteConfirm": "Supprimer ce look ?"
 }

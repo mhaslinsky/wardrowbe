@@ -10,5 +10,11 @@
   "open": "코디 열기",
   "noMatch": "일치하는 옷 없음",
   "strength": "일치도: {value}%",
-  "baseLayer": "추가된 기본 레이어"
+  "baseLayer": "추가된 기본 레이어",
+  "invalidPhoto": "올바른 사진을 선택하세요.",
+  "photoTooLarge": "더 작은 사진을 선택하세요.",
+  "rateLimit": "잠시 후 다시 시도하세요.",
+  "unavailable": "매칭을 사용할 수 없습니다.",
+  "photoAlt": "스타일 참고 사진",
+  "deleteConfirm": "이 코디를 삭제할까요?"
 }

@@ -9,6 +9,7 @@
   "family": "ファミリー",
   "familyFeed": "ファミリーフィード",
   "history": "履歴",
+  "inspiration": "インスピレーション",
   "notifications": "通知",
   "openSidebar": "サイドバーを開く",
   "outfits": "コーデ",
@@ -21,6 +22,5 @@
   "suggestOutfit": "コーディネート提案",
   "toggleTheme": "テーマ切替",
   "userFallback": "ユーザー",
-  "wardrobe": "ワードローブ",
-  "inspiration": "インスピレーション"
+  "wardrobe": "ワードローブ"
 }

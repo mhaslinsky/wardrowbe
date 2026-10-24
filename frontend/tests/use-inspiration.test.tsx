@@ -1,13 +1,18 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useInspiration } from '@/lib/hooks/use-inspiration';
-import { setAccessToken } from '@/lib/api';
+import { createQueryClient } from '@/lib/query-client';
+import { sessionMock } from './setup';
+import savedLook from './fixtures/inspiration-look.json';
+import { ApiError, setAccessToken } from '@/lib/api';
 
-const savedLook = { id: 'look1', image_url: '/look.webp', slots: [], items: [] };
-let queryClient: QueryClient;
+let queryClient: ReturnType<typeof createQueryClient>;
 beforeEach(() => {
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  queryClient = createQueryClient();
+  queryClient.setDefaultOptions({ queries: { retry: false } });
+  sessionMock.status = 'unauthenticated';
+  sessionMock.data = null;
   setAccessToken(null);
   vi.mocked(fetch).mockReset();
 });
@@ -37,14 +42,14 @@ it('uploads the image with authentication and refreshes saved looks and outfits'
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['inspiration'] });
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['outfits'] });
 });
-it.each([400, 413, 415, 422, 500])('rejects failed uploads (%s) without claiming success', async (status) => {
+it.each([413, 429, 503])('rejects failed uploads (%s) without claiming success', async (status) => {
   vi.mocked(fetch).mockImplementation(async (_url, options) => options?.method === 'POST'
     ? new Response(JSON.stringify({ detail: 'Invalid image' }), { status })
     : new Response('[]'));
   const { result } = renderHook(() => useInspiration(), { wrapper });
   await waitFor(() => expect(result.current.looks.isSuccess).toBe(true));
   await act(async () => {
-    await expect(result.current.create.mutateAsync(new File(['bad'], 'look.jpg'))).rejects.toThrow();
+    await expect(result.current.create.mutateAsync(new File(['bad'], 'look.jpg'))).rejects.toMatchObject({ name: 'ApiError', status, data: { detail: 'Invalid image' } });
   });
   expect(result.current.create.isSuccess).toBe(false);
   await waitFor(() => expect(result.current.create.isError).toBe(true));
@@ -59,4 +64,36 @@ it('deletes a saved look and refreshes both lists', async () => {
   expect(fetch).toHaveBeenCalledWith('/api/v1/inspiration/look1', expect.objectContaining({ method: 'DELETE' }));
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['inspiration'] });
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['outfits'] });
+});
+
+it('waits for session resolution before loading with the session token', async () => {
+  sessionMock.status = 'loading';
+  const requestSessions: string[] = [];
+  vi.mocked(fetch).mockImplementation(async () => {
+    requestSessions.push(sessionMock.status);
+    return new Response(JSON.stringify([savedLook]));
+  });
+  const { result, rerender } = renderHook(() => useInspiration(), { wrapper });
+  expect(result.current.looks.fetchStatus).toBe('idle');
+  sessionMock.status = 'authenticated';
+  sessionMock.data = { accessToken: 'session-token', expires: '2099-01-01' };
+  rerender();
+  await waitFor(() => expect(result.current.looks.isSuccess).toBe(true));
+  expect(requestSessions).toEqual(['authenticated']);
+  expect(fetch).toHaveBeenCalledWith('/api/v1/inspiration', expect.objectContaining({
+    headers: expect.objectContaining({ Authorization: 'Bearer session-token' }),
+  }));
+});
+
+it('keeps the HTTP status when an upload error body is malformed', async () => {
+  vi.mocked(fetch).mockImplementation(async (_url, options) => options?.method === 'POST'
+    ? new Response('not JSON', { status: 503 }) : new Response('[]'));
+  const { result } = renderHook(() => useInspiration(), { wrapper });
+  await waitFor(() => expect(result.current.looks.isSuccess).toBe(true));
+  await act(async () => {
+    await expect(result.current.create.mutateAsync(new File(['photo'], 'look.jpg')))
+      .rejects.toBeInstanceOf(ApiError);
+  });
+  await waitFor(() => expect(result.current.create.isError).toBe(true));
+  expect(result.current.create.error).toMatchObject({ status: 503 });
 });

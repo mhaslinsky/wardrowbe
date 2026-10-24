@@ -9,6 +9,7 @@
   "family": "가족",
   "familyFeed": "가족 피드",
   "history": "기록",
+  "inspiration": "스타일 영감",
   "notifications": "알림",
   "openSidebar": "사이드바 열기",
   "outfits": "코디",
@@ -21,6 +22,5 @@
   "suggestOutfit": "코디 추천",
   "toggleTheme": "테마 전환",
   "userFallback": "사용자",
-  "wardrobe": "옷장",
-  "inspiration": "스타일 영감"
+  "wardrobe": "옷장"
 }

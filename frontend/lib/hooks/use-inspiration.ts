@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, getAccessToken } from '@/lib/api';
+import { useSession } from 'next-auth/react';
+import { api, ApiError, API_BASE_PATH, getAccessToken } from '@/lib/api';
 import { useSetTokenIfAvailable } from '@/lib/hooks/use-session-token';
 import { queryKeys } from '@/lib/hooks/query-keys';
 
@@ -12,20 +13,34 @@ export interface InspirationLook {
 }
 
 export function useInspiration() {
+  const { status } = useSession();
   useSetTokenIfAvailable();
   const queryClient = useQueryClient();
-  const queryKey = ['inspiration'];
-  const looks = useQuery({ queryKey, queryFn: () => api.get<InspirationLook[]>('/inspiration') });
+  const queryKey = queryKeys.inspiration;
+  const looks = useQuery({
+    queryKey, queryFn: () => api.get<InspirationLook[]>('/inspiration'),
+    enabled: status !== 'loading',
+    meta: { toastsOwnErrors: true },
+  });
   const create = useMutation({
+    meta: { toastsOwnErrors: true },
     mutationFn: async (file: File) => {
       const data = new FormData();
       data.append('image', file);
       const token = getAccessToken();
-      const response = await fetch('/api/v1/inspiration', {
+      const response = await fetch(`${API_BASE_PATH}/inspiration`, {
         method: 'POST', body: data, credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!response.ok) throw new Error('inspiration');
+      if (!response.ok) {
+        const body = await response.json().catch(() => {
+          throw new ApiError('Invalid server response', response.status, null);
+        });
+        throw new ApiError(
+          typeof body?.detail === 'string' ? body.detail : 'Request failed',
+          response.status, body,
+        );
+      }
       return response.json() as Promise<InspirationLook>;
     },
     onSuccess: () => {
@@ -34,6 +49,7 @@ export function useInspiration() {
     },
   });
   const remove = useMutation({
+    meta: { toastsOwnErrors: true },
     mutationFn: (id: string) => api.delete(`/inspiration/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });

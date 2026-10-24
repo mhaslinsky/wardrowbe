@@ -10,5 +10,11 @@
   "open": "Apri outfit",
   "noMatch": "Nessuna corrispondenza",
   "strength": "Corrispondenza: {value}%",
-  "baseLayer": "Strato di base aggiunto"
+  "baseLayer": "Strato di base aggiunto",
+  "invalidPhoto": "Scegli una foto valida.",
+  "photoTooLarge": "Scegli una foto più piccola.",
+  "rateLimit": "Riprova tra poco.",
+  "unavailable": "Abbinamento non disponibile.",
+  "photoAlt": "Foto di ispirazione",
+  "deleteConfirm": "Eliminare questo look?"
 }
