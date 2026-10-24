@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     # AI Service (OpenAI-compatible API - supports Ollama, OpenAI, etc.)
     ai_base_url: str = Field(default="")
     ai_api_key: str | None = Field(default=None)
+    ai_image_model: str = Field(default="")
     ai_vision_model: str = Field(default="gpt-4o")  # comma-separated for model rotation
     ai_text_model: str = Field(default="gpt-4o")  # comma-separated for model rotation
     ai_timeout: int = Field(default=120)

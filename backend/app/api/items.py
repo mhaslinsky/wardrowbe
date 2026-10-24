@@ -60,6 +60,12 @@ from app.schemas.item import (
 )
 from app.services.image_service import ImageService
 from app.services.item_service import ItemService
+from app.services.photo_redraw_service import (
+    PhotoRedrawService,
+    lock_photo,
+    retained_paths,
+    select_photo,
+)
 from app.utils.auth import get_current_user
 from app.utils.signed_urls import sign_optional
 from app.utils.timezone import get_user_today
@@ -552,12 +558,14 @@ async def bulk_delete_items(
                 failed += 1
                 continue
 
+            item = await lock_photo(db, item)
             image_service.delete_images(
                 {
                     "image_path": item.image_path,
                     "medium_path": item.medium_path,
                     "thumbnail_path": item.thumbnail_path,
                     "original_backup_path": item.original_image_path,
+                    **retained_paths(item),
                 }
             )
 
@@ -575,6 +583,30 @@ async def bulk_delete_items(
         next_cursor=next_cursor,
         has_more=has_more,
     )
+
+
+@router.post("/bulk/redraw-photo")
+async def bulk_redraw_photos(
+    request: BulkSelectionRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict:
+    item_service = ItemService(db)
+    item_ids, cursor, has_more = await _resolve_bulk_item_ids(
+        item_service, current_user.id, request, "redraw-photo"
+    )
+    results = []
+    for item_id in item_ids:
+        try:
+            item = await item_service.get_by_id(item_id, current_user.id)
+            if item is None:
+                raise HTTPException(404, "Item not found")
+            await PhotoRedrawService().redraw(db, item)
+            results.append({"id": str(item_id), "status": (item.photo_redraw or {})["status"]})
+        except HTTPException as error:
+            await db.rollback()
+            results.append({"id": str(item_id), "error": error.detail})
+    return {"results": results, "next_cursor": cursor, "has_more": has_more}
 
 
 @router.post("/bulk/analyze", response_model=BulkAnalyzeResponse)
@@ -1313,6 +1345,7 @@ async def delete_item(
             detail="Item not found",
         )
 
+    item = await lock_photo(db, item)
     image_service = ImageService()
     image_service.delete_images(
         {
@@ -1320,6 +1353,7 @@ async def delete_item(
             "medium_path": item.medium_path,
             "thumbnail_path": item.thumbnail_path,
             "original_backup_path": item.original_image_path,
+            **retained_paths(item),
         }
     )
 
@@ -1916,6 +1950,7 @@ async def replace_item_image(
             detail=str(e),
         ) from None
 
+    item = await lock_photo(db, item)
     old_paths = {
         "image_path": item.image_path,
         "medium_path": item.medium_path,
@@ -1923,6 +1958,12 @@ async def replace_item_image(
         "original_backup_path": item.original_image_path,
     }
 
+    if item.photo_redraw:
+        item.photo_redraw = {
+            **item.photo_redraw,
+            "retained": [*item.photo_redraw.get("retained", []), *filter(None, old_paths.values())],
+        }
+        old_paths = {}
     item.image_path = image_paths["image_path"]
     item.medium_path = image_paths["medium_path"]
     item.thumbnail_path = image_paths["thumbnail_path"]
@@ -2127,4 +2168,44 @@ async def set_primary_image(
 
     await db.flush()
     await db.refresh(item)
+    return ItemResponse.model_validate(item)
+
+
+@router.post("/{item_id}/redraw-photo", response_model=ItemResponse)
+async def redraw_item_photo(
+    item_id: UUID,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ItemResponse:
+    item = await ItemService(db).get_by_id(item_id, current_user.id)
+    if item is None:
+        raise HTTPException(404, "Item not found")
+    await PhotoRedrawService().redraw(db, item)
+    item = await ItemService(db).get_by_id(item_id, current_user.id)
+    if item is None:
+        raise HTTPException(404, "Item deleted during redraw")
+    return ItemResponse.model_validate(item)
+
+
+@router.post("/{item_id}/photo/{choice}", response_model=ItemResponse)
+async def choose_item_photo(
+    item_id: UUID,
+    choice: str,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ItemResponse:
+    if choice not in ("original", "redrawn"):
+        raise HTTPException(400, "Invalid photo choice")
+    item = await ItemService(db).get_by_id(item_id, current_user.id)
+    if item is None:
+        raise HTTPException(404, "Item not found")
+    item = await lock_photo(db, item)
+    if (item.photo_redraw or {}).get("status") == "generating":
+        raise HTTPException(409, "Photo redraw in progress")
+    paths = select_photo(item, choice)
+    try:
+        await db.commit()
+    except BaseException:
+        ImageService().delete_images(paths)
+        raise
     return ItemResponse.model_validate(item)

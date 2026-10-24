@@ -99,6 +99,7 @@ class ItemResponse(ItemBase):
     thumbnail_path: str | None = None
     medium_path: str | None = None
     original_image_path: str | None = None
+    photo_redraw: dict | None = None
     tags: dict = Field(default_factory=dict)
     colors: list[str] = Field(default_factory=list)
     primary_color: str | None = None
@@ -136,6 +137,15 @@ class ItemResponse(ItemBase):
     archive_reason: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def photo_choices(self) -> dict[str, str]:
+        return {
+            name: sign_image_url(paths["image_path"])
+            for name in ("original", "redrawn")
+            if (paths := (self.photo_redraw or {}).get(name))
+        }
 
     @computed_field
     @property
