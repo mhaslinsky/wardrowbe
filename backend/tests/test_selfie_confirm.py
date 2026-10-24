@@ -14,14 +14,29 @@ from app.main import app
 from app.models.item import ClothingItem, ItemHistory, ItemStatus
 from app.models.learning import ItemPairScore, OutfitPerformance, UserLearningProfile
 from app.models.outfit import Outfit, UserFeedback
-from app.services.suggestion_cache import _cache_key, push_suggestions
+from app.services.suggestion_cache import _cache_key, _index_key
 from app.utils.auth import get_current_user
-from app.utils.redis_lock import get_redis
 from app.utils.timezone import get_user_today
 from tests.test_outfit_wear_history import _items
 from tests.test_wear_service import source
 
 URL = "/api/v1/selfie/confirm"
+pytest_plugins = ["tests.test_suggestion_cache"]
+
+
+@pytest.fixture
+def cache_state(mock_redis):
+    redis, _pipeline = mock_redis
+    values = {}
+
+    async def remove(*keys):
+        for key in keys:
+            values.pop(key, None)
+
+    redis.delete.side_effect = remove
+    redis.smembers.side_effect = lambda key: values.get(key, set())
+    with patch("app.services.suggestion_cache.get_redis", return_value=redis):
+        yield values
 
 
 @pytest_asyncio.fixture
@@ -71,15 +86,18 @@ def payload(ids, request_id=None):
     return {"request_id": str(request_id or uuid4()), "item_ids": ids}
 
 
-async def test_corrected_wear_replay_midnight_and_learning(confirm_client, db_session, test_user):
+async def test_corrected_wear_replay_midnight_and_learning(
+    confirm_client, db_session, test_user, cache_state
+):
     ids = await _items(db_session, test_user.id)
     body = payload(ids[1:])
-    redis = await get_redis()
-    await push_suggestions(test_user.id, "casual", [{"before": True}])
+    cache_key = _cache_key(test_user.id, "casual")
+    cache_state[cache_key] = ["before"]
+    cache_state[_index_key(test_user.id, "casual")] = {cache_key}
     first = await confirm_client.post(URL, json=body)
     assert first.status_code == 200, first.text
     outfit = first.json()
-    assert not await redis.exists(_cache_key(test_user.id, "casual"))
+    assert cache_key not in cache_state
     assert {item["id"] for item in outfit["items"]} == set(ids[1:])
     assert outfit["scheduled_for"] == str(get_user_today(test_user))
     assert outfit["status"] == "accepted"
@@ -103,10 +121,8 @@ async def test_corrected_wear_replay_midnight_and_learning(confirm_client, db_se
         )
         == 1
     )
-    redis = await get_redis()
-    await push_suggestions(test_user.id, "casual", [{"sentinel": True}])
-    cache_before = await redis.lrange(_cache_key(test_user.id, "casual"), 0, -1)
-    assert cache_before
+    cache_state[cache_key] = ["sentinel"]
+    cache_before = cache_state.copy()
     await db_session.execute(
         ClothingItem.__table__.update()
         .where(ClothingItem.id == UUID(ids[1]))
@@ -124,7 +140,7 @@ async def test_corrected_wear_replay_midnight_and_learning(confirm_client, db_se
         assert (
             await db_session.execute(select(model.__table__).where(model.user_id == test_user.id))
         ).all() == before
-    assert await redis.lrange(_cache_key(test_user.id, "casual"), 0, -1) == cache_before
+    assert cache_state == cache_before
     changed = await confirm_client.post(URL, json={**body, "item_ids": ids[:1]})
     assert changed.status_code == 409
     assert changed.json()["detail"]["error_code"] == "REQUEST_REUSED"
