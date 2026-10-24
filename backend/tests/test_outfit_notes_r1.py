@@ -97,6 +97,11 @@ async def test_comment_timestamp_tracks_changes_and_clear(
     client, auth_headers, db_session, test_user
 ):
     outfit = await save_note(db_session, test_user, None)
+    response = await client.post(
+        f"/api/v1/outfits/{outfit.id}/feedback", headers=auth_headers, json={"worn": True}
+    )
+    assert response.status_code == 200
+    worn_outfit_id = response.json()["outfit_id"]
     first = datetime(2030, 1, 1, tzinfo=UTC)
     later = first + timedelta(days=1)
 
@@ -109,7 +114,7 @@ async def test_comment_timestamp_tracks_changes_and_clear(
         ).scalar_one()
         return feedback.comment_updated_at
 
-    outfit_id = outfit.id
+    outfit_id = worn_outfit_id
     for body, clock_time, expected in (
         ({"comment": "First note"}, first, first),
         ({"comment": "First note"}, later, first),

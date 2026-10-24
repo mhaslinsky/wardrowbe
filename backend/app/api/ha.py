@@ -116,6 +116,7 @@ async def laundry_done(request: Request, db: DbSession) -> JSONResponse:
             ClothingItem.needs_wash.is_(True),
             ClothingItem.type.not_in(FOOTWEAR_TYPES),
         )
+        .order_by(ClothingItem.id)
         .with_for_update()
     )
     items = list(result.scalars().all())

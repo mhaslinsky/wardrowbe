@@ -45,6 +45,7 @@ from app.services.studio_service import (
     StudioService,
 )
 from app.services.suggestion_cache import clear_suggestions
+from app.services.undo_wear_service import UndoWearService, undo_conflict
 from app.services.wear_service import AlreadyThis, WearService, require_wear, wear_http
 from app.services.weather_service import WeatherData
 from app.utils.auth import get_current_user
@@ -945,8 +946,7 @@ async def submit_feedback(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> FeedbackResponse:
-    if request.worn or request.actually_worn is True or request.wore_instead_items:
-        await WearService(db).begin(current_user)
+    await WearService(db).begin(current_user)
     query = (
         select(Outfit)
         .where(and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id))
@@ -981,6 +981,12 @@ async def submit_feedback(
                 str(item_id) for item_id in request.wore_instead_items
             ]
         outfit = wear
+
+    if any(
+        value is not None
+        for value in (request.rating, request.comfort_rating, request.style_rating)
+    ) and (outfit.feedback is None or outfit.feedback.worn_at is None):
+        raise undo_conflict("NOT_WORN", "Outfit is not worn")
 
     if outfit.feedback:
         feedback = outfit.feedback
@@ -1281,6 +1287,44 @@ async def log_outfit_worn(
     return WearOutfitResponse(
         **outfit_to_response(full).model_dump(), already_logged=isinstance(result, AlreadyThis)
     )
+
+
+class UndoWearRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    washed_item_ids: list[UUID] | None = None
+
+
+class UndoWearResponse(OutfitResponse):
+    learning_stale: bool
+
+
+@router.post("/{outfit_id}/undo-wear", response_model=UndoWearResponse)
+@wear_http()
+async def undo_outfit_wear(
+    outfit_id: UUID,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    request: UndoWearRequest | None = None,
+) -> UndoWearResponse:
+    outfit = await UndoWearService(db).undo(
+        current_user, outfit_id, request.washed_item_ids if request else None
+    )
+    user_id, occasion = current_user.id, outfit.occasion
+    await db.commit()
+    learning_stale = False
+    try:
+        await LearningService(db).recompute_learning_profile(user_id)
+    except Exception:
+        learning_stale = True
+        await db.rollback()
+        logger.exception("Learning rebuild failed after undo for outfit %s", outfit_id)
+    try:
+        await clear_suggestions(user_id, occasion)
+    except Exception:
+        logger.exception("Suggestion clearing failed after undo for outfit %s", outfit_id)
+    full = await StudioService(db).get_full_outfit(outfit_id)
+    return UndoWearResponse(**outfit_to_response(full).model_dump(), learning_stale=learning_stale)
 
 
 class PatchOutfitRequest(BaseModel):

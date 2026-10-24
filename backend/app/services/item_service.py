@@ -482,6 +482,7 @@ class ItemService:
             history = ItemHistory(
                 item_id=item.id,
                 outfit_id=outfit_id,
+                created_at=datetime.now(UTC),
                 worn_at=worn_at,
                 occasion=occasion,
                 notes=notes,
@@ -501,6 +502,7 @@ class ItemService:
     ) -> WashHistory:
         wash = WashHistory(
             item_id=item.id,
+            created_at=datetime.now(UTC),
             washed_at=washed_at,
             method=method,
             notes=notes,
