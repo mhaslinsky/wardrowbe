@@ -16,6 +16,9 @@ from app.services.weather_service import DailyForecast
 from app.utils.timezone import get_user_today
 
 
+TEST_HANG_CEILING_SECONDS = 20
+
+
 @pytest_asyncio.fixture
 async def day_generation(monkeypatch, db_session, test_user):
     calls = []
@@ -155,16 +158,17 @@ async def test_two_callers_recount(session_maker, db_session, test_user, day_gen
             forecast(service, day)
             return await service.top_up_day(user, day, "casual")
 
-    with (
-        patch.object(RecommendationService, "generate_recommendations", held_generate),
-        patch.object(WearService, "lock_day", observed_lock),
-    ):
-        first = asyncio.create_task(call())
-        await started.wait()
-        second = asyncio.create_task(call())
-        await second_lock.wait()
-        release.set()
-        results = await asyncio.gather(first, second)
+    async with asyncio.timeout(TEST_HANG_CEILING_SECONDS):
+        with (
+            patch.object(RecommendationService, "generate_recommendations", held_generate),
+            patch.object(WearService, "lock_day", observed_lock),
+        ):
+            first = asyncio.create_task(call())
+            await started.wait()
+            second = asyncio.create_task(call())
+            await second_lock.wait()
+            release.set()
+            results = await asyncio.gather(first, second)
     assert [len(result) for result in results] == [3, 3]
     assert len(day_generation) == 1
     assert (
