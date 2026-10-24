@@ -1149,7 +1149,7 @@ async def test_obsolete_unlink_failure_does_not_rollback_retry(photo_item, db_se
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("item_type", [*types_for_role("footwear"), "shirt", None, "unknown"])
+@pytest.mark.parametrize("item_type", [*types_for_role("footwear"), "shirt", "", "unknown"])
 @pytest.mark.parametrize("recorded", [True, False])
 async def test_redraw_prompt_by_type(item_type, recorded, photo_item, db_session):
     from app.services.photo_redraw_service import PhotoRedrawService
