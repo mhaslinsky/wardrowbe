@@ -47,3 +47,33 @@ async def test_undo_http(client, db_session, studio_user, wardrobe_items, scenar
         assert response.status_code == 200, response.text
     else:
         assert response.json()["detail"]["error_code"] == "NOT_WORN"
+
+
+@pytest.mark.parametrize("unknown", [False, True])
+async def test_undo_http_wash_list(client, db_session, studio_user, wardrobe_items, unknown):
+    from uuid import uuid4
+
+    from app.services.item_service import ItemService
+
+    app.dependency_overrides[get_current_user] = lambda: studio_user
+    today = get_user_today(studio_user)
+    item = wardrobe_items[0]
+    outfit = await source(db_session, studio_user, [item.id], day=today)
+    outfit = (
+        await WearService(db_session).log_worn(studio_user, outfit, today, caller="test")
+    ).outfit
+    await db_session.refresh(item)
+    await ItemService(db_session).log_wash(item, today)
+    await db_session.commit()
+    with (
+        patch("app.api.outfits.clear_suggestions", new_callable=AsyncMock),
+        patch("app.api.outfits.LearningService.recompute_learning_profile", new_callable=AsyncMock),
+    ):
+        response = await client.post(
+            f"/api/v1/outfits/{outfit.id}/undo-wear",
+            json={"washed_item_ids": [str(uuid4())] if unknown else []},
+        )
+    assert response.status_code == (422 if unknown else 200), response.text
+    await db_session.refresh(item)
+    assert item.wear_count == int(unknown)
+    assert item.last_washed_at == (today if unknown else None)
