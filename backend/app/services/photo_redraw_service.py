@@ -27,13 +27,20 @@ PHOTO_FIELDS = ("image_path", "medium_path", "thumbnail_path")
 async def lock_photo(db, item, missing_ok=False):
     """Lock and reload the latest photo paths before a write."""
     item_id = item.id if isinstance(item, ClothingItem) else item
-    current = await db.scalar(
-        select(ClothingItem)
-        .where(ClothingItem.id == item_id)
-        .with_for_update()
-        .options(selectinload(ClothingItem.additional_images))
-        .execution_options(populate_existing=True)
-    )
+    query = select(ClothingItem).where(ClothingItem.id == item_id).with_for_update()
+    if isinstance(item, ClothingItem):
+        found = await db.scalar(query.with_only_columns(ClothingItem.id))
+        current = item if found is not None else None
+        if current is not None:
+            await db.refresh(
+                current, attribute_names=list(ClothingItem.__mapper__.column_attrs.keys())
+            )
+    else:
+        current = await db.scalar(
+            query.options(selectinload(ClothingItem.additional_images)).execution_options(
+                populate_existing=True
+            )
+        )
     if current is None and not missing_ok:
         raise HTTPException(404, "Item not found")
     return current
