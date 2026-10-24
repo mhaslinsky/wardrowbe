@@ -11,10 +11,11 @@ from app.database import DbSession
 from app.models.trip import Trip
 from app.models.user import User
 from app.services.recommendation_service import AIRecommendationError, InsufficientWardrobeError
-from app.services.trip_service import TripService
+from app.services.trip_service import TripOverlapError, TripService
 from app.services.weather_service import WeatherServiceError
 from app.utils.auth import get_current_user
 from app.utils.garment_vocabulary import OCCASIONS
+from app.utils.rate_limit import rate_limit_by_user
 
 router = APIRouter(prefix="/trips", tags=["Trips"])
 
@@ -35,7 +36,11 @@ class TripRequest(BaseModel):
         return self
 
 
-class TripResponse(TripRequest):
+class TripResponse(BaseModel):
+    destination: str
+    start_date: date
+    end_date: date
+    occasions: list[str]
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     days: list[dict]
@@ -61,9 +66,14 @@ async def plan_trip(
     user: Annotated[User, Depends(get_current_user)],
     db: DbSession,
 ):
+    await rate_limit_by_user(str(user.id), "trip", max_requests=2, window_seconds=60)
     try:
         return await TripService(db).plan(user, request)
+    except TripOverlapError as error:
+        raise HTTPException(409, detail="Trip dates overlap") from error
+    except AIRecommendationError as error:
+        raise HTTPException(503, detail="Trip planning unavailable") from error
     except (ValueError, InsufficientWardrobeError) as error:
         raise HTTPException(422, detail=str(error)) from error
-    except (httpx.HTTPError, WeatherServiceError, AIRecommendationError) as error:
+    except (httpx.HTTPError, WeatherServiceError) as error:
         raise HTTPException(503, detail="Trip weather unavailable") from error
