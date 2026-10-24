@@ -203,6 +203,13 @@
     "alreadyLogged": "Déjà enregistré : {name}",
     "failed": "Échec de l’enregistrement",
     "dismiss": "Ignorer",
-    "generateFailed": "Impossible de charger les options"
+    "generateFailed": "Impossible de charger les options",
+    "undo": "Annuler",
+    "replace": "Remplacer",
+    "washedSince": "Lavés depuis ?",
+    "undone": "Annulé",
+    "learningStale": "Suggestions parfois retardées",
+    "replaceFailed": "Jour rouvert. Remplacement échoué",
+    "replaceFailedStale": "Remplacement échoué ; suggestions parfois retardées"
   }
 }

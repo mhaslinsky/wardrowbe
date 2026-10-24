@@ -203,6 +203,13 @@
     "alreadyLogged": "Bereits gespeichert: {name}",
     "failed": "Speichern fehlgeschlagen",
     "dismiss": "Verwerfen",
-    "generateFailed": "Optionen konnten nicht geladen werden"
+    "generateFailed": "Optionen konnten nicht geladen werden",
+    "undo": "Rückgängig",
+    "replace": "Ersetzen",
+    "washedSince": "Seitdem gewaschen?",
+    "undone": "Rückgängig gemacht",
+    "learningStale": "Vorschläge können verzögert sein",
+    "replaceFailed": "Tag wieder offen. Ersetzen fehlgeschlagen",
+    "replaceFailedStale": "Ersetzen fehlgeschlagen; Vorschläge können verzögert sein"
   }
 }

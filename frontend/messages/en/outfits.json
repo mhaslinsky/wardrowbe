@@ -203,6 +203,13 @@
     "alreadyLogged": "Already logged: {name}",
     "failed": "Could not save",
     "dismiss": "Dismiss",
-    "generateFailed": "Could not get options"
+    "generateFailed": "Could not get options",
+    "undo": "Undo",
+    "replace": "Replace",
+    "washedSince": "Washed since?",
+    "undone": "Undone",
+    "learningStale": "Suggestions may lag",
+    "replaceFailed": "Day reopened. Replacement failed",
+    "replaceFailedStale": "Could not replace; suggestions may lag"
   }
 }

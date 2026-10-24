@@ -203,6 +203,13 @@
     "alreadyLogged": "已記錄：{name}",
     "failed": "儲存失敗",
     "dismiss": "略過",
-    "generateFailed": "無法取得選項"
+    "generateFailed": "無法取得選項",
+    "undo": "復原",
+    "replace": "替換",
+    "washedSince": "之後洗過嗎？",
+    "undone": "已復原",
+    "learningStale": "推薦可能延遲更新",
+    "replaceFailed": "當天紀錄已復原。替換失敗",
+    "replaceFailedStale": "替換失敗，推薦可能延遲更新"
   }
 }

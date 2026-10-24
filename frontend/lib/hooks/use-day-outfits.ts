@@ -29,6 +29,41 @@ export function useLogDayWear() {
   });
 }
 
+export type WashedItem = { id: string; name: string | null; washed_at: string };
+
+function washedItems(error: unknown): WashedItem[] | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  const detail = (error.data as { detail?: { error_code?: string; items?: unknown } } | null)?.detail;
+  if (detail?.error_code !== 'WASH_SINCE_WEAR' || !Array.isArray(detail.items) || !detail.items.length) return null;
+  return detail.items.every((item) => item && typeof item.id === 'string' && (item.name === null || typeof item.name === 'string') && typeof item.washed_at === 'string')
+    ? detail.items : null;
+}
+
+export function useUndoDayWear() {
+  useSetTokenIfAvailable();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ outfitId, washedItemIds }: { outfitId: string; washedItemIds?: string[] }) => {
+      try {
+        return await api.post<Outfit & { learning_stale: boolean }>(`/outfits/${outfitId}/undo-wear`, {
+          ...(washedItemIds !== undefined ? { washed_item_ids: washedItemIds } : {}),
+        });
+      } catch (error) {
+        const items = washedItems(error);
+        if (items) return { washedItems: items };
+        throw error;
+      }
+    },
+    onSuccess: (result, { outfitId }) => {
+      if ('washedItems' in result) return;
+      invalidateOutfitCaches(queryClient, outfitId);
+      queryClient.invalidateQueries({ queryKey: queryKeys.learning.all });
+      invalidateEveryItemWearCache(queryClient);
+      queryClient.invalidateQueries({ queryKey: queryKeys.washHistory('').slice(0, 1) });
+    },
+  });
+}
+
 export async function loggedOutfitName(error: unknown): Promise<string | null> {
   if (!(error instanceof ApiError) || error.status !== 409) return null;
   const detail = (error.data as { detail?: { error_code?: string; existing_ids?: string[] } })?.detail;

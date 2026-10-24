@@ -243,3 +243,10 @@ it('uses an icon with an accessible Today label and no button text', () => {
   expect(today).toHaveTextContent('')
   expect(today.textContent).toBe('')
 })
+
+it('offers Undo and Replace together on each worn card', () => {
+  state.worn = true
+  render(<DayOutfits />, { wrapper })
+  const undo = screen.getByRole('button', { name: 'undo' })
+  expect(undo.parentElement).toBe(screen.getByRole('button', { name: 'replace' }).parentElement)
+})
