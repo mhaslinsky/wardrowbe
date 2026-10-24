@@ -17,6 +17,10 @@ vi.mock('@/lib/hooks/use-user', () => ({
   useUserProfile: () => ({ data: undefined, isLoading: false }),
   useUpdateUserProfile: () => ({ mutateAsync: vi.fn() }),
 }))
+vi.mock('@/components/ui/select', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/components/ui/select')>(),
+  Select: () => null,
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
 beforeEach(() => {
@@ -31,14 +35,14 @@ describe('standing rules settings', () => {
     const editor = screen.getByLabelText('standingRules.label')
     expect(editor).toHaveValue('Never a polo under an overshirt')
     fireEvent.change(editor, { target: { value: '  Add a base shirt  \n\n Never a polo ' } })
-    fireEvent.click(screen.getAllByRole('button', { name: 'save' })[0])
+    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
     await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: ['Add a base shirt', 'Never a polo'] }))
   })
 
   it.each(['', Array(21).fill('rule').join('\n'), 'x'.repeat(301)])('handles empty or over-limit input', async (value) => {
     render(<SettingsPage />)
     fireEvent.change(screen.getByLabelText('standingRules.label'), { target: { value } })
-    fireEvent.click(screen.getAllByRole('button', { name: 'save' })[0])
+    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
     if (value === '') {
       await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: [] }))
     } else {

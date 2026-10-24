@@ -43,10 +43,10 @@ describe('ready to wear', () => {
     })
     render(<OutfitsPage />, { wrapper })
     expect(await screen.findByText('dirty')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'filters.readyToWear' }))
+    fireEvent.click(screen.getByText('filters.readyToWear', { selector: 'button' }))
     await waitFor(() => expect(screen.queryByText('dirty')).not.toBeInTheDocument())
     expect(await screen.findByText('clean')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'filters.readyToWear' }))
+    fireEvent.click(screen.getByText('filters.readyToWear', { selector: 'button' }))
     expect(await screen.findByText('dirty')).toBeInTheDocument()
   })
 
@@ -60,16 +60,16 @@ describe('ready to wear', () => {
     vi.mocked(api.post).mockResolvedValue({ deleted: 25, failed: 0, errors: [] })
     render(<OutfitsPage />, { wrapper })
     await screen.findByText('clean')
-    fireEvent.click(screen.getByRole('button', { name: 'filters.readyToWear' }))
+    fireEvent.click(screen.getByText('filters.readyToWear', { selector: 'button' }))
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/outfits', expect.objectContaining({
       params: expect.objectContaining({ ready_to_wear: 'true' }),
     })))
     await screen.findByText('clean')
-    fireEvent.click(await screen.findByRole('button', { name: 'bulkActions.select' }))
+    fireEvent.click(await screen.findByText('bulkActions.select', { selector: 'button' }))
     fireEvent.click(screen.getByText('selectAll'))
-    fireEvent.click(screen.getByRole('button', { name: 'bulkActions.selectAllMatching' }))
-    fireEvent.click(screen.getByRole('button', { name: 'delete' }))
-    fireEvent.click(screen.getAllByRole('button', { name: 'delete' }).at(-1)!)
+    fireEvent.click(screen.getByText('bulkActions.selectAllMatching', { selector: 'button' }))
+    fireEvent.click(screen.getByLabelText('delete', { selector: 'button' }))
+    fireEvent.click(screen.getByText('delete', { selector: 'button' }))
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/outfits/bulk/delete', {
       select_all: true,
       excluded_ids: [],
