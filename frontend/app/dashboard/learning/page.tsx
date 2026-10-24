@@ -188,7 +188,7 @@ function ItemPairCard({ pair }: { pair: ItemPair }) {
       <div className="flex items-center gap-2 flex-1">
         {/* Item 1 */}
         <Link
-          href={`/dashboard/wardrobe/${pair.item1.id}`}
+          href={`/dashboard/wardrobe?item=${pair.item1.id}`}
           className="w-12 h-12 rounded bg-background overflow-hidden relative flex-shrink-0 hover:ring-2 ring-primary transition-all"
         >
           {pair.item1.thumbnail_url ? (
@@ -211,7 +211,7 @@ function ItemPairCard({ pair }: { pair: ItemPair }) {
 
         {/* Item 2 */}
         <Link
-          href={`/dashboard/wardrobe/${pair.item2.id}`}
+          href={`/dashboard/wardrobe?item=${pair.item2.id}`}
           className="w-12 h-12 rounded bg-background overflow-hidden relative flex-shrink-0 hover:ring-2 ring-primary transition-all"
         >
           {pair.item2.thumbnail_url ? (
