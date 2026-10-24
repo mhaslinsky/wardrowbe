@@ -83,7 +83,7 @@ export default function TripsPage() {
           <Button disabled={busy}>{t(plan.isPending ? 'planning' : 'plan')}</Button>
         </fieldset>
       </form>
-      {(validationError || requestError) && <p role="alert">{t(validationError ? 'validation' : errorKey(requestError))}</p>}
+      {(validationError || requestError) && <p role="alert">{t(validationError ? 'validation' : remove.error ? 'deleteFailed' : errorKey(requestError))}</p>}
       {trips.isLoading && <p role="status">{t('loading')}</p>}
       {trips.isError && <p role="alert">{t('loadFailed')}</p>}
       {trips.data?.length === 0 && <p>{t('empty')}</p>}
@@ -103,7 +103,7 @@ export default function TripsPage() {
           </li>)}</ul>
           <h3 className="font-semibold">{t('packing')}</h3>
           <ul>{trip.packing.map((item) => <li key={item.item_id}>
-            <Link className="underline" href={`/dashboard/wardrobe/${item.item_id}`}>{item.name || t('unnamed')}</Link>
+            <Link className="underline" href={`/dashboard/wardrobe?item=${item.item_id}`}>{item.name || t('unnamed')}</Link>
             {' · '}{t('quantity', { count: item.count, days: item.days_worn })}
           </li>)}</ul>
         </section>

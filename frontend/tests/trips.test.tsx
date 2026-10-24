@@ -1,6 +1,10 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import * as intl from 'next-intl';
+import tripMessages from '@/messages/en/trips.json';
+import commonMessages from '@/messages/en/common.json';
+import constantMessages from '@/messages/en/constants.json';
 import TripsPage from '@/app/dashboard/trips/page';
 import { useTrips, type Trip } from '@/lib/hooks/use-trips';
 import { createQueryClient } from '@/lib/query-client';
@@ -68,12 +72,13 @@ it('plans four days, links each outfit, lists each packing item once, and resets
   expect(screen.getByText('trips.empty')).toBeVisible();
   fill(); submit();
   expect(await screen.findByRole('heading', { name: 'Paris' })).toBeVisible();
+  expect(writes('POST')[0][0]).toBe('/api/v1/trips');
   expect(JSON.parse(writes('POST')[0][1]!.body as string)).toEqual({
     destination: 'Paris', start_date: '2026-11-01', end_date: '2026-11-04', occasions: ['casual'],
   });
   for (const day of trip.days) expect(screen.getByRole('link', { name: day.date })).toHaveAttribute('href', `/dashboard/outfits/${day.outfit_id}`);
   expect(screen.getAllByRole('link', { name: 'Boots' })).toHaveLength(1);
-  expect(screen.getByRole('link', { name: 'trips.unnamed' })).toHaveAttribute('href', '/dashboard/wardrobe/shirt');
+  expect(screen.getByRole('link', { name: 'trips.unnamed' })).toHaveAttribute('href', '/dashboard/wardrobe?item=shirt');
   expect(screen.getAllByText(/trips.quantity/)).toHaveLength(2);
   expect(screen.getByText(/trips.climate/)).toBeVisible();
   expect(screen.getAllByText(/trips.forecast/)).toHaveLength(3);
@@ -121,7 +126,7 @@ it('retains a trip after failed deletion and allows retry', async () => {
   saved = [trip]; await openPage();
   failure = { status: 503, detail: 'Trip planning unavailable' };
   fireEvent.click(screen.getByRole('button', { name: 'common.delete' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('trips.unavailable');
+  expect(await screen.findByRole('alert')).toHaveTextContent('trips.deleteFailed');
   expect(screen.getByRole('heading', { name: 'Paris' })).toBeVisible();
   failure = undefined;
   fireEvent.click(screen.getByRole('button', { name: 'common.delete' }));
@@ -157,4 +162,39 @@ it('refreshes trips, calendar and outfit caches after both writes', async () => 
   for (const prefix of ['trips', 'calendarOutfits', 'outfits', 'pendingOutfits']) {
     expect(invalidate.mock.calls.filter(([filter]) => filter?.queryKey?.[0] === prefix)).toHaveLength(2);
   }
+});
+
+it.each([1, 14])('accepts a valid %i-day trip', async (days) => {
+  await openPage(); fill();
+  const end = '2026-11-' + String(days).padStart(2, '0');
+  fireEvent.change(screen.getByLabelText('trips.return'), { target: { value: end } });
+  submit();
+  await screen.findByRole('heading', { name: 'Paris' });
+  expect(writes('POST')).toHaveLength(1);
+  expect(writes('POST')[0][0]).toBe('/api/v1/trips');
+  expect(JSON.parse(writes('POST')[0][1]!.body as string)).toMatchObject({ start_date: '2026-11-01', end_date: end });
+});
+
+it('rejects a 15-day trip before POST', async () => {
+  await openPage(); fill();
+  fireEvent.change(screen.getByLabelText('trips.return'), { target: { value: '2026-11-15' } });
+  submit();
+  expect(screen.getByRole('alert')).toHaveTextContent('trips.validation');
+  expect(writes('POST')).toHaveLength(0);
+});
+
+it('renders singular and plural packing quantities and days', async () => {
+  const realIntl = await vi.importActual<typeof intl>('next-intl');
+  const messages = { trips: tripMessages, common: commonMessages, constants: constantMessages };
+  const translation = vi.spyOn(intl, 'useTranslations').mockImplementation(((namespace: 'trips' | 'common' | 'constants') =>
+    realIntl.createTranslator({ locale: 'en', messages, namespace })) as typeof intl.useTranslations);
+  try {
+    saved = [{ ...trip, packing: [
+      { item_id: 'one', name: 'Shirt', count: 1, days_worn: 1 },
+      { item_id: 'two', name: 'Boots', count: 2, days_worn: 2 },
+    ] }];
+    await openPage();
+    expect(screen.getByText(/Pack 1 item; worn 1 day/)).toBeVisible();
+    expect(screen.getByText(/Pack 2 items; worn 2 days/)).toBeVisible();
+  } finally { translation.mockRestore(); }
 });

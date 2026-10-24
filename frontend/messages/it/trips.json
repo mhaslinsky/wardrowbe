@@ -15,7 +15,7 @@
   "forecast": "Previsioni",
   "climate": "Media climatica (1991–2020)",
   "temperature": "Da {low} a {high} °C",
-  "quantity": "Quantità: {count}; indossato {days} giorni",
+  "quantity": "Porta {count, plural, one {# articolo} other {# articoli}}; indossato {days, plural, one {# giorno} other {# giorni}}",
   "unnamed": "Articolo senza nome",
   "deleteConfirm": "Eliminare il viaggio? I giorni indossati vengono conservati.",
   "overlap": "Le date dei viaggi si sovrappongono.",
@@ -23,5 +23,6 @@
   "weatherUnavailable": "Il meteo del viaggio non è disponibile.",
   "aiDisabled": "La pianificazione IA è disattivata.",
   "unavailable": "La pianificazione non è disponibile.",
-  "rateLimit": "Troppe richieste. Riprova tra poco."
+  "rateLimit": "Troppe richieste. Riprova tra poco.",
+  "deleteFailed": "Impossibile eliminare il viaggio."
 }

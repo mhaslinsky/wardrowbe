@@ -15,7 +15,7 @@
   "forecast": "天气预报",
   "climate": "气候平均值（1991–2020）",
   "temperature": "{low}至{high} °C",
-  "quantity": "携带{count}件，穿着{days}天",
+  "quantity": "携带{count, plural, other {#件}}，穿着{days, plural, other {#天}}",
   "unnamed": "未命名物品",
   "deleteConfirm": "删除旅行？已穿着的日期将保留。",
   "overlap": "旅行日期重叠。",
@@ -23,5 +23,6 @@
   "weatherUnavailable": "无法获取旅行天气。",
   "aiDisabled": "AI规划已禁用。",
   "unavailable": "旅行规划暂不可用。",
-  "rateLimit": "请求过多，请稍后重试。"
+  "rateLimit": "请求过多，请稍后重试。",
+  "deleteFailed": "无法删除旅行。"
 }

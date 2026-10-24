@@ -15,7 +15,7 @@
   "forecast": "일기 예보",
   "climate": "기후 평균 (1991–2020)",
   "temperature": "{low}~{high} °C",
-  "quantity": "준비 {count}개 · 착용 {days}일",
+  "quantity": "준비 {count, plural, other {#개}} · 착용 {days, plural, other {#일}}",
   "unnamed": "이름 없는 아이템",
   "deleteConfirm": "여행을 삭제할까요? 착용한 날은 유지됩니다.",
   "overlap": "여행 날짜가 겹칩니다.",
@@ -23,5 +23,6 @@
   "weatherUnavailable": "여행 날씨를 확인할 수 없습니다.",
   "aiDisabled": "AI 계획이 비활성화되어 있습니다.",
   "unavailable": "여행 계획을 사용할 수 없습니다.",
-  "rateLimit": "요청이 너무 많습니다. 잠시 후 다시 시도하세요."
+  "rateLimit": "요청이 너무 많습니다. 잠시 후 다시 시도하세요.",
+  "deleteFailed": "여행을 삭제할 수 없습니다."
 }

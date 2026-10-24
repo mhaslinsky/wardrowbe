@@ -15,7 +15,7 @@
   "forecast": "Prévisions",
   "climate": "Moyenne climatique (1991–2020)",
   "temperature": "{low} à {high} °C",
-  "quantity": "Quantité : {count} ; porté {days} jours",
+  "quantity": "Emporter {count, plural, one {# article} other {# articles}} ; porté {days, plural, one {# jour} other {# jours}}",
   "unnamed": "Article sans nom",
   "deleteConfirm": "Supprimer le voyage ? Les jours portés sont conservés.",
   "overlap": "Les dates se chevauchent.",
@@ -23,5 +23,6 @@
   "weatherUnavailable": "La météo du voyage est indisponible.",
   "aiDisabled": "La planification IA est désactivée.",
   "unavailable": "La planification est indisponible.",
-  "rateLimit": "Trop de demandes. Réessayez bientôt."
+  "rateLimit": "Trop de demandes. Réessayez bientôt.",
+  "deleteFailed": "Impossible de supprimer le voyage."
 }

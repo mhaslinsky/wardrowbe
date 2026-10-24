@@ -15,7 +15,7 @@
   "forecast": "天氣預報",
   "climate": "氣候平均值（1991–2020）",
   "temperature": "{low}至{high} °C",
-  "quantity": "攜帶{count}件，穿著{days}天",
+  "quantity": "攜帶{count, plural, one {#件} other {#件}}，穿著{days, plural, one {#天} other {#天}}",
   "unnamed": "未命名物品",
   "deleteConfirm": "刪除旅行？已穿著的日期將保留。",
   "overlap": "旅行日期重疊。",
@@ -23,5 +23,6 @@
   "weatherUnavailable": "無法取得旅行天氣。",
   "aiDisabled": "AI規劃已停用。",
   "unavailable": "旅行規劃暫不可用。",
-  "rateLimit": "請求過多，請稍後重試。"
+  "rateLimit": "請求過多，請稍後重試。",
+  "deleteFailed": "無法刪除旅行。"
 }

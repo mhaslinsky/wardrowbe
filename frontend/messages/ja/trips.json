@@ -15,7 +15,7 @@
   "forecast": "天気予報",
   "climate": "平年値（1991–2020）",
   "temperature": "{low}～{high} °C",
-  "quantity": "持参 {count}点・着用 {days}日",
+  "quantity": "持参 {count, plural, one {#点} other {#点}}・着用 {days, plural, one {#日} other {#日}}",
   "unnamed": "名前のないアイテム",
   "deleteConfirm": "旅行を削除しますか？着用済みの日は保持されます。",
   "overlap": "旅行の日程が重複しています。",
@@ -23,5 +23,6 @@
   "weatherUnavailable": "旅行先の天気を取得できません。",
   "aiDisabled": "AI計画は無効です。",
   "unavailable": "旅行計画を利用できません。",
-  "rateLimit": "リクエストが多すぎます。しばらくして再試行してください。"
+  "rateLimit": "リクエストが多すぎます。しばらくして再試行してください。",
+  "deleteFailed": "旅行を削除できませんでした。"
 }
