@@ -209,6 +209,7 @@
     "washedSince": "Washed since?",
     "undone": "Undone",
     "learningStale": "Suggestions may lag",
-    "replaceFailed": "Day reopened. Replacement failed"
+    "replaceFailed": "Day reopened. Replacement failed",
+    "replaceFailedStale": "Could not replace; suggestions may lag"
   }
 }

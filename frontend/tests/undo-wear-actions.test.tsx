@@ -1,15 +1,17 @@
 import { QueryClientProvider } from '@tanstack/react-query'
+import { useState } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { UndoWearActions } from '@/components/undo-wear-actions'
-import { api, ApiError } from '@/lib/api'
+import { api, ApiError, NetworkError } from '@/lib/api'
 import type { Outfit } from '@/lib/hooks/use-outfits'
 import { createQueryClient } from '@/lib/query-client'
 import { toast } from 'sonner'
 import { translationMock } from './setup'
+vi.mock('@/lib/hooks/use-items', () => ({ useItemPages: () => ({ items: [{ id: 'shirt', status: 'ready', is_archived: false }, { id: 'archived', status: 'ready', is_archived: true }, { id: 'processing', status: 'processing', is_archived: false }] }) }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/lib/api', async (original) => ({ ...(await original<typeof import('@/lib/api')>()), api: { post: vi.fn() } }))
-const outfit = { id: 'logged', items: [{ id: 'shirt' }], name: 'Logged' } as Outfit
+const outfit = { id: 'logged', items: [{ id: 'shirt', status: 'ready', is_archived: false }], name: 'Logged' } as Outfit
 const chosen = { ...outfit, id: 'saved', name: 'Saved' }
 const washed = new ApiError('wash', 409, { detail: { error_code: 'WASH_SINCE_WEAR', items: [
   { id: 'shirt', name: 'Shirt', washed_at: '2026-10-24' }, { id: 'pants', name: 'Pants', washed_at: '2026-10-24' },
@@ -19,7 +21,11 @@ function setup(choices = [chosen]) {
   const client = createQueryClient()
   const invalidate = vi.spyOn(client, 'invalidateQueries')
   const notice = vi.fn()
-  render(<QueryClientProvider client={client}><UndoWearActions outfit={outfit} date="2026-10-23" choices={choices} onNotice={notice} /></QueryClientProvider>)
+  function Harness() {
+    const [message, setMessage] = useState('')
+    return <QueryClientProvider client={client}><UndoWearActions outfit={outfit} date="2026-10-23" choices={choices} onNotice={(text) => { notice(text); setMessage(text) }} /><p role="status">{message}</p></QueryClientProvider>
+  }
+  render(<Harness />)
   return { notice, invalidate }
 }
 it('undoes without wash and invalidates every wear cache', async () => {
@@ -28,7 +34,7 @@ it('undoes without wash and invalidates every wear cache', async () => {
   await waitFor(() => expect(notice).toHaveBeenLastCalledWith('undone'))
   expect(api.post).toHaveBeenCalledWith('/outfits/logged/undo-wear', {})
   const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
-  for (const key of ['outfits', 'calendarOutfits', 'pendingOutfits', 'analytics', 'learning', 'items', 'item', 'wear-stats', 'wear-history']) expect(keys).toContainEqual([key])
+  for (const key of ['outfits', 'calendarOutfits', 'pendingOutfits', 'analytics', 'learning', 'items', 'item', 'wear-stats', 'wear-history', 'wash-history']) expect(keys).toContainEqual([key])
   expect(keys).toContainEqual(['outfit', 'logged'])
 })
 it.each([false, true])('checks every washed item and resends selected ids, empty=%s', async (empty) => {
@@ -87,4 +93,46 @@ it('allows confirmation for an unnamed washed item', async () => {
   vi.mocked(api.post).mockRejectedValueOnce(new ApiError('wash', 409, { detail: { error_code: 'WASH_SINCE_WEAR', items: [{ id: 'shirt', name: null, washed_at: '2026-10-24' }] } }))
   setup(); fireEvent.click(screen.getByRole('button', { name: 'undo' }))
   expect(await screen.findByRole('checkbox', { name: 'unnamedItem' })).toBeChecked()
+})
+
+it.each([false, true])('closes dialogs and toasts a real undo failure after wash=%s', async (washFirst) => {
+  if (washFirst) vi.mocked(api.post).mockRejectedValueOnce(washed)
+  vi.mocked(api.post).mockRejectedValueOnce(new ApiError('server failed', 500, {}))
+  setup()
+  fireEvent.click(screen.getByRole('button', { name: 'replace' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Saved' }))
+  if (washFirst) { await screen.findByRole('checkbox', { name: 'Shirt' }); fireEvent.click(screen.getByRole('button', { name: 'confirm' })) }
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('failed'))
+  expect(screen.getByRole('status')).toBeVisible()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(toast.error).toHaveBeenCalledWith('server failed')
+})
+it.each([false, true])('toasts replacement failures and uses one notice when stale=%s', async (stale) => {
+  vi.mocked(api.post).mockResolvedValueOnce({ learning_stale: stale }).mockRejectedValueOnce(new ApiError('wear failed', 422, {}))
+  setup(); fireEvent.click(screen.getByRole('button', { name: 'replace' })); fireEvent.click(screen.getByRole('button', { name: 'Saved' }))
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(stale ? 'replaceFailedStale' : 'replaceFailed'))
+  expect(screen.getByRole('status')).toBeVisible()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(toast.error).toHaveBeenCalledWith('wear failed')
+})
+it('excludes unavailable choices and translates unnamed outfit occasions', () => {
+  translationMock.includeNamespace = true
+  setup([
+    { ...chosen, id: 'archived', name: 'Archived', items: [{ ...chosen.items[0], id: 'archived' }] },
+    { ...chosen, id: 'processing', name: 'Processing', items: [{ ...chosen.items[0], id: 'processing' }] },
+    { ...chosen, id: 'empty', name: 'Empty', items: [] },
+    { ...chosen, name: null, occasion: 'casual' },
+  ] as Outfit[])
+  fireEvent.click(screen.getByRole('button', { name: 'outfits.day.replace' }))
+  for (const name of ['Archived', 'Processing', 'Empty', 'casual']) expect(screen.queryByRole('button', { name, exact: true })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'constants.occasions.casual' })).toBeVisible()
+  expect(api.post).not.toHaveBeenCalled()
+})
+
+it.each([new ApiError('unavailable', 503, {}), new NetworkError('offline')])('preserves normal toasts for undo errors: %s', async (error) => {
+  vi.mocked(api.post).mockRejectedValueOnce(error)
+  setup(); fireEvent.click(screen.getByRole('button', { name: 'undo' }))
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('failed'))
+  expect(screen.getByRole('status')).toBeVisible()
+  expect(vi.mocked(toast.error).mock.calls[0][0]).toBe(error.message)
 })

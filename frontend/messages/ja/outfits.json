@@ -209,6 +209,7 @@
     "washedSince": "その後洗濯しましたか？",
     "undone": "取り消しました",
     "learningStale": "提案の反映が遅れる場合があります",
-    "replaceFailed": "記録を取り消しました。変更できませんでした"
+    "replaceFailed": "記録を取り消しました。変更できませんでした",
+    "replaceFailedStale": "変更できず、提案の反映が遅れる場合があります"
   }
 }

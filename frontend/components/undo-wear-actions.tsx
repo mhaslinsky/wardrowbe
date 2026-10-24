@@ -2,20 +2,27 @@
 
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ApiError } from '@/lib/api';
 import type { Outfit } from '@/lib/hooks/use-outfits';
-import { useLogDayWear, useUndoDayWear } from '@/lib/hooks/use-day-outfits';
+import { useLogDayWear, useUndoDayWear, type WashedItem } from '@/lib/hooks/use-day-outfits';
+import { useItemPages } from '@/lib/hooks/use-items';
+import { useOccasionLabel } from '@/lib/hooks/use-translated-constants';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-type WashedItem = { id: string; name: string | null; washed_at: string };
-
-function washedItems(error: unknown): WashedItem[] | null {
-  if (!(error instanceof ApiError) || error.status !== 409) return null;
-  const detail = (error.data as { detail?: { error_code?: string; items?: unknown } } | null)?.detail;
-  if (detail?.error_code !== 'WASH_SINCE_WEAR' || !Array.isArray(detail.items) || !detail.items.length) return null;
-  return detail.items.every((item) => item && typeof item.id === 'string' && (item.name === null || typeof item.name === 'string') && typeof item.washed_at === 'string')
-    ? detail.items : null;
+function ReplacementPicker({ choices, disabled, onChoose }: { choices: Outfit[]; disabled: boolean; onChoose: (choice: Outfit) => void }) {
+  const t = useTranslations('outfits.day');
+  const common = useTranslations('common');
+  const occasionLabel = useOccasionLabel();
+  const [pageCount, setPageCount] = useState(1);
+  const wardrobe = useItemPages({ is_archived: false, status: 'ready' }, pageCount, 100);
+  const readyIds = new Set(wardrobe.items.filter((item) => !item.is_archived && item.status === 'ready').map((item) => item.id));
+  const availableChoices = choices.filter((choice) => choice.items.length > 0 && choice.items.every((item) => readyIds.has(item.id)));
+  return <div className="max-h-[60vh] overflow-y-auto space-y-2">
+    {wardrobe.isLoading && <p role="status">{common('loading')}</p>}
+    {!wardrobe.isLoading && !availableChoices.length && <p>{t('empty')}</p>}
+    {availableChoices.map((choice) => <Button key={choice.id} variant="outline" className="w-full" disabled={disabled || wardrobe.isFetching} onClick={() => onChoose(choice)}>{choice.name || occasionLabel(choice.occasion)}</Button>)}
+    {wardrobe.hasMore && <Button variant="outline" disabled={wardrobe.isFetching} onClick={() => setPageCount((count) => count + 1)}>{common('loadMore')}</Button>}
+  </div>;
 }
 
 export function UndoWearActions({ outfit, date, choices, disabled, onNotice }: {
@@ -25,7 +32,7 @@ export function UndoWearActions({ outfit, date, choices, disabled, onNotice }: {
   const common = useTranslations('common');
   const wardrobe = useTranslations('wardrobe.ai.queue');
   const undo = useUndoDayWear();
-  const wear = useLogDayWear(true);
+  const wear = useLogDayWear();
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
@@ -44,22 +51,22 @@ export function UndoWearActions({ outfit, date, choices, disabled, onNotice }: {
     let stale = false;
     try {
       const result = await undo.mutateAsync({ outfitId: outfit.id, washedItemIds });
+      if ('washedItems' in result) {
+        setItems(result.washedItems);
+        setChecked(result.washedItems.map((item) => item.id));
+        setReplaceOpen(false);
+        return;
+      }
       undone = true;
       stale = result.learning_stale;
       setItems([]);
       setReplaceOpen(false);
       if (chosen) await wear.mutateAsync({ outfitId: chosen.id, date });
       onNotice(stale ? t('learningStale') : chosen ? t('logged') : t('undone'));
-    } catch (error) {
-      const washed = undone ? null : washedItems(error);
-      if (washed) {
-        setItems(washed);
-        setChecked(washed.map((item) => item.id));
-        setReplaceOpen(false);
-      } else {
-        onNotice(undone ? t('replaceFailed') : t('failed'));
-        if (stale) onNotice(`${t('replaceFailed')} ${t('learningStale')}`);
-      }
+    } catch {
+      setItems([]);
+      setReplaceOpen(false);
+      onNotice(undone ? t(stale ? 'replaceFailedStale' : 'replaceFailed') : t('failed'));
     } finally {
       busy.current = false;
       setPending(false);
@@ -73,10 +80,7 @@ export function UndoWearActions({ outfit, date, choices, disabled, onNotice }: {
     </div>
     <Dialog open={replaceOpen} onOpenChange={(open) => { if (!pending) setReplaceOpen(open); }}><DialogContent>
       <DialogHeader><DialogTitle>{t('replace')}</DialogTitle></DialogHeader>
-      <div className="max-h-[60vh] overflow-y-auto space-y-2">
-        {!choices.length && <p>{t('empty')}</p>}
-        {choices.map((choice) => <Button key={choice.id} variant="outline" className="w-full" disabled={unavailable || !choice.items.length} onClick={() => run(choice)}>{choice.name || choice.occasion}</Button>)}
-      </div>
+      {replaceOpen && <ReplacementPicker choices={choices} disabled={!!unavailable} onChoose={(choice) => run(choice)} />}
     </DialogContent></Dialog>
     <Dialog open={items.length > 0} onOpenChange={(open) => { if (!open && !pending) { setItems([]); setReplacement(undefined); } }}><DialogContent>
       <DialogHeader><DialogTitle>{t('washedSince')}</DialogTitle></DialogHeader>

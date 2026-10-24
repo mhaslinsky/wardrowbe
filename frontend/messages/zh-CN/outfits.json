@@ -209,6 +209,7 @@
     "washedSince": "之后洗过吗？",
     "undone": "已撤销",
     "learningStale": "推荐可能延迟更新",
-    "replaceFailed": "当天记录已撤销。替换失败"
+    "replaceFailed": "当天记录已撤销。替换失败",
+    "replaceFailedStale": "替换失败，推荐可能延迟更新"
   }
 }

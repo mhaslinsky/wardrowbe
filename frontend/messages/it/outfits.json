@@ -209,6 +209,7 @@
     "washedSince": "Lavati dopo?",
     "undone": "Annullato",
     "learningStale": "Suggerimenti in ritardo",
-    "replaceFailed": "Giorno riaperto. Sostituzione fallita"
+    "replaceFailed": "Giorno riaperto. Sostituzione fallita",
+    "replaceFailedStale": "Sostituzione fallita; suggerimenti in ritardo"
   }
 }

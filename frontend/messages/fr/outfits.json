@@ -209,6 +209,7 @@
     "washedSince": "Lavés depuis ?",
     "undone": "Annulé",
     "learningStale": "Suggestions parfois retardées",
-    "replaceFailed": "Jour rouvert. Remplacement échoué"
+    "replaceFailed": "Jour rouvert. Remplacement échoué",
+    "replaceFailedStale": "Remplacement échoué ; suggestions parfois retardées"
   }
 }

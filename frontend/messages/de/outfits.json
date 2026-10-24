@@ -209,6 +209,7 @@
     "washedSince": "Seitdem gewaschen?",
     "undone": "Rückgängig gemacht",
     "learningStale": "Vorschläge können verzögert sein",
-    "replaceFailed": "Tag wieder offen. Ersetzen fehlgeschlagen"
+    "replaceFailed": "Tag wieder offen. Ersetzen fehlgeschlagen",
+    "replaceFailedStale": "Ersetzen fehlgeschlagen; Vorschläge können verzögert sein"
   }
 }

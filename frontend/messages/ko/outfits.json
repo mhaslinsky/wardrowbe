@@ -209,6 +209,7 @@
     "washedSince": "그 후 세탁했나요?",
     "undone": "취소됨",
     "learningStale": "추천 반영이 늦을 수 있어요",
-    "replaceFailed": "기록이 취소됨. 교체 실패"
+    "replaceFailed": "기록이 취소됨. 교체 실패",
+    "replaceFailedStale": "교체 실패로 추천 반영이 늦을 수 있어요"
   }
 }
