@@ -108,6 +108,7 @@ async def test_saved_family_prefers_template_even_when_items_change(
                     "source": OutfitSource.manual,
                     "parent": "template",
                     "status": OutfitStatus.accepted,
+                    "worn": True,
                 },
             ),
         ],
@@ -201,6 +202,7 @@ async def test_grouping_filters_before_count_pagination_and_reset(
                     "source": OutfitSource.manual,
                     "parent": "template",
                     "status": OutfitStatus.accepted,
+                    "worn": True,
                 },
             ),
         ],
@@ -254,7 +256,12 @@ async def test_wears_belong_to_their_original_template(
         ("first", {"source": OutfitSource.manual, "scheduled_for": None, "parent": "original"}),
         (
             "wear",
-            {"source": OutfitSource.manual, "parent": "first", "status": OutfitStatus.accepted},
+            {
+                "source": OutfitSource.manual,
+                "parent": "first",
+                "status": OutfitStatus.accepted,
+                "worn": True,
+            },
         ),
     ]
     if siblings == 0:
@@ -346,3 +353,26 @@ async def test_grouped_page_hydrates_only_its_outfits(client, db_session, test_u
         result = await listed(client, auth_headers, group=True, page_size=100, page=page_number)
         all_cards.extend(result["outfits"])
     await assert_partition(client, auth_headers, {"outfits": all_cards, "total": 200})
+
+
+async def test_accepted_without_wear_stays_outside_template_wears(
+    client, db_session, test_user, auth_headers
+):
+    await seed(
+        db_session,
+        test_user.id,
+        [
+            ("template", {"source": OutfitSource.manual, "scheduled_for": None}),
+            (
+                "accepted",
+                {
+                    "source": OutfitSource.manual,
+                    "parent": "template",
+                    "status": OutfitStatus.accepted,
+                },
+            ),
+        ],
+    )
+    grouped = await listed(client, auth_headers, group=True)
+    assert grouped["total"] == 2
+    assert all(card["wear_count"] == 0 for card in grouped["outfits"])

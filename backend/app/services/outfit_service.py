@@ -23,6 +23,7 @@ from app.models.user import User
 class OutfitListFilters:
     user_id: UUID
     group: bool = False
+    worn: bool | None = None
     ready_to_wear: bool = False
     status_filter: str | None = None
     occasion: str | None = None
@@ -71,7 +72,7 @@ def _is_template(outfit: OutfitGroupRecord) -> bool:
 def _is_wear(outfit: OutfitGroupRecord) -> bool:
     return (
         outfit.scheduled_for is not None
-        and outfit.status == OutfitStatus.accepted
+        and outfit.worn
         and outfit.cloned_from_outfit_id is not None
     )
 
@@ -128,9 +129,7 @@ def _visible_groups(ordered, groups, hidden) -> list[OutfitGroup]:
             id=outfit.id,
             hidden_member_ids=[member.id for member in groups[outfit.id] if member.id != outfit.id],
             wear_count=sum(
-                member.scheduled_for is not None
-                and (member.status == OutfitStatus.accepted or member.worn)
-                for member in groups[outfit.id]
+                member.scheduled_for is not None and member.worn for member in groups[outfit.id]
             ),
         )
         for outfit in ordered
@@ -186,6 +185,14 @@ class OutfitService:
 
     def _build_filter_clauses(self, filters: OutfitListFilters) -> list:
         clauses = [Outfit.user_id == filters.user_id]
+
+        if filters.worn is not None:
+            predicate = Outfit.feedback.has(UserFeedback.worn_at.is_not(None))
+            clauses.append(predicate if filters.worn else ~predicate)
+        if filters.status_filter and "pending" in [
+            part.strip() for part in filters.status_filter.split(",")
+        ]:
+            clauses.append(~func.coalesce(Outfit.ai_raw_response.has_key("inspiration"), False))
 
         if filters.ready_to_wear:
             clauses.append(
@@ -301,9 +308,7 @@ class OutfitService:
                     Outfit.scheduled_for,
                     Outfit.cloned_from_outfit_id,
                     Outfit.created_at,
-                    or_(
-                        UserFeedback.worn_at.is_not(None), UserFeedback.actually_worn.is_(True)
-                    ).label("worn"),
+                    UserFeedback.worn_at.is_not(None).label("worn"),
                     func.array_agg(OutfitItem.item_id)
                     .filter(OutfitItem.item_id.is_not(None))
                     .label("item_ids"),

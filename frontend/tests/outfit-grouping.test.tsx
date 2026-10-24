@@ -47,9 +47,9 @@ describe('grouped outfits', () => {
     nav.params = new URLSearchParams('filter=worn')
     view.rerender(<OutfitsPage />)
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/outfits', {
-      params: expect.objectContaining({ status: 'accepted', is_lookbook: 'false' }),
+      params: expect.objectContaining({ worn: 'true', is_lookbook: 'false' }),
     }))
-    const wornCall = vi.mocked(api.get).mock.calls.find(([, options]) => options?.params?.status === 'accepted')
+    const wornCall = vi.mocked(api.get).mock.calls.find(([, options]) => options?.params?.worn === 'true')
     expect(wornCall?.[1]?.params).not.toHaveProperty('group')
     nav.params = new URLSearchParams()
     view.rerender(<OutfitsPage />)
@@ -81,15 +81,15 @@ describe('grouped outfits', () => {
   })
 
   it('keeps calendar queries ungrouped', async () => {
-    nav.params = new URLSearchParams('view=calendar')
+    nav.params = new URLSearchParams('view=calendar&filter=worn')
     vi.mocked(api.get).mockResolvedValue({ outfits: [], total: 0, page: 1, has_more: false })
     render(<OutfitsPage />, { wrapper })
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/outfits', {
-      params: expect.objectContaining({ date_from: expect.any(String), date_to: expect.any(String) }),
+      params: expect.objectContaining({ date_from: expect.any(String), date_to: expect.any(String), worn: 'true' }),
     }))
     const calendarCall = vi.mocked(api.get).mock.calls.find(([, options]) => options?.params?.date_from)
     expect(calendarCall?.[1]?.params).not.toHaveProperty('group')
-    expect(api.get).toHaveBeenCalledWith('/outfits', { params: expect.objectContaining({ group: 'true' }) })
+    expect(api.get).toHaveBeenCalledWith('/outfits', { params: expect.objectContaining({ worn: 'true' }) })
   })
 
   it.each(['unknown', 'constructor'])('normalizes filter=%s to All and disables bulk actions', async (filter) => {

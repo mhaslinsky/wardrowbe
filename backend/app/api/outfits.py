@@ -40,19 +40,17 @@ from app.services.recommendation_service import (
     RecommendationService,
 )
 from app.services.studio_service import (
-    FutureWearDateError,
     ItemOwnershipError,
-    OutfitNotTemplateError,
     OutfitWornImmutableError,
     StudioService,
 )
 from app.services.suggestion_cache import clear_suggestions
+from app.services.wear_service import AlreadyThis, WearService, require_wear, wear_http
 from app.services.weather_service import WeatherData
 from app.utils.auth import get_current_user
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.scales import RATING_MAX, RATING_MIN
 from app.utils.signed_urls import sign_optional
-from app.utils.timezone import get_user_today
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +192,7 @@ class OutfitListResponse(BaseModel):
 class BulkOutfitFilters(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
+    worn: bool | None = None
     ready_to_wear: bool = False
     group: bool = False
     status_filter: str | None = Field(None, alias="status")
@@ -638,6 +637,7 @@ async def list_outfits(
         None, description="Legacy alias for item_type used by /pairings"
     ),
     group: bool = Query(False),
+    worn: bool | None = Query(None),
     ready_to_wear: bool = Query(False),
     search: str | None = Query(None, max_length=50),
     occasions: str | None = Query(
@@ -656,6 +656,7 @@ async def list_outfits(
     filters = OutfitListFilters(
         user_id=target_user_id,
         group=group,
+        worn=worn,
         ready_to_wear=ready_to_wear,
         status_filter=status_filter,
         occasion=occasion,
@@ -714,6 +715,7 @@ async def bulk_delete_outfits(
     if request.select_all:
         list_filters = OutfitListFilters(
             user_id=current_user.id,
+            worn=request.filters.worn if request.filters else None,
             ready_to_wear=request.filters.ready_to_wear if request.filters else False,
             status_filter=request.filters.status_filter if request.filters else None,
             occasion=request.filters.occasion if request.filters else None,
@@ -923,12 +925,15 @@ async def delete_outfit(
 
 
 @router.post("/{outfit_id}/feedback", response_model=FeedbackResponse)
+@wear_http()
 async def submit_feedback(
     outfit_id: UUID,
     request: FeedbackRequest,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> FeedbackResponse:
+    if request.worn or request.actually_worn is True or request.wore_instead_items:
+        await WearService(db).begin(current_user)
     query = (
         select(Outfit)
         .where(and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id))
@@ -941,10 +946,28 @@ async def submit_feedback(
     outfit = result.scalar_one_or_none()
 
     if not outfit:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
+        raise LookupError("Outfit not found")
+
+    posted_outfit_id = outfit.id
+    if request.worn or request.actually_worn is True or request.wore_instead_items:
+        target_date = WearService.date_for(current_user, outfit)
+        wear_result = await WearService(db).log_worn(
+            current_user,
+            outfit,
+            target_date,
+            request.wore_instead_items or None,
+            caller="feedback",
         )
+        wear = require_wear(wear_result)
+        if request.actually_worn is False and request.wore_instead_items and wear.id != outfit.id:
+            if outfit.feedback is None:
+                outfit.feedback = UserFeedback(outfit_id=outfit.id)
+                db.add(outfit.feedback)
+            outfit.feedback.actually_worn = False
+            outfit.feedback.wore_instead_items = [
+                str(item_id) for item_id in request.wore_instead_items
+            ]
+        outfit = wear
 
     if outfit.feedback:
         feedback = outfit.feedback
@@ -953,7 +976,7 @@ async def submit_feedback(
         outfit.feedback = feedback
         db.add(feedback)
 
-    if request.accepted is not None:
+    if request.accepted is not None and not feedback.worn_at:
         feedback.accepted = request.accepted
         outfit.status = OutfitStatus.accepted if request.accepted else OutfitStatus.rejected
         outfit.responded_at = datetime.utcnow()
@@ -966,51 +989,18 @@ async def submit_feedback(
         feedback.style_rating = request.style_rating
     if request.comment is not None:
         feedback.comment = request.comment
-    if request.worn and not feedback.worn_at:
-        user_today = get_user_today(current_user)
-        feedback.worn_at = user_today
-        await ItemService(db).record_wears(
-            current_user.id,
-            [outfit_item.item_id for outfit_item in outfit.items],
-            user_today,
-            occasion=outfit.occasion,
-            outfit_id=outfit.id,
-        )
     if request.worn_with_modifications is not None:
         feedback.worn_with_modifications = request.worn_with_modifications
     if request.modification_notes is not None:
         feedback.modification_notes = request.modification_notes
-    if request.actually_worn is not None:
+    if request.actually_worn is not None and not feedback.worn_at:
         feedback.actually_worn = request.actually_worn
-    replacement: Outfit | None = None
-    if request.wore_instead_items is not None:
-        feedback.wore_instead_items = [str(item_id) for item_id in request.wore_instead_items]
-        if request.wore_instead_items:
-            studio_service = StudioService(db)
-            try:
-                replacement = await studio_service.create_wore_instead(
-                    user=current_user,
-                    original_outfit_id=outfit_id,
-                    item_ids=list(request.wore_instead_items),
-                    rating=request.rating,
-                    comment=request.comment,
-                    scheduled_for=None,
-                )
-            except ItemOwnershipError:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={
-                        "error_code": "OUTFIT_ITEM_OWNERSHIP",
-                        "message": "One or more items do not belong to you",
-                    },
-                ) from None
-
     await db.commit()
     await db.refresh(feedback)
 
-    await _run_learning_safely(db, outfit_id, current_user.id)
-    if replacement is not None:
-        await _run_learning_safely(db, replacement.id, current_user.id)
+    await _run_learning_safely(db, posted_outfit_id, current_user.id)
+    if outfit.id != posted_outfit_id:
+        await _run_learning_safely(db, outfit.id, current_user.id)
 
     return FeedbackResponse(
         id=feedback.id,
@@ -1247,6 +1237,39 @@ class WearTodayRequest(BaseModel):
     scheduled_for: date | None = None
 
 
+class WoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: date
+    item_ids: list[UUID] | None = Field(None, min_length=1, max_length=20)
+
+
+@router.post("/{outfit_id}/wore", response_model=WearOutfitResponse)
+@wear_http()
+async def log_outfit_worn(
+    outfit_id: UUID,
+    request: WoreRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> WearOutfitResponse:
+    await WearService(db).begin(current_user, request.date)
+    await rate_limit_by_user(str(current_user.id), "wore", max_requests=10, window_seconds=60)
+    service = WearService(db)
+    source = await service._load(current_user.id, outfit_id)
+    result = await service.log_worn(
+        current_user, source, request.date, request.item_ids, caller="wore"
+    )
+    outfit = require_wear(result)
+    await db.commit()
+    if not isinstance(result, AlreadyThis):
+        await _run_learning_safely(db, outfit.id, current_user.id)
+    await clear_suggestions(current_user.id, outfit.occasion)
+    full = await StudioService(db).get_full_outfit(outfit.id)
+    return WearOutfitResponse(
+        **outfit_to_response(full).model_dump(), already_logged=isinstance(result, AlreadyThis)
+    )
+
+
 class PatchOutfitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1262,6 +1285,7 @@ async def _run_learning_safely(db: AsyncSession, outfit_id: UUID, user_id: UUID)
 
 
 @router.post("/studio", response_model=OutfitResponse, status_code=status.HTTP_201_CREATED)
+@wear_http()
 async def create_studio_outfit(
     request: StudioCreateRequest,
     db: DbSession,
@@ -1273,28 +1297,19 @@ async def create_studio_outfit(
     )
 
     service = StudioService(db)
-    try:
-        outfit = await service.create_from_scratch(
-            user=current_user,
-            item_ids=request.items,
-            occasion=request.occasion,
-            name=request.name,
-            scheduled_for=request.scheduled_for,
-            mark_worn=request.mark_worn,
-            source_item_id=request.source_item_id,
-            season=request.season,
-            formality=request.formality,
-            palette=request.palette,
-            notes=request.notes,
-        )
-    except ItemOwnershipError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error_code": "OUTFIT_ITEM_OWNERSHIP",
-                "message": "One or more items do not belong to you",
-            },
-        ) from None
+    outfit = await service.create_from_scratch(
+        user=current_user,
+        item_ids=request.items,
+        occasion=request.occasion,
+        name=request.name,
+        scheduled_for=request.scheduled_for,
+        mark_worn=request.mark_worn,
+        source_item_id=request.source_item_id,
+        season=request.season,
+        formality=request.formality,
+        palette=request.palette,
+        notes=request.notes,
+    )
 
     await db.commit()
     await _run_learning_safely(db, outfit.id, current_user.id)
@@ -1305,6 +1320,7 @@ async def create_studio_outfit(
 
 
 @router.post("/{outfit_id}/wore-instead", response_model=OutfitResponse)
+@wear_http()
 async def create_wore_instead_outfit(
     outfit_id: UUID,
     request: WoreInsteadRequest,
@@ -1317,28 +1333,14 @@ async def create_wore_instead_outfit(
     )
 
     service = StudioService(db)
-    try:
-        replacement = await service.create_wore_instead(
-            user=current_user,
-            original_outfit_id=outfit_id,
-            item_ids=request.items,
-            rating=request.rating,
-            comment=request.comment,
-            scheduled_for=request.scheduled_for,
-        )
-    except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_code": "OUTFIT_NOT_FOUND", "message": "Outfit not found"},
-        ) from None
-    except ItemOwnershipError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error_code": "OUTFIT_ITEM_OWNERSHIP",
-                "message": "One or more items do not belong to you",
-            },
-        ) from None
+    replacement = await service.create_wore_instead(
+        user=current_user,
+        original_outfit_id=outfit_id,
+        item_ids=request.items,
+        rating=request.rating,
+        comment=request.comment,
+        scheduled_for=request.scheduled_for,
+    )
 
     await db.commit()
     await _run_learning_safely(db, replacement.id, current_user.id)
@@ -1381,6 +1383,7 @@ async def clone_outfit_to_lookbook(
 
 
 @router.post("/{outfit_id}/wear-today", response_model=WearOutfitResponse)
+@wear_http()
 async def wear_outfit_today(
     outfit_id: UUID,
     request: WearTodayRequest,
@@ -1391,27 +1394,11 @@ async def wear_outfit_today(
     await rate_limit_by_user(str(current_user.id), "wear_today", max_requests=10, window_seconds=60)
 
     service = StudioService(db)
-    try:
-        wear, already_logged = await service.wear_on(
-            user=current_user,
-            template_id=outfit_id,
-            scheduled_for=request.scheduled_for,
-        )
-    except FutureWearDateError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from None
-    except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error_code": "OUTFIT_NOT_FOUND", "message": "Outfit not found"},
-        ) from None
-    except OutfitNotTemplateError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_code": "OUTFIT_NOT_TEMPLATE",
-                "message": "wear-today requires a lookbook template",
-            },
-        ) from None
+    wear, already_logged = await service.wear_on(
+        user=current_user,
+        template_id=outfit_id,
+        scheduled_for=request.scheduled_for,
+    )
 
     await db.commit()
     if not already_logged:

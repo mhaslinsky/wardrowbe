@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { NextIntlClientProvider } from 'next-intl'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -31,10 +33,8 @@ vi.mock('@/lib/hooks/use-outfits', () => ({
   useOutfits: () => ({ data: undefined }),
   useDeleteOutfit: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
-const mutate = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/hooks/use-studio', () => ({
-  useWearToday: () => ({ mutateAsync: mutate, isPending: false }),
-}))
+vi.unmock('@/lib/hooks/use-studio')
+vi.mock('@/lib/api', () => ({ api: { post: vi.fn() }, setAccessToken: vi.fn() }))
 vi.mock('@/lib/hooks/use-user', () => ({ useUserToday: () => () => '2026-10-05' }))
 vi.mock('@/components/shared/lineage-card', () => ({ LineageCard: () => null }))
 vi.mock('@/components/shared/clone-to-lookbook-dialog', () => ({
@@ -48,10 +48,11 @@ function messages(locale: string, namespace: string) {
 }
 
 
-beforeEach(() => { mutate.mockReset(); mutate.mockResolvedValue({ id: 'wear' }); });
+beforeEach(() => { vi.mocked(api.post).mockReset(); vi.mocked(api.post).mockResolvedValue({ id: 'wear' }); });
 function openPicker() {
   const en = Object.fromEntries(['outfits', 'common', 'history', 'constants'].map(namespace => [namespace, messages('en', namespace)]));
-  render(<NextIntlClientProvider locale="en" messages={en}><OutfitDetailPage /></NextIntlClientProvider>);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><NextIntlClientProvider locale="en" messages={en}><OutfitDetailPage /></NextIntlClientProvider></QueryClientProvider>);
   fireEvent.click(screen.getByRole('button', { name: 'Wear on…' }));
   return screen.getByLabelText('Wear date');
 }
@@ -61,7 +62,7 @@ it('defaults to today and submits a past date', async () => {
   expect(input).toHaveAttribute('max', '2026-10-05');
   fireEvent.change(input, { target: { value: '2026-10-01' } });
   fireEvent.click(screen.getByRole('button', { name: 'Log wear' }));
-  await waitFor(() => expect(mutate).toHaveBeenCalledWith({ scheduled_for: '2026-10-01' }));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/outfits/o1/wear-today', { scheduled_for: '2026-10-01' }));
 });
 it('blocks empty and future dates and resets after cancel', () => {
   const input = openPicker();
@@ -72,5 +73,5 @@ it('blocks empty and future dates and resets after cancel', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   fireEvent.click(screen.getByRole('button', { name: 'Wear on…' }));
   expect(screen.getByLabelText('Wear date')).toHaveValue('2026-10-05');
-  expect(mutate).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
 });

@@ -109,7 +109,7 @@ async def test_api_duplicate_and_dated_lists(client, db_session, test_user, auth
         assert listed.status_code == 200
         assert first.json()["id"] in {outfit["id"] for outfit in listed.json()["outfits"]}
     for payload, expected in [
-        ({"scheduled_for": "2999-01-01"}, 400),
+        ({"scheduled_for": "2999-01-01"}, 422),
         ({"scheduled_for": "not-a-date"}, 422),
     ]:
         rejected = await client.post(endpoint, json=payload, headers=auth_headers)
@@ -141,7 +141,7 @@ async def test_concurrent_wear_on_creates_one_row(
                 if (
                     len(columns) == 1
                     and columns[0]["entity"] is Outfit
-                    and columns[0]["name"] == "id"
+                    and "user_feedback.worn_at =" in str(statement)
                 ):
                     checked.set()
                     await release.wait()

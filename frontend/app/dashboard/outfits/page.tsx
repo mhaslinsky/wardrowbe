@@ -115,7 +115,7 @@ function chipToFilters(chip: FilterChip, search: string, occasions: string[]): O
       return filters;
     case 'worn':
       filters.is_lookbook = false;
-      filters.status = 'accepted';
+      filters.worn = true;
       return filters;
     case 'pairings':
       filters.has_source_item = true;

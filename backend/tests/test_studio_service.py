@@ -136,7 +136,7 @@ async def test_create_from_scratch_leaves_authoring_attributes_unset(
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("scheduled_for", "worn_on"),
-    [(date(2020, 1, 2), date(2020, 1, 2)), (None, date(2019, 12, 31))],
+    [(date(2019, 12, 30), date(2019, 12, 30)), (None, date(2019, 12, 31))],
     ids=["dated", "undated-is-the-users-today"],
 )
 async def test_create_from_scratch_mark_worn(
@@ -468,7 +468,7 @@ async def test_wore_instead(db_session, studio_user, wardrobe_items):
     assert replacement.status == OutfitStatus.accepted
 
     await db_session.refresh(original)
-    assert original.status == OutfitStatus.rejected
+    assert original.status == OutfitStatus.pending
 
 
 @pytest.mark.asyncio

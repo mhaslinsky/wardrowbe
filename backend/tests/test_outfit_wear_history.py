@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 
 from app.models.item import ClothingItem, ItemStatus
 from app.models.learning import ItemPairScore
+from app.utils.timezone import get_user_today
 
 
 async def _items(db_session, user_id):
@@ -64,7 +65,11 @@ async def test_worn_feedback_records_one_history_entry_per_item_even_when_sent_t
     item_ids = await _items(db_session, test_user.id)
     created = await client.post(
         "/api/v1/outfits/studio",
-        json={"items": item_ids, "occasion": "work", "scheduled_for": "2026-10-02"},
+        json={
+            "items": item_ids,
+            "occasion": "work",
+            "scheduled_for": get_user_today(test_user).isoformat(),
+        },
         headers=auth_headers,
     )
     outfit_id = created.json()["id"]
