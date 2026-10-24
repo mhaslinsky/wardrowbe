@@ -116,12 +116,12 @@ function DayWearActions({ outfit, date, disabled = false, onSuccess, onPendingCh
   </div>;
 }
 
-function WornOutfit({ outfit }: { outfit: Outfit }) {
+function WornOutfits({ outfits }: { outfits: Outfit[] }) {
   const t = useTranslations('outfits.day');
   return <div className="space-y-3">
     <h3 className="font-semibold">{t('worn')}</h3>
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <OutfitCard outfit={outfit} hideWashWarnings />
+    <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))]">
+      {outfits.map((outfit) => <OutfitCard key={outfit.id} outfit={outfit} hideWashWarnings />)}
     </div>
   </div>;
 }
@@ -141,17 +141,24 @@ export function DayOutfits({ date: controlledDate, onDateChange }: { date?: stri
   const { data: preferences } = usePreferences();
   const generate = useGenerateDayOptions();
   const dayOutfits = day.data?.pages.flatMap((page) => page.outfits) ?? [];
-  const wornOutfit = dayOutfits.find((outfit) => outfit.feedback?.worn_at === date);
-  const logged = !!wornOutfit;
+  const wornOutfits = dayOutfits.filter((outfit) => outfit.feedback?.worn_at === date);
+  const logged = wornOutfits.length > 0;
   const [year, month, dayOfMonth] = date.split('-').map(Number);
   const dateLabel = date === today ? t('today') : date === shiftDay(today, 1) ? t('tomorrow')
     : new Intl.DateTimeFormat(locale, { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(year, month - 1, dayOfMonth));
+  const seen = new Set(wornOutfits.map((outfit) => outfit.id));
   const sections = [
     { title: t('options'), query: day },
     { title: t('saved'), query: saved },
     { title: t('past'), query: past },
-  ];
-  const seen = new Set<string>(wornOutfit ? [wornOutfit.id] : []);
+  ].map((section) => ({
+    ...section,
+    outfits: (section.query.data?.pages.flatMap((page) => page.outfits) ?? []).filter((outfit) => {
+      if (seen.has(outfit.id) || outfit.status === 'rejected' || outfit.status === 'expired') return false;
+      seen.add(outfit.id);
+      return true;
+    }),
+  }));
   return <section className="space-y-4">
     <div className="flex items-center gap-1 sm:gap-3">
       <h2 className="mr-auto text-base font-semibold sm:text-xl">{t('title')}</h2>
@@ -160,20 +167,16 @@ export function DayOutfits({ date: controlledDate, onDateChange }: { date?: stri
       <Button size="icon" className="h-8 w-8 shrink-0" variant="outline" disabled={!ready || date >= shiftDay(today, 1)} onClick={() => setDate(shiftDay(date, 1))} aria-label={t('next')}>→</Button>
       <Button size="icon" className="h-8 w-8 shrink-0" variant="ghost" disabled={!ready} onClick={() => setDate(null)} aria-label={t('today')}><CalendarCheck className="h-4 w-4" /></Button>
     </div>
-    {wornOutfit && <WornOutfit outfit={wornOutfit} />}
+    {logged && <WornOutfits outfits={wornOutfits} />}
     {date >= today && <Button disabled={!ready || logged || generate.isPending || day.isLoading || day.isError} onClick={() => generate.mutate({ date, occasion: preferences?.default_occasion || 'casual' })}>{t('generate')}</Button>}
     {generate.isError && <p role="alert">{t('generateFailed')}</p>}
-    {sections.map(({ title, query }) => <div key={title} className="space-y-3">
+    {sections.map(({ title, query, outfits }) => <div key={title} className="space-y-3">
       <h3 className="font-semibold">{title}</h3>
       {query.isLoading && <p role="status">{common('loading')}</p>}
       {query.isError && <p role="alert">{t('failed')}</p>}
       {query.data?.pages[0]?.total === 0 && <p>{t('empty')}</p>}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {query.data?.pages.flatMap((page) => page.outfits).filter((outfit) => {
-          if (seen.has(outfit.id) || outfit.status === 'rejected' || outfit.status === 'expired') return false;
-          seen.add(outfit.id);
-          return true;
-        }).map((outfit) => <Card key={outfit.id}><CardContent className="p-3 space-y-3">
+      <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))]">
+        {outfits.map((outfit) => <Card key={outfit.id}><CardContent className="p-3 space-y-3">
           <OutfitCard outfit={outfit} />
           <WearActions outfit={outfit} date={date} disabled={!ready} dismissAction={
             !outfit.feedback?.worn_at && ['pending', 'sent', 'viewed'].includes(outfit.status)

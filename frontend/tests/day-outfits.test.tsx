@@ -7,7 +7,7 @@ import type { Item, Outfit } from '@/lib/types'
 
 const state = vi.hoisted(() => ({
   log: vi.fn().mockResolvedValue({}), name: vi.fn().mockResolvedValue('Blue outfit'),
-  loading: false, more: false, profileReady: true, date: '', worn: false, fail: false, outfit: {} as Outfit, items: [] as Item[], post: vi.fn().mockResolvedValue([]),
+  extraOutfits: [] as Outfit[], loading: false, more: false, profileReady: true, date: '', worn: false, fail: false, outfit: {} as Outfit, items: [] as Item[], post: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('@/lib/api', () => ({ api: { post: (...args: unknown[]) => state.post(...args) } }))
 vi.mock('@/lib/hooks/use-user', () => ({ useUserToday: () => () => '2026-10-24', useUserProfile: () => ({ data: state.profileReady ? { timezone: 'America/New_York' } : undefined }) }))
@@ -16,7 +16,7 @@ vi.mock('@/lib/hooks/use-day-outfits', async (original) => ({
   ...(await original<typeof import('@/lib/hooks/use-day-outfits')>()),
   useLogDayWear: () => ({ mutateAsync: state.log, isPending: false }),
   loggedOutfitName: () => state.name(),
-  useDayOutfits: (date: string) => { state.date = date; return { isError: state.fail, data: { pages: [{ total: 1, outfits: [{ ...state.outfit, feedback: state.worn ? { worn_at: date } : null }] }] } } },
+  useDayOutfits: (date: string) => { state.date = date; return { isError: state.fail, data: { pages: [{ total: 1, outfits: [{ ...state.outfit, feedback: state.worn ? { worn_at: date } : null }, ...state.extraOutfits] }] } } },
 }))
 vi.mock('@/lib/hooks/use-outfits', () => ({
   useInfiniteOutfits: () => ({ data: { pages: [{ total: 1, outfits: [state.outfit] }] } }),
@@ -29,6 +29,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientPro
 
 beforeEach(() => {
   vi.clearAllMocks()
+  state.extraOutfits = []
   state.log.mockResolvedValue({})
   translationMock.includeNamespace = false; state.loading = false; state.more = false; state.profileReady = true; state.worn = false; state.fail = false
   state.outfit = { id: 'o1', name: 'Look', status: 'pending', items: [item('shirt'), item('pants', 'pants')] } as unknown as Outfit
@@ -214,4 +215,31 @@ it('keeps dismiss beside wear and swap', () => {
   expect(row).toBe(screen.getByRole('button', { name: 'dismiss' }).parentElement)
   expect(row).toBe(screen.getByRole('button', { name: 'swap' }).parentElement)
   expect(row).not.toHaveClass('flex-wrap')
+})
+
+it('shows every logged outfit once outside the suggestion sections', () => {
+  state.worn = true
+  state.extraOutfits = [{ ...state.outfit, id: 'second-log', name: 'Second log', feedback: { worn_at: '2026-10-24' } } as Outfit]
+  const { rerender } = render(<DayOutfits />, { wrapper })
+  const worn = screen.getByRole('heading', { name: 'worn' }).parentElement!
+  expect(within(worn).getByText('Look')).toBeVisible()
+  expect(within(worn).getByText('Second log')).toBeVisible()
+  expect(within(worn).queryByText('Wash')).not.toBeInTheDocument()
+  expect(screen.getAllByText('Second log')).toHaveLength(1)
+  expect(screen.getAllByText('Look')).toHaveLength(1)
+  rerender(<DayOutfits />)
+  expect(within(worn).getByText('Second log')).toBeVisible()
+  state.worn = false
+  state.extraOutfits = []
+  rerender(<DayOutfits />)
+  expect(screen.queryByRole('heading', { name: 'worn' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'wore' })).toBeEnabled()
+})
+
+it('uses an icon with an accessible Today label and no button text', () => {
+  render(<DayOutfits />, { wrapper })
+  const today = screen.getByRole('button', { name: 'today' })
+  expect(today.querySelector('svg')).toBeInTheDocument()
+  expect(today).toHaveTextContent('')
+  expect(today.textContent).toBe('')
 })

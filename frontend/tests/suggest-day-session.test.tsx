@@ -121,3 +121,13 @@ it('blocks the initial generation form until the profile resolves', () => {
   fireEvent.click(screen.getByRole('button', { name: 'getSuggestion' }))
   expect(api.post).not.toHaveBeenCalled()
 })
+
+it('keeps the day view outside the narrow Suggest form', () => {
+  render(<SuggestPage />, { wrapper })
+  const dayView = screen.getByRole('heading', { name: 'title', level: 2 }).closest('section')!
+  expect(dayView).not.toBeNull()
+  expect(dayView.closest('.max-w-2xl')).toBeNull()
+  const narrowForm = screen.getByRole('button', { name: 'getSuggestion' }).closest('.max-w-2xl')!
+  expect(narrowForm).not.toBeNull()
+  expect(dayView.parentElement).toBe(narrowForm.parentElement)
+})
