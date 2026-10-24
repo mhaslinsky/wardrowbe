@@ -56,7 +56,7 @@ def test_packing_has_one_entry_per_item_and_days_worn():
     [
         {"destination": "   "},
         {"end_date": "2026-10-24"},
-        {"end_date": "2026-11-08"},
+        {"end_date": "2026-11-09"},
         {"occasions": []},
         {"occasions": ["bogus"]},
         {"start_date": "broken"},
