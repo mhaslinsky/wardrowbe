@@ -12,10 +12,11 @@ export function useDayOutfits(date: string) {
   return useInfiniteOutfits({ date_from: date, date_to: date });
 }
 
-export function useLogDayWear() {
+export function useLogDayWear(toastsOwnErrors = false) {
   useSetTokenIfAvailable();
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { toastsOwnErrors },
     mutationFn: ({ outfitId, date, itemIds }: { outfitId: string; date: string; itemIds?: string[] }) =>
       api.post<Outfit & { already_logged: boolean }>(`/outfits/${outfitId}/wore`, {
         date, ...(itemIds ? { item_ids: itemIds } : {}),
@@ -23,6 +24,23 @@ export function useLogDayWear() {
     onSuccess: (outfit, { outfitId }) => {
       invalidateOutfitCaches(queryClient, outfitId);
       queryClient.invalidateQueries({ queryKey: queryKeys.outfit(outfit.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.learning.all });
+      invalidateEveryItemWearCache(queryClient);
+    },
+  });
+}
+
+export function useUndoDayWear() {
+  useSetTokenIfAvailable();
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { toastsOwnErrors: true },
+    mutationFn: ({ outfitId, washedItemIds }: { outfitId: string; washedItemIds?: string[] }) =>
+      api.post<Outfit & { learning_stale: boolean }>(`/outfits/${outfitId}/undo-wear`, {
+        ...(washedItemIds !== undefined ? { washed_item_ids: washedItemIds } : {}),
+      }),
+    onSuccess: (_, { outfitId }) => {
+      invalidateOutfitCaches(queryClient, outfitId);
       queryClient.invalidateQueries({ queryKey: queryKeys.learning.all });
       invalidateEveryItemWearCache(queryClient);
     },

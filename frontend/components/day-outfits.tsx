@@ -14,6 +14,7 @@ import type { Item } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { UndoWearActions } from '@/components/undo-wear-actions';
 import { OutfitCard } from '@/components/outfits/outfit-card';
 
 function shiftDay(date: string, offset: number) {
@@ -116,12 +117,15 @@ function DayWearActions({ outfit, date, disabled = false, onSuccess, onPendingCh
   </div>;
 }
 
-function WornOutfits({ outfits }: { outfits: Outfit[] }) {
+function WornOutfits({ outfits, date, choices, disabled, onNotice }: { outfits: Outfit[]; date: string; choices: Outfit[]; disabled: boolean; onNotice: (message: string) => void }) {
   const t = useTranslations('outfits.day');
   return <div className="space-y-3">
     <h3 className="font-semibold">{t('worn')}</h3>
     <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))]">
-      {outfits.map((outfit) => <OutfitCard key={outfit.id} outfit={outfit} hideWashWarnings />)}
+      {outfits.map((outfit) => <Card key={outfit.id}><CardContent className="p-3 space-y-3">
+        <OutfitCard outfit={outfit} hideWashWarnings />
+        <UndoWearActions outfit={outfit} date={date} choices={choices} disabled={disabled} onNotice={onNotice} />
+      </CardContent></Card>)}
     </div>
   </div>;
 }
@@ -129,6 +133,7 @@ function WornOutfits({ outfits }: { outfits: Outfit[] }) {
 export function DayOutfits({ date: controlledDate, onDateChange }: { date?: string; onDateChange?: (date: string | null) => void } = {}) {
   const t = useTranslations('outfits.day');
   const common = useTranslations('common');
+  const [notice, setNotice] = useState({ date: '', message: '' });
   const locale = useLocale();
   const selection = useDaySelection();
   const { today, ready } = selection;
@@ -167,7 +172,8 @@ export function DayOutfits({ date: controlledDate, onDateChange }: { date?: stri
       <Button size="icon" className="h-8 w-8 shrink-0" variant="outline" disabled={!ready || date >= shiftDay(today, 1)} onClick={() => setDate(shiftDay(date, 1))} aria-label={t('next')}>→</Button>
       <Button size="icon" className="h-8 w-8 shrink-0" variant="ghost" disabled={!ready} onClick={() => setDate(null)} aria-label={t('today')}><CalendarCheck className="h-4 w-4" /></Button>
     </div>
-    {logged && <WornOutfits outfits={wornOutfits} />}
+    {notice.date === date && notice.message && <p role="status">{notice.message}</p>}
+    {logged && <WornOutfits key={date} outfits={wornOutfits} date={date} choices={sections.slice(0, 2).flatMap((section) => section.outfits)} disabled={!ready} onNotice={(message) => setNotice({ date, message })} />}
     {date >= today && <Button disabled={!ready || logged || generate.isPending || day.isLoading || day.isError} onClick={() => generate.mutate({ date, occasion: preferences?.default_occasion || 'casual' })}>{t('generate')}</Button>}
     {generate.isError && <p role="alert">{t('generateFailed')}</p>}
     {sections.map(({ title, query, outfits }) => <div key={title} className="space-y-3">

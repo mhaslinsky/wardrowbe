@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { api, ApiError } from '@/lib/api'
-import { loggedOutfitName, useLogDayWear, useGenerateDayOptions } from '@/lib/hooks/use-day-outfits'
+import { loggedOutfitName, useLogDayWear, useGenerateDayOptions, useUndoDayWear } from '@/lib/hooks/use-day-outfits'
 
 vi.mock('@/lib/api', async (original) => ({
   ...(await original<typeof import('@/lib/api')>()),
@@ -52,4 +52,16 @@ it('generates dated options through the shared hook and refreshes day caches', a
   await act(() => result.current.mutateAsync({ date: '2026-10-25', occasion: 'casual' }))
   expect(api.post).toHaveBeenCalledWith('/outfits/suggest-options', { date: '2026-10-25', occasion: 'casual' })
   expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toContainEqual(['outfits'])
+})
+
+it('undoes wear and refreshes item, calendar and learning caches', async () => {
+  vi.mocked(api.post).mockResolvedValue({ id: 'source', learning_stale: false })
+  const client = new QueryClient()
+  const invalidate = vi.spyOn(client, 'invalidateQueries')
+  const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  const { result } = renderHook(useUndoDayWear, { wrapper })
+  await act(() => result.current.mutateAsync({ outfitId: 'source', washedItemIds: [] }))
+  expect(api.post).toHaveBeenCalledWith('/outfits/source/undo-wear', { washed_item_ids: [] })
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
+  for (const key of ['outfits', 'calendarOutfits', 'pendingOutfits', 'analytics', 'learning', 'items', 'item', 'wear-stats', 'wear-history']) expect(keys).toContainEqual([key])
 })

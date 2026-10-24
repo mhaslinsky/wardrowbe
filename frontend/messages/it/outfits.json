@@ -203,6 +203,12 @@
     "alreadyLogged": "Già registrato: {name}",
     "failed": "Salvataggio non riuscito",
     "dismiss": "Ignora",
-    "generateFailed": "Impossibile ottenere le opzioni"
+    "generateFailed": "Impossibile ottenere le opzioni",
+    "undo": "Annulla",
+    "replace": "Sostituisci",
+    "washedSince": "Lavati dopo?",
+    "undone": "Annullato",
+    "learningStale": "Suggerimenti in ritardo",
+    "replaceFailed": "Giorno riaperto. Sostituzione fallita"
   }
 }

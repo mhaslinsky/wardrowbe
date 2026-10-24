@@ -203,6 +203,12 @@
     "alreadyLogged": "이미 기록됨: {name}",
     "failed": "저장 실패",
     "dismiss": "닫기",
-    "generateFailed": "옵션을 가져오지 못했어요"
+    "generateFailed": "옵션을 가져오지 못했어요",
+    "undo": "취소",
+    "replace": "교체",
+    "washedSince": "그 후 세탁했나요?",
+    "undone": "취소됨",
+    "learningStale": "추천 반영이 늦을 수 있어요",
+    "replaceFailed": "기록이 취소됨. 교체 실패"
   }
 }

@@ -203,6 +203,12 @@
     "alreadyLogged": "記録済み: {name}",
     "failed": "保存できませんでした",
     "dismiss": "閉じる",
-    "generateFailed": "候補を取得できませんでした"
+    "generateFailed": "候補を取得できませんでした",
+    "undo": "取り消す",
+    "replace": "変更",
+    "washedSince": "その後洗濯しましたか？",
+    "undone": "取り消しました",
+    "learningStale": "提案の反映が遅れる場合があります",
+    "replaceFailed": "記録を取り消しました。変更できませんでした"
   }
 }
