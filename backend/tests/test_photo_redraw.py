@@ -1,6 +1,7 @@
 import base64
 import json
 import threading
+from contextlib import nullcontext
 from io import BytesIO
 from unittest.mock import AsyncMock, patch
 
@@ -768,12 +769,12 @@ async def test_failed_photo_edits_remove_uncommitted_copies(
     }[operation]
     provider = _mock_provider()
     provider.remove.side_effect = error
-    for attempt in range(2):
+    for _attempt in range(2):
         with (
             patch("app.services.background_removal.get_provider", return_value=provider),
             patch.object(ImageService, method, side_effect=error)
             if operation != "remove-background"
-            else patch.object(ImageService, "validate_image", wraps=service.validate_image),
+            else nullcontext(),
         ):
             response = await client.post(
                 f"/api/v1/items/{item_id}/{operation}", json={}, headers=auth_headers

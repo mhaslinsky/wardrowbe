@@ -1766,13 +1766,12 @@ async def rotate_item_image(
     item = await photos.lock_photo(db, item)
     try:
         image_service = ImageService()
-        photos.prepare_photo_edit(item)
-        # to_thread because rotate_image is a blocking decode/resize/encode
-        # cycle; calling it directly stalls the whole event loop for its
-        # duration, which on a large image is seconds of dead API.
-        await asyncio.to_thread(image_service.rotate_image, item.image_path, direction)
-        photos.retain_backup(item)
-        await db.commit()
+        async with photos.edit_photo(db, item):
+            # to_thread because rotate_image is a blocking decode/resize/encode
+            # cycle; calling it directly stalls the whole event loop for its
+            # duration, which on a large image is seconds of dead API.
+            await asyncio.to_thread(image_service.rotate_image, item.image_path, direction)
+            photos.retain_backup(item)
         await db.refresh(item)
         return ItemResponse.model_validate(item)
     except ValueError as e:
@@ -1830,15 +1829,16 @@ async def remove_item_background(
     item = await photos.lock_photo(db, item)
     try:
         image_service = ImageService()
-        photos.prepare_photo_edit(item)
-        result = await asyncio.to_thread(image_service.remove_background, item.image_path, bg_color)
-        item.original_image_path = result["original_backup_path"]
-        photos.retain_backup(item)
-        if recovering_from_error:
-            item.status = ItemStatus.ready
-            item.processing_kind = None
-            item.ai_started_at = None
-        await db.commit()
+        async with photos.edit_photo(db, item):
+            result = await asyncio.to_thread(
+                image_service.remove_background, item.image_path, bg_color
+            )
+            item.original_image_path = result["original_backup_path"]
+            photos.retain_backup(item)
+            if recovering_from_error:
+                item.status = ItemStatus.ready
+                item.processing_kind = None
+                item.ai_started_at = None
         await db.refresh(
             item,
             attribute_names=[
@@ -1894,11 +1894,12 @@ async def restore_item_original(
     item = await photos.lock_photo(db, item)
     try:
         image_service = ImageService()
-        photos.prepare_photo_edit(item)
-        photos.retain_backup(item)
-        await asyncio.to_thread(
-            image_service.restore_original, item.image_path, item.original_image_path
-        )
+        async with photos.edit_photo(db, item):
+            photos.retain_backup(item)
+            await asyncio.to_thread(
+                image_service.restore_original, item.image_path, item.original_image_path
+            )
+            item.original_image_path = None
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1911,8 +1912,6 @@ async def restore_item_original(
             detail="Failed to restore original image",
         ) from None
 
-    item.original_image_path = None
-    await db.commit()
     await db.refresh(item, attribute_names=["original_image_path", "updated_at"])
     return ItemResponse.model_validate(item)
 

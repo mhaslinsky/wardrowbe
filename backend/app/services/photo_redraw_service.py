@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 import json
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from uuid import uuid4
@@ -127,11 +128,30 @@ def prepare_photo_edit(item) -> dict[str, str]:
     if not item.photo_redraw:
         return {}
     paths = {field: getattr(item, field) for field in PHOTO_FIELDS}
-    if not live_paths(item):
+    created = not live_paths(item)
+    if created:
         paths = ImageService().copy_photo(paths)
     set_active_photo(item, paths, "custom")
     item.photo_redraw = {**item.photo_redraw, "live": paths}
-    return paths
+    return paths if created else {}
+
+
+@asynccontextmanager
+async def edit_photo(db, item):
+    """Commit an edit's ownership or remove its newly created working files."""
+    created = prepare_photo_edit(item)
+    try:
+        yield
+        await db.commit()
+    except BaseException:
+        if created:
+            ImageService().delete_images(
+                {
+                    **created,
+                    "backup": f"{created['image_path'].rsplit('.', 1)[0]}_orig.jpg",
+                }
+            )
+        raise
 
 
 def cutout(image: Image.Image) -> Image.Image:
@@ -284,7 +304,7 @@ class PhotoRedrawService:
             "status": "generating",
             "started_at": datetime.now(UTC).isoformat(),
             "claim_id": claim_id,
-            "paid": False,
+            "paid": bool(previous.get("paid", previous.get("provider_calls", 0) > 0)),
         }
         item.photo_redraw = dict(metadata)
         # Persist the claim before a provider request, including after a stale claim is reclaimed.
