@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from app.api.trips import TripRequest, TripResponse
-from app.models.outfit import Outfit
+from app.models.outfit import Outfit, TimeOfDay
 from app.models.trip import Trip
 from app.services.trip_service import TripService, TripWeather, packing_list, reuse_limit
 from app.services.weather_service import WeatherService, WeatherServiceError
@@ -237,7 +237,7 @@ async def test_four_day_api_plan_and_calendar(client, db_session, test_user, aut
     seen = []
 
     async def generate(service, **kwargs):
-        assert kwargs["time_of_day"].value == "full_day"
+        assert kwargs["time_of_day"] == TimeOfDay.full_day
         excluded = kwargs["exclude_items"]
         assert dirty_id in excluded
         assert all(previous in excluded for previous in seen)
@@ -434,6 +434,7 @@ async def real_plan(client, db_session, user, headers, kinds, days):
 async def test_real_materialize_cannot_reuse_tee_under_hoodie(
     client, db_session, test_user, auth_headers
 ):
+    user_id = test_user.id
     response, prompts = await real_plan(
         client, db_session, test_user, auth_headers, ["t-shirt", "hoodie", "jeans"], 2
     )
@@ -444,7 +445,7 @@ async def test_real_materialize_cannot_reuse_tee_under_hoodie(
     )
     assert (
         await db_session.scalar(
-            select(func.count()).select_from(Outfit).where(Outfit.user_id == test_user.id)
+            select(func.count()).select_from(Outfit).where(Outfit.user_id == user_id)
         )
     ) == 0
 
@@ -475,8 +476,9 @@ async def test_saved_outfit_reuse_breach(db_session, test_user):
             await TripService(db_session).plan(test_user, request(2))
 
 
-async def test_invalid_json_weather_maps_to_503(client, auth_headers):
-    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=b"not json"))
+@pytest.mark.parametrize("content", [b"not json", b"{}", b'{"hourly": {}}'])
+async def test_invalid_json_weather_maps_to_503(client, auth_headers, content):
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=content))
     provider = httpx.AsyncClient(transport=transport)
     with (
         patch("app.services.trip_service.httpx.AsyncClient", return_value=provider),
