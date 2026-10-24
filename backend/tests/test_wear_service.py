@@ -287,6 +287,7 @@ async def test_accept_is_not_worn_and_inspiration_not_pending(
     chosen = await source(db_session, test_user, ids, day=today)
     look = await source(db_session, test_user, ids, inspiration=True)
     await db_session.commit()
+    db_session.expunge_all()
     response = await client.post(f"/api/v1/outfits/{chosen.id}/accept", headers=auth_headers)
     assert response.status_code == 200
     for filters in (

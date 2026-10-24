@@ -951,7 +951,7 @@ async def submit_feedback(
             detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
         )
 
-    if request.worn or request.actually_worn is True:
+    if request.worn or request.actually_worn is True or request.wore_instead_items:
         existing_date = outfit.feedback.worn_at if outfit.feedback else None
         wear_result = await WearService(db).log_worn(
             current_user,
@@ -988,35 +988,10 @@ async def submit_feedback(
         feedback.modification_notes = request.modification_notes
     if request.actually_worn is not None and not feedback.worn_at:
         feedback.actually_worn = request.actually_worn
-    replacement: Outfit | None = None
-    if request.wore_instead_items is not None and not (request.worn or request.actually_worn):
-        feedback.wore_instead_items = [str(item_id) for item_id in request.wore_instead_items]
-        if request.wore_instead_items:
-            studio_service = StudioService(db)
-            try:
-                replacement = await studio_service.create_wore_instead(
-                    user=current_user,
-                    original_outfit_id=outfit_id,
-                    item_ids=list(request.wore_instead_items),
-                    rating=request.rating,
-                    comment=request.comment,
-                    scheduled_for=None,
-                )
-            except ItemOwnershipError:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={
-                        "error_code": "OUTFIT_ITEM_OWNERSHIP",
-                        "message": "One or more items do not belong to you",
-                    },
-                ) from None
-
     await db.commit()
     await db.refresh(feedback)
 
-    await _run_learning_safely(db, outfit_id, current_user.id)
-    if replacement is not None:
-        await _run_learning_safely(db, replacement.id, current_user.id)
+    await _run_learning_safely(db, outfit.id, current_user.id)
 
     return FeedbackResponse(
         id=feedback.id,

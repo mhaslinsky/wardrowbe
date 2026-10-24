@@ -108,6 +108,7 @@ async def test_saved_family_prefers_template_even_when_items_change(
                     "source": OutfitSource.manual,
                     "parent": "template",
                     "status": OutfitStatus.accepted,
+                    "worn": True,
                 },
             ),
         ],
@@ -201,6 +202,7 @@ async def test_grouping_filters_before_count_pagination_and_reset(
                     "source": OutfitSource.manual,
                     "parent": "template",
                     "status": OutfitStatus.accepted,
+                    "worn": True,
                 },
             ),
         ],
@@ -254,7 +256,12 @@ async def test_wears_belong_to_their_original_template(
         ("first", {"source": OutfitSource.manual, "scheduled_for": None, "parent": "original"}),
         (
             "wear",
-            {"source": OutfitSource.manual, "parent": "first", "status": OutfitStatus.accepted},
+            {
+                "source": OutfitSource.manual,
+                "parent": "first",
+                "status": OutfitStatus.accepted,
+                "worn": True,
+            },
         ),
     ]
     if siblings == 0:

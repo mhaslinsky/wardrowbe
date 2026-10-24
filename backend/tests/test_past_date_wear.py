@@ -141,7 +141,7 @@ async def test_concurrent_wear_on_creates_one_row(
                 if (
                     len(columns) == 1
                     and columns[0]["entity"] is Outfit
-                    and columns[0]["name"] == "id"
+                    and "user_feedback.worn_at =" in str(statement)
                 ):
                     checked.set()
                     await release.wait()
