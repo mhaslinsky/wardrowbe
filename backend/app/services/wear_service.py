@@ -97,12 +97,11 @@ def map_wear_error(
         mapped = error
     if ha:
         detail = mapped.detail
+        if isinstance(detail, dict) and "error_code" in detail:
+            detail = detail["error_code"]
         return JSONResponse(
             status_code=mapped.status_code,
-            content={
-                "ok": False,
-                "error": detail["error_code"] if isinstance(detail, dict) else str(detail),
-            },
+            content={"ok": False, "error": str(detail)},
         )
     return mapped
 

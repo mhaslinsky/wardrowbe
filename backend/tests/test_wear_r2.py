@@ -7,6 +7,7 @@ from uuid import UUID
 
 import pytest
 import pytest_asyncio
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event, func, select, text
 
@@ -15,7 +16,13 @@ from app.main import app
 from app.models.item import ClothingItem, ItemHistory, ItemStatus
 from app.models.outfit import Outfit, UserFeedback
 from app.services.item_service import ItemService
-from app.services.wear_service import AlreadyThis, WearService
+from app.services.wear_service import (
+    AlreadyThis,
+    FutureWearDateError,
+    ItemOwnershipError,
+    OutfitNotTemplateError,
+    WearService,
+)
 from app.utils.auth import get_current_user
 from app.utils.timezone import get_user_today
 from tests.test_outfit_wear_history import _items
@@ -275,3 +282,22 @@ async def test_pending_filter_strips_spaces(client, db_session, test_user, auth_
         "/api/v1/outfits", headers=auth_headers, params={"status": " pending "}
     )
     assert response.status_code == 200 and response.json()["total"] == 0
+
+
+@pytest.mark.parametrize(
+    "error,status,code",
+    [
+        (ItemOwnershipError("unavailable"), 403, "OUTFIT_ITEM_OWNERSHIP"),
+        (LookupError("missing"), 404, "OUTFIT_NOT_FOUND"),
+        (FutureWearDateError("future"), 422, "future"),
+        (OutfitNotTemplateError("dated"), 400, "OUTFIT_NOT_TEMPLATE"),
+        (HTTPException(422, "invalid"), 422, "invalid"),
+        (HTTPException(422, {"message": "invalid"}), 422, "{'message': 'invalid'}"),
+    ],
+)
+async def test_ha_wraps_all_core_failures(writer_client, error, status, code):
+    send, records = writer_client
+    with patch.object(WearService, "log_worn", side_effect=error):
+        response = await send("ha")
+    assert response.status_code == status
+    assert response.json() == {"ok": False, "error": code}
