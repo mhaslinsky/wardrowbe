@@ -1,11 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import OutfitsPage from '@/app/dashboard/outfits/page'
 import { api } from '@/lib/api'
-import { queryKeys } from '@/lib/hooks/query-keys'
-import { useBulkDeleteOutfits } from '@/lib/hooks/use-outfits'
 
 const nav = vi.hoisted(() => ({ params: new URLSearchParams() }))
 
@@ -32,6 +30,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 afterEach(() => {
   vi.mocked(api.get).mockReset()
+  vi.mocked(api.post).mockReset()
   nav.params = new URLSearchParams()
 })
 
@@ -50,32 +49,31 @@ describe('ready to wear', () => {
     fireEvent.click(screen.getByRole('button', { name: 'filters.readyToWear' }))
     expect(await screen.findByText('dirty')).toBeInTheDocument()
   })
-})
 
-
-it('selects all matching ready outfits and sends the active filter for deletion', async () => {
-  nav.params = new URLSearchParams('filter=ai')
-  vi.mocked(api.get).mockImplementation(async (_path, options) => {
-    const params = (options as { params: Record<string, string> }).params
-    if (params.is_lookbook) return { outfits: [], total: 0, page: 1, page_size: 1, has_more: false }
-    return { outfits: [{ id: 'clean' }], total: 2, page: 1, page_size: 24, has_more: true }
+  it('selects all matching ready outfits and sends the active filter for deletion', async () => {
+    nav.params = new URLSearchParams('filter=ai')
+    vi.mocked(api.get).mockImplementation(async (_path, options) => {
+      const params = (options as { params: Record<string, string> }).params
+      if (params.is_lookbook) return { outfits: [], total: 0, page: 1, page_size: 1, has_more: false }
+      return { outfits: Array.from({ length: 24 }, (_, index) => ({ id: index === 0 ? 'clean' : `clean-${index}` })), total: 25, page: 1, page_size: 24, has_more: true }
+    })
+    vi.mocked(api.post).mockResolvedValue({ deleted: 25, failed: 0, errors: [] })
+    render(<OutfitsPage />, { wrapper })
+    await screen.findByText('clean')
+    fireEvent.click(screen.getByRole('button', { name: 'filters.readyToWear' }))
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/outfits', expect.objectContaining({
+      params: expect.objectContaining({ ready_to_wear: 'true' }),
+    })))
+    await screen.findByText('clean')
+    fireEvent.click(await screen.findByRole('button', { name: 'bulkActions.select' }))
+    fireEvent.click(screen.getByText('selectAll'))
+    fireEvent.click(screen.getByRole('button', { name: 'bulkActions.selectAllMatching' }))
+    fireEvent.click(screen.getByRole('button', { name: 'delete' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'delete' }).at(-1)!)
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/outfits/bulk/delete', {
+      select_all: true,
+      excluded_ids: [],
+      filters: expect.objectContaining({ ready_to_wear: true }),
+    }))
   })
-  vi.mocked(api.post).mockResolvedValue({ deleted: 2, failed: 0, errors: [] })
-  render(<OutfitsPage />, { wrapper })
-  await screen.findByText('clean')
-  fireEvent.click(screen.getByRole('button', { name: 'filters.readyToWear' }))
-  await waitFor(() => expect(api.get).toHaveBeenCalledWith('/outfits', expect.objectContaining({
-    params: expect.objectContaining({ ready_to_wear: 'true' }),
-  })))
-  await screen.findByText('clean')
-  fireEvent.click(await screen.findByRole('button', { name: 'bulkActions.select' }))
-  fireEvent.click(screen.getByText('selectAll'))
-  fireEvent.click(screen.getByRole('button', { name: 'bulkActions.selectAllMatching' }))
-  fireEvent.click(screen.getByRole('button', { name: 'delete' }))
-  fireEvent.click(screen.getAllByRole('button', { name: 'delete' }).at(-1)!)
-  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/outfits/bulk/delete', {
-    select_all: true,
-    excluded_ids: [],
-    filters: expect.objectContaining({ ready_to_wear: true }),
-  }))
 })

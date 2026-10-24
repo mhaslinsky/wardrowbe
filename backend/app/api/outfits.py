@@ -192,9 +192,11 @@ class OutfitListResponse(BaseModel):
 
 
 class BulkOutfitFilters(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
     ready_to_wear: bool = False
     group: bool = False
-    status_filter: str | None = None
+    status_filter: str | None = Field(None, alias="status")
     occasion: str | None = None
     date_from: date | None = None
     date_to: date | None = None
