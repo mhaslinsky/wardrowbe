@@ -60,7 +60,10 @@ class ItemUpdate(BaseModel):
     tags: ItemTags | None = None
     colors: ColorList | None = None
     primary_color: ColorName | None = None
-    wash_interval: int | None = None
+    wash_interval: int | None = Field(
+        default=None,
+        description="Trips treat 999 as unlimited for layers; base garments allow one wear.",
+    )
 
 
 class ItemResponse(ItemBase):
@@ -122,7 +125,10 @@ class ItemResponse(ItemBase):
     acceptance_count: int = 0
     wears_since_wash: int = 0
     last_washed_at: date | None = None
-    wash_interval: int | None = None
+    wash_interval: int | None = Field(
+        default=None,
+        description="Trips treat 999 as unlimited for layers; base garments allow one wear.",
+    )
     needs_wash: bool = False
     additional_images: list["ItemImageResponse"] = Field(default_factory=list)
     is_archived: bool = False

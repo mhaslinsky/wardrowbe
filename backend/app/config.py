@@ -52,8 +52,7 @@ class Settings(BaseSettings):
     # only merges clients into one bucket; counting too many lets a client pick its own key.
     trusted_proxy_count: int = Field(default=0, ge=0)
 
-    # The hours (local, inclusive) an outfit has to work for. Outfit weather reads only the hourly
-    # temperatures inside them, so an overnight low doesn't pull a heavy coat into a mild day.
+    # Ordinary outfits use this configurable local window; trips use 10 AM to 6 PM.
     wearing_day_start_hour: int = Field(default=0, ge=0, le=23)
     wearing_day_end_hour: int = Field(default=21, ge=0, le=23)
 
