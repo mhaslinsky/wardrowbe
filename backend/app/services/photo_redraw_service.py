@@ -73,7 +73,7 @@ def select_photo(item, choice: str) -> dict[str, str]:
     photo = dict(item.photo_redraw or {})
     if not photo.get(choice):
         raise HTTPException(400, "Photo unavailable")
-    if photo.get("selected") == choice and live_paths(item):
+    if photo.get("selected") == choice:
         return {}
     paths = ImageService().copy_photo(photo[choice])
     retained = list(photo.get("retained", []))
@@ -242,7 +242,7 @@ class PhotoRedrawService:
             "claim_id": claim_id,
             "paid": False,
         }
-        item.photo_redraw = metadata
+        item.photo_redraw = dict(metadata)
         # Persist the claim before a provider request, including after a stale claim is reclaimed.
         await db.commit()
         service, pending_store, new_live = ImageService(), None, {}
@@ -272,7 +272,7 @@ class PhotoRedrawService:
                 selected=previous.get("selected", "original"),
                 retained=list(dict.fromkeys(retained)),
             )
-            item.photo_redraw = metadata
+            item.photo_redraw = dict(metadata)
             await db.commit()
             source = service._open_bounded(
                 service.get_image_path(original["image_path"]).read_bytes(), ".png"
@@ -307,7 +307,7 @@ class PhotoRedrawService:
                     != source_hash
                 ):
                     metadata.update(status="source_changed", selected="custom")
-            current.photo_redraw = metadata
+            current.photo_redraw = dict(metadata)
             if metadata["status"] == "generated":
                 current.photo_redraw = {**metadata, "selected": "custom"}
                 new_live = select_photo(current, "redrawn")
