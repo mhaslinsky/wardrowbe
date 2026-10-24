@@ -489,9 +489,13 @@ async def suggest_outfit(
     return outfit_to_response(outfit, wore_instead_map, is_starter_suggestion=is_starter)
 
 
+class SuggestOptionsRequest(SuggestRequest):
+    target_date: date | None = Field(None, alias="date")
+
+
 @router.post("/suggest-options", response_model=list[OutfitResponse])
 async def suggest_outfit_options(
-    request: SuggestRequest,
+    request: SuggestOptionsRequest,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> list[OutfitResponse]:
@@ -518,15 +522,24 @@ async def suggest_outfit_options(
     occasion = request.occasion or _default_occasion(current_user)
 
     try:
-        outfits = await service.generate_recommendations(
-            user=current_user,
-            occasion=occasion,
-            weather_override=weather_override,
-            exclude_items=request.exclude_items,
-            include_items=request.include_items,
-            time_of_day=request.time_of_day,
-            count=3,
-        )
+        if request.target_date is not None:
+            outfits = await service.top_up_day(
+                user=current_user,
+                day=request.target_date,
+                occasion=occasion,
+                exclude_items=request.exclude_items,
+                include_items=request.include_items,
+            )
+        else:
+            outfits = await service.generate_recommendations(
+                user=current_user,
+                occasion=occasion,
+                weather_override=weather_override,
+                exclude_items=request.exclude_items,
+                include_items=request.include_items,
+                time_of_day=request.time_of_day,
+                count=3,
+            )
     except InsufficientWardrobeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

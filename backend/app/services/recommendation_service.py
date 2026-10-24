@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -152,6 +153,130 @@ class RecommendationService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.weather_service = WeatherService()
+        self._defer_commit = False
+
+    async def _day_suggestions(self, user_id: UUID, day: date) -> list[Outfit]:
+        result = await self.db.execute(
+            select(Outfit)
+            .where(
+                Outfit.user_id == user_id,
+                Outfit.scheduled_for == day,
+                Outfit.source.in_(
+                    [OutfitSource.scheduled, OutfitSource.on_demand, OutfitSource.external]
+                ),
+                Outfit.status.in_(
+                    [
+                        OutfitStatus.pending,
+                        OutfitStatus.sent,
+                        OutfitStatus.viewed,
+                        OutfitStatus.accepted,
+                    ]
+                ),
+                ~Outfit.feedback.has(UserFeedback.worn_at.is_not(None)),
+                (Outfit.ai_raw_response.is_(None) | ~Outfit.ai_raw_response.has_key("inspiration")),
+            )
+            .order_by(
+                (Outfit.source == OutfitSource.scheduled).desc(),
+                Outfit.created_at,
+                Outfit.id,
+            )
+            .options(
+                selectinload(Outfit.items).selectinload(OutfitItem.item),
+                selectinload(Outfit.feedback),
+                selectinload(Outfit.family_ratings).selectinload(FamilyOutfitRating.user),
+            )
+            .execution_options(populate_existing=True)
+        )
+        return list(result.scalars().all())
+
+    async def top_up_day(
+        self,
+        user: User,
+        day: date,
+        occasion: str,
+        exclude_items: list[UUID] | None = None,
+        include_items: list[UUID] | None = None,
+    ) -> list[Outfit]:
+        today = get_user_today(user)
+        if day > today + timedelta(days=7):
+            raise ValueError("Choose a date within 7 days")
+        if day < today:
+            return await self._day_suggestions(user.id, day)
+
+        from app.services.wear_service import WearService
+
+        try:
+            async with self.db.begin_nested():
+                await self.db.execute(text("SET LOCAL lock_timeout = '1500ms'"))
+                await WearService(self.db).lock_day(user.id, day)
+                await self.db.execute(text("SET LOCAL lock_timeout = DEFAULT"))
+        except DBAPIError as error:
+            if getattr(error.orig, "sqlstate", None) != "55P03":
+                raise
+            return await self._day_suggestions(user.id, day)
+
+        try:
+            existing = await self._day_suggestions(user.id, day)
+            logged = await self.db.scalar(
+                select(UserFeedback.id)
+                .join(Outfit)
+                .where(Outfit.user_id == user.id, UserFeedback.worn_at == day)
+                .limit(1)
+            )
+            if logged is not None or len(existing) >= 3:
+                await self.db.commit()
+                return existing
+            lat, lon = user.location_lat, user.location_lon
+            if (lat is None or lon is None) and user.location_name:
+                location = await self.weather_service.geocode_location_name(user.location_name)
+                if location:
+                    lat, lon, _ = location
+            if lat is None or lon is None:
+                raise ValueError("Set your location in settings")
+            forecasts = await self.weather_service.get_daily_forecast(
+                float(lat), float(lon), days=8
+            )
+            forecast = next((entry for entry in forecasts if entry.date == day.isoformat()), None)
+            if forecast is None:
+                raise ValueError("Forecast unavailable for this date")
+            temperature = (forecast.temp_min + forecast.temp_max) / 2
+            weather = WeatherData(
+                temperature=temperature,
+                feels_like=temperature,
+                humidity=forecast.humidity if forecast.humidity is not None else 50,
+                precipitation_chance=forecast.precipitation_chance,
+                precipitation_mm=0,
+                wind_speed=forecast.wind_speed if forecast.wind_speed is not None else 0,
+                condition=forecast.condition,
+                condition_code=forecast.condition_code,
+                is_day=True,
+                uv_index=forecast.uv_index if forecast.uv_index is not None else 0,
+                timestamp=datetime.combine(day, datetime.min.time()),
+                temp_min=forecast.temp_min,
+                temp_max=forecast.temp_max,
+                window_min=forecast.temp_min,
+                window_max=forecast.temp_max,
+            )
+            self._defer_commit = True
+            await self.generate_recommendations(
+                user=user,
+                occasion=occasion,
+                scheduled_date=day,
+                weather_override=weather,
+                time_of_day=TimeOfDay.full_day,
+                exclude_items=exclude_items,
+                include_items=include_items,
+                count=3 - len(existing),
+            )
+            await self.db.flush()
+            outfits = await self._day_suggestions(user.id, day)
+            await self.db.commit()
+            return outfits
+        except BaseException:
+            await self.db.rollback()
+            raise
+        finally:
+            self._defer_commit = False
 
     async def get_candidate_items(
         self,
@@ -807,7 +932,10 @@ class RecommendationService:
             )
             self.db.add(outfit_item)
 
-        await self.db.commit()
+        if self._defer_commit:
+            await self.db.flush()
+        else:
+            await self.db.commit()
         await self.db.refresh(outfit)
 
         result = await self.db.execute(
@@ -847,7 +975,7 @@ class RecommendationService:
             time_of_day = get_time_of_day(user)
 
         # Determine cache eligibility before auto-merge
-        use_cache = not exclude_items and not single_outfit
+        use_cache = not exclude_items and not single_outfit and not self._defer_commit
 
         # Auto-exclude today's rejected items for this occasion
         rejected_ids = await self._get_today_rejected_item_ids(user, occasion)
