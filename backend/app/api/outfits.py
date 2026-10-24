@@ -192,6 +192,7 @@ class OutfitListResponse(BaseModel):
 
 
 class BulkOutfitFilters(BaseModel):
+    ready_to_wear: bool = False
     group: bool = False
     status_filter: str | None = None
     occasion: str | None = None
@@ -711,6 +712,7 @@ async def bulk_delete_outfits(
     if request.select_all:
         list_filters = OutfitListFilters(
             user_id=current_user.id,
+            ready_to_wear=request.filters.ready_to_wear if request.filters else False,
             status_filter=request.filters.status_filter if request.filters else None,
             occasion=request.filters.occasion if request.filters else None,
             date_from=request.filters.date_from if request.filters else None,

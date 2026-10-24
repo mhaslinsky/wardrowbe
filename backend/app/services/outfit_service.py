@@ -187,6 +187,11 @@ class OutfitService:
     def _build_filter_clauses(self, filters: OutfitListFilters) -> list:
         clauses = [Outfit.user_id == filters.user_id]
 
+        if filters.ready_to_wear:
+            clauses.append(
+                ~Outfit.items.any(OutfitItem.item.has(ClothingItem.needs_wash.is_(True)))
+            )
+
         if filters.family_member_view:
             clauses.append(Outfit.scheduled_for.is_not(None))
 
@@ -284,11 +289,6 @@ class OutfitService:
         self, filters: OutfitListFilters, page: int, page_size: int
     ) -> tuple[list[Outfit], int]:
         clauses = self._build_filter_clauses(filters)
-
-        if filters.ready_to_wear:
-            clauses.append(
-                ~Outfit.items.any(OutfitItem.item.has(ClothingItem.needs_wash.is_(True)))
-            )
 
         if filters.group:
             result = await self.db.execute(
