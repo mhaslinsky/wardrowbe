@@ -314,7 +314,9 @@ class ImageService:
         if not backup_full.exists():
             raise ValueError(f"Backup not found: {backup_path}")
 
-        image = Image.open(backup_full).convert("RGB")
+        image = Image.open(backup_full)
+        if image.format != "PNG":
+            image = image.convert("RGB")
         paths = self._save_all_sizes(image, image_path)
         backup_full.unlink()
         return paths
@@ -349,14 +351,23 @@ class ImageService:
         backup_full = self.storage_path / f"{image_path.rsplit('.', 1)[0]}_orig.jpg"
         backup = None
         if backup_full.exists():
-            backup = _flatten_to_rgb(Image.open(backup_full)).rotate(angle, expand=True)
+            backup = Image.open(backup_full)
+            if backup.format != "PNG":
+                backup = _flatten_to_rgb(backup)
+            backup = backup.rotate(angle, expand=True)
 
         paths = self._save_all_sizes(rotated, image_path)
         if backup is not None:
-            _replace_atomically(backup_full, lambda tmp: backup.save(tmp, "JPEG", quality=95))
+            _replace_atomically(
+                backup_full,
+                lambda tmp: backup.save(
+                    tmp, "PNG" if backup.mode == "RGBA" else "JPEG", quality=95
+                ),
+            )
         return paths
 
     def copy_photo(self, paths: dict[str, str]) -> dict[str, str]:
+        """Copy all photo variants using a shared new basename."""
         copied = {}
         try:
             source_path = Path(paths["image_path"])
@@ -373,6 +384,7 @@ class ImageService:
             raise
 
     def store_cutout(self, image: Image.Image, user_id: uuid.UUID) -> dict[str, str]:
+        """Store transparent PNG variants, removing partial writes on failure."""
         relative = str(Path(str(user_id)) / self._generate_filename(".png"))
         try:
             return self._save_all_sizes(image, relative)

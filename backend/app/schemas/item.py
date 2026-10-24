@@ -422,3 +422,21 @@ class WashHistoryResponse(BaseModel):
     method: str | None = None
     notes: str | None = None
     created_at: datetime
+
+
+class PhotoRedrawRequest(BaseModel):
+    retry: bool = False
+
+
+class BulkPhotoRedrawRequest(BulkSelectionRequest):
+    retry: bool = False
+
+
+class PhotoRedrawResult(BaseModel):
+    id: UUID
+    status: str | None = None
+    error: str | None = None
+
+
+class BulkPhotoRedrawResponse(BulkBatchResponse):
+    results: list[PhotoRedrawResult]

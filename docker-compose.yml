@@ -13,6 +13,7 @@ x-backend-env: &backend-env
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434/v1}
   AI_API_KEY: ${AI_API_KEY:-}
+  AI_IMAGE_MODEL: ${AI_IMAGE_MODEL:-}
   AI_VISION_MODEL: ${AI_VISION_MODEL:-gpt-4o}
   AI_TEXT_MODEL: ${AI_TEXT_MODEL:-gpt-4o}
   AI_TIMEOUT: ${AI_TIMEOUT:-}

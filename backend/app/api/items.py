@@ -38,6 +38,8 @@ from app.schemas.item import (
     BulkCancelAnalysisResponse,
     BulkDeleteRequest,
     BulkDeleteResponse,
+    BulkPhotoRedrawRequest,
+    BulkPhotoRedrawResponse,
     BulkRemoveBackgroundRequest,
     BulkRemoveBackgroundResponse,
     BulkRotateRequest,
@@ -53,20 +55,17 @@ from app.schemas.item import (
     ItemUpdate,
     LogWashRequest,
     LogWearRequest,
+    PhotoRedrawRequest,
     RemoveBackgroundRequest,
     ReorderImagesRequest,
     TaggingProgressResponse,
     WashHistoryResponse,
 )
+from app.services import photo_redraw_service as photos
 from app.services.image_service import ImageService
 from app.services.item_service import ItemService
-from app.services.photo_redraw_service import (
-    PhotoRedrawService,
-    lock_photo,
-    retained_paths,
-    select_photo,
-)
 from app.utils.auth import get_current_user
+from app.utils.rate_limit import rate_limit_by_user
 from app.utils.signed_urls import sign_optional
 from app.utils.timezone import get_user_today
 from app.utils.uploads import UploadTooLargeError, read_upload_within_limit
@@ -95,6 +94,7 @@ async def _resolve_bulk_item_ids(
     user_id: UUID,
     request: BulkSelectionRequest,
     action: str,
+    limit: int | None = None,
 ) -> tuple[list[UUID], UUID | None, bool]:
     """Resolve one bulk request into at most max_bulk_action_count item ids.
 
@@ -103,7 +103,7 @@ async def _resolve_bulk_item_ids(
     the client, which holds filters rather than ids, so it is walked here: one
     row beyond the cap is fetched to decide has_more without a second query.
     """
-    limit = settings.max_bulk_action_count
+    limit = settings.max_bulk_action_count if limit is None else limit
 
     if not request.select_all:
         item_ids = request.item_ids or []
@@ -558,14 +558,14 @@ async def bulk_delete_items(
                 failed += 1
                 continue
 
-            item = await lock_photo(db, item)
+            item = await photos.lock_photo(db, item)
             image_service.delete_images(
                 {
                     "image_path": item.image_path,
                     "medium_path": item.medium_path,
                     "thumbnail_path": item.thumbnail_path,
                     "original_backup_path": item.original_image_path,
-                    **retained_paths(item),
+                    **photos.retained_paths(item),
                 }
             )
 
@@ -585,16 +585,17 @@ async def bulk_delete_items(
     )
 
 
-@router.post("/bulk/redraw-photo")
+@router.post("/bulk/redraw-photo", response_model=BulkPhotoRedrawResponse)
 async def bulk_redraw_photos(
-    request: BulkSelectionRequest,
+    request: BulkPhotoRedrawRequest,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     user_id = current_user.id
+    await rate_limit_by_user(user_id, "photo_redraw", max_requests=5, window_seconds=60)
     item_service = ItemService(db)
     item_ids, cursor, has_more = await _resolve_bulk_item_ids(
-        item_service, user_id, request, "redraw-photo"
+        item_service, user_id, request, "redraw-photo", limit=20
     )
     results = []
     for item_id in item_ids:
@@ -602,14 +603,21 @@ async def bulk_redraw_photos(
             item = await item_service.get_by_id(item_id, user_id)
             if item is None:
                 raise HTTPException(404, "Item not found")
-            await PhotoRedrawService().redraw(db, item)
+            await photos.PhotoRedrawService().redraw(db, item, retry=request.retry)
             item = await item_service.get_by_id(item_id, user_id)
             if item is None:
                 raise HTTPException(404, "Item deleted during redraw")
             results.append({"id": str(item_id), "status": (item.photo_redraw or {})["status"]})
-        except HTTPException as error:
+        except Exception as error:
             await db.rollback()
-            results.append({"id": str(item_id), "error": error.detail})
+            results.append(
+                {
+                    "id": str(item_id),
+                    "error": error.detail
+                    if isinstance(error, HTTPException)
+                    else "Photo redraw failed",
+                }
+            )
     return {"results": results, "next_cursor": cursor, "has_more": has_more}
 
 
@@ -1349,7 +1357,7 @@ async def delete_item(
             detail="Item not found",
         )
 
-    item = await lock_photo(db, item)
+    item = await photos.lock_photo(db, item)
     image_service = ImageService()
     image_service.delete_images(
         {
@@ -1357,7 +1365,7 @@ async def delete_item(
             "medium_path": item.medium_path,
             "thumbnail_path": item.thumbnail_path,
             "original_backup_path": item.original_image_path,
-            **retained_paths(item),
+            **photos.retained_paths(item),
         }
     )
 
@@ -1771,12 +1779,15 @@ async def rotate_item_image(
             detail="Item has no image",
         )
 
+    item = await photos.lock_photo(db, item)
     try:
         image_service = ImageService()
+        photos.prepare_photo_edit(item)
         # to_thread because rotate_image is a blocking decode/resize/encode
         # cycle; calling it directly stalls the whole event loop for its
         # duration, which on a large image is seconds of dead API.
         await asyncio.to_thread(image_service.rotate_image, item.image_path, direction)
+        photos.retain_backup(item)
         await db.commit()
         await db.refresh(item)
         return ItemResponse.model_validate(item)
@@ -1832,10 +1843,13 @@ async def remove_item_background(
     hex_color = request.bg_color.lstrip("#")
     bg_color = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
 
+    item = await photos.lock_photo(db, item)
     try:
         image_service = ImageService()
+        photos.prepare_photo_edit(item)
         result = await asyncio.to_thread(image_service.remove_background, item.image_path, bg_color)
         item.original_image_path = result["original_backup_path"]
+        photos.retain_backup(item)
         if recovering_from_error:
             item.status = ItemStatus.ready
             item.processing_kind = None
@@ -1893,8 +1907,10 @@ async def restore_item_original(
             detail="No original image to restore",
         )
 
+    item = await photos.lock_photo(db, item)
     try:
         image_service = ImageService()
+        photos.prepare_photo_edit(item)
         await asyncio.to_thread(
             image_service.restore_original, item.image_path, item.original_image_path
         )
@@ -1954,7 +1970,7 @@ async def replace_item_image(
             detail=str(e),
         ) from None
 
-    item = await lock_photo(db, item)
+    item = await photos.lock_photo(db, item)
     old_paths = {
         "image_path": item.image_path,
         "medium_path": item.medium_path,
@@ -1966,6 +1982,7 @@ async def replace_item_image(
         item.photo_redraw = {
             **item.photo_redraw,
             "retained": [*item.photo_redraw.get("retained", []), *filter(None, old_paths.values())],
+            "selected": "custom",
         }
         old_paths = {}
     item.image_path = image_paths["image_path"]
@@ -2180,12 +2197,13 @@ async def redraw_item_photo(
     item_id: UUID,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
+    request: PhotoRedrawRequest | None = None,
 ) -> ItemResponse:
     user_id = current_user.id
     item = await ItemService(db).get_by_id(item_id, user_id)
     if item is None:
         raise HTTPException(404, "Item not found")
-    await PhotoRedrawService().redraw(db, item)
+    await photos.PhotoRedrawService().redraw(db, item, retry=request.retry if request else False)
     item = await ItemService(db).get_by_id(item_id, user_id)
     if item is None:
         raise HTTPException(404, "Item deleted during redraw")
@@ -2204,14 +2222,19 @@ async def choose_item_photo(
     item = await ItemService(db).get_by_id(item_id, current_user.id)
     if item is None:
         raise HTTPException(404, "Item not found")
-    item = await lock_photo(db, item)
+    item = await photos.lock_photo(db, item)
     if (item.photo_redraw or {}).get("status") == "generating":
-        raise HTTPException(409, "Photo redraw in progress")
-    paths = select_photo(item, choice)
+        if not photos.stale_claim(item.photo_redraw):
+            raise HTTPException(409, "Photo redraw in progress")
+        item.photo_redraw = {**item.photo_redraw, "status": "failed"}
+    old_live = photos.live_paths(item)
+    paths = photos.select_photo(item, choice)
     try:
         await db.commit()
     except BaseException:
         ImageService().delete_images(paths)
         raise
+    if paths:
+        ImageService().delete_images(old_live)
     await db.refresh(item, attribute_names=["updated_at"])
     return ItemResponse.model_validate(item)
