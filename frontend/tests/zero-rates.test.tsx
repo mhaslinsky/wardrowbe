@@ -155,3 +155,26 @@ describe('null acceptance rate and rating', () => {
     noData.forEach((key) => expect(screen.getByText(key)).toBeInTheDocument())
   })
 })
+
+it('learning pair links open each item through the wardrobe query', () => {
+  vi.mocked(useLearning).mockReturnValue({
+    data: {
+      ...learning(0, 0),
+      best_pairs: [{
+        item1: { id: 'first-item', name: 'Shirt', type: 'shirt', thumbnail_url: null },
+        item2: { id: 'second-item', name: 'Jeans', type: 'pants', thumbnail_url: null },
+        compatibility_score: 0.5,
+        times_paired: 2,
+        times_accepted: 1,
+      }],
+    },
+    isLoading: false,
+    isError: false,
+  } as unknown as ReturnType<typeof useLearning>)
+  render(<LearningPage />)
+
+  expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+    '/dashboard/wardrobe?item=first-item',
+    '/dashboard/wardrobe?item=second-item',
+  ])
+})
