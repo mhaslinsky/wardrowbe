@@ -158,10 +158,10 @@ class WearService:
         if user is None:
             result = await self.db.execute(
                 text(
-                    "SELECT pg_advisory_xact_lock(hashtextextended(id::text || ':wear-entry', 0)) "
+                    "SELECT pg_advisory_xact_lock(hashtextextended(id::text || :entry_suffix, 0)) "
                     "FROM users WHERE email = :email"
                 ),
-                {"email": ha_email},
+                {"email": ha_email, "entry_suffix": ":wear-entry"},
             )
             if result.first() is None:
                 raise HTTPException(404, detail="user_not_found")
