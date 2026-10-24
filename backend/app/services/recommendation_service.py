@@ -239,9 +239,7 @@ class RecommendationService:
                 try:
                     location = await self.weather_service.geocode_location_name(user.location_name)
                 except GeocodingServiceError as error:
-                    raise ValueError(
-                        "Could not resolve location. Update your location in settings."
-                    ) from error
+                    raise ValueError("Could not resolve location") from error
                 if location:
                     lat, lon, _ = location
             if lat is None or lon is None:
@@ -251,7 +249,7 @@ class RecommendationService:
                     float(lat), float(lon), days=DAY_FORECAST_DAYS
                 )
             except WeatherServiceError as error:
-                raise ValueError("Could not fetch weather data. Try again later.") from error
+                raise ValueError("Could not fetch weather data") from error
             forecast = next((entry for entry in forecasts if entry.date == day.isoformat()), None)
             if forecast is None:
                 raise ValueError("Forecast unavailable for this date")
