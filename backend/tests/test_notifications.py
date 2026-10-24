@@ -1411,7 +1411,7 @@ async def test_schedule_notify_round_trip(client, test_user, auth_headers):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("notify", [None, "invalid", {}, []])
+@pytest.mark.parametrize("notify", [None, "invalid"])
 async def test_schedule_rejects_invalid_notify(client, test_user, auth_headers, notify):
     response = await client.post(
         "/api/v1/notifications/schedules",

@@ -954,21 +954,14 @@ class TestWorkerFunctionRegistry:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("with_channel", [False, True])
 async def test_silent_schedule_generates_without_delivery(
-    db_session: AsyncSession, schedule_user: User, with_channel: bool
+    db_session: AsyncSession, schedule_user: User, ntfy_channel, with_channel: bool
 ):
     schedule_user.location_lat = None
     schedule_user.location_lon = None
     schedule = _make_due_schedule(schedule_user, notify_day_before=True)
     schedule.notify = False
-    if with_channel:
-        db_session.add(
-            NotificationSettings(
-                user_id=schedule_user.id,
-                channel="ntfy",
-                enabled=True,
-                config={"server": "https://ntfy.sh", "topic": "silent-test"},
-            )
-        )
+    if not with_channel:
+        await db_session.delete(ntfy_channel)
     db_session.add(schedule)
     await db_session.commit()
     target_date = datetime.now(UTC).date() + timedelta(days=1)
@@ -988,23 +981,18 @@ async def test_silent_schedule_generates_without_delivery(
         await db_session.flush()
         return outfit
 
+    post = _fake_post()
     with (
         patch("app.workers.notifications.get_db_session", return_value=db_session),
         patch.object(db_session, "close", new_callable=AsyncMock),
         patch("app.workers.notifications.RecommendationService") as recommendations,
-        patch.object(
-            NotificationDispatcher, "send_outfit_notification", new_callable=AsyncMock
-        ) as send,
-        patch.object(
-            NotificationDispatcher, "enabled_channels", new_callable=AsyncMock
-        ) as channels,
+        patch.object(httpx.AsyncClient, "post", post),
     ):
         recommendations.return_value.generate_recommendation = AsyncMock(side_effect=generate)
         result = await process_scheduled_notification({}, str(schedule.id))
 
     assert result["status"] == "generated"
-    send.assert_not_awaited()
-    channels.assert_not_awaited()
+    post.assert_not_awaited()
     outfit = await db_session.get(Outfit, uuid.UUID(result["outfit_id"]))
     assert outfit.scheduled_for == target_date
     assert (
