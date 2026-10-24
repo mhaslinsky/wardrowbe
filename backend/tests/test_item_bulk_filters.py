@@ -1,14 +1,17 @@
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
+import httpx
 import pytest
 from sqlalchemy import select
 
 from app.api.items import _resolve_bulk_item_ids
+from app.config import get_settings
 from app.models.item import ClothingItem, ItemStatus, TaggingStatus
 from app.schemas.item import BulkDeleteRequest, ItemFilter
 from app.services.item_service import ItemService
 from tests.test_bulk_action_limits import _make_item
+from tests.test_bulk_action_limits import fake_redis as fake_redis
 
 
 @pytest.mark.parametrize("filter_name", ["favorite", "needs_wash"])
@@ -17,7 +20,7 @@ from tests.test_bulk_action_limits import _make_item
     ["delete", "rotate", "remove-background", "analyze", "cancel-analysis", "redraw-photo"],
 )
 async def test_every_action_preserves_hidden_items(
-    client, auth_headers, db_session, test_user, filter_name, action
+    client, auth_headers, db_session, test_user, filter_name, action, fake_redis, monkeypatch
 ):
     initial_status = ItemStatus.processing if action == "cancel-analysis" else ItemStatus.ready
     matching = await _make_item(db_session, test_user, status=initial_status, **{filter_name: True})
@@ -32,17 +35,38 @@ async def test_every_action_preserves_hidden_items(
         .mappings()
         .one()
     )
-    redis = AsyncMock()
-    redis.enqueue_job.return_value.job_id = "filtered-job"
+    monkeypatch.setattr(get_settings(), "ai_image_model", "gemini-3.1-flash-image")
+    monkeypatch.setattr(get_settings(), "ai_api_key", "test-key")
+    real_client = httpx.AsyncClient
+    provider_requests = []
 
-    async def redraw(database, item, retry=False):
-        item.photo_redraw = {"status": "skipped"}
-        await database.commit()
+    def respond(request):
+        provider_requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": '{"needs_redraw": false, "confidence": 0.99, "reason": "Catalog"}'
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+        )
 
     with (
-        patch("app.api.items.create_pool", return_value=redis),
         patch("app.api.items.rate_limit_by_user", new_callable=AsyncMock),
-        patch("app.api.items.photos.PhotoRedrawService.redraw", side_effect=redraw) as redraw_mock,
+        patch(
+            "app.services.photo_redraw_service.httpx.AsyncClient",
+            side_effect=lambda **kwargs: real_client(
+                transport=httpx.MockTransport(respond), **kwargs
+            ),
+        ),
     ):
         response = await client.post(
             f"/api/v1/items/bulk/{action}",
@@ -73,11 +97,12 @@ async def test_every_action_preserves_hidden_items(
         assert (await db_session.get(ClothingItem, matching_id)).status == ItemStatus.ready
     elif action == "redraw-photo":
         assert payload["results"] == [{"id": str(matching_id), "status": "skipped", "error": None}]
-        assert redraw_mock.await_count == 1
+        assert len(provider_requests) == 1
+        assert (await db_session.get(ClothingItem, matching_id)).photo_redraw["status"] == "skipped"
     else:
         assert payload["queued"] == 1
-        assert redis.enqueue_job.await_count == 1
-        assert redis.enqueue_job.call_args.args[1] == str(matching_id)
+        assert fake_redis.enqueue_job.await_count == 1
+        assert fake_redis.enqueue_job.call_args.args[1] == str(matching_id)
         assert (await db_session.get(ClothingItem, matching_id)).status == ItemStatus.processing
 
 
