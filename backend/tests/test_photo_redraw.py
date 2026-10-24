@@ -976,9 +976,9 @@ async def completed_redraw(item, db, status="generated", selected="redrawn"):
 async def test_retry_reads_original_and_skip_preserves_choice(
     status, selected, photo_item, db_session
 ):
-    from app.services.photo_redraw_service import PHOTO_FIELDS, PhotoRedrawService
-
     from datetime import UTC, datetime, timedelta
+
+    from app.services.photo_redraw_service import PHOTO_FIELDS, PhotoRedrawService
 
     previous = await completed_redraw(photo_item, db_session, selected=selected)
     if status in ("failed", "generating"):
