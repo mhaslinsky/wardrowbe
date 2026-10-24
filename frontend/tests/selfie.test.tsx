@@ -2,6 +2,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryKeys } from '@/lib/hooks/query-keys';
 import { createQueryClient } from '@/lib/query-client';
 import { toast } from 'sonner';
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
@@ -16,8 +17,7 @@ const wardrobe = [
 ];
 const confirmBodies = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/selfie/confirm')).map(([, options]) => JSON.parse(String(options?.body)));
 let revoke: ReturnType<typeof vi.fn<(url: string) => void>>;
-function mount() {
-  const client = createQueryClient();
+function mount(client = createQueryClient()) {
   return render(<QueryClientProvider client={client}><SelfiePage /></QueryClientProvider>);
 }
 function choose() {
@@ -94,7 +94,10 @@ describe('selfie confirmation', () => {
   it('swaps within a slot, adds and removes items, and logs corrected items', async () => {
     requestMock.mockResolvedValueOnce(reply({ matches: [wardrobe[0]], considered: 3 }))
       .mockResolvedValueOnce(reply({ id: 'logged-outfit' }));
-    mount(); choose();
+    const client = createQueryClient();
+    const caches = [queryKeys.outfits.all, queryKeys.calendarOutfits.all, queryKeys.pendingOutfits.all, queryKeys.analytics.all, queryKeys.learning.all, queryKeys.everyItem, queryKeys.wearHistory.all, queryKeys.wearStats.all];
+    for (const key of caches) client.setQueryData(key, { sentinel: true });
+    mount(client); choose();
     await screen.findByText('Blue shirt');
     fireEvent.click(screen.getByRole('button', { name: 'swap' }));
     expect(screen.queryByRole('button', { name: 'Jeans' })).not.toBeInTheDocument();
@@ -105,6 +108,7 @@ describe('selfie confirmation', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'remove' })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'confirm' }));
     await screen.findByText('logged');
+    for (const key of caches) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
     expect(confirmBodies()[0].item_ids).toEqual(['pants']);
     expect(screen.getByRole('link', { name: 'viewOutfit' })).toHaveAttribute('href', '/dashboard/outfits/logged-outfit');
     expect(screen.getByRole('button', { name: 'confirm' })).toBeDisabled();

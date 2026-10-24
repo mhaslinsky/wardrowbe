@@ -322,6 +322,15 @@ async def test_concurrent_writers(confirm_client, db_session, session_maker, tes
             assert responses[1].status_code == 409, responses[1].text
             assert responses[1].json()["detail"]["error_code"] == "DAY_LOGGED"
         assert await counts(db_session, test_user.id) == (2 if rival == "wore" else 1, 1, 2)
+        history = (
+            await db_session.execute(
+                select(ItemHistory.item_id, func.count())
+                .join(ClothingItem)
+                .where(ClothingItem.user_id == test_user.id)
+                .group_by(ItemHistory.item_id)
+            )
+        ).all()
+        assert dict(history) == {UUID(item_id): 1 for item_id in ids[:2]}
     finally:
         release.set()
         app.dependency_overrides[get_db] = previous_db
