@@ -54,6 +54,7 @@ describe('ready to wear', () => {
 
 
 it('selects all matching ready outfits and sends the active filter for deletion', async () => {
+  nav.params = new URLSearchParams('filter=ai')
   vi.mocked(api.get).mockImplementation(async (_path, options) => {
     const params = (options as { params: Record<string, string> }).params
     if (params.is_lookbook) return { outfits: [], total: 0, page: 1, page_size: 1, has_more: false }
@@ -66,7 +67,8 @@ it('selects all matching ready outfits and sends the active filter for deletion'
   await waitFor(() => expect(api.get).toHaveBeenCalledWith('/outfits', expect.objectContaining({
     params: expect.objectContaining({ ready_to_wear: 'true' }),
   })))
-  fireEvent.click(screen.getByRole('button', { name: 'bulkActions.select' }))
+  await screen.findByText('clean')
+  fireEvent.click(await screen.findByRole('button', { name: 'bulkActions.select' }))
   fireEvent.click(screen.getByText('selectAll'))
   fireEvent.click(screen.getByRole('button', { name: 'bulkActions.selectAllMatching' }))
   fireEvent.click(screen.getByRole('button', { name: 'delete' }))
