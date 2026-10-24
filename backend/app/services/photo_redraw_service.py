@@ -343,7 +343,8 @@ class PhotoRedrawService:
         item.photo_redraw = dict(metadata)
         # Persist the claim before a provider request, including after a stale claim is reclaimed.
         await db.commit()
-        service, pending_store, new_live, new_redrawn = ImageService(), None, {}, {}
+        service, pending_store, new_live = ImageService(), None, {}
+        created = set()
 
         async def mark_paid():
             current = await lock_photo(db, item_id)
@@ -359,7 +360,10 @@ class PhotoRedrawService:
         self.mark_paid = mark_paid
         try:
             active_paths = {field: getattr(item, field) for field in PHOTO_FIELDS}
-            original = previous.get("original") or service.copy_photo(active_paths)
+            original = previous.get("original")
+            if not original:
+                original = service.copy_photo(active_paths)
+                created.update(original.values())
             metadata.update(
                 original=original,
                 selected=previous.get("selected", "original"),
@@ -371,12 +375,12 @@ class PhotoRedrawService:
             await db.commit()
             active_path = item.image_path
             active_hash = hashlib.sha256(service.get_image_path(active_path).read_bytes()).digest()
-            source_path = original["image_path"] if completed_retry else active_path
+            source_path = (previous.get("original") or active_paths)["image_path"]
             source = service._open_bounded(service.get_image_path(source_path).read_bytes(), ".png")
             result, details = await self.generate(source)
             current = await lock_photo(db, item_id, missing_ok=True)
             if current is None:
-                service.delete_images(original)
+                service.delete_images({path: path for path in created})
                 return
             if (
                 current.photo_redraw.get("claim_id") != claim_id
@@ -393,15 +397,21 @@ class PhotoRedrawService:
                 provider_calls=self.calls,
                 usage=self.usage,
             )
-            if completed_retry and result is None:
-                metadata["status"] = previous["status"]
+            if previous.get("redrawn") and result is None:
+                metadata.update(
+                    {
+                        field: previous[field]
+                        for field in ("status", "redrawn", "selected", "live", "started_at")
+                        if field in previous
+                    }
+                )
             old_live = live_paths(current)
             if result is not None:
                 pending_store = asyncio.create_task(
                     asyncio.to_thread(service.store_cutout, result, item.user_id)
                 )
-                new_redrawn = await asyncio.shield(pending_store)
-                metadata["redrawn"] = new_redrawn
+                metadata["redrawn"] = await asyncio.shield(pending_store)
+                created.update(metadata["redrawn"].values())
                 metadata["files"] = list(
                     dict.fromkeys([*metadata["files"], *metadata["redrawn"].values()])
                 )
@@ -415,6 +425,7 @@ class PhotoRedrawService:
             if result is not None and metadata["status"] == "generated":
                 current.photo_redraw = {**metadata, "selected": "custom"}
                 new_live = select_photo(current, "redrawn")
+                created.update(new_live.values())
             obsolete = {}
             if result is not None:
                 protected = {
@@ -441,22 +452,15 @@ class PhotoRedrawService:
                 }
             await db.commit()
         except BaseException as error:
-            if pending_store is not None and not new_redrawn:
+            if pending_store is not None:
                 try:
-                    new_redrawn = await pending_store
+                    created.update((await pending_store).values())
                 except BaseException:
                     logger.warning("Redraw storage did not complete for item %s", item_id)
             await db.rollback()
             current = await lock_photo(db, item_id, missing_ok=True)
             owned = set(retained_paths(current).values()) if current is not None else set()
-            uncommitted = {
-                field: path
-                for field, path in {
-                    **new_live,
-                    **{f"redrawn_{field}": path for field, path in new_redrawn.items()},
-                }.items()
-                if path not in owned
-            }
+            uncommitted = {path: path for path in created if path not in owned}
             service.delete_images(uncommitted)
             if (
                 current is not None
@@ -472,8 +476,6 @@ class PhotoRedrawService:
                     "usage": self.usage,
                 }
                 await db.commit()
-            elif current is None:
-                service.delete_images(metadata.get("original", {}))
             raise
         try:
             service.delete_images(obsolete)
