@@ -450,11 +450,13 @@ async def test_cancel_recovery_and_explicit_retry(
 
 
 @pytest.mark.asyncio
-async def test_cancelled_store_cleans_files(photo_item, db_session):
+@pytest.mark.parametrize("retry", [False, True])
+async def test_cancelled_store_cleans_files(photo_item, db_session, retry):
     import asyncio
 
     from app.services.photo_redraw_service import PhotoRedrawService
 
+    previous = await completed_redraw(photo_item, db_session) if retry else None
     loop = asyncio.get_running_loop()
     started, finished, release = asyncio.Event(), asyncio.Event(), threading.Event()
     store, written = ImageService.store_cutout, []
@@ -476,7 +478,7 @@ async def test_cancelled_store_cleans_files(photo_item, db_session):
         patch.object(ImageService, "store_cutout", blocked),
         patch("app.services.photo_redraw_service.cutout", return_value=garment()),
     ):
-        task = asyncio.create_task(PhotoRedrawService().redraw(db_session, photo_item))
+        task = asyncio.create_task(PhotoRedrawService().redraw(db_session, photo_item, retry=retry))
         await started.wait()
         task.cancel()
         release.set()
@@ -485,6 +487,11 @@ async def test_cancelled_store_cleans_files(photo_item, db_session):
             await task
     assert photo_item.photo_redraw["status"] == "failed"
     assert all(not ImageService().get_image_path(path).exists() for path in written)
+    if previous:
+        assert photo_item.photo_redraw["redrawn"] == previous["redrawn"]
+        assert all(
+            ImageService().get_image_path(path).exists() for path in previous["redrawn"].values()
+        )
 
 
 @pytest.mark.asyncio
@@ -880,6 +887,7 @@ async def test_claim_stale_matches_reclaim_decision(
         (None, ["black"], None),
         (None, [], None),
         (None, [], "washed cotton"),
+        ("black", ["black"], "material fallback"),
     ],
 )
 async def test_recorded_colour_prompts(primary, colors, material, photo_item, db_session):
@@ -887,7 +895,13 @@ async def test_recorded_colour_prompts(primary, colors, material, photo_item, db
 
     photo_item.primary_color = primary
     photo_item.colors = colors
-    photo_item.tags = {"material_detail": material} if material else {}
+    photo_item.tags = (
+        {"material": material}
+        if material == "material fallback"
+        else {"material_detail": material, "material": "ignored"}
+        if material
+        else {}
+    )
     await db_session.commit()
     encoded = BytesIO()
     garment().save(encoded, "PNG")
@@ -984,3 +998,118 @@ async def test_completed_paid_retry_replaces_redrawn_files(
         service.get_image_path(switched.json()["image_path"]).read_bytes()
         == originals[original["image_path"]]
     )
+
+
+async def completed_redraw(item, db, status="generated", selected="redrawn"):
+    from app.services.photo_redraw_service import PHOTO_FIELDS, select_photo
+
+    service = ImageService()
+    item.photo_redraw = {
+        "status": status,
+        "paid": True,
+        "original": service.copy_photo({field: getattr(item, field) for field in PHOTO_FIELDS}),
+        "redrawn": service.store_cutout(garment(RED), item.user_id),
+    }
+    select_photo(item, selected)
+    await db.commit()
+    return dict(item.photo_redraw)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["generated", "color_drift"])
+@pytest.mark.parametrize("selected", ["original", "redrawn"])
+async def test_completed_retry_reads_original_and_skip_preserves_choice(
+    status, selected, photo_item, db_session
+):
+    from app.services.photo_redraw_service import PHOTO_FIELDS, PhotoRedrawService
+
+    previous = await completed_redraw(photo_item, db_session, status, selected)
+    active = {field: getattr(photo_item, field) for field in PHOTO_FIELDS}
+    original = Image.open(ImageService().get_image_path(previous["original"]["image_path"]))
+
+    async def inspect(source):
+        assert source.size == original.size
+        assert source.convert("RGB").tobytes() == original.convert("RGB").tobytes()
+        return None, {"status": "skipped", "needs_redraw": False}
+
+    with patch.object(PhotoRedrawService, "generate", side_effect=inspect):
+        await PhotoRedrawService().redraw(db_session, photo_item, retry=True)
+    assert photo_item.photo_redraw["status"] == status
+    assert photo_item.photo_redraw["selected"] == selected
+    assert photo_item.photo_redraw["redrawn"] == previous["redrawn"]
+    assert {field: getattr(photo_item, field) for field in PHOTO_FIELDS} == active
+    with patch.object(PhotoRedrawService, "generate", side_effect=inspect) as generate:
+        await PhotoRedrawService().redraw(db_session, photo_item, retry=True)
+    generate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["provider", "commit", "cancel_commit"])
+async def test_failed_retry_preserves_committed_redraw(
+    failure, photo_item, db_session, client, auth_headers
+):
+    import asyncio
+
+    from app.services.photo_redraw_service import PHOTO_FIELDS, PhotoRedrawService
+
+    previous = await completed_redraw(photo_item, db_session)
+    active = {field: getattr(photo_item, field) for field in PHOTO_FIELDS}
+    service = ImageService()
+    before = set(service.get_image_path(photo_item.image_path).parent.iterdir())
+    commit = db_session.commit
+    error_type = asyncio.CancelledError if failure == "cancel_commit" else RuntimeError
+
+    async def fail_final():
+        if photo_item.photo_redraw["status"] == "generated":
+            raise error_type("Commit failed")
+        await commit()
+
+    with (
+        patch.object(
+            PhotoRedrawService,
+            "generate",
+            AsyncMock(
+                side_effect=RuntimeError("Provider failed") if failure == "provider" else None,
+                return_value=(garment(), {"status": "generated"}),
+            ),
+        ),
+        patch.object(db_session, "commit", fail_final),
+        pytest.raises(error_type),
+    ):
+        await PhotoRedrawService().redraw(db_session, photo_item, retry=True)
+    assert photo_item.photo_redraw["status"] == "failed"
+    assert photo_item.photo_redraw["redrawn"] == previous["redrawn"]
+    assert {field: getattr(photo_item, field) for field in PHOTO_FIELDS} == active
+    assert set(service.get_image_path(photo_item.image_path).parent.iterdir()) == before
+    switched = await client.post(
+        f"/api/v1/items/{photo_item.id}/photo/original", headers=auth_headers
+    )
+    assert switched.status_code == 200
+    switched = await client.post(
+        f"/api/v1/items/{photo_item.id}/photo/redrawn", headers=auth_headers
+    )
+    assert switched.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_obsolete_unlink_failure_does_not_rollback_retry(photo_item, db_session, caplog):
+    from app.services.photo_redraw_service import PHOTO_FIELDS, PhotoRedrawService
+
+    previous = await completed_redraw(photo_item, db_session)
+    with (
+        patch.object(
+            PhotoRedrawService,
+            "generate",
+            AsyncMock(return_value=(garment(), {"status": "generated"})),
+        ),
+        patch.object(ImageService, "delete_images", side_effect=OSError("Unlink failed")),
+    ):
+        await PhotoRedrawService().redraw(db_session, photo_item, retry=True)
+    await db_session.refresh(photo_item)
+    assert photo_item.photo_redraw["status"] == "generated"
+    assert photo_item.photo_redraw["selected"] == "redrawn"
+    assert photo_item.photo_redraw["redrawn"] != previous["redrawn"]
+    assert all(
+        ImageService().get_image_path(getattr(photo_item, field)).exists() for field in PHOTO_FIELDS
+    )
+    assert "Could not remove obsolete redraw files" in caplog.text
