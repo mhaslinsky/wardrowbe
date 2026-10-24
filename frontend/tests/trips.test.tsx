@@ -198,3 +198,15 @@ it('renders singular and plural packing quantities and days', async () => {
     expect(screen.getByText(/Pack 2 items; worn 2 days/)).toBeVisible();
   } finally { translation.mockRestore(); }
 });
+
+it('shows a later planning error after a failed delete', async () => {
+  saved = [trip]; await openPage();
+  failure = { status: 503, detail: 'Trip planning unavailable' };
+  fireEvent.click(screen.getByRole('button', { name: 'common.delete' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('trips.deleteFailed');
+  fill();
+  failure = { status: 409, detail: 'Trip dates overlap' };
+  submit();
+  expect(await screen.findByRole('alert')).toHaveTextContent('trips.overlap');
+  expect(screen.getByRole('alert')).not.toHaveTextContent('trips.deleteFailed');
+});

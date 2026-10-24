@@ -83,7 +83,7 @@ export default function TripsPage() {
           <Button disabled={busy}>{t(plan.isPending ? 'planning' : 'plan')}</Button>
         </fieldset>
       </form>
-      {(validationError || requestError) && <p role="alert">{t(validationError ? 'validation' : remove.error ? 'deleteFailed' : errorKey(requestError))}</p>}
+      {(validationError || requestError) && <p role="alert">{t(validationError ? 'validation' : remove.error && !plan.error ? 'deleteFailed' : errorKey(requestError))}</p>}
       {trips.isLoading && <p role="status">{t('loading')}</p>}
       {trips.isError && <p role="alert">{t('loadFailed')}</p>}
       {trips.data?.length === 0 && <p>{t('empty')}</p>}
