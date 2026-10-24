@@ -24,6 +24,8 @@ async def logged(db, user, items, day):
     chosen = await source(db, user, [item.id for item in items], day=day)
     result = await WearService(db).log_worn(user, chosen, day, caller="test")
     await db.commit()
+    for item in items:
+        await db.refresh(item)
     return result.outfit
 
 
@@ -187,7 +189,6 @@ async def test_route_commits_before_best_effort_learning(
 
 async def test_laundry_locks_in_item_order():
     db = AsyncMock()
-    result = AsyncMock()
     from unittest.mock import MagicMock
 
     result = MagicMock()
