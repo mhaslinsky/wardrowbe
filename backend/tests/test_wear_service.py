@@ -101,10 +101,17 @@ async def test_state_table_and_retry(
         assert item.wear_count == int(item_id in (target_ids or ids[:2]))
 
 
-async def test_transitive_template_root_and_backfill(db_session, studio_user, wardrobe_items):
+@pytest.mark.parametrize("saved_from_suggestion", [False, True])
+async def test_transitive_template_root_and_backfill(
+    db_session, studio_user, wardrobe_items, saved_from_suggestion
+):
     ids = [item.id for item in wardrobe_items]
     today = get_user_today(studio_user)
     template = await source(db_session, studio_user, ids[:2], kind="manual")
+    if saved_from_suggestion:
+        original = await source(db_session, studio_user, ids[:2], day=today)
+        template.cloned_from_outfit_id = original.id
+        await db_session.flush()
     service = WearService(db_session)
     first = await service.log_worn(studio_user, template, today, caller="test")
     await db_session.commit()

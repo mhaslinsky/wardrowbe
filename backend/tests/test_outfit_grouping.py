@@ -353,3 +353,26 @@ async def test_grouped_page_hydrates_only_its_outfits(client, db_session, test_u
         result = await listed(client, auth_headers, group=True, page_size=100, page=page_number)
         all_cards.extend(result["outfits"])
     await assert_partition(client, auth_headers, {"outfits": all_cards, "total": 200})
+
+
+async def test_accepted_without_wear_stays_outside_template_wears(
+    client, db_session, test_user, auth_headers
+):
+    await seed(
+        db_session,
+        test_user.id,
+        [
+            ("template", {"source": OutfitSource.manual, "scheduled_for": None}),
+            (
+                "accepted",
+                {
+                    "source": OutfitSource.manual,
+                    "parent": "template",
+                    "status": OutfitStatus.accepted,
+                },
+            ),
+        ],
+    )
+    grouped = await listed(client, auth_headers, group=True)
+    assert grouped["total"] == 2
+    assert all(card["wear_count"] == 0 for card in grouped["outfits"])
