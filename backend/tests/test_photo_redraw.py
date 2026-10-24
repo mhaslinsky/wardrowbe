@@ -711,3 +711,102 @@ async def test_retry_generates_from_current_photo(photo_item, db_session):
 
     with patch.object(PhotoRedrawService, "generate", side_effect=inspect):
         await PhotoRedrawService().redraw(db_session, photo_item, retry=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "operation,error_kind,expected",
+    [
+        ("rotate", "runtime", 500),
+        ("remove-background", "runtime", 500),
+        ("remove-background", "import", 501),
+        ("restore-original", "runtime", 500),
+    ],
+)
+async def test_failed_photo_edits_remove_uncommitted_copies(
+    operation, error_kind, expected, client, auth_headers, photo_item, db_session
+):
+    from app.database import get_db
+    from app.main import app
+    from app.services.photo_redraw_service import PHOTO_FIELDS, PhotoRedrawService, set_active_photo
+
+    item_id = photo_item.id
+    service = ImageService()
+    with patch.object(
+        PhotoRedrawService, "generate", AsyncMock(return_value=(garment(), {"status": "generated"}))
+    ):
+        await PhotoRedrawService().redraw(db_session, photo_item)
+    assert (await image_action(client, auth_headers, photo_item, "replace")).status_code == 200
+    if operation == "restore-original":
+        photo_item.original_image_path = service.copy_photo({"image_path": photo_item.image_path})[
+            "image_path"
+        ]
+        set_active_photo(
+            photo_item, {field: getattr(photo_item, field) for field in PHOTO_FIELDS}, "custom"
+        )
+        await db_session.commit()
+    directory = service.get_image_path(photo_item.image_path).parent
+
+    async def transactional_db():
+        try:
+            yield db_session
+            await db_session.commit()
+        except BaseException:
+            await db_session.rollback()
+            raise
+
+    app.dependency_overrides[get_db] = transactional_db
+    error = (
+        ImportError("Provider unavailable")
+        if error_kind == "import"
+        else RuntimeError("Edit failed")
+    )
+    method = {
+        "rotate": "rotate_image",
+        "remove-background": "remove_background",
+        "restore-original": "restore_original",
+    }[operation]
+    provider = _mock_provider()
+    provider.remove.side_effect = error
+    for attempt in range(2):
+        with (
+            patch("app.services.background_removal.get_provider", return_value=provider),
+            patch.object(ImageService, method, side_effect=error)
+            if operation != "remove-background"
+            else patch.object(ImageService, "validate_image", wraps=service.validate_image),
+        ):
+            response = await client.post(
+                f"/api/v1/items/{item_id}/{operation}", json={}, headers=auth_headers
+            )
+        assert response.status_code == expected, response.text
+        current = await client.get(f"/api/v1/items/{item_id}", headers=auth_headers)
+        owned = set(current.json()["photo_redraw"]["files"])
+        assert {
+            str(path.relative_to(service.storage_path)) for path in directory.iterdir()
+        } <= owned
+    assert (
+        await client.delete(f"/api/v1/items/{item_id}", headers=auth_headers)
+    ).status_code == 204
+    assert not list(directory.iterdir())
+
+
+@pytest.mark.asyncio
+async def test_retry_validation_failure_keeps_paid_history(photo_item, db_session):
+    from fastapi import HTTPException
+
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    photo_item.photo_redraw = {"status": "failed", "paid": True, "provider_calls": 2}
+    await db_session.commit()
+    with patch.object(
+        PhotoRedrawService,
+        "generate",
+        AsyncMock(side_effect=ValueError("Invalid source before assessment")),
+    ):
+        with pytest.raises(ValueError):
+            await PhotoRedrawService().redraw(db_session, photo_item, retry=True)
+    assert photo_item.photo_redraw["status"] == "failed"
+    assert photo_item.photo_redraw["paid"] is True
+    with pytest.raises(HTTPException) as error:
+        await PhotoRedrawService().redraw(db_session, photo_item)
+    assert error.value.status_code == 409
