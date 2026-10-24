@@ -10,6 +10,7 @@ from starlette.requests import Request
 from app.api.ha import laundry_done
 from app.api.outfits import FeedbackRequest, UndoWearRequest, submit_feedback, undo_outfit_wear
 from app.models.item import ItemHistory, WashHistory
+from app.models.learning import OutfitPerformance
 from app.models.outfit import OutfitStatus
 from app.services.item_service import ItemService
 from app.services.undo_wear_service import UndoWearService
@@ -55,6 +56,9 @@ async def test_no_wash_overlap_and_replacement(db_session, studio_user, wardrobe
     await logged(db_session, studio_user, [shirt, shoes], today - timedelta(days=1))
     before = await state(db_session, [shirt, jeans])
     outfit = await logged(db_session, studio_user, [shirt, jeans], today)
+    db_session.add(
+        OutfitPerformance(outfit_id=outfit.id, user_id=studio_user.id, occasion="casual")
+    )
     outfit.feedback.rating = 4
     outfit.feedback.comfort_rating = 3
     outfit.feedback.style_rating = 5
@@ -65,6 +69,7 @@ async def test_no_wash_overlap_and_replacement(db_session, studio_user, wardrobe
     await db_session.commit()
     assert await state(db_session, [shirt, jeans]) == before
     assert await row_count(db_session, ItemHistory, [shirt.id, jeans.id, shoes.id]) == 2
+    assert await db_session.get(OutfitPerformance, outfit.id) is None
     assert outfit.status == OutfitStatus.skipped
     assert outfit.feedback.comment == "Keep this"
     for field in (
