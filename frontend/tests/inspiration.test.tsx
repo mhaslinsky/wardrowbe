@@ -7,7 +7,7 @@ import { createQueryClient } from '@/lib/query-client';
 import { translationMock } from './setup';
 import savedLook from './fixtures/inspiration-look.json';
 
-// Slots are from CT107 PER-180 smoke; items and image_url are schema-derived until PER-184 smoke.
+// Captured from the PER-184 CT107 browser upload, with signed image queries removed.
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 let client: ReturnType<typeof createQueryClient>;
 let looks: typeof savedLook[];
@@ -57,8 +57,9 @@ it('uploads once, renders saved slots through translated labels, and clears the 
   expect(await screen.findByText('inspiration.saved')).toBeVisible();
   expect(screen.getByRole('button', { name: 'inspiration.create' })).toBeDisabled();
   expect(screen.getByLabelText('inspiration.photo')).toHaveValue('');
-  expect(screen.getAllByText('inspiration.noMatch')).toHaveLength(2);
-  expect(screen.getByText('constants.colors.brown, constants.types.jacket, constants.fits.regular, constants.patterns.solid')).toBeVisible();
+  expect(screen.getAllByText('inspiration.noMatch')).toHaveLength(savedLook.slots.filter((slot) => slot.no_match).length);
+  const slot = savedLook.slots[0];
+  expect(screen.getByText(`constants.colors.${slot.color}, constants.types.${slot.type}, constants.fits.${slot.fit}, constants.patterns.${slot.pattern}`)).toBeVisible();
   expect(screen.getByAltText('inspiration.photoAlt')).toHaveAttribute('src', savedLook.image_url);
   expect(screen.getByText(savedLook.items[0].name)).toBeVisible();
   submit();
