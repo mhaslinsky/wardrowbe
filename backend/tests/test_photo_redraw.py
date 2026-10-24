@@ -248,12 +248,12 @@ async def test_no_redraw_keeps_base_file_behavior(
     paths = [item.image_path, item.medium_path, item.thumbnail_path]
     before = set(service.get_image_path(item.image_path).parent.iterdir())
     response = await image_action(client, auth_headers, item, action)
-    assert response.status_code == (
-        204 if action == "delete" else 200
-    ), response.text
+    assert response.status_code == (204 if action == "delete" else 200), response.text
     after = set(service.get_image_path(item.image_path).parent.iterdir())
     if action == "rotate":
-        assert [response.json()[field] for field in ("image_path", "medium_path", "thumbnail_path")] == paths
+        assert [
+            response.json()[field] for field in ("image_path", "medium_path", "thumbnail_path")
+        ] == paths
         assert response.json()["additional_images"] == []
         assert before == after
         assert Image.open(service.get_image_path(paths[0])).size == (600, 600)
