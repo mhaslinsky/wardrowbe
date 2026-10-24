@@ -719,13 +719,14 @@ function SuggestContent() {
   };
 
   return (
+    <div className="space-y-6">
+      <DayOutfits date={date} onDateChange={setDate} />
     <div
       className={cn(
         "mx-auto space-y-6 transition-all duration-300",
         isCompareAll && outfits.length > 0 ? "max-w-5xl" : "max-w-2xl"
       )}
     >
-      <DayOutfits date={date} onDateChange={setDate} />
       {/* Page header with greeting */}
       <div className="text-center space-y-1">
         <h1 className="text-2xl font-bold tracking-tight">{t(getGreetingKey())}</h1>
@@ -978,6 +979,7 @@ function SuggestContent() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   );
 }

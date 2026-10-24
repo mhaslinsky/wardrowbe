@@ -31,6 +31,7 @@
     "removeItem": "{name} 제거"
   },
   "cards": {
+    "wash": "세탁",
     "wearCount": "{count, plural, other {#회 착용}}",
     "history": "기록",
     "record": "기록 {count}",
@@ -185,11 +186,12 @@
   "viewList": "목록",
   "viewToggle": "보기 전환",
   "day": {
+    "tomorrow": "내일",
+    "worn": "착용함",
     "title": "하루 코디",
     "previous": "이전 날",
     "next": "다음 날",
     "today": "오늘",
-    "preview": "내일은 미리보기입니다",
     "generate": "옵션 보기",
     "options": "추천",
     "saved": "저장한 코디",

@@ -25,6 +25,7 @@ import type outfitsMessages from '@/messages/en/outfits.json';
 
 interface OutfitCardProps {
   outfit: Outfit;
+  hideWashWarnings?: boolean;
   onClick?: () => void;
   selectMode?: boolean;
   selected?: boolean;
@@ -97,7 +98,7 @@ function getMetaLabel(outfit: Outfit, t: OutfitCardTranslator, locale: string, t
   }
 }
 
-export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: OutfitCardProps) {
+export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect, hideWashWarnings = false }: OutfitCardProps) {
   const typeLabel = useTypeLabel();
   const t: OutfitCardTranslator = useTranslations('outfits.cards');
   const locale = useLocale();
@@ -105,7 +106,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
   const occasionLabel = useOccasionLabel();
   const getTitle = useOutfitTitle();
   const badge = getSourceBadge(outfit, t);
-  const visibleItems = outfit.items.slice(0, 4);
+  const visibleItems = outfit.items.slice(0, outfit.items.length > 8 ? 7 : 8);
   const dirtyCount = outfit.items.filter(item => item.needs_wash).length;
   const overflow = outfit.items.length - visibleItems.length;
 
@@ -120,7 +121,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
   const content = (
     <Card
       className={cn(
-        'overflow-hidden transition-all hover:shadow-md',
+        'overflow-hidden transition-all hover:shadow-md [container-type:inline-size]',
         handleCardClick && 'cursor-pointer',
         selectMode && selected && 'ring-2 ring-primary shadow-md'
       )}
@@ -140,7 +141,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
               />
             </div>
           )}
-          <div className="absolute inset-0 grid grid-cols-4 gap-0.5 p-2">
+          <div className="absolute inset-0 grid gap-0.5 p-2" style={{ gridTemplateColumns: `repeat(${Math.min(outfit.items.length || 1, 4)}, minmax(0, 1fr))`, gridTemplateRows: outfit.items.length > 4 ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)' }}>
             {visibleItems.map((item, idx) => (
               <div
                 key={`${item.id}-${idx}`}
@@ -162,8 +163,11 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
                     </span>
                   </div>
                 )}
-                {item.needs_wash && (
-                  <Badge className="absolute bottom-1 left-1 text-[10px]">{t('inTheWash')}</Badge>
+                {!hideWashWarnings && item.needs_wash && (
+                  <Badge className="absolute bottom-1 left-1 whitespace-nowrap px-1 text-[10px]">
+                    <span className="[@container(min-width:480px)]:hidden">{t('wash')}</span>
+                    <span className="hidden [@container(min-width:480px)]:inline">{t('inTheWash')}</span>
+                  </Badge>
                 )}
               </div>
             ))}
@@ -188,7 +192,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect }: 
           )}
         </div>
         <div className="p-3 space-y-1">
-          {dirtyCount > 0 && <p className="text-xs text-amber-700">{t('piecesInWash', { count: dirtyCount })}</p>}
+          {!hideWashWarnings && dirtyCount > 0 && <p className="text-xs text-amber-700">{t('piecesInWash', { count: dirtyCount })}</p>}
           {outfit.wear_count != null && outfit.wear_count > 0 && (
             <p className="text-xs text-muted-foreground">{t('wearCount', { count: outfit.wear_count })}</p>
           )}

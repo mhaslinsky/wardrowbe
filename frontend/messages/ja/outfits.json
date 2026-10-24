@@ -31,6 +31,7 @@
     "removeItem": "{name}を外す"
   },
   "cards": {
+    "wash": "洗濯",
     "wearCount": "{count, plural, one {# 回着用} other {# 回着用}}",
     "history": "履歴",
     "record": "記録 {count}",
@@ -185,11 +186,12 @@
   "viewList": "リスト",
   "viewToggle": "表示切替",
   "day": {
+    "tomorrow": "明日",
+    "worn": "着用済み",
     "title": "今日の服装",
     "previous": "前の日",
     "next": "次の日",
     "today": "今日",
-    "preview": "明日はプレビューです",
     "generate": "候補を取得",
     "options": "提案",
     "saved": "保存したコーデ",

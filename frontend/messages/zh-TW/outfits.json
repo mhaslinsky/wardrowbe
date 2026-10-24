@@ -31,6 +31,7 @@
     "removeItem": "移除 {name}"
   },
   "cards": {
+    "wash": "待洗",
     "wearCount": "已穿過 {count, plural, one {# 次} other {# 次}}",
     "history": "歷史紀錄",
     "record": "紀錄 {count}",
@@ -185,11 +186,12 @@
   "viewList": "列表",
   "viewToggle": "切換檢視",
   "day": {
+    "tomorrow": "明天",
+    "worn": "已穿",
     "title": "每日穿搭",
     "previous": "前一天",
     "next": "後一天",
     "today": "今天",
-    "preview": "明天僅供預覽",
     "generate": "取得選項",
     "options": "推薦",
     "saved": "已儲存穿搭",

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DayOutfits, WearActions } from '@/components/day-outfits'
 import { translationMock } from './setup'
@@ -23,7 +23,7 @@ vi.mock('@/lib/hooks/use-outfits', () => ({
   useRejectOutfit: () => ({ mutate: vi.fn() }),
 }))
 vi.mock('@/lib/hooks/use-items', () => ({ useItemPages: () => ({ items: state.items, isLoading: state.loading, hasMore: state.more }) }))
-vi.mock('@/components/outfits/outfit-card', () => ({ OutfitCard: ({ outfit }: { outfit: Outfit }) => <div>{outfit.name}</div> }))
+vi.mock('@/components/outfits/outfit-card', () => ({ OutfitCard: ({ outfit, hideWashWarnings }: { outfit: Outfit; hideWashWarnings?: boolean }) => <div>{outfit.name}{!hideWashWarnings && <span>Wash</span>}</div> }))
 const item = (id: string, type = 'shirt', extra = {}) => ({ id, name: id, type, status: 'ready', needs_wash: false, is_archived: false, ...extra } as Item)
 const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
 
@@ -185,4 +185,33 @@ it('reuses common loading and load-more strings in the swap picker', () => {
   expect(screen.getByText('common.loading')).toBeVisible()
   expect(screen.getByRole('button', { name: 'common.loadMore' })).toBeVisible()
   translationMock.includeNamespace = false
+})
+
+it('labels today, tomorrow and another day without a preview notice', () => {
+  render(<DayOutfits />, { wrapper })
+  expect(screen.getByText('today')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: 'next' }))
+  expect(screen.getByText('tomorrow')).toBeVisible()
+  expect(screen.queryByText('preview')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'today' }))
+  fireEvent.click(screen.getByRole('button', { name: 'previous' }))
+  expect(screen.getByText('Fri, Oct 23')).toBeVisible()
+})
+
+it('separates the worn outfit and hides its wash warnings', () => {
+  state.worn = true
+  render(<DayOutfits />, { wrapper })
+  const worn = screen.getByRole('heading', { name: 'worn' }).parentElement!
+  expect(within(worn).getByText('Look')).toBeVisible()
+  expect(within(worn).queryByText('Wash')).not.toBeInTheDocument()
+  const suggestions = screen.getByRole('heading', { name: 'options' }).parentElement!
+  expect(within(suggestions).queryByText('Look')).not.toBeInTheDocument()
+})
+
+it('keeps dismiss beside wear and swap', () => {
+  render(<DayOutfits />, { wrapper })
+  const row = screen.getByRole('button', { name: 'wore' }).parentElement
+  expect(row).toBe(screen.getByRole('button', { name: 'dismiss' }).parentElement)
+  expect(row).toBe(screen.getByRole('button', { name: 'swap' }).parentElement)
+  expect(row).not.toHaveClass('flex-wrap')
 })
