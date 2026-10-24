@@ -117,9 +117,9 @@ async def _resolve_bulk_item_ids(
     filters = request.filters
     item_ids = await item_service.get_ids_by_filter(
         user_id=user_id,
-        type_filter=filters.type if filters else None,
-        search=filters.search if filters else None,
-        is_archived=filters.is_archived if filters and filters.is_archived is not None else False,
+        filters=ItemFilter.model_validate(
+            {**filters.model_dump(), "is_archived": filters.is_archived or False} if filters else {}
+        ),
         excluded_ids=list(request.excluded_ids) if request.excluded_ids else None,
         after_id=request.after_id,
         limit=limit + 1,
