@@ -67,6 +67,7 @@
   },
   "deleteFailed": "削除に失敗しました",
   "schedule": {
+    "sendNotification": "通知を送信",
     "addFailed": "スケジュールの追加に失敗しました",
     "addSchedule": "スケジュールを追加",
     "dayLabel": "日",

@@ -25,6 +25,9 @@ class Schedule(Base):
     notification_time: Mapped[time] = mapped_column(Time, nullable=False)
     occasion: Mapped[str] = mapped_column(String(50), default="casual")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
     notify_day_before: Mapped[bool] = mapped_column(
         Boolean, default=False
     )  # If True, notify evening before

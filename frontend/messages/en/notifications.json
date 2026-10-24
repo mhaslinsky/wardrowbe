@@ -67,6 +67,7 @@
   },
   "deleteFailed": "Failed to delete",
   "schedule": {
+    "sendNotification": "Send notification",
     "addFailed": "Failed to add schedule",
     "addSchedule": "Add Schedule",
     "dayLabel": "Day",

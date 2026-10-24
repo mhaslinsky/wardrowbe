@@ -31,6 +31,7 @@ export interface Schedule {
   notification_time: string;
   occasion: string;
   enabled: boolean;
+  notify: boolean;
   notify_day_before: boolean;
   created_at: string;
   updated_at: string;
@@ -166,6 +167,7 @@ export function useCreateSchedule() {
       notification_time: string;
       occasion: string;
       enabled: boolean;
+      notify?: boolean;
       notify_day_before?: boolean;
     }) => {
       applySessionToken(session);
@@ -187,7 +189,7 @@ export function useUpdateSchedule() {
       data,
     }: {
       id: string;
-      data: Partial<{ notification_time: string; occasion: string; enabled: boolean; notify_day_before: boolean }>;
+      data: Partial<{ notification_time: string; occasion: string; enabled: boolean; notify_day_before: boolean; notify: boolean }>;
     }) => {
       applySessionToken(session);
       return api.patch<Schedule>(`/notifications/schedules/${id}`, data);

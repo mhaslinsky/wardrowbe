@@ -1376,3 +1376,46 @@ class TestDispatcherDelivery:
         assert result.status == NotificationStatus.sent
         assert tuple(stored) == kept
         assert (outfit.status, outfit.sent_at) == kept
+
+
+@pytest.mark.asyncio
+async def test_schedule_notify_round_trip(client, test_user, auth_headers):
+    response = await client.post(
+        "/api/v1/notifications/schedules",
+        headers=auth_headers,
+        json={
+            "day_of_week": 5,
+            "notification_time": "20:00",
+            "notify_day_before": True,
+            "notify": False,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["notify"] is False
+    schedule_id = response.json()["id"]
+    path = f"/api/v1/notifications/schedules/{schedule_id}"
+    assert (await client.get(path, headers=auth_headers)).json()["notify"] is False
+    unchanged = await client.patch(path, headers=auth_headers, json={"occasion": "casual"})
+    assert unchanged.json()["notify"] is False
+    updated = await client.patch(path, headers=auth_headers, json={"notify": True})
+    assert updated.json()["notify"] is True
+    reset = await client.patch(path, headers=auth_headers, json={"notify": False})
+    assert reset.json()["notify"] is False
+    default = await client.post(
+        "/api/v1/notifications/schedules",
+        headers=auth_headers,
+        json={"day_of_week": 6, "notification_time": "20:00"},
+    )
+    assert default.status_code == 201
+    assert default.json()["notify"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("notify", [None, "invalid"])
+async def test_schedule_rejects_invalid_notify(client, test_user, auth_headers, notify):
+    response = await client.post(
+        "/api/v1/notifications/schedules",
+        headers=auth_headers,
+        json={"day_of_week": 5, "notification_time": "20:00", "notify": notify},
+    )
+    assert response.status_code == 422

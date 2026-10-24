@@ -159,6 +159,7 @@ class NotificationService:
         occasion: str,
         enabled: bool,
         notify_day_before: bool,
+        notify: bool = True,
     ) -> Schedule:
         existing = await self.db.execute(
             select(Schedule).where(
@@ -181,6 +182,7 @@ class NotificationService:
             occasion=occasion,
             enabled=enabled,
             notify_day_before=notify_day_before,
+            notify=notify,
         )
         self.db.add(schedule)
         await self.db.flush()
@@ -196,6 +198,7 @@ class NotificationService:
         occasion: str | None = None,
         enabled: bool | None = None,
         notify_day_before: bool | None = None,
+        notify: bool | None = None,
     ) -> Schedule | None:
         schedule = await self.get_schedule_by_id(schedule_id, user_id)
         if not schedule:
@@ -209,6 +212,8 @@ class NotificationService:
             schedule.occasion = occasion
         if enabled is not None:
             schedule.enabled = enabled
+        if notify is not None:
+            schedule.notify = notify
         if notify_day_before is not None:
             schedule.notify_day_before = notify_day_before
 

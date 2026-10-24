@@ -246,6 +246,7 @@ async def create_schedule(
             occasion=data.occasion,
             enabled=data.enabled,
             notify_day_before=data.notify_day_before,
+            notify=data.notify,
         )
     except ValueError as e:
         raise HTTPException(
@@ -290,6 +291,7 @@ async def update_schedule(
         occasion=patch.get("occasion"),
         enabled=patch.get("enabled"),
         notify_day_before=patch.get("notify_day_before"),
+        notify=patch.get("notify"),
     )
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")

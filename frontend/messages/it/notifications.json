@@ -67,6 +67,7 @@
   },
   "deleteFailed": "Eliminazione fallita",
   "schedule": {
+    "sendNotification": "Invia notifica",
     "addFailed": "Aggiunta programmazione fallita",
     "addSchedule": "Aggiungi programmazione",
     "dayLabel": "Giorno",

@@ -75,11 +75,13 @@ function ScheduleCard({
   schedule,
   onToggle,
   onToggleDayBefore,
+  onToggleNotify,
   onDelete,
 }: {
   schedule: Schedule;
   onToggle: (enabled: boolean) => void;
   onToggleDayBefore: (notify_day_before: boolean) => void;
+  onToggleNotify: (notify: boolean) => void;
   onDelete: () => void;
 }) {
   const t = useTranslations('notifications');
@@ -116,6 +118,10 @@ function ScheduleCard({
           </Button>
         </div>
       </div>
+      <div className="flex items-center gap-2">
+        <Switch id={`notify-${schedule.id}`} checked={schedule.notify} onCheckedChange={onToggleNotify} />
+        <Label htmlFor={`notify-${schedule.id}`}>{t('schedule.sendNotification')}</Label>
+      </div>
       {/* Bottom row: Day before toggle */}
       <div className="flex items-center justify-between pt-2 border-t">
         <div className="flex items-center gap-2">
@@ -144,6 +150,7 @@ interface ScheduleFormData {
   occasion: string;
   enabled: boolean;
   notify_day_before: boolean;
+  notify: boolean;
 }
 
 function AddScheduleDialog({
@@ -159,6 +166,7 @@ function AddScheduleDialog({
   const [open, setOpen] = useState(false);
   const [time, setTime] = useState('07:00');
   const [occasion, setOccasion] = useState('casual');
+  const [notify, setNotify] = useState(true);
   const [notifyDayBefore, setNotifyDayBefore] = useState(false);
   const [dayOfWeek, setDayOfWeek] = useState<number>(0);
 
@@ -176,12 +184,14 @@ function AddScheduleDialog({
         occasion,
         enabled: true,
         notify_day_before: notifyDayBefore,
+        notify,
       });
       // Close and reset on success
       setOpen(false);
       setTime('07:00');
       setOccasion('casual');
       setNotifyDayBefore(false);
+      setNotify(true);
     } catch {
       // Error handled by parent via toast
     }
@@ -192,6 +202,7 @@ function AddScheduleDialog({
     setTime('07:00');
     setOccasion('casual');
     setNotifyDayBefore(false);
+    setNotify(true);
   };
 
   return (
@@ -266,7 +277,11 @@ function AddScheduleDialog({
                 onCheckedChange={setNotifyDayBefore}
               />
             </div>
-            {notifyDayBefore && (
+            <div className="flex items-center justify-between">
+              <Label htmlFor="schedule-notify">{t('schedule.sendNotification')}</Label>
+              <Switch id="schedule-notify" checked={notify} onCheckedChange={setNotify} />
+            </div>
+            {notifyDayBefore && notify && (
               <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded">
                 {t('schedule.notifyDayBeforeInfo', { notifyDay: notifyDay ? t(`days.${notifyDay.key}`) : '', time, outfitDay: (() => { const d = DAY_KEYS.find(d => d.value === dayOfWeek); return d ? t(`days.${d.key}`) : ''; })() })}
               </p>
@@ -364,6 +379,14 @@ export default function NotificationsPage() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : t('updateFailed');
       toast.error(message);
+    }
+  };
+
+  const handleToggleNotify = async (id: string, notify: boolean) => {
+    try {
+      await updateSchedule.mutateAsync({ id, data: { notify } });
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : t('updateFailed'));
     }
   };
 
@@ -491,6 +514,7 @@ export default function NotificationsPage() {
                     key={schedule.id}
                     schedule={schedule}
                     onToggle={(enabled) => handleToggleSchedule(schedule.id, enabled)}
+                    onToggleNotify={(notify) => handleToggleNotify(schedule.id, notify)}
                     onToggleDayBefore={(notify_day_before) => handleToggleDayBefore(schedule.id, notify_day_before)}
                     onDelete={() => setDeleteConfirm({ type: 'schedule', id: schedule.id })}
                   />

@@ -67,6 +67,7 @@
   },
   "deleteFailed": "Échec de la suppression",
   "schedule": {
+    "sendNotification": "Envoyer une notification",
     "addFailed": "Échec de l'ajout de l'horaire",
     "addSchedule": "Ajouter un horaire",
     "dayLabel": "Jour",
