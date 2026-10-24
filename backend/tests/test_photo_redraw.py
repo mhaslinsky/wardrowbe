@@ -21,7 +21,7 @@ def garment(color=GREEN):
 
 @pytest_asyncio.fixture
 async def photo_item(db_session, test_user, monkeypatch):
-    monkeypatch.setattr(get_settings(), "ai_image_model", "gemini-3.1-flash-image", raising=False)
+    monkeypatch.setitem(get_settings().__dict__, "ai_image_model", "gemini-3.1-flash-image")
     monkeypatch.setattr(get_settings(), "ai_api_key", "test-key")
     return await _make_item(db_session, test_user)
 
@@ -175,7 +175,7 @@ async def test_retained_photos_survive_edits_and_delete_with_item(
                 )
                 assert removal.status_code == 200, removal.text
             response = await client.post(prefix + "/" + action, json={}, headers=auth_headers)
-    assert response.status_code == 200, response.text
+    assert response.status_code == (400 if action == "rotate" else 200), response.text
     assert all(
         service.get_image_path(path).read_bytes() == content for path, content in immutable.items()
     )
@@ -206,11 +206,100 @@ async def test_no_redraw_keeps_base_file_behavior(
         assert response.json()["deleted"] == 1
     else:
         response = await client.post(prefix + "/rotate", headers=auth_headers)
-    assert response.status_code in (200, 204), response.text
+    assert response.status_code == (
+        400 if action == "rotate" else 204 if action == "delete" else 200
+    ), response.text
     after = set(service.get_image_path(item.image_path).parent.iterdir())
     if action == "rotate":
         assert before == after
-        assert response.json()["image_path"] == paths[0]
+        assert Image.open(service.get_image_path(paths[0])).size == (600, 600)
     else:
         assert all(not service.get_image_path(path).exists() for path in paths)
         assert len(after - before) == (3 if action == "replace" else 0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["delete", "duplicate", "replace"])
+async def test_changes_during_generation(
+    operation, client, auth_headers, photo_item, db_session, test_user
+):
+    from fastapi import HTTPException
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.api.items import delete_item
+    from app.services.item_service import ItemService
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    item_id = photo_item.id
+    original_path = photo_item.image_path
+    retained = []
+
+    async def generate(source):
+        async with async_sessionmaker(db_session.bind, expire_on_commit=False)() as other:
+            current = await ItemService(other).get_by_id(item_id, test_user.id)
+            assert current.photo_redraw["status"] == "generating"
+            retained.extend(current.photo_redraw["original"].values())
+            if operation == "delete":
+                await delete_item(item_id, other, test_user)
+            elif operation == "duplicate":
+                with pytest.raises(HTTPException) as error:
+                    await PhotoRedrawService().redraw(other, current)
+                assert error.value.status_code == 409
+            else:
+                current.image_path = ImageService().copy_photo({"image_path": original_path})[
+                    "image_path"
+                ]
+                current.photo_redraw = {**current.photo_redraw, "retained": [original_path]}
+                await other.commit()
+        return garment(), {}
+
+    with (
+        patch.object(PhotoRedrawService, "generate", side_effect=generate),
+        patch("app.services.photo_redraw_service.cutout", return_value=garment()),
+    ):
+        response = await client.post(f"/api/v1/items/{item_id}/redraw-photo", headers=auth_headers)
+    assert response.status_code == (404 if operation == "delete" else 200), response.text
+    if operation == "delete":
+        assert all(not ImageService().get_image_path(path).exists() for path in retained)
+    else:
+        assert response.json()["photo_redraw"]["status"] == (
+            "source_changed" if operation == "replace" else "generated"
+        )
+
+
+@pytest.mark.asyncio
+async def test_bulk_missing_disabled_and_ownership(
+    client, auth_headers, photo_item, db_session, monkeypatch
+):
+    from uuid import uuid4
+
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    monkeypatch.setattr(get_settings(), "ai_image_model", "")
+    response = await client.post(
+        f"/api/v1/items/{photo_item.id}/redraw-photo", headers=auth_headers
+    )
+    assert response.status_code == 503
+    response = await client.post(
+        f"/api/v1/items/{photo_item.id}/photo/invalid", headers=auth_headers
+    )
+    assert response.status_code == 400
+    response = await client.post(
+        f"/api/v1/items/{photo_item.id}/photo/redrawn", headers=auth_headers
+    )
+    assert response.status_code == 400
+    response = await client.post(f"/api/v1/items/{uuid4()}/redraw-photo", headers=auth_headers)
+    assert response.status_code == 404
+    assert (await client.post(f"/api/v1/items/{photo_item.id}/redraw-photo")).status_code == 401
+    with patch.object(PhotoRedrawService, "redraw", new_callable=AsyncMock) as redraw:
+        photo_item.photo_redraw = {"status": "skipped"}
+        await db_session.commit()
+        response = await client.post(
+            "/api/v1/items/bulk/redraw-photo",
+            json={"item_ids": [str(photo_item.id), str(uuid4())]},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["results"][0]["status"] == "skipped"
+        assert response.json()["results"][1]["error"] == "Item not found"
+        assert redraw.await_count == 1
