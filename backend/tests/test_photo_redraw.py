@@ -223,7 +223,7 @@ async def test_retained_photos_survive_edits_and_delete_with_item(
         assert response.status_code in (200, 204), response.text
         assert all(not service.get_image_path(path).exists() for path in tracked)
         return
-    assert response.status_code == (400 if action == "rotate" else 200), response.text
+    assert response.status_code == 200, response.text
     if action == "replace":
         assert response.json()["photo_redraw"]["selected"] == "custom"
     if action == "remove-background":
@@ -249,10 +249,12 @@ async def test_no_redraw_keeps_base_file_behavior(
     before = set(service.get_image_path(item.image_path).parent.iterdir())
     response = await image_action(client, auth_headers, item, action)
     assert response.status_code == (
-        400 if action == "rotate" else 204 if action == "delete" else 200
+        204 if action == "delete" else 200
     ), response.text
     after = set(service.get_image_path(item.image_path).parent.iterdir())
     if action == "rotate":
+        assert [response.json()[field] for field in ("image_path", "medium_path", "thumbnail_path")] == paths
+        assert response.json()["additional_images"] == []
         assert before == after
         assert Image.open(service.get_image_path(paths[0])).size == (600, 600)
     else:
@@ -569,7 +571,7 @@ async def test_photo_file_ownership_sequences(
             )
         else:
             response = await image_action(client, auth_headers, photo_item, action)
-        assert response.status_code in ((200, 400) if action == "rotate" else (200,)), response.text
+        assert response.status_code == 200, response.text
         await db_session.refresh(photo_item, attribute_names=["photo_redraw"])
         owned = set(photo_item.photo_redraw.get("files", []))
         assert {
