@@ -32,6 +32,7 @@ def item(kind, wears=0, interval=None):
         ("jacket", 1000, 999, float("inf")),
         ("jacket", 0, 1, 1),
         ("hoodie", 1, 2, 1),
+        ("sweater", 0, 2, 2),
         ("JEANS", 0, None, 6),
         ("jeans", 2, 3, 1),
         ("jeans", 3, 3, 0),

@@ -26,8 +26,9 @@ from app.utils.timezone import get_user_today
 def reuse_limit(item) -> float:
     kind = (item.type or "").lower()
     role = ITEM_ROLE.get(kind)
+    single_wear = role == "full_body" or (role == "base_top" and kind not in NEEDS_BASE_TOP_TYPES)
     if item.wash_interval == 999:
-        return 1 if role in {"base_top", "full_body"} else float("inf")
+        return 1 if single_wear else float("inf")
     remaining = max(
         0,
         (
@@ -37,7 +38,7 @@ def reuse_limit(item) -> float:
         )
         - (item.wears_since_wash or 0),
     )
-    return min(1, remaining) if role in {"base_top", "full_body"} else remaining
+    return min(1, remaining) if single_wear else remaining
 
 
 def packing_list(outfits) -> list[dict]:
