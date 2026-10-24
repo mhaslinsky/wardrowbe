@@ -17,6 +17,7 @@ import { useTypeLabel } from '@/lib/hooks/use-translated-constants';
 
 export default function SelfiePage() {
   const t = useTranslations('selfie');
+  const tc = useTranslations('common');
   const typeLabel = useTypeLabel();
   const recognise = useSelfieRecognition();
   const confirm = useConfirmSelfie();
@@ -144,7 +145,7 @@ export default function SelfiePage() {
                         <span className="truncate">{item.name || typeLabel(item.type)}</span>
                       </div>
                       <Button variant="ghost" disabled={locked} onClick={() => changeSelection(selected.filter((chosen) => chosen.id !== item.id))}>
-                        {t('remove')}
+                        {tc('remove')}
                       </Button>
                       <Button variant="ghost" disabled={locked} onClick={() => { setSwapId(item.id); setWardrobePage(1); setPickerOpen(true); }}>
                         {t('swap')}
@@ -157,7 +158,7 @@ export default function SelfiePage() {
             <Button variant="outline" disabled={locked} onClick={() => { setSwapId(null); setWardrobePage(1); setPickerOpen(true); }}>{t('add')}</Button>
             {pickerOpen && !locked && (
               <div className="space-y-2" role="group" aria-label={t('wardrobe')}>
-                {wardrobe.isLoading && <p>{t('loadingWardrobe')}</p>}
+                {wardrobe.isLoading && <p>{tc('loading')}</p>}
                 {wardrobe.isError && <p role="alert">{t('wardrobeError')}</p>}
                 {choices.map((item) => <Button key={item.id} variant="outline" onClick={() => {
                   changeSelection(swapId ? selected.map((chosen) => chosen.id === swapId ? item : chosen) : [...selected, item]);
@@ -166,9 +167,9 @@ export default function SelfiePage() {
                 }}>{item.name || typeLabel(item.type)}</Button>)}
                 {!wardrobe.isLoading && !wardrobe.isError && choices.length === 0 && <p>{t('noChoices')}</p>}
                 <div className="flex gap-2">
-                  <Button variant="ghost" disabled={wardrobePage === 1 || wardrobe.isFetching} onClick={() => setWardrobePage(wardrobePage - 1)}>{t('previous')}</Button>
-                  <Button variant="ghost" disabled={!wardrobe.data?.has_more || wardrobe.isFetching} onClick={() => setWardrobePage(wardrobePage + 1)}>{t('next')}</Button>
-                  <Button variant="ghost" onClick={() => { setPickerOpen(false); setSwapId(null); }}>{t('cancel')}</Button>
+                  <Button variant="ghost" disabled={wardrobePage === 1 || wardrobe.isFetching} onClick={() => setWardrobePage(wardrobePage - 1)}>{tc('previous')}</Button>
+                  <Button variant="ghost" disabled={!wardrobe.data?.has_more || wardrobe.isFetching} onClick={() => setWardrobePage(wardrobePage + 1)}>{tc('next')}</Button>
+                  <Button variant="ghost" onClick={() => { setPickerOpen(false); setSwapId(null); }}>{tc('cancel')}</Button>
                 </div>
               </div>
             )}
