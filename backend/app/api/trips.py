@@ -43,9 +43,7 @@ class TripResponse(TripRequest):
 
 
 @router.get("", response_model=list[TripResponse])
-async def list_trips(
-    user: Annotated[User, Depends(get_current_user)], db: DbSession
-):
+async def list_trips(user: Annotated[User, Depends(get_current_user)], db: DbSession):
     return (
         (
             await db.execute(
