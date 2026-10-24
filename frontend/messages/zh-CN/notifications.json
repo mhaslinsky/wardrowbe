@@ -67,6 +67,7 @@
   },
   "deleteFailed": "删除失败",
   "schedule": {
+    "sendNotification": "发送通知",
     "addFailed": "添加时间表失败",
     "addSchedule": "添加时间表",
     "dayLabel": "日",

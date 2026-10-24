@@ -67,6 +67,7 @@
   },
   "deleteFailed": "삭제 실패",
   "schedule": {
+    "sendNotification": "알림 보내기",
     "addFailed": "일정 추가 실패",
     "addSchedule": "일정 추가",
     "dayLabel": "요일",

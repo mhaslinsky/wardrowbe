@@ -67,6 +67,7 @@
   },
   "deleteFailed": "Löschen fehlgeschlagen",
   "schedule": {
+    "sendNotification": "Benachrichtigung senden",
     "addFailed": "Zeitplan konnte nicht hinzugefügt werden",
     "addSchedule": "Zeitplan hinzufügen",
     "dayLabel": "Tag",

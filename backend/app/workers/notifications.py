@@ -169,7 +169,7 @@ async def process_scheduled_notification(ctx: dict, schedule_id: str):
             return {"status": "skipped", "reason": "user_not_found"}
 
         dispatcher = NotificationDispatcher(db)
-        if not await dispatcher.enabled_channels(schedule.user_id):
+        if schedule.notify and not await dispatcher.enabled_channels(schedule.user_id):
             logger.warning(f"No enabled channels for user {schedule.user_id}, skipping")
             return {"status": "skipped", "reason": "no_channels"}
 
@@ -203,7 +203,10 @@ async def process_scheduled_notification(ctx: dict, schedule_id: str):
             scheduled_date=target_date,
         )
 
-        await dispatcher.send_outfit_notification(user_id=str(user.id), outfit_id=str(outfit.id))
+        if schedule.notify:
+            await dispatcher.send_outfit_notification(
+                user_id=str(user.id), outfit_id=str(outfit.id)
+            )
 
         await db.commit()
 
@@ -211,7 +214,7 @@ async def process_scheduled_notification(ctx: dict, schedule_id: str):
             f"Processed schedule {schedule_id} for user {schedule.user_id} "
             f"(occasion={schedule.occasion}, outfit={outfit.id}, for_tomorrow={is_for_tomorrow})"
         )
-        return {"status": "sent", "outfit_id": str(outfit.id)}
+        return {"status": "sent" if schedule.notify else "generated", "outfit_id": str(outfit.id)}
 
     except AIDisabledError:
         # Internal text is off — defer to the external agent; skip, don't retry.

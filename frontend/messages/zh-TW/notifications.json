@@ -67,6 +67,7 @@
   },
   "deleteFailed": "刪除失敗",
   "schedule": {
+    "sendNotification": "傳送通知",
     "addFailed": "新增排程失敗",
     "addSchedule": "新增排程",
     "dayLabel": "日",

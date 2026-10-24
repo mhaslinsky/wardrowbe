@@ -110,6 +110,7 @@ class ScheduleBase(BaseModel):
     notification_time: str  # HH:MM format
     occasion: Occasion = "casual"
     enabled: bool = True
+    notify: bool = True
     notify_day_before: bool = False  # If True, notification comes evening before
 
     @field_validator("day_of_week")
@@ -136,6 +137,7 @@ class ScheduleUpdate(BaseModel):
     notification_time: str | None = None
     occasion: Occasion | None = None
     enabled: bool | None = None
+    notify: bool | None = None
     notify_day_before: bool | None = None
 
     @field_validator("notification_time")
@@ -160,6 +162,7 @@ class ScheduleResponse(BaseModel):
     notification_time: str  # Converted from Time object
     occasion: str
     enabled: bool
+    notify: bool
     notify_day_before: bool
     created_at: datetime
     updated_at: datetime

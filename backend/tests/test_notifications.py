@@ -1381,9 +1381,14 @@ class TestDispatcherDelivery:
 @pytest.mark.asyncio
 async def test_schedule_notify_round_trip(client, test_user, auth_headers):
     response = await client.post(
-        "/api/v1/notifications/schedules", headers=auth_headers,
-        json={"day_of_week": 5, "notification_time": "20:00", "notify_day_before": True,
-              "notify": False},
+        "/api/v1/notifications/schedules",
+        headers=auth_headers,
+        json={
+            "day_of_week": 5,
+            "notification_time": "20:00",
+            "notify_day_before": True,
+            "notify": False,
+        },
     )
     assert response.status_code == 201
     assert response.json()["notify"] is False
@@ -1397,7 +1402,8 @@ async def test_schedule_notify_round_trip(client, test_user, auth_headers):
     reset = await client.patch(path, headers=auth_headers, json={"notify": False})
     assert reset.json()["notify"] is False
     default = await client.post(
-        "/api/v1/notifications/schedules", headers=auth_headers,
+        "/api/v1/notifications/schedules",
+        headers=auth_headers,
         json={"day_of_week": 6, "notification_time": "20:00"},
     )
     assert default.status_code == 201
