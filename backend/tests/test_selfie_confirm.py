@@ -1,4 +1,6 @@
 import asyncio
+import subprocess
+import sys
 from datetime import timedelta
 from unittest.mock import patch
 from uuid import UUID, uuid4
@@ -8,6 +10,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.main import app
@@ -348,3 +351,54 @@ async def test_post_commit_failure_keeps_wear(confirm_client, db_session, test_u
         result = await confirm_client.post(URL, json=payload(ids))
     assert result.status_code == 200, result.text
     assert await counts(db_session, test_user.id) == (1, 1, 3)
+
+
+def test_registry_loads_selfie_metadata_without_api_imports():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import app.models; from app.database import Base; "
+            "assert 'selfie_confirms' in Base.metadata.tables; "
+            "assert app.models.SelfieConfirm.__table__ is Base.metadata.tables['selfie_confirms']",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+async def test_delete_between_replay_lookup_and_load(confirm_client, db_session, test_user):
+    ids = await _items(db_session, test_user.id)
+    body = payload(ids)
+    first = await confirm_client.post(URL, json=body)
+    assert first.status_code == 200, first.text
+    outfit = first.json()
+    lookup, deleted = asyncio.Event(), asyncio.Event()
+    scalar = AsyncSession.scalar
+
+    async def gate(session, statement, *args, **kwargs):
+        result = await scalar(session, statement, *args, **kwargs)
+        if "FROM selfie_confirms" in str(statement):
+            lookup.set()
+            await deleted.wait()
+        return result
+
+    with patch.object(AsyncSession, "scalar", gate):
+        async with asyncio.timeout(30), asyncio.TaskGroup() as tasks:
+            replay = tasks.create_task(confirm_client.post(URL, json=body))
+            await lookup.wait()
+            removal = await confirm_client.delete(f"/api/v1/outfits/{outfit['id']}")
+            assert removal.status_code == 204, removal.text
+            deleted.set()
+    assert replay.result().status_code == 410, replay.result().text
+    assert replay.result().json()["detail"] == {
+        "error_code": "CONFIRM_RESULT_DELETED",
+        "worn_on": outfit["scheduled_for"],
+    }
+    assert await counts(db_session, test_user.id) == (0, 1, 3)
+    assert list(
+        await db_session.scalars(
+            select(ClothingItem.wear_count).where(ClothingItem.user_id == test_user.id)
+        )
+    ) == [1, 1, 1]
