@@ -13,13 +13,12 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
-from app.api.outfits import outfit_to_response
+from app.api.outfits import OutfitResponse, outfit_to_response
 from app.config import get_settings
 from app.database import DbSession
 from app.models.item import ClothingItem, ItemStatus
 from app.models.user import User
 from app.schemas.item import ItemResponse
-from app.schemas.outfit import OutfitResponse
 from app.services.ai_service import AIDisabledError, get_ai_service
 from app.services.image_service import ALLOWED_MIME_TYPES
 from app.services.learning_service import LearningService
