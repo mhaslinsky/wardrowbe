@@ -241,6 +241,7 @@ async def test_changes_during_generation(
             retained.extend(current.photo_redraw["original"].values())
             if operation == "delete":
                 await delete_item(item_id, other, test_user)
+                await other.commit()
             elif operation == "duplicate":
                 with pytest.raises(HTTPException) as error:
                     await PhotoRedrawService().redraw(other, current)

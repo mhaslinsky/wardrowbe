@@ -591,17 +591,21 @@ async def bulk_redraw_photos(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
+    user_id = current_user.id
     item_service = ItemService(db)
     item_ids, cursor, has_more = await _resolve_bulk_item_ids(
-        item_service, current_user.id, request, "redraw-photo"
+        item_service, user_id, request, "redraw-photo"
     )
     results = []
     for item_id in item_ids:
         try:
-            item = await item_service.get_by_id(item_id, current_user.id)
+            item = await item_service.get_by_id(item_id, user_id)
             if item is None:
                 raise HTTPException(404, "Item not found")
             await PhotoRedrawService().redraw(db, item)
+            item = await item_service.get_by_id(item_id, user_id)
+            if item is None:
+                raise HTTPException(404, "Item deleted during redraw")
             results.append({"id": str(item_id), "status": (item.photo_redraw or {})["status"]})
         except HTTPException as error:
             await db.rollback()
@@ -2177,11 +2181,12 @@ async def redraw_item_photo(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> ItemResponse:
-    item = await ItemService(db).get_by_id(item_id, current_user.id)
+    user_id = current_user.id
+    item = await ItemService(db).get_by_id(item_id, user_id)
     if item is None:
         raise HTTPException(404, "Item not found")
     await PhotoRedrawService().redraw(db, item)
-    item = await ItemService(db).get_by_id(item_id, current_user.id)
+    item = await ItemService(db).get_by_id(item_id, user_id)
     if item is None:
         raise HTTPException(404, "Item deleted during redraw")
     return ItemResponse.model_validate(item)
@@ -2208,4 +2213,5 @@ async def choose_item_photo(
     except BaseException:
         ImageService().delete_images(paths)
         raise
+    await db.refresh(item, attribute_names=["updated_at"])
     return ItemResponse.model_validate(item)

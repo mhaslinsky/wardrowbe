@@ -223,7 +223,13 @@ class PhotoRedrawService:
                 metadata["redrawn"] = await asyncio.to_thread(
                     service.store_cutout, result, item.user_id
                 )
-                metadata["status"] = "generated" if colors_match(mask, result) else "color_drift"
+                matches = colors_match(mask, result)
+                metadata["color_check"] = {
+                    "passed": matches,
+                    "original": garment_color(mask),
+                    "redrawn": garment_color(result),
+                }
+                metadata["status"] = "generated" if matches else "color_drift"
                 if (
                     current.image_path != source_path
                     or hashlib.sha256(service.get_image_path(source_path).read_bytes()).digest()
