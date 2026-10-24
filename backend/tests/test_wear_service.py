@@ -360,3 +360,21 @@ async def test_concurrent_different_sources(session_maker, db_session, studio_us
     results = await asyncio.gather(owner, contender)
     assert sum(isinstance(result, Created) for result in results) == 1
     assert sum(isinstance(result, DayLogged) for result in results) == 1
+
+
+async def test_studio_duplicate_ids_roll_back(db_session, studio_user, wardrobe_items):
+    from app.services.studio_service import StudioService
+
+    item_id = wardrobe_items[0].id
+    with pytest.raises(HTTPException) as failure:
+        async with db_session.begin_nested():
+            await StudioService(db_session).create_from_scratch(
+                studio_user, [item_id, item_id], "casual", None, None, True, None
+            )
+    assert failure.value.status_code == 422
+    assert (
+        await db_session.scalar(
+            select(func.count()).select_from(Outfit).where(Outfit.user_id == studio_user.id)
+        )
+        == 0
+    )

@@ -161,7 +161,7 @@ class StudioService:
         if mark_worn:
             source = await self._reload_outfit(outfit.id)
             result = await WearService(self.db).log_worn(
-                user, source, scheduled_for, caller="studio"
+                user, source, scheduled_for, item_ids, caller="studio"
             )
             require_wear(result)
 
