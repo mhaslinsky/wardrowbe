@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.item import ClothingItem, ItemStatus
@@ -35,15 +36,20 @@ class SelfieConfirmService:
         if previous is not None:
             if previous.payload_hash != payload_hash:
                 raise HTTPException(409, detail={"error_code": "REQUEST_REUSED"})
+            deleted_result = HTTPException(
+                410,
+                detail={
+                    "error_code": "CONFIRM_RESULT_DELETED",
+                    "worn_on": previous.worn_on.isoformat(),
+                },
+            )
             if previous.outfit_id is None:
-                raise HTTPException(
-                    410,
-                    detail={
-                        "error_code": "CONFIRM_RESULT_DELETED",
-                        "worn_on": previous.worn_on.isoformat(),
-                    },
-                )
-            return await load_full_outfit(self.db, previous.outfit_id), False
+                raise deleted_result
+            try:
+                return await load_full_outfit(self.db, previous.outfit_id), False
+            except NoResultFound:
+                # Deletion can commit after the request lookup.
+                raise deleted_result from None
 
         available = await self.db.scalars(
             select(ClothingItem.id).where(
