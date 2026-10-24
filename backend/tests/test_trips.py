@@ -394,7 +394,7 @@ async def real_plan(client, db_session, user, headers, kinds, days):
             name=f"trip-{kind}",
             image_path="trip-test",
             status=ItemStatus.ready,
-            wash_interval=2 if kind == "hoodie" else None,
+            wash_interval=2 if kind in {"hoodie", "sweater"} else None,
         )
         for kind in kinds
     ]
@@ -408,7 +408,7 @@ async def real_plan(client, db_session, user, headers, kinds, days):
             int(line[1 : line.index("]")])
             for line in prompt.splitlines()
             if line.startswith("[")
-            and any(f'"trip-{kind}"' in line for kind in ("hoodie", "jeans"))
+            and any(f'"trip-{kind}"' in line for kind in ("hoodie", "sweater", "jeans"))
         ]
         return SimpleNamespace(
             content=json.dumps({"items": numbers}), model="fixture", endpoint="fixture"
@@ -431,12 +431,13 @@ async def real_plan(client, db_session, user, headers, kinds, days):
     return response, prompts
 
 
+@pytest.mark.parametrize("layer", ["hoodie", "sweater"])
 async def test_real_materialize_cannot_reuse_tee_under_hoodie(
-    client, db_session, test_user, auth_headers
+    client, db_session, test_user, auth_headers, layer
 ):
     user_id = test_user.id
     response, prompts = await real_plan(
-        client, db_session, test_user, auth_headers, ["t-shirt", "hoodie", "jeans"], 2
+        client, db_session, test_user, auth_headers, ["t-shirt", layer, "jeans"], 2
     )
     assert response.status_code == 422, response.text
     assert response.json()["detail"] == "Not enough clothes for a complete trip"
