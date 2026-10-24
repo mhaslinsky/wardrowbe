@@ -49,7 +49,7 @@ export function PhotoRedrawControls({ item }: { item: Item }) {
   const [confirm, setConfirm] = useState(false);
   const [message, setMessage] = useState<'error' | 'conflict' | null>(null);
   const photo = item.photo_redraw;
-  const status = photo?.status;
+  const status = photo?.status === 'generating' && photo.claim_stale === true ? 'failed' : photo?.status;
   const busy = redraw.isPending || choose.isPending || status === 'generating';
   const canRedraw = features?.photo_redraw === true && item.status === 'ready' && (!status || status === 'failed');
   const paidRetry = !!(photo?.paid || (photo?.provider_calls ?? 0) > 0);

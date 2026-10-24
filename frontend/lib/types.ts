@@ -20,6 +20,7 @@ export interface ItemTags {
 
 export interface PhotoRedraw {
   status: string;
+  claim_stale?: boolean;
   selected?: 'original' | 'redrawn' | 'custom';
   paid?: boolean;
   provider_calls?: number;

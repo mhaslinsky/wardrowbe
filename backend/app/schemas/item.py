@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_serializer, model_validator
 
 from app.models.item import ProcessingKind, TaggingStatus
 from app.schemas.color import ColorList, ColorName
@@ -100,6 +100,15 @@ class ItemResponse(ItemBase):
     medium_path: str | None = None
     original_image_path: str | None = None
     photo_redraw: dict | None = None
+
+    @field_serializer("photo_redraw")
+    def serialize_photo_redraw(self, photo: dict | None) -> dict | None:
+        from app.services.photo_redraw_service import stale_claim
+
+        if photo is None:
+            return None
+        return {**photo, "claim_stale": photo.get("status") == "generating" and stale_claim(photo)}
+
     tags: dict = Field(default_factory=dict)
     colors: list[str] = Field(default_factory=list)
     primary_color: str | None = None
