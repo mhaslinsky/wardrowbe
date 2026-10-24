@@ -949,3 +949,53 @@ class TestWorkerFunctionRegistry:
             "update_learning_profiles",
         }
         assert func_names == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("with_channel", [False, True])
+async def test_silent_schedule_generates_without_delivery(
+    db_session: AsyncSession, schedule_user: User, with_channel: bool
+):
+    schedule_user.location_lat = None
+    schedule_user.location_lon = None
+    schedule = _make_due_schedule(schedule_user, notify_day_before=True)
+    schedule.notify = False
+    if with_channel:
+        db_session.add(NotificationSettings(
+            user_id=schedule_user.id, channel="ntfy", enabled=True,
+            config={"server": "https://ntfy.sh", "topic": "silent-test"},
+        ))
+    db_session.add(schedule)
+    await db_session.commit()
+    target_date = datetime.now(UTC).date() + timedelta(days=1)
+
+    async def generate(**kwargs):
+        assert kwargs["scheduled_date"] == target_date
+        assert kwargs["source"] == OutfitSource.scheduled
+        outfit = Outfit(
+            user_id=schedule_user.id, occasion=kwargs["occasion"],
+            scheduled_for=kwargs["scheduled_date"], status=OutfitStatus.pending,
+            source=kwargs["source"], reasoning="Silent suggestion",
+        )
+        db_session.add(outfit)
+        await db_session.flush()
+        return outfit
+
+    with (
+        patch("app.workers.notifications.get_db_session", return_value=db_session),
+        patch.object(db_session, "close", new_callable=AsyncMock),
+        patch("app.workers.notifications.RecommendationService") as recommendations,
+        patch.object(NotificationDispatcher, "send_outfit_notification", new_callable=AsyncMock) as send,
+        patch.object(NotificationDispatcher, "enabled_channels", new_callable=AsyncMock) as channels,
+    ):
+        recommendations.return_value.generate_recommendation = AsyncMock(side_effect=generate)
+        result = await process_scheduled_notification({}, str(schedule.id))
+
+    assert result["status"] == "generated"
+    send.assert_not_awaited()
+    channels.assert_not_awaited()
+    outfit = await db_session.get(Outfit, uuid.UUID(result["outfit_id"]))
+    assert outfit.scheduled_for == target_date
+    assert not (await db_session.execute(
+        select(Notification).where(Notification.user_id == schedule_user.id)
+    )).scalars().all()
