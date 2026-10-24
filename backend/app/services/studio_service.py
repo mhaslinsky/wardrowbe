@@ -17,13 +17,9 @@ from app.models.outfit import (
 )
 from app.models.user import User
 from app.services.learning_service import LearningService
-from app.services.wear_service import AlreadyThis, WearService, require_wear
+from app.services.wear_service import AlreadyThis, ItemOwnershipError, WearService, require_wear
 from app.utils.clothing import canonical_item_order
 from app.utils.timezone import get_user_today
-
-
-class ItemOwnershipError(Exception):
-    pass
 
 
 class OutfitWornImmutableError(Exception):
@@ -74,15 +70,6 @@ async def validate_item_ownership(
     return items
 
 
-def _worn_status(worn_on: date | None) -> OutfitStatus:
-    """An outfit created already worn counts as accepted, so it shows in the Worn history."""
-    return OutfitStatus.accepted if worn_on is not None else OutfitStatus.pending
-
-
-def _responded_at(worn_on: date | None) -> datetime | None:
-    return datetime.now(UTC) if worn_on is not None else None
-
-
 class StudioService:
     CLONE_SOFT_IDEMPOTENCY_SECONDS = 5
 
@@ -124,21 +111,19 @@ class StudioService:
         palette: list[str] | None = None,
         notes: str | None = None,
     ) -> Outfit:
+        if mark_worn:
+            scheduled_for = scheduled_for or get_user_today(user)
+            await WearService(self.db).lock_day(user.id, scheduled_for)
         items = await validate_item_ownership(self.db, user.id, item_ids)
         ordered = self._order_items_canonically(items)
-
-        # Marking an undated outfit worn means it was worn today, as wear_today assumes.
-        if mark_worn and scheduled_for is None:
-            scheduled_for = get_user_today(user)
-        effective_worn = None
 
         outfit = Outfit(
             user_id=user.id,
             occasion=occasion,
             scheduled_for=scheduled_for,
             source=OutfitSource.manual,
-            status=_worn_status(effective_worn),
-            responded_at=_responded_at(effective_worn),
+            status=OutfitStatus.pending,
+            responded_at=None,
             name=name,
             source_item_id=source_item_id,
             season=season,
@@ -153,7 +138,7 @@ class StudioService:
             self.db.add(OutfitItem(outfit_id=outfit.id, item_id=item.id, position=pos))
 
         feedback = self.learning.create_synthetic_feedback(
-            outfit_id=outfit.id, accepted=True, worn_at=effective_worn
+            outfit_id=outfit.id, accepted=True, worn_at=None
         )
         self.db.add(feedback)
 
@@ -178,10 +163,12 @@ class StudioService:
         scheduled_for: date | None,
     ) -> Outfit:
         original = await WearService(self.db)._load(user.id, original_outfit_id)
+        target_date = scheduled_for or original.scheduled_for or get_user_today(user)
+        await WearService(self.db).lock_day(user.id, target_date)
         result = await WearService(self.db).log_worn(
             user,
             original,
-            scheduled_for or original.scheduled_for or get_user_today(user),
+            target_date,
             item_ids,
             caller="wore_instead",
         )
@@ -271,8 +258,9 @@ class StudioService:
         if target_date > get_user_today(user):
             raise FutureWearDateError("Wear date cannot be in the future")
 
+        await WearService(self.db).lock_day(user.id, target_date)
         template = await WearService(self.db)._load(user.id, template_id)
-        if template.scheduled_for is not None or template.source != OutfitSource.manual:
+        if template.scheduled_for is not None:
             raise OutfitNotTemplateError("wear_today requires a lookbook template")
         result = await WearService(self.db).log_worn(
             user, template, target_date, caller="wear_today"

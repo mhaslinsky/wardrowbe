@@ -7,7 +7,7 @@ could edit or delete the catalog (PER-160).
 import hmac
 import logging
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -19,7 +19,7 @@ from app.models.outfit import Outfit, OutfitSource, UserFeedback
 from app.models.user import User
 from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
-from app.services.wear_service import AlreadyThis, DayLogged, WearService
+from app.services.wear_service import AlreadyThis, DayLogged, ItemOwnershipError, WearService
 from app.utils.garment_vocabulary import types_for_role
 from app.utils.timezone import get_user_today
 
@@ -57,6 +57,21 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
         return _error(status.HTTP_404_NOT_FOUND, "user_not_found")
 
     today = get_user_today(user)
+    await WearService(db).lock_day(user.id, today)
+    existing_id = await db.scalar(
+        select(Outfit.id)
+        .where(Outfit.user_id == user.id, Outfit.feedback.has(UserFeedback.worn_at == today))
+        .order_by(Outfit.id)
+    )
+    if existing_id is not None:
+        return JSONResponse(
+            {
+                "ok": True,
+                "outfit_id": str(existing_id),
+                "date": today.isoformat(),
+                "already_logged": True,
+            }
+        )
     result = await db.execute(
         select(Outfit)
         .where(
@@ -69,23 +84,15 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
     )
     outfits = list(result.scalars().all())
     if not outfits:
-        logged = await db.execute(
-            select(Outfit.id)
-            .where(Outfit.user_id == user.id, Outfit.feedback.has(UserFeedback.worn_at == today))
-            .order_by(Outfit.id)
-        )
-        existing_id = logged.scalars().first()
-        if existing_id is None:
-            return _error(status.HTTP_404_NOT_FOUND, "no_outfit_today")
-        return JSONResponse(
-            {
-                "ok": True,
-                "outfit_id": str(existing_id),
-                "date": today.isoformat(),
-                "already_logged": True,
-            }
-        )
-    result = await WearService(db).log_worn(user, outfits[0], today, caller="ha")
+        return _error(status.HTTP_404_NOT_FOUND, "no_outfit_today")
+    try:
+        result = await WearService(db).log_worn(user, outfits[0], today, caller="ha")
+    except HTTPException as error:
+        return _error(error.status_code, str(error.detail))
+    except LookupError:
+        return _error(404, "outfit_not_found")
+    except ItemOwnershipError:
+        return _error(403, "items_unavailable")
     if isinstance(result, (AlreadyThis, DayLogged)):
         outfit_id = result.existing_ids[0] if isinstance(result, DayLogged) else result.outfit.id
         await db.commit()

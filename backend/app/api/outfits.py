@@ -951,16 +951,31 @@ async def submit_feedback(
             detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
         )
 
+    posted_outfit_id = outfit.id
     if request.worn or request.actually_worn is True or request.wore_instead_items:
         existing_date = outfit.feedback.worn_at if outfit.feedback else None
-        wear_result = await WearService(db).log_worn(
-            current_user,
-            outfit,
-            existing_date or get_user_today(current_user),
-            request.wore_instead_items or None,
-            caller="feedback",
-        )
-        outfit = require_wear(wear_result)
+        target_date = existing_date or get_user_today(current_user)
+        await WearService(db).lock_day(current_user.id, target_date)
+        try:
+            wear_result = await WearService(db).log_worn(
+                current_user,
+                outfit,
+                target_date,
+                request.wore_instead_items or None,
+                caller="feedback",
+            )
+        except ItemOwnershipError:
+            raise HTTPException(403, detail={"error_code": "OUTFIT_ITEM_OWNERSHIP"}) from None
+        wear = require_wear(wear_result)
+        if request.actually_worn is False and request.wore_instead_items and wear.id != outfit.id:
+            if outfit.feedback is None:
+                outfit.feedback = UserFeedback(outfit_id=outfit.id)
+                db.add(outfit.feedback)
+            outfit.feedback.actually_worn = False
+            outfit.feedback.wore_instead_items = [
+                str(item_id) for item_id in request.wore_instead_items
+            ]
+        outfit = wear
 
     if outfit.feedback:
         feedback = outfit.feedback
@@ -991,7 +1006,9 @@ async def submit_feedback(
     await db.commit()
     await db.refresh(feedback)
 
-    await _run_learning_safely(db, outfit.id, current_user.id)
+    await _run_learning_safely(db, posted_outfit_id, current_user.id)
+    if outfit.id != posted_outfit_id:
+        await _run_learning_safely(db, outfit.id, current_user.id)
 
     return FeedbackResponse(
         id=feedback.id,
@@ -1242,11 +1259,18 @@ async def log_outfit_worn(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> WearOutfitResponse:
+    await rate_limit_by_user(str(current_user.id), "wore", max_requests=10, window_seconds=60)
     service = WearService(db)
-    source = await service._load(current_user.id, outfit_id)
-    result = await service.log_worn(
-        current_user, source, request.date, request.item_ids, caller="wore"
-    )
+    await service.lock_day(current_user.id, request.date)
+    try:
+        source = await service._load(current_user.id, outfit_id)
+        result = await service.log_worn(
+            current_user, source, request.date, request.item_ids, caller="wore"
+        )
+    except LookupError:
+        raise HTTPException(404, detail={"error_code": "OUTFIT_NOT_FOUND"}) from None
+    except ItemOwnershipError as error:
+        raise HTTPException(422, detail=str(error)) from None
     outfit = require_wear(result)
     await db.commit()
     if not isinstance(result, AlreadyThis):

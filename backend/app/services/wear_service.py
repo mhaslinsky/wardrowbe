@@ -3,15 +3,19 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.item import ClothingItem
+from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus, UserFeedback
 from app.models.user import User
 from app.services.item_service import ItemService
 from app.utils.timezone import get_user_today
+
+
+class ItemOwnershipError(Exception):
+    pass
 
 
 @dataclass
@@ -30,6 +34,7 @@ class DayLogged:
 
 
 def require_wear(result: Created | AlreadyThis | DayLogged) -> Outfit:
+    """Unwrap Created/AlreadyThis or raise 409 for DayLogged; the caller commits."""
     if isinstance(result, DayLogged):
         raise HTTPException(
             409,
@@ -46,6 +51,12 @@ class WearService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def lock_day(self, user_id: UUID, worn_on: date) -> None:
+        await self.db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"{user_id}:{worn_on.isoformat()}"},
+        )
+
     async def _load(self, user_id: UUID, outfit_id: UUID) -> Outfit:
         result = await self.db.execute(
             select(Outfit)
@@ -58,23 +69,28 @@ class WearService:
         )
         outfit = result.scalar_one_or_none()
         if outfit is None:
-            raise HTTPException(404, detail="Outfit not found")
+            raise LookupError("Outfit not found")
         return outfit
 
-    async def _validate(self, user: User, outfit: Outfit, item_ids: list[UUID]) -> None:
+    async def _validate(
+        self, user: User, outfit: Outfit, item_ids: list[UUID], *, availability: bool = True
+    ) -> None:
         if outfit.status in (OutfitStatus.rejected, OutfitStatus.expired):
             raise HTTPException(422, detail="Outfit cannot be worn")
         if not item_ids or len(item_ids) != len(set(item_ids)):
             raise HTTPException(422, detail="Choose unique items")
+        if not availability:
+            return
         result = await self.db.execute(
             select(ClothingItem.id).where(
                 ClothingItem.id.in_(item_ids),
                 ClothingItem.user_id == user.id,
                 ClothingItem.is_archived.is_(False),
+                ClothingItem.status == ItemStatus.ready,
             )
         )
         if set(result.scalars()) != set(item_ids):
-            raise HTTPException(422, detail="Items are unavailable")
+            raise ItemOwnershipError("Items are unavailable")
 
     async def _root(self, user_id: UUID, outfit: Outfit) -> Outfit:
         seen = {outfit.id}
@@ -97,22 +113,15 @@ class WearService:
         *,
         caller: str,
     ) -> Created | AlreadyThis | DayLogged:
+        """Return Created, unchanged AlreadyThis, or DayLogged; the caller commits."""
         if worn_on > get_user_today(user):
             raise HTTPException(422, detail="Wear date cannot be in the future")
+        await self.lock_day(user.id, worn_on)
         source = await self._load(user.id, source_outfit.id)
         effective_ids = (
             item_ids if item_ids is not None else [item.item_id for item in source.items]
         )
-        await self._validate(user, source, effective_ids)
-        await self.db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": f"{user.id}:{worn_on.isoformat()}"},
-        )
-        source = await self._load(user.id, source.id)
-        effective_ids = (
-            item_ids if item_ids is not None else [item.item_id for item in source.items]
-        )
-        await self._validate(user, source, effective_ids)
+        await self._validate(user, source, effective_ids, availability=False)
         was_worn = source.feedback is not None and source.feedback.worn_at is not None
         is_child = source.scheduled_for is not None and source.cloned_from_outfit_id is not None
         root = await self._root(user.id, source) if was_worn or is_child else source
@@ -129,15 +138,12 @@ class WearService:
         )
         logged = list(result.scalars())
         for existing in logged:
-            if (
-                existing.id == root.id
-                or existing.cloned_from_outfit_id == root.id
-                or existing.replaces_outfit_id == root.id
-            ):
+            if (await self._root(user.id, existing)).id == root.id:
                 if {item.item_id for item in existing.items} == set(effective_ids):
                     return AlreadyThis(existing)
         if logged:
             return DayLogged([existing.id for existing in logged])
+        await self._validate(user, source, effective_ids)
 
         inspiration = "inspiration" in (source.ai_raw_response or {})
         was_worn = source.feedback is not None and source.feedback.worn_at is not None
@@ -159,7 +165,13 @@ class WearService:
                 source=OutfitSource.manual,
                 status=OutfitStatus.pending,
                 cloned_from_outfit_id=root.id if template_root and not inspiration else None,
-                replaces_outfit_id=None if template_root and not inspiration else root.id,
+                replaces_outfit_id=(
+                    source.id
+                    if caller == "wore_instead"
+                    else None
+                    if template_root and not inspiration
+                    else root.id
+                ),
                 name=source.name,
                 source_item_id=source.source_item_id,
             )
@@ -197,6 +209,8 @@ class WearService:
             select(Outfit)
             .where(
                 Outfit.user_id == user.id,
+                Outfit.id != wear.id,
+                or_(Outfit.id == source.id, Outfit.scheduled_for == worn_on),
                 Outfit.source.in_(
                     [OutfitSource.scheduled, OutfitSource.on_demand, OutfitSource.external]
                 ),
@@ -206,9 +220,6 @@ class WearService:
             .options(selectinload(Outfit.feedback))
         )
         for suggestion in result.scalars():
-            if suggestion.id != wear.id and (
-                suggestion.id == source.id or suggestion.scheduled_for == worn_on
-            ):
-                suggestion.status = OutfitStatus.skipped
+            suggestion.status = OutfitStatus.skipped
         await self.db.flush()
         return Created(wear)

@@ -10,7 +10,13 @@ from sqlalchemy import func, select, text
 from app.models.item import ClothingItem, ItemHistory
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus, UserFeedback
 from app.services.outfit_service import OutfitListFilters, OutfitService
-from app.services.wear_service import AlreadyThis, Created, DayLogged, WearService
+from app.services.wear_service import (
+    AlreadyThis,
+    Created,
+    DayLogged,
+    ItemOwnershipError,
+    WearService,
+)
 from app.utils.timezone import get_user_today
 from tests.test_outfit_wear_history import _items
 
@@ -145,7 +151,7 @@ async def test_transitive_template_root_and_backfill(
         "foreign_outfit",
     ],
 )
-async def test_validation_before_lock(db_session, studio_user, wardrobe_items, bad):
+async def test_validation_before_write(db_session, studio_user, wardrobe_items, bad):
     ids = [item.id for item in wardrobe_items]
     today = get_user_today(studio_user)
     chosen = await source(db_session, studio_user, [] if bad == "missing" else ids[:2])
@@ -162,29 +168,20 @@ async def test_validation_before_lock(db_session, studio_user, wardrobe_items, b
         chosen.status = OutfitStatus(bad)
     elif bad == "foreign_outfit":
         chosen = Outfit(id=uuid4(), user_id=uuid4())
-        with pytest.raises(HTTPException) as failure:
+        with pytest.raises(LookupError):
             await WearService(db_session).log_worn(studio_user, chosen, today, caller="test")
-        assert failure.value.status_code == 404
         return
     await db_session.flush()
-    statements = []
-    execute = db_session.execute
-
-    async def capture(statement, *args, **kwargs):
-        statements.append(str(statement))
-        return await execute(statement, *args, **kwargs)
-
-    with patch.object(db_session, "execute", side_effect=capture):
-        with pytest.raises(HTTPException) as failure:
-            await WearService(db_session).log_worn(
-                studio_user,
-                chosen,
-                today + timedelta(days=1) if bad == "future" else today,
-                supplied,
-                caller="test",
-            )
-    assert failure.value.status_code == 422
-    assert not any("pg_advisory" in statement for statement in statements)
+    with pytest.raises((HTTPException, ItemOwnershipError)) as failure:
+        await WearService(db_session).log_worn(
+            studio_user,
+            chosen,
+            today + timedelta(days=1) if bad == "future" else today,
+            supplied,
+            caller="test",
+        )
+    if isinstance(failure.value, HTTPException):
+        assert failure.value.status_code == 422
     assert (
         await db_session.scalar(
             select(func.count()).select_from(ItemHistory).where(ItemHistory.item_id.in_(ids))
