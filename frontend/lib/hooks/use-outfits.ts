@@ -38,6 +38,7 @@ export interface OutfitListResponse {
 }
 
 export interface OutfitFilters {
+  worn?: boolean;
   group?: boolean;
   ready_to_wear?: boolean;
   status?: OutfitStatus;
@@ -90,6 +91,7 @@ function outfitListParams(filters: OutfitFilters, page: number, pageSize: number
 
   if (filters.group) params.group = String(filters.group);
   if (filters.ready_to_wear) params.ready_to_wear = String(filters.ready_to_wear);
+  if (filters.worn !== undefined) params.worn = String(filters.worn);
   if (filters.status) params.status = filters.status;
   if (filters.occasion) params.occasion = filters.occasion;
   if (filters.date_from) params.date_from = filters.date_from;
@@ -286,6 +288,7 @@ export function useCalendarOutfits(year: number, month: number, filters: OutfitF
     date_to,
   };
 
+  if (filters.worn !== undefined) params.worn = String(filters.worn);
   if (filters.status) params.status = filters.status;
   if (filters.occasion) params.occasion = filters.occasion;
 

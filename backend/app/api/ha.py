@@ -6,7 +6,6 @@ could edit or delete the catalog (PER-160).
 
 import hmac
 import logging
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
@@ -16,10 +15,11 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.database import DbSession
 from app.models.item import ClothingItem
-from app.models.outfit import Outfit, OutfitSource, OutfitStatus, UserFeedback
+from app.models.outfit import Outfit, OutfitSource, UserFeedback
 from app.models.user import User
 from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
+from app.services.wear_service import AlreadyThis, DayLogged, WearService
 from app.utils.garment_vocabulary import types_for_role
 from app.utils.timezone import get_user_today
 
@@ -57,7 +57,6 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
         return _error(status.HTTP_404_NOT_FOUND, "user_not_found")
 
     today = get_user_today(user)
-    # Row locks ensure two concurrent calls log only one wear.
     result = await db.execute(
         select(Outfit)
         .where(
@@ -67,42 +66,38 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
         )
         .order_by(Outfit.created_at.desc())
         .options(selectinload(Outfit.items), selectinload(Outfit.feedback))
-        .with_for_update(of=Outfit)
     )
     outfits = list(result.scalars().all())
     if not outfits:
-        return _error(status.HTTP_404_NOT_FOUND, "no_outfit_today")
-
-    # A day gets one wear even when it has several scheduled outfits.
-    worn = next((o for o in outfits if o.feedback and o.feedback.worn_at), None)
-    if worn is not None:
+        logged = await db.execute(
+            select(Outfit.id)
+            .where(Outfit.user_id == user.id, Outfit.feedback.has(UserFeedback.worn_at == today))
+            .order_by(Outfit.id)
+        )
+        existing_id = logged.scalars().first()
+        if existing_id is None:
+            return _error(status.HTTP_404_NOT_FOUND, "no_outfit_today")
         return JSONResponse(
             {
                 "ok": True,
-                "outfit_id": str(worn.id),
+                "outfit_id": str(existing_id),
                 "date": today.isoformat(),
                 "already_logged": True,
             }
         )
-
-    outfit = outfits[0]
-    feedback = outfit.feedback
-    if feedback is None:
-        feedback = UserFeedback(outfit_id=outfit.id)
-        outfit.feedback = feedback
-        db.add(feedback)
-    feedback.accepted = True
-    feedback.actually_worn = True
-    feedback.worn_at = today
-    outfit.status = OutfitStatus.accepted
-    outfit.responded_at = datetime.now(UTC)
-    await ItemService(db).record_wears(
-        user.id,
-        [outfit_item.item_id for outfit_item in outfit.items],
-        today,
-        occasion=outfit.occasion,
-        outfit_id=outfit.id,
-    )
+    result = await WearService(db).log_worn(user, outfits[0], today, caller="ha")
+    if isinstance(result, (AlreadyThis, DayLogged)):
+        outfit_id = result.existing_ids[0] if isinstance(result, DayLogged) else result.outfit.id
+        await db.commit()
+        return JSONResponse(
+            {
+                "ok": True,
+                "outfit_id": str(outfit_id),
+                "date": today.isoformat(),
+                "already_logged": True,
+            }
+        )
+    outfit = result.outfit
     await db.commit()
 
     try:

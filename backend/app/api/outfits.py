@@ -47,6 +47,7 @@ from app.services.studio_service import (
     StudioService,
 )
 from app.services.suggestion_cache import clear_suggestions
+from app.services.wear_service import AlreadyThis, WearService, require_wear
 from app.services.weather_service import WeatherData
 from app.utils.auth import get_current_user
 from app.utils.rate_limit import rate_limit_by_user
@@ -194,6 +195,7 @@ class OutfitListResponse(BaseModel):
 class BulkOutfitFilters(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
+    worn: bool | None = None
     ready_to_wear: bool = False
     group: bool = False
     status_filter: str | None = Field(None, alias="status")
@@ -638,6 +640,7 @@ async def list_outfits(
         None, description="Legacy alias for item_type used by /pairings"
     ),
     group: bool = Query(False),
+    worn: bool | None = Query(None),
     ready_to_wear: bool = Query(False),
     search: str | None = Query(None, max_length=50),
     occasions: str | None = Query(
@@ -656,6 +659,7 @@ async def list_outfits(
     filters = OutfitListFilters(
         user_id=target_user_id,
         group=group,
+        worn=worn,
         ready_to_wear=ready_to_wear,
         status_filter=status_filter,
         occasion=occasion,
@@ -714,6 +718,7 @@ async def bulk_delete_outfits(
     if request.select_all:
         list_filters = OutfitListFilters(
             user_id=current_user.id,
+            worn=request.filters.worn if request.filters else None,
             ready_to_wear=request.filters.ready_to_wear if request.filters else False,
             status_filter=request.filters.status_filter if request.filters else None,
             occasion=request.filters.occasion if request.filters else None,
@@ -946,6 +951,17 @@ async def submit_feedback(
             detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
         )
 
+    if request.worn or request.actually_worn is True:
+        existing_date = outfit.feedback.worn_at if outfit.feedback else None
+        wear_result = await WearService(db).log_worn(
+            current_user,
+            outfit,
+            existing_date or get_user_today(current_user),
+            request.wore_instead_items or None,
+            caller="feedback",
+        )
+        outfit = require_wear(wear_result)
+
     if outfit.feedback:
         feedback = outfit.feedback
     else:
@@ -953,7 +969,7 @@ async def submit_feedback(
         outfit.feedback = feedback
         db.add(feedback)
 
-    if request.accepted is not None:
+    if request.accepted is not None and not feedback.worn_at:
         feedback.accepted = request.accepted
         outfit.status = OutfitStatus.accepted if request.accepted else OutfitStatus.rejected
         outfit.responded_at = datetime.utcnow()
@@ -966,24 +982,14 @@ async def submit_feedback(
         feedback.style_rating = request.style_rating
     if request.comment is not None:
         feedback.comment = request.comment
-    if request.worn and not feedback.worn_at:
-        user_today = get_user_today(current_user)
-        feedback.worn_at = user_today
-        await ItemService(db).record_wears(
-            current_user.id,
-            [outfit_item.item_id for outfit_item in outfit.items],
-            user_today,
-            occasion=outfit.occasion,
-            outfit_id=outfit.id,
-        )
     if request.worn_with_modifications is not None:
         feedback.worn_with_modifications = request.worn_with_modifications
     if request.modification_notes is not None:
         feedback.modification_notes = request.modification_notes
-    if request.actually_worn is not None:
+    if request.actually_worn is not None and not feedback.worn_at:
         feedback.actually_worn = request.actually_worn
     replacement: Outfit | None = None
-    if request.wore_instead_items is not None:
+    if request.wore_instead_items is not None and not (request.worn or request.actually_worn):
         feedback.wore_instead_items = [str(item_id) for item_id in request.wore_instead_items]
         if request.wore_instead_items:
             studio_service = StudioService(db)
@@ -1245,6 +1251,36 @@ class WearTodayRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scheduled_for: date | None = None
+
+
+class WoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date: date
+    item_ids: list[UUID] | None = Field(None, min_length=1, max_length=20)
+
+
+@router.post("/{outfit_id}/wore", response_model=WearOutfitResponse)
+async def log_outfit_worn(
+    outfit_id: UUID,
+    request: WoreRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> WearOutfitResponse:
+    service = WearService(db)
+    source = await service._load(current_user.id, outfit_id)
+    result = await service.log_worn(
+        current_user, source, request.date, request.item_ids, caller="wore"
+    )
+    outfit = require_wear(result)
+    await db.commit()
+    if not isinstance(result, AlreadyThis):
+        await _run_learning_safely(db, outfit.id, current_user.id)
+    await clear_suggestions(current_user.id, outfit.occasion)
+    full = await StudioService(db).get_full_outfit(outfit.id)
+    return WearOutfitResponse(
+        **outfit_to_response(full).model_dump(), already_logged=isinstance(result, AlreadyThis)
+    )
 
 
 class PatchOutfitRequest(BaseModel):

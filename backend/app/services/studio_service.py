@@ -16,8 +16,8 @@ from app.models.outfit import (
     OutfitStatus,
 )
 from app.models.user import User
-from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
+from app.services.wear_service import AlreadyThis, WearService, require_wear
 from app.utils.clothing import canonical_item_order
 from app.utils.timezone import get_user_today
 
@@ -130,7 +130,7 @@ class StudioService:
         # Marking an undated outfit worn means it was worn today, as wear_today assumes.
         if mark_worn and scheduled_for is None:
             scheduled_for = get_user_today(user)
-        effective_worn = scheduled_for if mark_worn else None
+        effective_worn = None
 
         outfit = Outfit(
             user_id=user.id,
@@ -157,14 +157,13 @@ class StudioService:
         )
         self.db.add(feedback)
 
-        if mark_worn and effective_worn is not None:
-            await ItemService(self.db).record_wears(
-                user.id,
-                [i.id for i in ordered],
-                effective_worn,
-                occasion=occasion,
-                outfit_id=outfit.id,
+        await self.db.flush()
+        if mark_worn:
+            source = await self._reload_outfit(outfit.id)
+            result = await WearService(self.db).log_worn(
+                user, source, scheduled_for, caller="studio"
             )
+            require_wear(result)
 
         await self.db.flush()
         return await self._reload_outfit(outfit.id)
@@ -178,69 +177,19 @@ class StudioService:
         comment: str | None,
         scheduled_for: date | None,
     ) -> Outfit:
-        result = await self.db.execute(
-            select(Outfit)
-            .where(and_(Outfit.id == original_outfit_id, Outfit.user_id == user.id))
-            .options(selectinload(Outfit.feedback))
-            .with_for_update()
+        original = await WearService(self.db)._load(user.id, original_outfit_id)
+        result = await WearService(self.db).log_worn(
+            user,
+            original,
+            scheduled_for or original.scheduled_for or get_user_today(user),
+            item_ids,
+            caller="wore_instead",
         )
-        original = result.scalar_one_or_none()
-        if original is None:
-            raise LookupError("original outfit not found")
-
-        existing_result = await self.db.execute(
-            select(Outfit)
-            .where(Outfit.replaces_outfit_id == original.id)
-            .options(
-                selectinload(Outfit.items).selectinload(OutfitItem.item),
-                selectinload(Outfit.feedback),
-            )
-        )
-        existing_replacement = existing_result.scalar_one_or_none()
-        if existing_replacement is not None:
-            return existing_replacement
-
-        items = await validate_item_ownership(self.db, user.id, item_ids)
-        ordered = self._order_items_canonically(items)
-
-        effective_date = scheduled_for or original.scheduled_for
-
-        replacement = Outfit(
-            user_id=user.id,
-            occasion=original.occasion,
-            scheduled_for=effective_date,
-            source=OutfitSource.manual,
-            status=_worn_status(effective_date),
-            responded_at=_responded_at(effective_date),
-            replaces_outfit_id=original.id,
-        )
-        self.db.add(replacement)
-        await self.db.flush()
-
-        for pos, item in enumerate(ordered):
-            self.db.add(OutfitItem(outfit_id=replacement.id, item_id=item.id, position=pos))
-
-        feedback = self.learning.create_synthetic_feedback(
-            outfit_id=replacement.id,
-            accepted=True,
-            worn_at=effective_date,
-            rating=rating,
-            comment=comment,
-        )
-        self.db.add(feedback)
-
-        original.status = OutfitStatus.rejected
-        original.responded_at = datetime.utcnow()
-
-        if effective_date is not None:
-            await ItemService(self.db).record_wears(
-                user.id,
-                [i.id for i in ordered],
-                effective_date,
-                occasion=replacement.occasion,
-                outfit_id=replacement.id,
-            )
-
+        replacement = require_wear(result)
+        if rating is not None:
+            replacement.feedback.rating = rating
+        if comment is not None:
+            replacement.feedback.comment = comment
         await self.db.flush()
         return await self._reload_outfit(replacement.id)
 
@@ -322,73 +271,13 @@ class StudioService:
         if target_date > get_user_today(user):
             raise FutureWearDateError("Wear date cannot be in the future")
 
-        result = await self.db.execute(
-            select(Outfit)
-            .where(and_(Outfit.id == template_id, Outfit.user_id == user.id))
-            .options(selectinload(Outfit.items).selectinload(OutfitItem.item))
-            .with_for_update(of=Outfit)
-        )
-        template = result.scalar_one_or_none()
-        if template is None:
-            raise LookupError("template not found")
-
-        if template.scheduled_for is not None:
+        template = await WearService(self.db)._load(user.id, template_id)
+        if template.scheduled_for is not None or template.source != OutfitSource.manual:
             raise OutfitNotTemplateError("wear_today requires a lookbook template")
-
-        # Lock the template before checking, so concurrent requests reuse the same dated wear.
-        existing = await self.db.execute(
-            select(Outfit.id)
-            .where(
-                Outfit.user_id == user.id,
-                Outfit.cloned_from_outfit_id == template.id,
-                Outfit.scheduled_for == target_date,
-                Outfit.feedback.has(worn_at=target_date),
-            )
-            .order_by(Outfit.created_at)
+        result = await WearService(self.db).log_worn(
+            user, template, target_date, caller="wear_today"
         )
-        existing_id = existing.scalars().first()
-        if existing_id is not None:
-            return await self._reload_outfit(existing_id), True
-
-        wear = Outfit(
-            user_id=user.id,
-            occasion=template.occasion,
-            scheduled_for=target_date,
-            source=OutfitSource.manual,
-            status=OutfitStatus.accepted,
-            responded_at=datetime.now(UTC),
-            cloned_from_outfit_id=template.id,
-            source_item_id=template.source_item_id,
-            name=template.name,
-        )
-        self.db.add(wear)
-        await self.db.flush()
-
-        for oi in sorted(template.items, key=lambda x: x.position):
-            self.db.add(
-                OutfitItem(
-                    outfit_id=wear.id,
-                    item_id=oi.item_id,
-                    position=oi.position,
-                    layer_type=oi.layer_type,
-                )
-            )
-
-        feedback = self.learning.create_synthetic_feedback(
-            outfit_id=wear.id, accepted=True, worn_at=target_date
-        )
-        self.db.add(feedback)
-
-        await ItemService(self.db).record_wears(
-            user.id,
-            [oi.item_id for oi in template.items],
-            target_date,
-            occasion=wear.occasion,
-            outfit_id=wear.id,
-        )
-
-        await self.db.flush()
-        return await self._reload_outfit(wear.id), False
+        return require_wear(result), isinstance(result, AlreadyThis)
 
     async def patch_outfit(
         self,
