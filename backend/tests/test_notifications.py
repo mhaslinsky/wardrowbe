@@ -1408,3 +1408,14 @@ async def test_schedule_notify_round_trip(client, test_user, auth_headers):
     )
     assert default.status_code == 201
     assert default.json()["notify"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("notify", [None, "invalid", {}, []])
+async def test_schedule_rejects_invalid_notify(client, test_user, auth_headers, notify):
+    response = await client.post(
+        "/api/v1/notifications/schedules",
+        headers=auth_headers,
+        json={"day_of_week": 5, "notification_time": "20:00", "notify": notify},
+    )
+    assert response.status_code == 422
