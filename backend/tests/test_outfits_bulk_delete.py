@@ -307,3 +307,34 @@ class TestBulkDeleteResourceLimits:
 
         remaining = await db_session.execute(select(Outfit).where(Outfit.user_id == test_user.id))
         assert remaining.scalars().all() == []
+
+
+@pytest.mark.parametrize("ready_filter", [True, False, None])
+async def test_select_all_matches_ready_to_wear_list(
+    client, test_user, auth_headers, db_session, ready_filter
+):
+    clean = _make_item(test_user.id, needs_wash=False)
+    dirty = _make_item(test_user.id, needs_wash=True)
+    db_session.add_all([clean, dirty])
+    await db_session.flush()
+    clean_outfit = _make_outfit(test_user.id, [clean])
+    mixed_outfit = _make_outfit(test_user.id, [clean, dirty])
+    empty_outfit = _make_outfit(test_user.id)
+    db_session.add_all([clean_outfit, mixed_outfit, empty_outfit])
+    await db_session.commit()
+    all_ids = {str(clean_outfit.id), str(mixed_outfit.id), str(empty_outfit.id)}
+    expected_ids = all_ids - {str(mixed_outfit.id)} if ready_filter else all_ids
+    filters = {} if ready_filter is None else {"ready_to_wear": ready_filter}
+    listed = await client.get("/api/v1/outfits", params=filters, headers=auth_headers)
+    assert listed.status_code == 200
+    assert {outfit["id"] for outfit in listed.json()["outfits"]} == expected_ids
+    deleted = await client.post(
+        "/api/v1/outfits/bulk/delete",
+        json={"select_all": True, "filters": filters},
+        headers=auth_headers,
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] == len(expected_ids)
+    assert deleted.json()["failed"] == 0
+    remaining = await db_session.execute(select(Outfit.id).where(Outfit.user_id == test_user.id))
+    assert {str(outfit_id) for outfit_id in remaining.scalars()} == all_ids - expected_ids
