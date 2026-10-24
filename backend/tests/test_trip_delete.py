@@ -103,3 +103,48 @@ async def test_partial_failure_rolls_back(db_session, test_user):
 
 async def test_malformed_id(client, auth_headers):
     assert (await client.delete("/api/v1/trips/broken", headers=auth_headers)).status_code == 422
+
+
+async def test_missing_and_foreign_links(client, db_session, test_user, auth_headers):
+    other = User(email=f"{uuid4()}@example.com", display_name="Other")
+    db_session.add(other)
+    await db_session.flush()
+    foreign_trip, foreign_ids = await seed_trip(db_session, other.id, 1)
+    trip_id, _ = await seed_trip(db_session, test_user.id, 0)
+    trip = await db_session.get(Trip, trip_id)
+    trip.days = [{"outfit_id": str(uuid4())}, {"outfit_id": str(foreign_ids[0])}]
+    await db_session.commit()
+    assert (
+        await client.delete(f"/api/v1/trips/{trip_id}", headers=auth_headers)
+    ).status_code == 204
+    assert await db_session.scalar(select(Trip.id).where(Trip.id == foreign_trip)) == foreign_trip
+    assert (
+        await db_session.scalar(select(Outfit.id).where(Outfit.id == foreign_ids[0]))
+        == foreign_ids[0]
+    )
+
+
+async def test_commit_failure_keeps_images_and_rows(db_session, test_user):
+    trip_id, outfit_ids = await seed_trip(db_session, test_user.id, 1)
+    user_id = test_user.id
+    with (
+        patch.object(db_session, "commit", side_effect=RuntimeError("forced commit failure")),
+        patch("app.services.trip_service.InspirationService.cleanup_image") as cleanup,
+    ):
+        with pytest.raises(RuntimeError, match="forced commit failure"):
+            await TripService(db_session).delete(user_id, trip_id)
+    cleanup.assert_not_called()
+    assert await db_session.scalar(select(Trip.id).where(Trip.id == trip_id)) == trip_id
+    assert (
+        await db_session.scalar(select(Outfit.id).where(Outfit.id == outfit_ids[0]))
+        == outfit_ids[0]
+    )
+
+
+async def test_image_cleanup_after_commit(db_session, test_user):
+    trip_id, outfit_ids = await seed_trip(db_session, test_user.id, 1)
+    with patch("app.services.trip_service.InspirationService.cleanup_image") as cleanup:
+        assert await TripService(db_session).delete(test_user.id, trip_id)
+    assert cleanup.call_count == 1
+    assert cleanup.call_args.args[0].id == outfit_ids[0]
+    assert not db_session.in_transaction()
