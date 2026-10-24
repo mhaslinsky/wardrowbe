@@ -195,3 +195,82 @@ async def test_trip_failure_rolls_back_committed_recommendations(db_session, tes
             select(func.count()).select_from(Trip).where(Trip.user_id == user_id)
         )
     ).scalar_one() == 0
+
+
+async def test_four_day_api_plan_and_calendar(client, db_session, test_user, auth_headers):
+    from app.models.item import ClothingItem, ItemStatus
+    from app.models.outfit import OutfitSource
+    from app.services.recommendation_service import RecommendationService
+
+    wardrobe = [
+        ClothingItem(
+            user_id=test_user.id,
+            type=kind,
+            name=f"Trip {index}",
+            image_path="trip-test",
+            status=ItemStatus.ready,
+            needs_wash=index == 0,
+        )
+        for index, kind in enumerate(["shirt"] * 5 + ["jeans", "jacket"])
+    ]
+    db_session.add_all(wardrobe)
+    await db_session.commit()
+    dirty_id = wardrobe[0].id
+    top_ids = [entry.id for entry in wardrobe[1:5]]
+    jeans_id = wardrobe[5].id
+    jacket_id = wardrobe[6].id
+    weather = TripWeather.climate_normal(
+        date(2027, 5, 1),
+        {"time": ["1991-05-01"], "temperature_2m_min": [10], "temperature_2m_max": [18]},
+    )
+    seen = []
+
+    async def generate(service, **kwargs):
+        excluded = kwargs["exclude_items"]
+        assert dirty_id in excluded
+        assert all(previous in excluded for previous in seen)
+        top_id = next(entry for entry in top_ids if entry not in excluded)
+        seen.append(top_id)
+        return [
+            await service._materialize_outfit(
+                {"items": [1, 2, 3]},
+                kwargs["user"],
+                weather,
+                kwargs["occasion"],
+                OutfitSource.on_demand,
+                {1: top_id, 2: jeans_id, 3: jacket_id},
+                scheduled_date=kwargs["scheduled_date"],
+            )
+        ]
+
+    with (
+        patch(
+            "app.services.trip_service.TripWeather.for_dates",
+            AsyncMock(return_value=[(weather, "forecast")] * 4),
+        ),
+        patch.object(RecommendationService, "generate_recommendations", generate),
+        patch("app.services.trip_service.get_user_today", return_value=date(2026, 10, 23)),
+    ):
+        response = await client.post(
+            "/api/v1/trips",
+            headers=auth_headers,
+            json={
+                "destination": "Paris",
+                "start_date": "2027-05-01",
+                "end_date": "2027-05-04",
+                "occasions": ["casual", "work"],
+            },
+        )
+    assert response.status_code == 201, response.text
+    trip = response.json()
+    assert [day["date"] for day in trip["days"]] == [f"2027-05-0{index}" for index in range(1, 5)]
+    assert len(trip["packing"]) == len({entry["item_id"] for entry in trip["packing"]}) == 6
+    assert {entry["item_id"]: entry["days_worn"] for entry in trip["packing"]}[str(jeans_id)] == 4
+    assert (await client.get("/api/v1/trips", headers=auth_headers)).json()[0]["id"] == trip["id"]
+    calendar = await client.get(
+        "/api/v1/outfits?date_from=2027-05-01&date_to=2027-05-04", headers=auth_headers
+    )
+    assert calendar.status_code == 200, calendar.text
+    assert {entry["id"] for entry in calendar.json()["outfits"]} == {
+        entry["outfit_id"] for entry in trip["days"]
+    }
