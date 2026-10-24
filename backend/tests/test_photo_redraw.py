@@ -1,5 +1,6 @@
 import base64
 import json
+import threading
 from io import BytesIO
 from unittest.mock import AsyncMock, patch
 
@@ -19,6 +20,46 @@ def garment(color=GREEN):
     return image
 
 
+def reply(parts):
+    payload = {
+        "candidates": [{"content": {"parts": parts}}],
+        "usageMetadata": {"candidatesTokenCount": 1120},
+    }
+    return httpx.Response(200, json=payload)
+
+
+async def image_action(client, headers, item, action):
+    from app.services.photo_redraw_service import lock_photo
+
+    prefix = f"/api/v1/items/{item.id}"
+    if action == "replace":
+        return await client.put(
+            prefix + "/image",
+            files={"image": ("new.jpg", _jpeg_bytes(RED), "image/jpeg")},
+            headers=headers,
+        )
+    if action == "delete":
+        return await client.delete(prefix, headers=headers)
+    if action == "bulk-delete":
+        response = await client.post(
+            "/api/v1/items/bulk/delete", json={"item_ids": [str(item.id)]}, headers=headers
+        )
+        assert response.json()["deleted"] == 1
+        return response
+    with (
+        patch("app.services.background_removal.get_provider", return_value=_mock_provider()),
+        patch("app.services.photo_redraw_service.lock_photo", wraps=lock_photo) as locked,
+    ):
+        if action == "restore-original":
+            assert (
+                await client.post(prefix + "/remove-background", json={}, headers=headers)
+            ).status_code == 200
+        response = await client.post(prefix + "/" + action, json={}, headers=headers)
+        if action in ("rotate", "remove-background"):
+            assert locked.await_count == 1
+        return response
+
+
 @pytest_asyncio.fixture
 async def photo_item(db_session, test_user, monkeypatch):
     monkeypatch.setitem(get_settings().__dict__, "ai_image_model", "gemini-3.1-flash-image")
@@ -28,26 +69,32 @@ async def photo_item(db_session, test_user, monkeypatch):
 
 @pytest.mark.parametrize("color,expected", [(GREEN, True), (RED, False), ((3, 50, 8), False)])
 def test_color_drift(color, expected):
-    from app.services.photo_redraw_service import colors_match
+    from app.services.photo_redraw_service import color_check
 
-    assert colors_match(garment(), garment(color)) is expected
-
-
-def test_empty_mask_rejected():
-    from app.services.photo_redraw_service import colors_match
-
-    with pytest.raises(ValueError, match="Empty garment"):
-        colors_match(Image.new("RGBA", (5, 5)), garment())
+    assert color_check(garment(), garment(color))["passed"] is expected
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["generated", "color_drift", "failed", "skipped", "malformed"])
-async def test_gemini_cutout_fallback_and_no_double_charge(mode, client, auth_headers, photo_item):
+@pytest.mark.parametrize(
+    "mode", ["generated", "color_drift", "failed", "skipped", "malformed", "checkerboard"]
+)
+async def test_gemini_cutout_fallback_and_no_double_charge(
+    mode, client, auth_headers, photo_item, db_session
+):
     from app.services.photo_redraw_service import PhotoRedrawService
 
     generated = BytesIO()
-    garment().convert("RGB").save(generated, "JPEG")
+    image = garment().convert("RGB")
+    if mode == "checkerboard":
+        for row in range(8):
+            for column in range(8):
+                shade = 192 if (row + column) % 2 else 255
+                image.paste(
+                    (shade, shade, shade), (column * 8, row * 8, column * 8 + 8, row * 8 + 8)
+                )
+    image.save(generated, "JPEG")
     calls = []
+    inline = {"data": base64.b64encode(generated.getvalue()).decode(), "mimeType": "image/jpeg"}
 
     def respond(request):
         body = json.loads(request.content)
@@ -60,25 +107,8 @@ async def test_gemini_cutout_fallback_and_no_double_charge(mode, client, auth_he
             parts = [{"text": text}]
         else:
             assert body["generationConfig"]["responseModalities"] == ["IMAGE"]
-            parts = (
-                []
-                if mode == "malformed"
-                else [
-                    {
-                        "inlineData": {
-                            "data": base64.b64encode(generated.getvalue()).decode(),
-                            "mimeType": "image/jpeg",
-                        }
-                    }
-                ]
-            )
-        return httpx.Response(
-            200,
-            json={
-                "candidates": [{"content": {"parts": parts}}],
-                "usageMetadata": {"candidatesTokenCount": 1120},
-            },
-        )
+            parts = [] if mode == "malformed" else [{"inlineData": inline}]
+        return reply(parts)
 
     transport = httpx.MockTransport(respond)
     real_client = httpx.AsyncClient
@@ -86,12 +116,29 @@ async def test_gemini_cutout_fallback_and_no_double_charge(mode, client, auth_he
     if mode == "failed":
         cutouts[1] = RuntimeError("rembg unavailable")
 
+    from app.services.photo_redraw_service import cutout as actual_cutout
+
     def remove_cutout(image):
+        if mode == "checkerboard" and len(cutouts) == 1:
+            with patch(
+                "app.services.photo_redraw_service.get_provider", return_value=_mock_provider()
+            ):
+                return actual_cutout(image)
         result = cutouts.pop(0) if cutouts else garment()
         if isinstance(result, Exception):
             raise result
         return result
 
+    from app.services.photo_redraw_service import garment_color
+
+    measurements = []
+
+    def measure(image):
+        measurements.append(threading.get_ident())
+        return garment_color(image)
+
+    prefix = f"/api/v1/items/{photo_item.id}"
+    endpoint = prefix + "/redraw-photo"
     original_path = photo_item.image_path
     original_bytes = ImageService().get_image_path(original_path).read_bytes()
     with (
@@ -100,16 +147,20 @@ async def test_gemini_cutout_fallback_and_no_double_charge(mode, client, auth_he
             side_effect=lambda **kwargs: real_client(transport=transport, **kwargs),
         ),
         patch("app.services.photo_redraw_service.cutout", side_effect=remove_cutout),
+        patch("app.services.photo_redraw_service.garment_color", side_effect=measure),
     ):
-        response = await client.post(
-            f"/api/v1/items/{photo_item.id}/redraw-photo", headers=auth_headers
-        )
-        duplicate = await client.post(
-            f"/api/v1/items/{photo_item.id}/redraw-photo", headers=auth_headers
-        )
+        if mode in ("failed", "malformed", "checkerboard"):
+            with pytest.raises((RuntimeError, ValueError)):
+                await client.post(endpoint, headers=auth_headers)
+            response = await client.get(prefix, headers=auth_headers)
+        else:
+            response = await client.post(endpoint, headers=auth_headers)
+        duplicate = await client.post(endpoint, headers=auth_headers)
     assert response.status_code == 200, response.text
     data = response.json()
-    assert data["photo_redraw"]["status"] == ("failed" if mode == "malformed" else mode)
+    assert data["photo_redraw"]["status"] == (
+        "failed" if mode in ("malformed", "checkerboard") else mode
+    )
     assert duplicate.status_code == 409
     assert len(calls) == (1 if mode == "skipped" else 2)
     assert ImageService().get_image_path(original_path).read_bytes() == original_bytes
@@ -118,18 +169,30 @@ async def test_gemini_cutout_fallback_and_no_double_charge(mode, client, auth_he
     else:
         assert data["image_path"] != original_path
     if mode in ("generated", "color_drift"):
+        assert len(measurements) == 2 and threading.get_ident() not in measurements
         saved = ImageService().get_image_path(data["photo_redraw"]["redrawn"]["image_path"])
         assert Image.open(saved).format == "PNG"
         assert Image.open(saved).getchannel("A").getextrema() == (0, 255)
         assert data["photo_choices"]["original"] and data["photo_choices"]["redrawn"]
+        from datetime import UTC, datetime, timedelta
+
+        photo_item.photo_redraw = {
+            **photo_item.photo_redraw,
+            "status": "generating",
+            "started_at": (datetime.now(UTC) - timedelta(minutes=16)).isoformat(),
+        }
+        await db_session.commit()
         with patch.object(PhotoRedrawService, "request", new_callable=AsyncMock) as paid:
-            for choice in ("original", "redrawn"):
+            directory = saved.parent
+            count = len(list(directory.iterdir()))
+            for choice in ("original", "original", "redrawn", "redrawn"):
                 switched = await client.post(
                     f"/api/v1/items/{photo_item.id}/photo/{choice}", headers=auth_headers
                 )
                 assert switched.status_code == 200, switched.text
                 assert switched.json()["photo_redraw"]["selected"] == choice
                 assert saved.exists()
+                assert len(list(directory.iterdir())) == count
             paid.assert_not_called()
 
 
@@ -153,36 +216,19 @@ async def test_retained_photos_survive_edits_and_delete_with_item(
         path: service.get_image_path(path).read_bytes()
         for path in [*original.values(), *redrawn.values()]
     }
-    prefix = f"/api/v1/items/{photo_item.id}"
-    if action == "replace":
-        response = await client.put(
-            prefix + "/image",
-            files={"image": ("new.jpg", _jpeg_bytes(RED), "image/jpeg")},
-            headers=auth_headers,
-        )
-    elif action in ("delete", "bulk-delete"):
-        tracked = list(retained_paths(photo_item).values())
-        if action == "delete":
-            response = await client.delete(prefix, headers=auth_headers)
-        else:
-            response = await client.post(
-                "/api/v1/items/bulk/delete",
-                json={"item_ids": [str(photo_item.id)]},
-                headers=auth_headers,
-            )
-            assert response.json()["deleted"] == 1
+    tracked = list(retained_paths(photo_item).values())
+    response = await image_action(client, auth_headers, photo_item, action)
+    if action in ("delete", "bulk-delete"):
         assert response.status_code in (200, 204), response.text
         assert all(not service.get_image_path(path).exists() for path in tracked)
         return
-    else:
-        with patch("app.services.background_removal.get_provider", return_value=_mock_provider()):
-            if action == "restore-original":
-                removal = await client.post(
-                    prefix + "/remove-background", json={}, headers=auth_headers
-                )
-                assert removal.status_code == 200, removal.text
-            response = await client.post(prefix + "/" + action, json={}, headers=auth_headers)
     assert response.status_code == (400 if action == "rotate" else 200), response.text
+    if action == "replace":
+        assert response.json()["photo_redraw"]["selected"] == "custom"
+    if action == "remove-background":
+        assert response.json()["original_image_path"] in response.json()["photo_redraw"]["retained"]
+    if action == "restore-original":
+        assert "A" in Image.open(service.get_image_path(response.json()["image_path"])).getbands()
     if action == "remove-background":
         thumbnail = service.get_image_path(response.json()["thumbnail_path"])
         assert Image.open(thumbnail).convert("RGB").getpixel((32, 32)) == (0, 0, 255)
@@ -200,22 +246,7 @@ async def test_no_redraw_keeps_base_file_behavior(
     service = ImageService()
     paths = [item.image_path, item.medium_path, item.thumbnail_path]
     before = set(service.get_image_path(item.image_path).parent.iterdir())
-    prefix = f"/api/v1/items/{item.id}"
-    if action == "replace":
-        response = await client.put(
-            prefix + "/image",
-            files={"image": ("new.jpg", _jpeg_bytes(RED), "image/jpeg")},
-            headers=auth_headers,
-        )
-    elif action == "delete":
-        response = await client.delete(prefix, headers=auth_headers)
-    elif action == "bulk-delete":
-        response = await client.post(
-            "/api/v1/items/bulk/delete", json={"item_ids": [str(item.id)]}, headers=auth_headers
-        )
-        assert response.json()["deleted"] == 1
-    else:
-        response = await client.post(prefix + "/rotate", headers=auth_headers)
+    response = await image_action(client, auth_headers, item, action)
     assert response.status_code == (
         400 if action == "rotate" else 204 if action == "delete" else 200
     ), response.text
@@ -229,7 +260,7 @@ async def test_no_redraw_keeps_base_file_behavior(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("operation", ["delete", "duplicate", "replace"])
+@pytest.mark.parametrize("operation", ["delete", "duplicate", "replace", "failure_replace"])
 async def test_changes_during_generation(
     operation, client, auth_headers, photo_item, db_session, test_user
 ):
@@ -262,12 +293,22 @@ async def test_changes_during_generation(
                 ]
                 current.photo_redraw = {**current.photo_redraw, "retained": [original_path]}
                 await other.commit()
-        return garment(), {}
+        if operation == "failure_replace":
+            raise RuntimeError("Provider failed after replace")
+        return garment(), {"status": "generated"}
 
     with (
         patch.object(PhotoRedrawService, "generate", side_effect=generate),
         patch("app.services.photo_redraw_service.cutout", return_value=garment()),
     ):
+        if operation == "failure_replace":
+            with pytest.raises(RuntimeError):
+                await client.post(f"/api/v1/items/{item_id}/redraw-photo", headers=auth_headers)
+            response = await client.get(f"/api/v1/items/{item_id}", headers=auth_headers)
+            assert original_path in response.json()["photo_redraw"]["retained"]
+            await client.delete(f"/api/v1/items/{item_id}", headers=auth_headers)
+            assert not ImageService().get_image_path(original_path).exists()
+            return
         response = await client.post(f"/api/v1/items/{item_id}/redraw-photo", headers=auth_headers)
     assert response.status_code == (404 if operation == "delete" else 200), response.text
     if operation == "delete":
@@ -283,8 +324,6 @@ async def test_bulk_missing_disabled_and_ownership(
     client, auth_headers, photo_item, db_session, monkeypatch
 ):
     from uuid import uuid4
-
-    from app.services.photo_redraw_service import PhotoRedrawService
 
     monkeypatch.setattr(get_settings(), "ai_image_model", "")
     response = await client.post(
@@ -302,18 +341,28 @@ async def test_bulk_missing_disabled_and_ownership(
     response = await client.post(f"/api/v1/items/{uuid4()}/redraw-photo", headers=auth_headers)
     assert response.status_code == 404
     assert (await client.post(f"/api/v1/items/{photo_item.id}/redraw-photo")).status_code == 401
-    with patch.object(PhotoRedrawService, "redraw", new_callable=AsyncMock) as redraw:
-        photo_item.photo_redraw = {"status": "skipped"}
-        await db_session.commit()
+    monkeypatch.setattr(get_settings(), "ai_image_model", "gemini-3.1-flash-image")
+    real_client = httpx.AsyncClient
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        text = json.dumps({"needs_redraw": False, "confidence": 0.99, "reason": "Catalog"})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": text}]}}]})
+
+    with patch(
+        "app.services.photo_redraw_service.httpx.AsyncClient",
+        side_effect=lambda **kwargs: real_client(transport=httpx.MockTransport(respond), **kwargs),
+    ):
         response = await client.post(
             "/api/v1/items/bulk/redraw-photo",
             json={"item_ids": [str(photo_item.id), str(uuid4())]},
             headers=auth_headers,
         )
-        assert response.status_code == 200, response.text
-        assert response.json()["results"][0]["status"] == "skipped"
-        assert response.json()["results"][1]["error"] == "Item not found"
-        assert redraw.await_count == 1
+    assert response.status_code == 200, response.text
+    assert response.json()["results"][0]["status"] == "skipped"
+    assert response.json()["results"][1]["error"] == "Item not found"
+    assert len(calls) == 1
 
 
 @pytest.mark.asyncio
@@ -344,3 +393,148 @@ def test_cutout_rejects_empty_and_opaque_masks(alpha):
     with patch("app.services.photo_redraw_service.get_provider", return_value=provider):
         with pytest.raises(ValueError):
             cutout(garment().convert("RGB"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["free", "paid", "stale"])
+async def test_cancel_recovery_and_explicit_retry(
+    phase, client, auth_headers, photo_item, db_session
+):
+    import asyncio
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    endpoint = f"/api/v1/items/{photo_item.id}/redraw-photo"
+
+    async def cancel(service, source):
+        if phase == "paid":
+            await service.mark_paid()
+        raise asyncio.CancelledError()
+
+    if phase == "stale":
+        photo_item.photo_redraw = {
+            "status": "generating",
+            "paid": False,
+            "started_at": (datetime.now(UTC) - timedelta(minutes=16)).isoformat(),
+        }
+        await db_session.commit()
+    else:
+        with (
+            patch.object(PhotoRedrawService, "generate", cancel),
+            patch("app.services.photo_redraw_service.cutout", return_value=garment()),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await client.post(endpoint, headers=auth_headers)
+        await db_session.refresh(photo_item, attribute_names=["photo_redraw"])
+        assert photo_item.photo_redraw["status"] == "failed"
+    with patch.object(
+        PhotoRedrawService, "generate", AsyncMock(return_value=(None, {"status": "skipped"}))
+    ):
+        assert (await client.post(endpoint, headers=auth_headers)).status_code == (
+            409 if phase == "paid" else 200
+        )
+        if phase == "paid":
+            assert (
+                await client.post(endpoint, json={"retry": True}, headers=auth_headers)
+            ).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_cancelled_store_cleans_files(photo_item, db_session):
+    import asyncio
+
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    loop = asyncio.get_running_loop()
+    started, finished, release = asyncio.Event(), asyncio.Event(), threading.Event()
+    store, written = ImageService.store_cutout, []
+
+    def blocked(service, image, owner):
+        paths = store(service, image, owner)
+        written.extend(paths.values())
+        loop.call_soon_threadsafe(started.set)
+        release.wait()
+        loop.call_soon_threadsafe(finished.set)
+        return paths
+
+    with (
+        patch.object(
+            PhotoRedrawService,
+            "generate",
+            AsyncMock(return_value=(garment(), {"status": "generated"})),
+        ),
+        patch.object(ImageService, "store_cutout", blocked),
+        patch("app.services.photo_redraw_service.cutout", return_value=garment()),
+    ):
+        task = asyncio.create_task(PhotoRedrawService().redraw(db_session, photo_item))
+        await started.wait()
+        task.cancel()
+        release.set()
+        await finished.wait()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert photo_item.photo_redraw["status"] == "failed"
+    assert all(not ImageService().get_image_path(path).exists() for path in written)
+
+
+@pytest.mark.asyncio
+async def test_final_commit_failure_removes_live_copies(photo_item, db_session):
+    from app.services.photo_redraw_service import PhotoRedrawService, retained_paths
+
+    commit = db_session.commit
+
+    async def fail_final():
+        if (photo_item.photo_redraw or {}).get("status") == "generated":
+            raise RuntimeError("Final commit failed")
+        await commit()
+
+    with (
+        patch.object(
+            PhotoRedrawService,
+            "generate",
+            AsyncMock(return_value=(garment(), {"status": "generated"})),
+        ),
+        patch.object(db_session, "commit", fail_final),
+        patch("app.services.photo_redraw_service.cutout", return_value=garment()),
+    ):
+        with pytest.raises(RuntimeError):
+            await PhotoRedrawService().redraw(db_session, photo_item)
+    paths = {
+        photo_item.image_path,
+        photo_item.medium_path,
+        photo_item.thumbnail_path,
+        *retained_paths(photo_item).values(),
+    }
+    service = ImageService()
+    assert set(service.get_image_path(photo_item.image_path).parent.iterdir()) == {
+        service.get_image_path(path) for path in paths if path
+    }
+
+
+@pytest.mark.asyncio
+async def test_bulk_cap_rate_and_missing_lock(client, auth_headers, photo_item):
+    from uuid import uuid4
+
+    from fastapi import HTTPException
+
+    from app.services.photo_redraw_service import lock_photo
+
+    endpoint = "/api/v1/items/bulk/redraw-photo"
+    response = await client.post(
+        endpoint, json={"item_ids": [str(uuid4()) for _ in range(21)]}, headers=auth_headers
+    )
+    assert response.status_code == 400
+    with patch(
+        "app.api.items.rate_limit_by_user",
+        AsyncMock(side_effect=HTTPException(429, "Limited")),
+        create=True,
+    ):
+        assert (
+            await client.post(
+                endpoint, json={"item_ids": [str(photo_item.id)]}, headers=auth_headers
+            )
+        ).status_code == 429
+    with pytest.raises(HTTPException) as error:
+        await lock_photo(AsyncMock(scalar=AsyncMock(return_value=None)), photo_item)
+    assert error.value.status_code == 404
