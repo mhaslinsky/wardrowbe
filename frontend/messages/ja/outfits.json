@@ -183,5 +183,24 @@
   "totalCount": "合計 {count}",
   "viewCalendar": "カレンダー",
   "viewList": "リスト",
-  "viewToggle": "表示切替"
+  "viewToggle": "表示切替",
+  "day": {
+    "title": "今日の服装",
+    "previous": "前の日",
+    "next": "次の日",
+    "today": "今日",
+    "preview": "明日はプレビューです",
+    "generate": "候補を取得",
+    "options": "提案",
+    "saved": "保存したコーデ",
+    "past": "過去のコーデ",
+    "empty": "コーデがありません",
+    "wore": "これを着ました",
+    "swap": "アイテムを交換",
+    "logged": "記録済み",
+    "alreadyLogged": "記録済み: {name}",
+    "failed": "保存できませんでした",
+    "dismiss": "閉じる",
+    "generateFailed": "候補を取得できませんでした"
+  }
 }

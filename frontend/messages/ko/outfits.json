@@ -183,5 +183,24 @@
   "totalCount": "총 {count}개",
   "viewCalendar": "캘린더",
   "viewList": "목록",
-  "viewToggle": "보기 전환"
+  "viewToggle": "보기 전환",
+  "day": {
+    "title": "하루 코디",
+    "previous": "이전 날",
+    "next": "다음 날",
+    "today": "오늘",
+    "preview": "내일은 미리보기입니다",
+    "generate": "옵션 보기",
+    "options": "추천",
+    "saved": "저장한 코디",
+    "past": "지난 코디",
+    "empty": "코디 없음",
+    "wore": "이걸 입었어요",
+    "swap": "아이템 바꾸기",
+    "logged": "기록됨",
+    "alreadyLogged": "이미 기록됨: {name}",
+    "failed": "저장 실패",
+    "dismiss": "닫기",
+    "generateFailed": "옵션을 가져오지 못했어요"
+  }
 }

@@ -183,5 +183,24 @@
   "totalCount": "共 {count} 個",
   "viewCalendar": "日曆",
   "viewList": "列表",
-  "viewToggle": "切換檢視"
+  "viewToggle": "切換檢視",
+  "day": {
+    "title": "每日穿搭",
+    "previous": "前一天",
+    "next": "後一天",
+    "today": "今天",
+    "preview": "明天僅供預覽",
+    "generate": "取得選項",
+    "options": "推薦",
+    "saved": "已儲存穿搭",
+    "past": "過去的穿搭",
+    "empty": "暫無穿搭",
+    "wore": "我穿了這套",
+    "swap": "替換單品",
+    "logged": "已記錄",
+    "alreadyLogged": "已記錄：{name}",
+    "failed": "儲存失敗",
+    "dismiss": "略過",
+    "generateFailed": "無法取得選項"
+  }
 }

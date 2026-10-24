@@ -35,6 +35,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }))
 vi.mock('@/lib/hooks/use-user', () => ({
+  useUserProfile: () => ({ data: { timezone: 'America/New_York' } }),
   useUserTimezone: () => 'America/New_York',
   useUserToday: () => () => '2026-10-23',
 }))

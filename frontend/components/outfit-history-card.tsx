@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ThumbsUp, ThumbsDown, Star, ArrowRight, Shirt, Users, ExternalLink } from 'lucide-react';
+import { ThumbsDown, Star, ArrowRight, Shirt, Users, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { OutfitStatusIcon } from '@/components/outfit-status';
-import { useAcceptOutfit, useRejectOutfit, type Outfit, type WoreInsteadItem } from '@/lib/hooks/use-outfits';
+import { useRejectOutfit, type Outfit, type WoreInsteadItem } from '@/lib/hooks/use-outfits';
 import { useOccasionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
 import { SourceBadge } from '@/components/shared/source-badge';
 import Image from 'next/image';
@@ -33,18 +33,8 @@ export function OutfitHistoryCard({ outfit, onFeedback, onPreview }: OutfitHisto
   const t = useTranslations('history.card');
   const wash = useTranslations('outfits.cards');
   const occasionLabel = useOccasionLabel();
-  const acceptOutfit = useAcceptOutfit();
   const rejectOutfit = useRejectOutfit();
   const [previewItem, setPreviewItem] = useState<WoreInsteadItem | null>(null);
-
-  const handleAccept = async () => {
-    try {
-      await acceptOutfit.mutateAsync(outfit.id);
-      toast.success(t('outfitAccepted'));
-    } catch {
-      toast.error(t('acceptFailed'));
-    }
-  };
 
   const handleReject = async () => {
     try {
@@ -212,19 +202,11 @@ export function OutfitHistoryCard({ outfit, onFeedback, onPreview }: OutfitHisto
                 <ThumbsDown className="h-3 w-3 mr-1" />
                 {t('dismiss')}
               </Button>
-              <Button
-                size="sm"
-                className="flex-1 h-8 text-xs"
-                onClick={handleAccept}
-                disabled={acceptOutfit.isPending}
-              >
-                <ThumbsUp className="h-3 w-3 mr-1" />
-                {t('accept')}
-              </Button>
+
             </div>
           )}
 
-          {outfit.status === 'accepted' && outfit.feedback?.actually_worn !== false && (
+          {!!outfit.feedback?.worn_at && (
             <Button
               size="sm"
               variant="outline"

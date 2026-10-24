@@ -183,5 +183,24 @@
   "totalCount": "{count} totali",
   "viewCalendar": "Calendario",
   "viewList": "Elenco",
-  "viewToggle": "Cambia vista"
+  "viewToggle": "Cambia vista",
+  "day": {
+    "title": "La tua giornata",
+    "previous": "Giorno precedente",
+    "next": "Giorno successivo",
+    "today": "Oggi",
+    "preview": "Domani è un’anteprima",
+    "generate": "Mostra opzioni",
+    "options": "Suggerimenti",
+    "saved": "Outfit salvati",
+    "past": "Outfit passati",
+    "empty": "Nessun outfit",
+    "wore": "Ho indossato questo",
+    "swap": "Cambia un capo",
+    "logged": "Registrato",
+    "alreadyLogged": "Già registrato: {name}",
+    "failed": "Salvataggio non riuscito",
+    "dismiss": "Ignora",
+    "generateFailed": "Impossibile ottenere le opzioni"
+  }
 }
