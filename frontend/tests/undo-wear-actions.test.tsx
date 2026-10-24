@@ -8,15 +8,14 @@ import type { Outfit } from '@/lib/hooks/use-outfits'
 import { createQueryClient } from '@/lib/query-client'
 import { toast } from 'sonner'
 import { translationMock } from './setup'
-vi.mock('@/lib/hooks/use-items', () => ({ useItemPages: () => ({ items: [{ id: 'shirt', status: 'ready', is_archived: false }, { id: 'archived', status: 'ready', is_archived: true }, { id: 'processing', status: 'processing', is_archived: false }] }) }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/lib/api', async (original) => ({ ...(await original<typeof import('@/lib/api')>()), api: { post: vi.fn() } }))
+vi.mock('@/lib/api', async (original) => ({ ...(await original<typeof import('@/lib/api')>()), api: { post: vi.fn(), get: vi.fn() } }))
 const outfit = { id: 'logged', items: [{ id: 'shirt', status: 'ready', is_archived: false }], name: 'Logged' } as Outfit
 const chosen = { ...outfit, id: 'saved', name: 'Saved' }
 const washed = new ApiError('wash', 409, { detail: { error_code: 'WASH_SINCE_WEAR', items: [
   { id: 'shirt', name: 'Shirt', washed_at: '2026-10-24' }, { id: 'pants', name: 'Pants', washed_at: '2026-10-24' },
 ] } })
-beforeEach(() => { vi.clearAllMocks(); translationMock.includeNamespace = false; vi.mocked(api.post).mockResolvedValue({ id: 'logged', learning_stale: false }) })
+beforeEach(() => { vi.clearAllMocks(); translationMock.includeNamespace = false; vi.mocked(api.post).mockResolvedValue({ id: 'logged', learning_stale: false }); vi.mocked(api.get).mockResolvedValue({ items: [{ id: 'shirt', status: 'ready', is_archived: false }, { id: 'archived', status: 'ready', is_archived: true }, { id: 'processing', status: 'processing', is_archived: false }], page: 1, has_more: false }) })
 function setup(choices = [chosen]) {
   const client = createQueryClient()
   const invalidate = vi.spyOn(client, 'invalidateQueries')
@@ -52,7 +51,7 @@ it.each([false, true])('checks every washed item and resends selected ids, empty
 it('replaces after undo and wash confirmation using the selected date', async () => {
   vi.mocked(api.post).mockRejectedValueOnce(washed)
   const { notice } = setup()
-  fireEvent.click(screen.getByRole('button', { name: 'replace' })); fireEvent.click(screen.getByRole('button', { name: 'Saved' }))
+  fireEvent.click(screen.getByRole('button', { name: 'replace' })); fireEvent.click(await screen.findByRole('button', { name: 'Saved' }))
   await screen.findByRole('checkbox', { name: 'Shirt' })
   expect(api.post).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByRole('button', { name: 'confirm' }))
@@ -63,7 +62,7 @@ it('replaces after undo and wash confirmation using the selected date', async ()
 it('leaves the day open with an error when replacement fails', async () => {
   vi.mocked(api.post).mockResolvedValueOnce({ learning_stale: false }).mockRejectedValueOnce(new Error('offline'))
   const { notice, invalidate } = setup()
-  fireEvent.click(screen.getByRole('button', { name: 'replace' })); fireEvent.click(screen.getByRole('button', { name: 'Saved' }))
+  fireEvent.click(screen.getByRole('button', { name: 'replace' })); fireEvent.click(await screen.findByRole('button', { name: 'Saved' }))
   await waitFor(() => expect(notice).toHaveBeenLastCalledWith('replaceFailed'))
   expect(api.post).toHaveBeenCalledTimes(2)
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['calendarOutfits'] })
@@ -76,13 +75,13 @@ it('reports stale learning', async () => {
 it.each([new Error('offline'), new ApiError('missing', 409, null), new ApiError('bad', 409, { detail: { error_code: 'WASH_SINCE_WEAR', items: [{}] } }), new ApiError('not worn', 409, { detail: { error_code: 'NOT_WORN' } }), new ApiError('inconsistent', 409, { detail: { error_code: 'UNDO_INCONSISTENT' } }), new ApiError('invalid', 422, {})])('shows failures without logging a replacement: %s', async (error) => {
   vi.mocked(api.post).mockRejectedValueOnce(error)
   const { notice } = setup()
-  fireEvent.click(screen.getByRole('button', { name: 'replace' })); fireEvent.click(screen.getByRole('button', { name: 'Saved' }))
+  fireEvent.click(screen.getByRole('button', { name: 'replace' })); fireEvent.click(await screen.findByRole('button', { name: 'Saved' }))
   await waitFor(() => expect(notice).toHaveBeenLastCalledWith('failed'))
   expect(api.post).toHaveBeenCalledTimes(1)
 })
 it('handles empty choices and cancels wash confirmation without undoing', async () => {
   vi.mocked(api.post).mockRejectedValueOnce(washed); setup([])
-  fireEvent.click(screen.getByRole('button', { name: 'replace' })); expect(screen.getByText('empty')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: 'replace' })); expect(await screen.findByText('empty')).toBeVisible()
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
   fireEvent.click(screen.getByRole('button', { name: 'undo' })); await screen.findByRole('checkbox', { name: 'Shirt' })
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
@@ -100,7 +99,7 @@ it.each([false, true])('closes dialogs and toasts a real undo failure after wash
   vi.mocked(api.post).mockRejectedValueOnce(new ApiError('server failed', 500, {}))
   setup()
   fireEvent.click(screen.getByRole('button', { name: 'replace' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Saved' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Saved' }))
   if (washFirst) { await screen.findByRole('checkbox', { name: 'Shirt' }); fireEvent.click(screen.getByRole('button', { name: 'confirm' })) }
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('failed'))
   expect(screen.getByRole('status')).toBeVisible()
@@ -109,13 +108,13 @@ it.each([false, true])('closes dialogs and toasts a real undo failure after wash
 })
 it.each([false, true])('toasts replacement failures and uses one notice when stale=%s', async (stale) => {
   vi.mocked(api.post).mockResolvedValueOnce({ learning_stale: stale }).mockRejectedValueOnce(new ApiError('wear failed', 422, {}))
-  setup(); fireEvent.click(screen.getByRole('button', { name: 'replace' })); fireEvent.click(screen.getByRole('button', { name: 'Saved' }))
+  setup(); fireEvent.click(screen.getByRole('button', { name: 'replace' })); fireEvent.click(await screen.findByRole('button', { name: 'Saved' }))
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(stale ? 'replaceFailedStale' : 'replaceFailed'))
   expect(screen.getByRole('status')).toBeVisible()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(toast.error).toHaveBeenCalledWith('wear failed')
 })
-it('excludes unavailable choices and translates unnamed outfit occasions', () => {
+it('excludes unavailable choices and translates unnamed outfit occasions', async () => {
   translationMock.includeNamespace = true
   setup([
     { ...chosen, id: 'archived', name: 'Archived', items: [{ ...chosen.items[0], id: 'archived' }] },
@@ -124,6 +123,7 @@ it('excludes unavailable choices and translates unnamed outfit occasions', () =>
     { ...chosen, name: null, occasion: 'casual' },
   ] as Outfit[])
   fireEvent.click(screen.getByRole('button', { name: 'outfits.day.replace' }))
+  await screen.findByRole('button', { name: 'constants.occasions.casual' })
   for (const name of ['Archived', 'Processing', 'Empty', 'casual']) expect(screen.queryByRole('button', { name, exact: true })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'constants.occasions.casual' })).toBeVisible()
   expect(api.post).not.toHaveBeenCalled()
@@ -135,4 +135,29 @@ it.each([new ApiError('unavailable', 503, {}), new NetworkError('offline')])('pr
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('failed'))
   expect(screen.getByRole('status')).toBeVisible()
   expect(vi.mocked(toast.error).mock.calls[0][0]).toBe(error.message)
+})
+
+it('automatically loads all ready pages before offering any replacement', async () => {
+  let finish!: (value: unknown) => void
+  vi.mocked(api.get).mockResolvedValueOnce({ items: [{ id: 'shirt', status: 'ready' }], page: 1, has_more: true })
+    .mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+  setup([chosen, { ...chosen, id: 'second', name: 'Page two outfit', items: [{ ...chosen.items[0], id: 'pants' }] }])
+  fireEvent.click(screen.getByRole('button', { name: 'replace' }))
+  await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2))
+  expect(screen.getByText('loading')).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Saved' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'loadMore' })).not.toBeInTheDocument()
+  finish({ items: [{ id: 'pants', status: 'ready' }], page: 2, has_more: false })
+  expect(await screen.findByRole('button', { name: 'Page two outfit' })).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Saved' })).toBeVisible()
+  expect(screen.queryByText('loading')).not.toBeInTheDocument()
+})
+it('shows an error and no choices when a later ready page fails', async () => {
+  vi.mocked(api.get).mockResolvedValueOnce({ items: [{ id: 'shirt', status: 'ready' }], page: 1, has_more: true })
+    .mockRejectedValue(new ApiError('page failed', 500, {}))
+  setup(); fireEvent.click(screen.getByRole('button', { name: 'replace' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('failed')
+  expect(screen.queryByRole('button', { name: 'Saved' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'loadMore' })).not.toBeInTheDocument()
+  expect(api.post).not.toHaveBeenCalled()
 })

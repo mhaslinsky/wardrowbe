@@ -1,10 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { Outfit } from '@/lib/hooks/use-outfits';
 import { useLogDayWear, useUndoDayWear, type WashedItem } from '@/lib/hooks/use-day-outfits';
-import { useItemPages } from '@/lib/hooks/use-items';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import type { ItemListResponse } from '@/lib/types';
+import { queryKeys } from '@/lib/hooks/query-keys';
 import { useOccasionLabel } from '@/lib/hooks/use-translated-constants';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,15 +16,46 @@ function ReplacementPicker({ choices, disabled, onChoose }: { choices: Outfit[];
   const t = useTranslations('outfits.day');
   const common = useTranslations('common');
   const occasionLabel = useOccasionLabel();
-  const [pageCount, setPageCount] = useState(1);
-  const wardrobe = useItemPages({ is_archived: false, status: 'ready' }, pageCount, 100);
+  const queryClient = useQueryClient();
+  const [wardrobe, setWardrobe] = useState<{ items: ItemListResponse['items']; loading: boolean; failed: boolean }>({ items: [], loading: true, failed: false });
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const items: ItemListResponse['items'] = [];
+      let page = 1;
+      try {
+        while (active) {
+          const result = await queryClient.fetchQuery({
+            queryKey: queryKeys.items.list({ is_archived: false, status: 'ready' }, page, 100),
+            staleTime: 0,
+            retry: false,
+            queryFn: () => api.get<ItemListResponse>('/items', {
+              params: { is_archived: 'false', status: 'ready', page: String(page), page_size: '100' },
+            }),
+          });
+          items.push(...result.items);
+          if (!result.has_more) {
+            if (active) setWardrobe({ items, loading: false, failed: false });
+            return;
+          }
+          if (!result.items.length) throw new Error('Incomplete item page');
+          page += 1;
+        }
+      } catch {
+        if (active) setWardrobe({ items: [], loading: false, failed: true });
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [queryClient]);
+  const loading = wardrobe.loading;
   const readyIds = new Set(wardrobe.items.filter((item) => !item.is_archived && item.status === 'ready').map((item) => item.id));
   const availableChoices = choices.filter((choice) => choice.items.length > 0 && choice.items.every((item) => readyIds.has(item.id)));
   return <div className="max-h-[60vh] overflow-y-auto space-y-2">
-    {wardrobe.isLoading && <p role="status">{common('loading')}</p>}
-    {!wardrobe.isLoading && !availableChoices.length && <p>{t('empty')}</p>}
-    {availableChoices.map((choice) => <Button key={choice.id} variant="outline" className="w-full" disabled={disabled || wardrobe.isFetching} onClick={() => onChoose(choice)}>{choice.name || occasionLabel(choice.occasion)}</Button>)}
-    {wardrobe.hasMore && <Button variant="outline" disabled={wardrobe.isFetching} onClick={() => setPageCount((count) => count + 1)}>{common('loadMore')}</Button>}
+    {loading && <p role="status">{common('loading')}</p>}
+    {!loading && wardrobe.failed && <p role="alert">{t('failed')}</p>}
+    {!loading && !wardrobe.failed && !availableChoices.length && <p>{t('empty')}</p>}
+    {!loading && !wardrobe.failed && availableChoices.map((choice) => <Button key={choice.id} variant="outline" className="w-full" disabled={disabled} onClick={() => onChoose(choice)}>{choice.name || occasionLabel(choice.occasion)}</Button>)}
   </div>;
 }
 
