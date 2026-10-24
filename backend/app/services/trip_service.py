@@ -1,16 +1,17 @@
 from collections import Counter
 from datetime import date, datetime, timedelta
+from hashlib import sha256
 from math import isfinite
 from statistics import mean
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.item import ClothingItem
 from app.models.outfit import TimeOfDay
 from app.models.trip import Trip
-from app.models.user import User
+from app.services.ai_service import require_internal_ai
 from app.services.recommendation_service import RecommendationService
 from app.services.weather_service import WeatherData, WeatherService, WeatherServiceError
 from app.utils.clothing import BODY_SLOTS, OVER_LAYER_SUBTYPES, covered_body_slots
@@ -67,7 +68,7 @@ class TripWeather:
 
     async def _for_location(self, location, dates):
         latitude, longitude, _ = location
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
             response = await client.get(
                 f"{self.weather.base_url}/forecast",
                 params={
@@ -212,20 +213,23 @@ class TripService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def plan(self, user, request) -> Trip:
-        if request.start_date < get_user_today(user):
-            raise ValueError("Departure must be today or later")
-        await self.db.execute(select(User.id).where(User.id == user.id).with_for_update())
-        if await self.db.scalar(
+    async def _check_overlap(self, session, user_id, request):
+        if await session.scalar(
             select(Trip.id)
             .where(
-                Trip.user_id == user.id,
+                Trip.user_id == user_id,
                 Trip.start_date <= request.end_date,
                 Trip.end_date >= request.start_date,
             )
             .limit(1)
         ):
             raise TripOverlapError("Trip dates overlap")
+
+    async def plan(self, user, request) -> Trip:
+        require_internal_ai("text")
+        if request.start_date < get_user_today(user):
+            raise ValueError("Departure must be today or later")
+        await self._check_overlap(self.db, user.id, request)
         dates = [
             request.start_date + timedelta(days=offset)
             for offset in range((request.end_date - request.start_date).days + 1)
@@ -302,6 +306,11 @@ class TripService:
                     days=days,
                     packing=packing_list(outfits),
                 )
+                lock_key = int.from_bytes(
+                    sha256(b"trip:" + user.id.bytes).digest()[:8], signed=True
+                )
+                await planning.execute(select(func.pg_advisory_xact_lock(lock_key)))
+                await self._check_overlap(planning, user.id, request)
                 planning.add(trip)
                 await planning.commit()
             await self.db.commit()

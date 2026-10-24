@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.database import DbSession
 from app.models.trip import Trip
 from app.models.user import User
+from app.services.ai_service import AIDisabledError
 from app.services.recommendation_service import AIRecommendationError, InsufficientWardrobeError
 from app.services.trip_service import TripOverlapError, TripService
 from app.services.weather_service import WeatherServiceError
@@ -71,6 +72,8 @@ async def plan_trip(
         return await TripService(db).plan(user, request)
     except TripOverlapError as error:
         raise HTTPException(409, detail="Trip dates overlap") from error
+    except AIDisabledError as error:
+        raise HTTPException(503, detail="AI planning is disabled") from error
     except AIRecommendationError as error:
         raise HTTPException(503, detail="Trip planning unavailable") from error
     except (ValueError, InsufficientWardrobeError) as error:
