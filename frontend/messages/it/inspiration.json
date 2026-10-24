@@ -16,5 +16,6 @@
   "rateLimit": "Riprova tra poco.",
   "unavailable": "Abbinamento non disponibile.",
   "photoAlt": "Foto di ispirazione",
-  "deleteConfirm": "Eliminare questo look?"
+  "deleteConfirm": "Eliminare questo look?",
+  "checkPhotoAndLocation": "Controlla la foto e la posizione."
 }

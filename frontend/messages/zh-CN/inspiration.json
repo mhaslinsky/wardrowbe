@@ -16,5 +16,6 @@
   "rateLimit": "请稍后重试。",
   "unavailable": "匹配暂不可用。",
   "photoAlt": "穿搭参考照片",
-  "deleteConfirm": "删除此穿搭？"
+  "deleteConfirm": "删除此穿搭？",
+  "checkPhotoAndLocation": "请检查照片和位置。"
 }

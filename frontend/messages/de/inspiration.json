@@ -16,5 +16,6 @@
   "rateLimit": "Versuche es gleich noch einmal.",
   "unavailable": "Zuordnung nicht verfügbar.",
   "photoAlt": "Inspirationsfoto",
-  "deleteConfirm": "Diesen Look löschen?"
+  "deleteConfirm": "Diesen Look löschen?",
+  "checkPhotoAndLocation": "Prüfe dein Foto und deinen Standort."
 }

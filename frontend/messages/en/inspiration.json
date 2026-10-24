@@ -16,5 +16,6 @@
   "rateLimit": "Try again shortly.",
   "unavailable": "Matching is unavailable.",
   "photoAlt": "Inspiration photo",
-  "deleteConfirm": "Delete this look?"
+  "deleteConfirm": "Delete this look?",
+  "checkPhotoAndLocation": "Check your photo and location."
 }

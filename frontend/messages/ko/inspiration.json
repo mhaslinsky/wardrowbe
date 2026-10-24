@@ -16,5 +16,6 @@
   "rateLimit": "잠시 후 다시 시도하세요.",
   "unavailable": "매칭을 사용할 수 없습니다.",
   "photoAlt": "스타일 참고 사진",
-  "deleteConfirm": "이 코디를 삭제할까요?"
+  "deleteConfirm": "이 코디를 삭제할까요?",
+  "checkPhotoAndLocation": "사진과 위치를 확인하세요."
 }

@@ -7,11 +7,12 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { useInspiration } from '@/lib/hooks/use-inspiration';
 import { ApiError } from '@/lib/api';
-import { ACCEPTED_IMAGE_INPUT } from '@/lib/image-types';
 import { useColorLabel, useTypeLabel, useFitLabel, usePatternLabel } from '@/lib/hooks/use-translated-constants';
 
+const ACCEPTED_INSPIRATION_INPUT = '.jpg,.jpeg,.png,.webp';
+
 const errorKeys: Record<number, string> = {
-  413: 'photoTooLarge', 415: 'invalidPhoto', 422: 'invalidPhoto',
+  413: 'photoTooLarge', 415: 'invalidPhoto', 422: 'checkPhotoAndLocation',
   429: 'rateLimit', 503: 'unavailable',
 };
 
@@ -35,7 +36,7 @@ export default function InspirationPage() {
       <p className="text-muted-foreground">{t('description')}</p>
       <form className="flex flex-wrap items-end gap-4" onSubmit={(event) => {
         event.preventDefault();
-        if (!file || create.isPending || create.isSuccess) return;
+        if (!file || create.isPending || remove.isPending || create.isSuccess) return;
         remove.reset();
         create.mutate(file, { onSuccess: () => {
           setFile(null);
@@ -44,8 +45,9 @@ export default function InspirationPage() {
       }}>
         <label className="space-y-2">
           <span className="block text-sm font-medium">{t('photo')}</span>
-          <input ref={inputRef} type="file" accept={ACCEPTED_IMAGE_INPUT} required
-            disabled={create.isPending} onChange={(event) => {
+          <input ref={inputRef} type="file" accept={ACCEPTED_INSPIRATION_INPUT} required
+            disabled={create.isPending || remove.isPending} onChange={(event) => {
+              if (create.isPending || remove.isPending) return;
               const selected = event.target.files?.[0] ?? null;
               create.reset();
               remove.reset();
@@ -53,7 +55,7 @@ export default function InspirationPage() {
               setFile(null);
               if (!selected) return;
               const extension = `.${selected.name.split('.').pop()?.toLowerCase()}`;
-              if (!ACCEPTED_IMAGE_INPUT.split(',').includes(extension)
+              if (!ACCEPTED_INSPIRATION_INPUT.split(',').includes(extension)
                   || !['image/jpeg', 'image/png', 'image/webp'].includes(selected.type)) {
                 setValidationError('invalidPhoto');
                 return;
@@ -65,7 +67,7 @@ export default function InspirationPage() {
               setFile(selected);
             }} />
         </label>
-        <Button disabled={!file || create.isPending || create.isSuccess}>
+        <Button disabled={!file || create.isPending || remove.isPending || create.isSuccess}>
           {create.isPending ? t('working') : t('create')}
         </Button>
       </form>
@@ -77,8 +79,9 @@ export default function InspirationPage() {
         <article key={look.id} className="space-y-4 rounded-xl border bg-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <Link className="underline" href={`/dashboard/outfits/${look.id}`}>{t('open')}</Link>
-            <Button variant="outline" disabled={remove.isPending}
+            <Button variant="outline" disabled={remove.isPending || create.isPending}
               onClick={() => {
+                if (create.isPending || remove.isPending) return;
                 if (!confirm(t('deleteConfirm'))) return;
                 create.reset();
                 setValidationError(null);

@@ -16,5 +16,6 @@
   "rateLimit": "少し待ってから再試行してください。",
   "unavailable": "マッチングを利用できません。",
   "photoAlt": "参考写真",
-  "deleteConfirm": "このコーディネートを削除しますか？"
+  "deleteConfirm": "このコーディネートを削除しますか？",
+  "checkPhotoAndLocation": "写真と現在地を確認してください。"
 }

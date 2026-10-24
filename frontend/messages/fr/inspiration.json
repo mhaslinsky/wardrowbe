@@ -16,5 +16,6 @@
   "rateLimit": "Réessaie dans un instant.",
   "unavailable": "Correspondance indisponible.",
   "photoAlt": "Photo d’inspiration",
-  "deleteConfirm": "Supprimer ce look ?"
+  "deleteConfirm": "Supprimer ce look ?",
+  "checkPhotoAndLocation": "Vérifiez votre photo et votre localisation."
 }

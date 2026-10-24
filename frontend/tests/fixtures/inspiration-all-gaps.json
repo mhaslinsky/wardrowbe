@@ -1,0 +1,25 @@
+{
+  "id": "8b0d968c-534c-421c-9d83-6f9ade6e58ca",
+  "image_url": "/api/v1/inspiration/8b0d968c-534c-421c-9d83-6f9ade6e58ca/image",
+  "slots": [
+    {
+      "type": "jacket",
+      "color": "brown",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": null,
+      "match_strength": 0,
+      "no_match": true
+    },
+    {
+      "type": "scarf",
+      "color": "navy",
+      "fit": "regular",
+      "pattern": "printed",
+      "item_id": null,
+      "match_strength": 0,
+      "no_match": true
+    }
+  ],
+  "items": []
+}

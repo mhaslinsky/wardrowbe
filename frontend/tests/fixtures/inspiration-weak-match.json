@@ -1,0 +1,22 @@
+{
+  "id": "ac883bd0-e2b8-4073-bc6f-006d69cb038c",
+  "image_url": "/api/v1/inspiration/ac883bd0-e2b8-4073-bc6f-006d69cb038c/image",
+  "slots": [
+    {
+      "type": "jacket",
+      "color": "blue",
+      "fit": "relaxed",
+      "pattern": "striped",
+      "item_id": "436ea38e-aa26-4ece-9443-069251482aa7",
+      "match_strength": 0.55,
+      "no_match": false
+    }
+  ],
+  "items": [
+    {
+      "id": "436ea38e-aa26-4ece-9443-069251482aa7",
+      "name": "Blue jacket",
+      "image_url": "/api/v1/images/436ea38e-aa26-4ece-9443-069251482aa7.jpg"
+    }
+  ]
+}

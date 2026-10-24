@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
@@ -65,7 +65,7 @@ it('uploads once, renders saved slots through translated labels, and clears the 
   expect(uploads()).toHaveLength(1);
 });
 
-it.each([[413, 'photoTooLarge'], [415, 'invalidPhoto'], [422, 'invalidPhoto'], [429, 'rateLimit'], [503, 'unavailable']])('shows translated %s recovery without a server toast', async (status, key) => {
+it.each([[413, 'photoTooLarge'], [415, 'invalidPhoto'], [422, 'checkPhotoAndLocation'], [429, 'rateLimit'], [503, 'unavailable']])('shows translated %s recovery without a server toast', async (status, key) => {
   uploadStatus = status as number;
   await openPage(); choose(); submit();
   expect(await screen.findByRole('alert')).toHaveTextContent(`inspiration.${key}`);
@@ -120,4 +120,51 @@ it('owns query error messages without an English toast', async () => {
   render(<QueryClientProvider client={client}><InspirationPage /></QueryClientProvider>);
   expect(await screen.findByRole('alert')).toHaveTextContent('inspiration.unavailable');
   expect(toast.error).not.toHaveBeenCalled();
+});
+
+it('keeps deletion disabled and blocks a second upload while a POST is pending', async () => {
+  looks = [savedLook];
+  let resolveUpload!: (response: Response) => void;
+  const upload = new Promise<Response>((resolve) => { resolveUpload = resolve; });
+  const respond = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((url, options) => options?.method === 'POST' ? upload : respond(url, options));
+  await openPage(); choose(); submit();
+  const working = await screen.findByRole('button', { name: 'inspiration.working' });
+  const remove = screen.getByRole('button', { name: 'common.delete' });
+  expect(remove).toBeDisabled();
+  fireEvent.click(remove);
+  fireEvent.submit(working.closest('form')!);
+  expect(working).toBeDisabled();
+  expect(uploads()).toHaveLength(1);
+  expect(confirm).not.toHaveBeenCalled();
+  await act(async () => { resolveUpload(new Response(JSON.stringify(savedLook), { status: 201 })); });
+  expect(await screen.findByText('inspiration.saved')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'common.delete' })).toBeEnabled();
+});
+
+it('offers only endpoint-supported image formats in the picker', async () => {
+  await openPage();
+  expect(screen.getByLabelText('inspiration.photo')).toHaveAttribute('accept', '.jpg,.jpeg,.png,.webp');
+  choose(new File(['photo'], 'look.heic', { type: 'image/heic' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('inspiration.invalidPhoto');
+  submit();
+  expect(uploads()).toHaveLength(0);
+});
+
+it('keeps the photo input disabled until an active deletion settles', async () => {
+  looks = [savedLook];
+  let resolveDelete!: (response: Response) => void;
+  const deletion = new Promise<Response>((resolve) => { resolveDelete = resolve; });
+  const respond = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((url, options) => options?.method === 'DELETE' ? deletion : respond(url, options));
+  await openPage();
+  fireEvent.click(screen.getByRole('button', { name: 'common.delete' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'common.delete' })).toBeDisabled());
+  expect(screen.getByLabelText('inspiration.photo')).toBeDisabled();
+  choose(); submit();
+  expect(uploads()).toHaveLength(0);
+  looks = [];
+  await act(async () => { resolveDelete(new Response(null, { status: 204 })); });
+  expect(await screen.findByText('inspiration.empty')).toBeVisible();
+  expect(screen.getByLabelText('inspiration.photo')).toBeEnabled();
 });
