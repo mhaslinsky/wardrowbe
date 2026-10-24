@@ -3,16 +3,20 @@ from datetime import date, datetime, timedelta
 from hashlib import sha256
 from math import isfinite
 from statistics import mean
+from uuid import UUID
 
 import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.item import ClothingItem
-from app.models.outfit import TimeOfDay
+from app.models.outfit import Outfit, TimeOfDay, UserFeedback
 from app.models.trip import Trip
+from app.models.user import User
 from app.services.ai_service import require_internal_ai
+from app.services.inspiration_service import InspirationService
 from app.services.recommendation_service import RecommendationService
+from app.services.wear_service import WearService
 from app.services.weather_service import WeatherData, WeatherService, WeatherServiceError
 from app.utils.clothing import BODY_SLOTS, OVER_LAYER_SUBTYPES, covered_body_slots
 from app.utils.garment_vocabulary import (
@@ -212,6 +216,45 @@ class TripOverlapError(ValueError):
 class TripService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def delete(self, user: User, trip_id: UUID) -> bool:
+        """Keep worn outfits and remove deleted outfits' images after commit."""
+        deleted_outfits = []
+        try:
+            wear = WearService(self.db)
+            await wear.begin(user)
+            user_id = user.id
+            trip = await self.db.scalar(
+                select(Trip).where(Trip.id == trip_id, Trip.user_id == user_id).with_for_update()
+            )
+            if trip is None:
+                return False
+            for offset in range((trip.end_date - trip.start_date).days + 1):
+                await wear.lock_day(user_id, trip.start_date + timedelta(days=offset))
+            outfit_ids = {UUID(day["outfit_id"]) for day in trip.days}
+            outfits = list(
+                await self.db.scalars(
+                    select(Outfit)
+                    .where(Outfit.id.in_(outfit_ids), Outfit.user_id == user_id)
+                    .with_for_update()
+                )
+            )
+            for outfit in outfits:
+                feedback = await self.db.scalar(
+                    select(UserFeedback).where(UserFeedback.outfit_id == outfit.id)
+                )
+                if feedback and (feedback.worn_at is not None or feedback.actually_worn):
+                    continue
+                await self.db.delete(outfit)
+                deleted_outfits.append(outfit)
+            await self.db.delete(trip)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        for outfit in deleted_outfits:
+            InspirationService(self.db).cleanup_image(outfit)
+        return True
 
     async def _check_overlap(self, session, user_id, request):
         if await session.scalar(
