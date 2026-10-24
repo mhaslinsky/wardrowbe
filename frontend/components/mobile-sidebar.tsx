@@ -27,6 +27,7 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
     { name: t('familyFeed'), href: '/dashboard/family/feed', icon: HeartHandshake },
     { name: t('analytics'), href: '/dashboard/analytics', icon: BarChart3 },
     { name: t('aiLearning'), href: '/dashboard/learning', icon: Brain },
+    { name: t('trips'), href: '/dashboard/trips', icon: Layers },
     { name: t('selfie'), href: '/dashboard/selfie', icon: Camera },
   ];
 
