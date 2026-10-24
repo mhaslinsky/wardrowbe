@@ -1,0 +1,15 @@
+{
+  "aiError": "Die KI konnte das Foto nicht lesen. Versuch es gleich noch einmal.",
+  "aiOff": "Die KI ist auf diesem Server ausgeschaltet.",
+  "found": "{count, plural, one {# Teil von dir gefunden} other {# Teile von dir gefunden}}",
+  "noneFound": "Keine Kleidung aus deinem Schrank erkannt.",
+  "photoAlt": "Dein Outfit-Foto",
+  "pick": "Foto aufnehmen oder auswählen",
+  "pickHint": "Am besten ein Ganzkörperfoto im Spiegel.",
+  "subtitle": "Finde passende Kleidungsstücke in deinem Outfit-Foto.",
+  "title": "Outfit-Selfie",
+  "working": "Kleidungsstücke werden gesucht…",
+  "invalidPhoto": "Wähle ein gültiges Foto.",
+  "photoTooLarge": "Wähle ein kleineres Foto.",
+  "rateLimit": "Versuche es gleich noch einmal."
+}
