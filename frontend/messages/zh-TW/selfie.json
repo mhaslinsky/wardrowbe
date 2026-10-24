@@ -11,5 +11,18 @@
   "working": "正在辨識衣物…",
   "invalidPhoto": "請選擇有效的照片。",
   "photoTooLarge": "請選擇較小的照片。",
-  "rateLimit": "請稍後重試。"
+  "rateLimit": "請稍後重試。",
+  "swap": "替換",
+  "add": "新增衣物",
+  "wardrobe": "你的衣櫥",
+  "wardrobeError": "無法載入衣櫥",
+  "noChoices": "沒有符合的衣物",
+  "logging": "正在記錄…",
+  "confirm": "記錄穿搭",
+  "logged": "穿搭已記錄",
+  "dayLogged": "今天已記錄",
+  "requestReused": "選擇已變更，請重新選擇衣物。",
+  "resultDeleted": "此穿搭已刪除",
+  "confirmError": "無法記錄穿搭，請重試。",
+  "viewOutfit": "查看穿搭"
 }

@@ -11,5 +11,18 @@
   "working": "Ricerca dei capi…",
   "invalidPhoto": "Scegli una foto valida.",
   "photoTooLarge": "Scegli una foto più piccola.",
-  "rateLimit": "Riprova tra poco."
+  "rateLimit": "Riprova tra poco.",
+  "swap": "Sostituisci",
+  "add": "Aggiungi capo",
+  "wardrobe": "Il tuo guardaroba",
+  "wardrobeError": "Impossibile caricare il guardaroba",
+  "noChoices": "Nessun capo corrispondente",
+  "logging": "Salvataggio…",
+  "confirm": "Registra outfit",
+  "logged": "Outfit registrato",
+  "dayLogged": "Già registrato oggi",
+  "requestReused": "Selezione modificata. Scegli di nuovo i capi.",
+  "resultDeleted": "Questo outfit è stato eliminato",
+  "confirmError": "Impossibile registrare l’outfit. Riprova.",
+  "viewOutfit": "Visualizza outfit"
 }

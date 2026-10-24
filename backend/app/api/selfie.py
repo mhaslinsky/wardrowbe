@@ -4,6 +4,7 @@ import tempfile
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from PIL import Image
@@ -12,6 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
+from app.api.outfits import OutfitResponse, outfit_to_response
 from app.config import get_settings
 from app.database import DbSession
 from app.models.item import ClothingItem, ItemStatus
@@ -19,7 +21,11 @@ from app.models.user import User
 from app.schemas.item import ItemResponse
 from app.services.ai_service import AIDisabledError, get_ai_service
 from app.services.image_service import ALLOWED_MIME_TYPES
+from app.services.learning_service import LearningService
+from app.services.selfie_confirm_service import SelfieConfirmService
 from app.services.selfie_service import candidates_for, match_selfie
+from app.services.suggestion_cache import clear_suggestions
+from app.services.wear_service import wear_http
 from app.utils.auth import get_current_user
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.uploads import UploadTooLargeError, read_upload_within_limit
@@ -129,3 +135,38 @@ def _validate_photo(content: bytes, content_type: str | None, max_megapixels: fl
         raise HTTPException(status_code=413, detail="Photo is too large") from None
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid image file") from None
+
+
+class SelfieConfirmRequest(BaseModel):
+    request_id: UUID
+    item_ids: list[UUID]
+
+
+@router.post("/confirm", response_model=OutfitResponse)
+@wear_http()
+async def confirm_outfit(
+    request: SelfieConfirmRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> OutfitResponse:
+    try:
+        outfit, created = await SelfieConfirmService(db).confirm(
+            current_user, request.request_id, request.item_ids
+        )
+        response = outfit_to_response(outfit)
+        outfit_id, user_id, occasion = outfit.id, current_user.id, outfit.occasion
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    if created:
+        try:
+            await LearningService(db).process_feedback(outfit_id, user_id)
+        except Exception:
+            await db.rollback()
+            logger.exception("Selfie learning failed for outfit %s", outfit_id)
+        try:
+            await clear_suggestions(user_id, occasion)
+        except Exception:
+            logger.exception("Selfie suggestion cache clear failed for user %s", user_id)
+    return response

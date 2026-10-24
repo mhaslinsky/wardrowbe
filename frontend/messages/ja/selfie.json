@@ -11,5 +11,18 @@
   "working": "服を確認しています…",
   "invalidPhoto": "有効な写真を選んでください。",
   "photoTooLarge": "小さい写真を選んでください。",
-  "rateLimit": "少し待ってから再試行してください。"
+  "rateLimit": "少し待ってから再試行してください。",
+  "swap": "入れ替え",
+  "add": "アイテムを追加",
+  "wardrobe": "ワードローブ",
+  "wardrobeError": "ワードローブを読み込めませんでした",
+  "noChoices": "該当するアイテムがありません",
+  "logging": "記録中…",
+  "confirm": "コーデを記録",
+  "logged": "コーデを記録しました",
+  "dayLogged": "今日は記録済みです",
+  "requestReused": "選択が変わりました。アイテムを選び直してください。",
+  "resultDeleted": "このコーデは削除されました",
+  "confirmError": "記録できませんでした。再試行してください。",
+  "viewOutfit": "コーデを見る"
 }

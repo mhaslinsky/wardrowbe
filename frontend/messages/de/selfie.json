@@ -11,5 +11,18 @@
   "working": "Kleidungsstücke werden gesucht…",
   "invalidPhoto": "Wähle ein gültiges Foto.",
   "photoTooLarge": "Wähle ein kleineres Foto.",
-  "rateLimit": "Versuche es gleich noch einmal."
+  "rateLimit": "Versuche es gleich noch einmal.",
+  "swap": "Tauschen",
+  "add": "Teil hinzufügen",
+  "wardrobe": "Dein Kleiderschrank",
+  "wardrobeError": "Kleiderschrank konnte nicht geladen werden",
+  "noChoices": "Keine passenden Teile",
+  "logging": "Wird gespeichert…",
+  "confirm": "Outfit eintragen",
+  "logged": "Outfit eingetragen",
+  "dayLogged": "Heute bereits eingetragen",
+  "requestReused": "Auswahl geändert. Wähle deine Teile erneut.",
+  "resultDeleted": "Dieses Outfit wurde gelöscht",
+  "confirmError": "Outfit konnte nicht eingetragen werden. Erneut versuchen.",
+  "viewOutfit": "Outfit ansehen"
 }
