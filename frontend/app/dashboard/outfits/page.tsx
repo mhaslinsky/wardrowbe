@@ -427,7 +427,7 @@ function OutfitsPageContent() {
               {t('viewCalendar')}
             </button>
           </div>
-          {view === 'list' && !filters.group && !readyToWear && (
+          {view === 'list' && !filters.group && (
             <Button
               variant={selectMode ? 'secondary' : 'outline'}
               onClick={handleToggleSelectMode}

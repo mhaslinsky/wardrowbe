@@ -307,3 +307,100 @@ class TestBulkDeleteResourceLimits:
 
         remaining = await db_session.execute(select(Outfit).where(Outfit.user_id == test_user.id))
         assert remaining.scalars().all() == []
+
+
+@pytest.mark.parametrize("ready_filter", [True, False, None])
+async def test_select_all_matches_ready_to_wear_list(
+    client, test_user, auth_headers, db_session, ready_filter
+):
+    clean = _make_item(test_user.id, needs_wash=False)
+    dirty = _make_item(test_user.id, needs_wash=True)
+    db_session.add_all([clean, dirty])
+    await db_session.flush()
+    clean_outfit = _make_outfit(test_user.id, [clean])
+    mixed_outfit = _make_outfit(test_user.id, [clean, dirty])
+    empty_outfit = _make_outfit(test_user.id)
+    db_session.add_all([clean_outfit, mixed_outfit, empty_outfit])
+    await db_session.commit()
+    all_ids = {str(clean_outfit.id), str(mixed_outfit.id), str(empty_outfit.id)}
+    expected_ids = all_ids - {str(mixed_outfit.id)} if ready_filter else all_ids
+    filters = {} if ready_filter is None else {"ready_to_wear": ready_filter}
+    listed = await client.get("/api/v1/outfits", params=filters, headers=auth_headers)
+    assert listed.status_code == 200
+    assert {outfit["id"] for outfit in listed.json()["outfits"]} == expected_ids
+    deleted = await client.post(
+        "/api/v1/outfits/bulk/delete",
+        json={"select_all": True, "filters": filters},
+        headers=auth_headers,
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] == len(expected_ids)
+    assert deleted.json()["failed"] == 0
+    remaining = await db_session.execute(select(Outfit.id).where(Outfit.user_id == test_user.id))
+    assert {str(outfit_id) for outfit_id in remaining.scalars()} == all_ids - expected_ids
+
+
+@pytest.mark.parametrize(
+    ("chip", "filters", "expected_indexes"),
+    [
+        ("all", {"group": True}, None),
+        ("my-looks", {"is_lookbook": True}, {2}),
+        ("worn", {"is_lookbook": False, "status": "accepted"}, {0}),
+        ("pairings", {"has_source_item": True}, {3}),
+        ("replacements", {"is_replacement": True}, {4}),
+        ("ai", {"source": "scheduled,on_demand"}, {0, 1}),
+        ("status-by-name", {"status_filter": "accepted"}, {0}),
+    ],
+)
+async def test_select_all_matches_chip_list(
+    client, test_user, auth_headers, db_session, chip, filters, expected_indexes
+):
+    item = _make_item(test_user.id)
+    db_session.add(item)
+    await db_session.flush()
+    outfits = [_make_outfit(test_user.id, [item], is_lookbook=index == 2) for index in range(5)]
+    outfits[0].status = OutfitStatus.accepted
+    outfits[0].source = OutfitSource.scheduled
+    outfits[1].source = OutfitSource.on_demand
+    outfits[3].source_item_id = item.id
+    db_session.add_all(outfits)
+    await db_session.flush()
+    outfits[4].replaces_outfit_id = outfits[1].id
+    await db_session.commit()
+    all_ids = {str(outfit.id) for outfit in outfits}
+    query = {"status" if key == "status_filter" else key: value for key, value in filters.items()}
+    listed = await client.get("/api/v1/outfits", params=query, headers=auth_headers)
+    assert listed.status_code == 200
+    deleted = await client.post(
+        "/api/v1/outfits/bulk/delete",
+        json={"select_all": True, "filters": filters},
+        headers=auth_headers,
+    )
+    if chip == "all":
+        assert deleted.status_code == 422
+        expected_ids = set()
+    else:
+        expected_ids = {str(outfits[index].id) for index in expected_indexes}
+        assert {outfit["id"] for outfit in listed.json()["outfits"]} == expected_ids
+        assert deleted.status_code == 200
+        assert deleted.json()["deleted"] == len(expected_ids)
+        assert deleted.json()["failed"] == 0
+    remaining = await db_session.execute(select(Outfit.id).where(Outfit.user_id == test_user.id))
+    assert {str(outfit_id) for outfit_id in remaining.scalars()} == all_ids - expected_ids
+
+
+@pytest.mark.parametrize("filters", [{"statuz": "accepted"}, {"ready_to_wear": "invalid"}])
+async def test_select_all_rejects_invalid_filters_without_deleting(
+    client, test_user, auth_headers, db_session, filters
+):
+    outfit = _make_outfit(test_user.id)
+    db_session.add(outfit)
+    await db_session.commit()
+    response = await client.post(
+        "/api/v1/outfits/bulk/delete",
+        json={"select_all": True, "filters": filters},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+    remaining = await db_session.execute(select(Outfit.id).where(Outfit.user_id == test_user.id))
+    assert remaining.scalars().all() == [outfit.id]
