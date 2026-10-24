@@ -11,7 +11,6 @@ import {
   Shirt,
   Sparkles,
   RefreshCw,
-  ThumbsUp,
   ThumbsDown,
   Cloud,
   Sun,
@@ -60,6 +59,9 @@ import { useWeather } from '@/lib/hooks/use-weather';
 import { usePreferences } from '@/lib/hooks/use-preferences';
 import { cn, formatShortDate } from '@/lib/utils';
 import { TempUnit, formatTemp, displayValue, toF, toCelsius } from '@/lib/temperature';
+
+import { DayOutfits, WearActions } from '@/components/day-outfits';
+import { useUserToday } from '@/lib/hooks/use-user';
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -277,7 +279,6 @@ function OutfitCard({
   baseItemId,
   temperatureUnit,
   t,
-  onAccept,
   onReject,
   showActions = true,
   badgeLabel,
@@ -286,11 +287,11 @@ function OutfitCard({
   baseItemId?: string;
   temperatureUnit: TempUnit;
   t: Translator;
-  onAccept?: () => void;
   onReject?: () => void;
   showActions?: boolean;
   badgeLabel?: string;
 }) {
+  const today = useUserToday()();
   const typeLabel = useTypeLabel();
   return (
     <Card className="overflow-hidden flex flex-col h-full">
@@ -387,12 +388,7 @@ function OutfitCard({
                 <ThumbsDown className="h-4 w-4" />
               </Button>
             )}
-            {onAccept && (
-              <Button size="sm" onClick={onAccept} className="gap-1.5 text-xs h-8">
-                <ThumbsUp className="h-3.5 w-3.5" />
-                {t('options.chooseThis')}
-              </Button>
-            )}
+            <WearActions outfit={outfit} date={today} />
           </div>
         )}
       </CardContent>
@@ -409,7 +405,6 @@ function OutfitResultsView({
   onSelectOption,
   isCompareAll,
   onToggleCompareAll,
-  onAccept,
   onReject,
   onTryAnother,
   onNewRequest,
@@ -423,12 +418,12 @@ function OutfitResultsView({
   onSelectOption: (index: number) => void;
   isCompareAll: boolean;
   onToggleCompareAll: () => void;
-  onAccept: (outfit?: Outfit) => void;
   onReject: (outfit?: Outfit) => void;
   onTryAnother: () => void;
   onNewRequest: () => void;
   t: Translator;
 }) {
+  const today = useUserToday()();
   const locale = useLocale();
   const conditionLabel = useWeatherConditionLabel();
   const occasionLabel = useOccasionLabel();
@@ -520,7 +515,6 @@ function OutfitResultsView({
                 temperatureUnit={temperatureUnit}
                 t={t}
                 badgeLabel={t('options.optionNumber', { number: idx + 1 })}
-                onAccept={() => onAccept(opt)}
                 onReject={() => onReject(opt)}
                 showActions={true}
               />
@@ -542,7 +536,6 @@ function OutfitResultsView({
             temperatureUnit={temperatureUnit}
             t={t}
             badgeLabel={outfits.length > 1 ? t('options.optionNumber', { number: activeOptionIndex + 1 }) : undefined}
-            onAccept={() => onAccept(currentOutfit)}
             onReject={() => onReject(currentOutfit)}
             showActions={false}
           />
@@ -553,10 +546,7 @@ function OutfitResultsView({
               <RefreshCw className="h-4 w-4" />
               {outfits.length > 1 ? t('options.generateNew') : t('tryAnother')}
             </Button>
-            <Button size="lg" onClick={() => onAccept(currentOutfit)} className="gap-2">
-              <ThumbsUp className="h-4 w-4" />
-              {t('loveIt')}
-            </Button>
+            <WearActions outfit={currentOutfit} date={today} />
             <Button variant="ghost" size="lg" onClick={() => onReject(currentOutfit)} className="px-3" aria-label={t('dismissOutfit')}>
               <ThumbsDown className="h-4 w-4" />
             </Button>
@@ -657,25 +647,6 @@ function SuggestContent() {
     }
   };
 
-  const handleAccept = async (targetOutfit?: Outfit) => {
-    const outfitToAccept = targetOutfit || outfits[activeOptionIndex];
-    if (!outfitToAccept) return;
-
-    applySessionToken(session);
-
-    try {
-      await api.post(`/outfits/${outfitToAccept.id}/accept`);
-      // Every look was already persisted, so the ones left over are marked skipped rather
-      // than rejected: rejecting would auto-exclude their items from today's suggestions,
-      // and those items mostly overlap with the outfit just accepted.
-      await discardAlternatives(outfits, outfitToAccept.id);
-      setOutfits([]);
-      setSelectedOccasion(null);
-    } catch (err) {
-      console.error('Accept error:', err);
-    }
-  };
-
   const handleTryAnother = async () => {
     await discardAlternatives(outfits);
     setOutfits([]);
@@ -720,6 +691,7 @@ function SuggestContent() {
         isCompareAll && outfits.length > 0 ? "max-w-5xl" : "max-w-2xl"
       )}
     >
+      <DayOutfits />
       {/* Page header with greeting */}
       <div className="text-center space-y-1">
         <h1 className="text-2xl font-bold tracking-tight">{t(getGreetingKey())}</h1>
@@ -888,7 +860,6 @@ function SuggestContent() {
           occasion={selectedOccasion || 'casual'}
           temperatureUnit={temperatureUnit}
           baseItemId={selectedItem?.id}
-          onAccept={handleAccept}
           onReject={handleReject}
           onTryAnother={handleTryAnother}
           onNewRequest={handleNewRequest}

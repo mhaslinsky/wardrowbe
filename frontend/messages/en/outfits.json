@@ -183,5 +183,25 @@
   "totalCount": "{count} total",
   "viewCalendar": "Calendar",
   "viewList": "List",
-  "viewToggle": "View toggle"
+  "viewToggle": "View toggle",
+  "day": {
+    "title": "Your day",
+    "previous": "Previous day",
+    "next": "Next day",
+    "today": "Today",
+    "preview": "Tomorrow is a preview",
+    "generate": "Get options",
+    "options": "Suggestions",
+    "saved": "Saved outfits",
+    "past": "Past outfits",
+    "empty": "No outfits",
+    "loading": "Loading",
+    "more": "Load more",
+    "wore": "I wore this",
+    "swap": "Swap a piece",
+    "logged": "Logged",
+    "alreadyLogged": "Already logged: {name}",
+    "failed": "Could not save",
+    "dismiss": "Dismiss"
+  }
 }

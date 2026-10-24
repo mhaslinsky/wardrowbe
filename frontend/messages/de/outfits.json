@@ -183,5 +183,25 @@
   "totalCount": "{count} insgesamt",
   "viewCalendar": "Kalender",
   "viewList": "Liste",
-  "viewToggle": "Ansicht wechseln"
+  "viewToggle": "Ansicht wechseln",
+  "day": {
+    "title": "Dein Tag",
+    "previous": "Vorheriger Tag",
+    "next": "Nächster Tag",
+    "today": "Heute",
+    "preview": "Morgen ist eine Vorschau",
+    "generate": "Optionen laden",
+    "options": "Vorschläge",
+    "saved": "Gespeicherte Outfits",
+    "past": "Frühere Outfits",
+    "empty": "Keine Outfits",
+    "loading": "Laden",
+    "more": "Mehr laden",
+    "wore": "Das habe ich getragen",
+    "swap": "Teil tauschen",
+    "logged": "Gespeichert",
+    "alreadyLogged": "Bereits gespeichert: {name}",
+    "failed": "Speichern fehlgeschlagen",
+    "dismiss": "Verwerfen"
+  }
 }

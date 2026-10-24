@@ -7,6 +7,7 @@ import LearningPage from '@/app/dashboard/learning/page'
 import { useAnalytics } from '@/lib/hooks/use-analytics'
 import { useLearning } from '@/lib/hooks/use-learning'
 
+vi.mock('@/components/day-outfits', () => ({ DayOutfits: () => null }))
 vi.mock('next/image', () => ({ default: () => null }))
 vi.mock('@/lib/hooks/use-translated-constants', () => ({
   useColorLabel: () => (c: string) => c,

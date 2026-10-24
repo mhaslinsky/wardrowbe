@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,8 +14,6 @@ import {
   TrendingUp,
   Cloud,
   Droplets,
-  ThumbsUp,
-  ThumbsDown,
   Clock,
   Bell,
   BellOff,
@@ -28,18 +26,15 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useAnalytics } from '@/lib/hooks/use-analytics';
 import { useAnalyticsInsightLines } from '@/lib/hooks/use-insight-text';
 import { useWeather } from '@/lib/hooks/use-weather';
 import { usePreferences } from '@/lib/hooks/use-preferences';
-import { useOccasionLabel, useWeatherConditionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
+import { useOccasionLabel, useWeatherConditionLabel } from '@/lib/hooks/use-translated-constants';
 import { displayValue, tempSymbol, TempUnit } from '@/lib/temperature';
-import { usePendingOutfits, useAcceptOutfit, useRejectOutfit } from '@/lib/hooks/use-outfits';
+import { DayOutfits } from '@/components/day-outfits';
 import { useSchedules, useNotificationSettings } from '@/lib/hooks/use-notifications';
 import { useFamily } from '@/lib/hooks/use-family';
-import { toast } from 'sonner';
-import { formatShortDate } from '@/lib/utils';
 import { findNextSchedule } from '@/lib/schedules';
 import { useUserTimezone } from '@/lib/hooks/use-user';
 
@@ -118,148 +113,6 @@ function WeatherCard() {
             {t('weather.getOutfitSuggestion')}
           </Link>
         </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PendingOutfitsCard() {
-  const typeLabel = useTypeLabel();
-  const { data, isLoading } = usePendingOutfits(2);
-  const acceptOutfit = useAcceptOutfit();
-  const rejectOutfit = useRejectOutfit();
-  const t = useTranslations('dashboard');
-  const tc = useTranslations('common');
-  const occasionLabel = useOccasionLabel();
-  const locale = useLocale();
-
-  const handleAccept = async (id: string) => {
-    try {
-      await acceptOutfit.mutateAsync(id);
-      toast.success(t('pendingOutfits.accepted'));
-    } catch {
-      toast.error(t('pendingOutfits.acceptFailed'));
-    }
-  };
-
-  const handleReject = async (id: string) => {
-    try {
-      await rejectOutfit.mutateAsync(id);
-      toast.success(t('pendingOutfits.dismissed'));
-    } catch {
-      toast.error(t('pendingOutfits.dismissFailed'));
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            {t('pendingOutfits.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-16 w-full mb-2" />
-          <Skeleton className="h-16 w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const pendingOutfits = data?.outfits || [];
-
-  if (pendingOutfits.length === 0) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-            {t('pendingOutfits.allCaughtUp')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            {t('pendingOutfits.noPending')}
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Clock className="h-4 w-4 text-orange-500" />
-            {t('pendingOutfits.title')}
-            <Badge variant="secondary" className="ml-1">{data?.total || pendingOutfits.length}</Badge>
-          </CardTitle>
-          {(data?.total ?? 0) > 2 && (
-            <Link href="/dashboard/history" className="text-xs text-muted-foreground hover:text-foreground">
-              {tc('viewAll')}
-            </Link>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {pendingOutfits.map((outfit) => (
-          <div key={outfit.id} className="flex items-center gap-3">
-            <div className="flex -space-x-2">
-              {outfit.items.slice(0, 3).map((item) => (
-                <div
-                  key={item.id}
-                  className="w-10 h-10 rounded-full bg-muted overflow-hidden relative border-2 border-background"
-                >
-                  {item.thumbnail_url ? (
-                    <Image
-                      src={item.thumbnail_url}
-                      alt={item.name || typeLabel(item.type)}
-                      fill
-                      className="object-cover"
-                      sizes="40px"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Shirt className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium capitalize truncate">{occasionLabel(outfit.occasion)}</p>
-              <p className="text-xs text-muted-foreground">
-                {outfit.scheduled_for
-                  ? formatShortDate(outfit.scheduled_for, locale)
-                  : t('pendingOutfits.lookbook')}
-              </p>
-            </div>
-            <div className="flex gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                onClick={() => handleReject(outfit.id)}
-                disabled={rejectOutfit.isPending}
-                aria-label={t('pendingOutfits.dismissLabel')}
-              >
-                <ThumbsDown className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-green-500 hover:text-green-600 hover:bg-green-50"
-                onClick={() => handleAccept(outfit.id)}
-                disabled={acceptOutfit.isPending}
-              >
-                <ThumbsUp className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        ))}
       </CardContent>
     </Card>
   );
@@ -624,10 +477,9 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Top row - Weather + Pending + Next Scheduled */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <DayOutfits />
+      <div className="grid gap-4 md:grid-cols-2">
         <WeatherCard />
-        <PendingOutfitsCard />
         <NextScheduledCard />
       </div>
 
