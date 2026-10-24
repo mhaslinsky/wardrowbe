@@ -654,3 +654,39 @@ async def test_bulk_duplicate_ids_make_one_paid_attempt(client, auth_headers, ph
     assert response.status_code == 200, response.text
     assert len(response.json()["results"]) == 1
     assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_checkerboard_pixels_retained_by_cutout_are_rejected():
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    image = Image.new("RGB", (64, 64))
+    for row in range(8):
+        for column in range(8):
+            shade = 192 if (row + column) % 2 else 255
+            image.paste((shade, shade, shade), (column * 8, row * 8, column * 8 + 8, row * 8 + 8))
+    image.paste(GREEN, (10, 10, 54, 54))
+    encoded = BytesIO()
+    image.save(encoded, "JPEG")
+    provider = _mock_provider()
+
+    def leave_background(source):
+        result = source.convert("RGBA")
+        result.paste((0, 0, 0, 0), (0, 0, 8, 8))
+        return result
+
+    provider.remove.side_effect = leave_background
+    assessment = reply(
+        [{"text": json.dumps({"needs_redraw": True, "confidence": 0.99, "reason": "Hanging"})}]
+    ).json()
+    generation = reply(
+        [{"inlineData": {"data": base64.b64encode(encoded.getvalue()).decode()}}]
+    ).json()
+    with (
+        patch.object(
+            PhotoRedrawService, "request", AsyncMock(side_effect=[assessment, generation])
+        ),
+        patch("app.services.photo_redraw_service.get_provider", return_value=provider),
+    ):
+        with pytest.raises(ValueError, match="checkerboard"):
+            await PhotoRedrawService().generate(Image.new("RGB", (64, 64), GREEN))
