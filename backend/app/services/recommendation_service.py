@@ -34,6 +34,7 @@ from app.services.item_scorer import (
     temperature_band,
 )
 from app.services.suggestion_cache import pop_suggestion, push_suggestions
+from app.services.wear_service import WearService
 from app.services.weather_service import (
     GeocodingServiceError,
     WeatherData,
@@ -60,6 +61,8 @@ logger = logging.getLogger(__name__)
 # How far the temperature may drift before a cached option, picked by the AI for the old
 # reading, is regenerated rather than served.
 CACHED_SUGGESTION_TEMP_TOLERANCE = 3.0
+DAY_LOCK_TIMEOUT_MS = 1500
+DAY_FORECAST_DAYS = 10
 
 SINGLE_OUTFIT_FORMAT = (
     "Respond with valid JSON:\n"
@@ -197,17 +200,22 @@ class RecommendationService:
         exclude_items: list[UUID] | None = None,
         include_items: list[UUID] | None = None,
     ) -> list[Outfit]:
+        """Top up a day to three options, or return existing options on lock timeout.
+
+        Past days are read-only; invalid dates or unavailable forecasts raise ValueError.
+        """
         today = get_user_today(user)
         if day > today + timedelta(days=7):
             raise ValueError("Choose a date within 7 days")
         if day < today:
             return await self._day_suggestions(user.id, day)
 
-        from app.services.wear_service import WearService
-
         try:
             async with self.db.begin_nested():
-                await self.db.execute(text("SET LOCAL lock_timeout = '1500ms'"))
+                await self.db.execute(
+                    text("SELECT set_config('lock_timeout', :timeout, true)"),
+                    {"timeout": f"{DAY_LOCK_TIMEOUT_MS}ms"},
+                )
                 await WearService(self.db).lock_day(user.id, day)
                 await self.db.execute(text("SET LOCAL lock_timeout = DEFAULT"))
         except DBAPIError as error:
@@ -228,14 +236,22 @@ class RecommendationService:
                 return existing
             lat, lon = user.location_lat, user.location_lon
             if (lat is None or lon is None) and user.location_name:
-                location = await self.weather_service.geocode_location_name(user.location_name)
+                try:
+                    location = await self.weather_service.geocode_location_name(user.location_name)
+                except GeocodingServiceError as error:
+                    raise ValueError(
+                        "Could not resolve location. Update your location in settings."
+                    ) from error
                 if location:
                     lat, lon, _ = location
             if lat is None or lon is None:
                 raise ValueError("Set your location in settings")
-            forecasts = await self.weather_service.get_daily_forecast(
-                float(lat), float(lon), days=8
-            )
+            try:
+                forecasts = await self.weather_service.get_daily_forecast(
+                    float(lat), float(lon), days=DAY_FORECAST_DAYS
+                )
+            except WeatherServiceError as error:
+                raise ValueError("Could not fetch weather data. Try again later.") from error
             forecast = next((entry for entry in forecasts if entry.date == day.isoformat()), None)
             if forecast is None:
                 raise ValueError("Forecast unavailable for this date")
@@ -1169,6 +1185,10 @@ class RecommendationService:
             preferences_text = "\n".join(filter(None, (preferences_text, wearer_preferences)))
 
         prompt_template = RECOMMENDATION_PROMPT
+        if self._defer_commit:
+            prompt_template = prompt_template.replace(
+                "exactly 3 distinct", f"exactly {count} distinct"
+            )
         if single_outfit:
             prompt_template = re.sub(
                 r"Respond with valid JSON containing exactly 3.*$",
