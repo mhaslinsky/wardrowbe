@@ -31,6 +31,7 @@
     "removeItem": "Supprimer {name}"
   },
   "cards": {
+    "wash": "Lavage",
     "wearCount": "Portée {count, plural, one {# fois} other {# fois}}",
     "history": "Historique",
     "record": "Entrée {count}",
@@ -185,11 +186,12 @@
   "viewList": "Liste",
   "viewToggle": "Changer de vue",
   "day": {
+    "tomorrow": "Demain",
+    "worn": "Porté",
     "title": "Votre journée",
     "previous": "Jour précédent",
     "next": "Jour suivant",
     "today": "Aujourd’hui",
-    "preview": "Demain est un aperçu",
     "generate": "Voir les options",
     "options": "Suggestions",
     "saved": "Tenues enregistrées",

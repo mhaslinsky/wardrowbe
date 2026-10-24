@@ -31,6 +31,7 @@
     "removeItem": "{name} entfernen"
   },
   "cards": {
+    "wash": "Wäsche",
     "wearCount": "{count, plural, one {# Mal getragen} other {# Mal getragen}}",
     "history": "Verlauf",
     "record": "Eintrag {count}",
@@ -185,11 +186,12 @@
   "viewList": "Liste",
   "viewToggle": "Ansicht wechseln",
   "day": {
+    "tomorrow": "Morgen",
+    "worn": "Getragen",
     "title": "Dein Tag",
     "previous": "Vorheriger Tag",
     "next": "Nächster Tag",
     "today": "Heute",
-    "preview": "Morgen ist eine Vorschau",
     "generate": "Optionen laden",
     "options": "Vorschläge",
     "saved": "Gespeicherte Outfits",

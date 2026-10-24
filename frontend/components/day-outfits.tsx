@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useTranslations } from 'next-intl';
+import { CalendarCheck } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useDayOutfits, useDaySelection, useGenerateDayOptions, useLogDayWear, loggedOutfitName } from '@/lib/hooks/use-day-outfits';
 import { useInfiniteOutfits, useRejectOutfit, type Outfit } from '@/lib/hooks/use-outfits';
 import { useItemPages } from '@/lib/hooks/use-items';
@@ -60,6 +61,7 @@ interface WearActionsProps {
   outfit: Outfit;
   date: string;
   disabled?: boolean;
+  dismissAction?: React.ReactNode;
   onSuccess?: (outfit: Outfit) => void;
   onPendingChange?: (pending: boolean) => void;
 }
@@ -68,7 +70,7 @@ export function WearActions(props: WearActionsProps) {
   return <DayWearActions key={`${props.outfit.id}:${props.date}`} {...props} />;
 }
 
-function DayWearActions({ outfit, date, disabled = false, onSuccess, onPendingChange }: WearActionsProps) {
+function DayWearActions({ outfit, date, disabled = false, onSuccess, onPendingChange, dismissAction }: WearActionsProps) {
   const t = useTranslations('outfits.day');
   const today = useUserToday();
   const { data: profile } = useUserProfile();
@@ -101,9 +103,10 @@ function DayWearActions({ outfit, date, disabled = false, onSuccess, onPendingCh
     } finally { onPendingChange?.(false); }
   };
   return <div className="space-y-2">
-    <div className="flex flex-wrap gap-2">
-      <Button disabled={unavailable} onClick={() => log()}>{t('wore')}</Button>
-      <Button variant="outline" disabled={unavailable} onClick={() => setSwap(true)}>{t('swap')}</Button>
+    <div className="flex items-center gap-1">
+      <Button size="sm" className="px-2 text-xs" disabled={unavailable} onClick={() => log()}>{t('wore')}</Button>
+      <Button size="sm" className="px-2 text-xs" variant="outline" disabled={unavailable} onClick={() => setSwap(true)}>{t('swap')}</Button>
+      {dismissAction}
     </div>
     {notice && <p role="status">{notice}</p>}
     <Dialog open={swap} onOpenChange={setSwap}><DialogContent>
@@ -113,9 +116,20 @@ function DayWearActions({ outfit, date, disabled = false, onSuccess, onPendingCh
   </div>;
 }
 
+function WornOutfits({ outfits }: { outfits: Outfit[] }) {
+  const t = useTranslations('outfits.day');
+  return <div className="space-y-3">
+    <h3 className="font-semibold">{t('worn')}</h3>
+    <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))]">
+      {outfits.map((outfit) => <OutfitCard key={outfit.id} outfit={outfit} hideWashWarnings />)}
+    </div>
+  </div>;
+}
+
 export function DayOutfits({ date: controlledDate, onDateChange }: { date?: string; onDateChange?: (date: string | null) => void } = {}) {
   const t = useTranslations('outfits.day');
   const common = useTranslations('common');
+  const locale = useLocale();
   const selection = useDaySelection();
   const { today, ready } = selection;
   const date = controlledDate ?? selection.date;
@@ -127,38 +141,47 @@ export function DayOutfits({ date: controlledDate, onDateChange }: { date?: stri
   const { data: preferences } = usePreferences();
   const generate = useGenerateDayOptions();
   const dayOutfits = day.data?.pages.flatMap((page) => page.outfits) ?? [];
-  const logged = dayOutfits.some((outfit) => !!outfit.feedback?.worn_at);
+  const wornOutfits = dayOutfits.filter((outfit) => outfit.feedback?.worn_at === date);
+  const logged = wornOutfits.length > 0;
+  const [year, month, dayOfMonth] = date.split('-').map(Number);
+  const dateLabel = date === today ? t('today') : date === shiftDay(today, 1) ? t('tomorrow')
+    : new Intl.DateTimeFormat(locale, { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(year, month - 1, dayOfMonth));
+  const seen = new Set(wornOutfits.map((outfit) => outfit.id));
   const sections = [
     { title: t('options'), query: day },
     { title: t('saved'), query: saved },
     { title: t('past'), query: past },
-  ];
-  const seen = new Set<string>();
+  ].map((section) => ({
+    ...section,
+    outfits: (section.query.data?.pages.flatMap((page) => page.outfits) ?? []).filter((outfit) => {
+      if (seen.has(outfit.id) || outfit.status === 'rejected' || outfit.status === 'expired') return false;
+      seen.add(outfit.id);
+      return true;
+    }),
+  }));
   return <section className="space-y-4">
-    <div className="flex flex-wrap items-center gap-3">
-      <h2 className="text-xl font-semibold">{t('title')}</h2>
-      <Button variant="outline" disabled={!ready} onClick={() => setDate(shiftDay(date, -1))} aria-label={t('previous')}>←</Button>
-      <span>{date}</span>
-      <Button variant="outline" disabled={!ready || date >= shiftDay(today, 1)} onClick={() => setDate(shiftDay(date, 1))} aria-label={t('next')}>→</Button>
-      <Button variant="ghost" disabled={!ready} onClick={() => setDate(null)}>{t('today')}</Button>
+    <div className="flex items-center gap-1 sm:gap-3">
+      <h2 className="mr-auto text-base font-semibold sm:text-xl">{t('title')}</h2>
+      <Button size="icon" className="h-8 w-8 shrink-0" variant="outline" disabled={!ready} onClick={() => setDate(shiftDay(date, -1))} aria-label={t('previous')}>←</Button>
+      <span className="whitespace-nowrap text-sm">{dateLabel}</span>
+      <Button size="icon" className="h-8 w-8 shrink-0" variant="outline" disabled={!ready || date >= shiftDay(today, 1)} onClick={() => setDate(shiftDay(date, 1))} aria-label={t('next')}>→</Button>
+      <Button size="icon" className="h-8 w-8 shrink-0" variant="ghost" disabled={!ready} onClick={() => setDate(null)} aria-label={t('today')}><CalendarCheck className="h-4 w-4" /></Button>
     </div>
-    {date > today && <p>{t('preview')}</p>}
+    {logged && <WornOutfits outfits={wornOutfits} />}
     {date >= today && <Button disabled={!ready || logged || generate.isPending || day.isLoading || day.isError} onClick={() => generate.mutate({ date, occasion: preferences?.default_occasion || 'casual' })}>{t('generate')}</Button>}
     {generate.isError && <p role="alert">{t('generateFailed')}</p>}
-    {sections.map(({ title, query }) => <div key={title} className="space-y-3">
+    {sections.map(({ title, query, outfits }) => <div key={title} className="space-y-3">
       <h3 className="font-semibold">{title}</h3>
       {query.isLoading && <p role="status">{common('loading')}</p>}
       {query.isError && <p role="alert">{t('failed')}</p>}
       {query.data?.pages[0]?.total === 0 && <p>{t('empty')}</p>}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {query.data?.pages.flatMap((page) => page.outfits).filter((outfit) => {
-          if (seen.has(outfit.id) || outfit.status === 'rejected' || outfit.status === 'expired') return false;
-          seen.add(outfit.id);
-          return true;
-        }).map((outfit) => <Card key={outfit.id}><CardContent className="p-3 space-y-3">
+      <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))]">
+        {outfits.map((outfit) => <Card key={outfit.id}><CardContent className="p-3 space-y-3">
           <OutfitCard outfit={outfit} />
-          {outfit.feedback?.worn_at === date ? <p>{t('logged')}</p> : <WearActions outfit={outfit} date={date} disabled={!ready} />}
-          {!outfit.feedback?.worn_at && ['pending', 'sent', 'viewed'].includes(outfit.status) && <Button variant="ghost" disabled={reject.isPending} onClick={() => reject.mutate(outfit.id)}>{t('dismiss')}</Button>}
+          <WearActions outfit={outfit} date={date} disabled={!ready} dismissAction={
+            !outfit.feedback?.worn_at && ['pending', 'sent', 'viewed'].includes(outfit.status)
+              ? <Button size="sm" className="px-2 text-xs" variant="ghost" disabled={reject.isPending} onClick={() => reject.mutate(outfit.id)}>{t('dismiss')}</Button> : null
+          } />
         </CardContent></Card>)}
       </div>
       {query.hasNextPage && <Button variant="outline" disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()}>{common('loadMore')}</Button>}

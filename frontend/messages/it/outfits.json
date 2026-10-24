@@ -31,6 +31,7 @@
     "removeItem": "Rimuovi {name}"
   },
   "cards": {
+    "wash": "Lavaggio",
     "wearCount": "Indossato {count, plural, one {# volta} other {# volte}}",
     "history": "Cronologia",
     "record": "Voce {count}",
@@ -185,11 +186,12 @@
   "viewList": "Elenco",
   "viewToggle": "Cambia vista",
   "day": {
+    "tomorrow": "Domani",
+    "worn": "Indossato",
     "title": "La tua giornata",
     "previous": "Giorno precedente",
     "next": "Giorno successivo",
     "today": "Oggi",
-    "preview": "Domani è un’anteprima",
     "generate": "Mostra opzioni",
     "options": "Suggerimenti",
     "saved": "Outfit salvati",
