@@ -85,6 +85,13 @@ async def test_gemini_cutout_fallback_and_no_double_charge(mode, client, auth_he
     cutouts = [garment(), garment(RED if mode == "color_drift" else GREEN)]
     if mode == "failed":
         cutouts[1] = RuntimeError("rembg unavailable")
+
+    def remove_cutout(image):
+        result = cutouts.pop(0) if cutouts else garment()
+        if isinstance(result, Exception):
+            raise result
+        return result
+
     original_path = photo_item.image_path
     original_bytes = ImageService().get_image_path(original_path).read_bytes()
     with (
@@ -92,7 +99,7 @@ async def test_gemini_cutout_fallback_and_no_double_charge(mode, client, auth_he
             "app.services.photo_redraw_service.httpx.AsyncClient",
             side_effect=lambda **kwargs: real_client(transport=transport, **kwargs),
         ),
-        patch("app.services.photo_redraw_service.cutout", side_effect=cutouts),
+        patch("app.services.photo_redraw_service.cutout", side_effect=remove_cutout),
     ):
         response = await client.post(
             f"/api/v1/items/{photo_item.id}/redraw-photo", headers=auth_headers
