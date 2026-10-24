@@ -1,0 +1,14 @@
+{
+  "title": "灵感穿搭",
+  "description": "用自己的衣服重现喜欢的穿搭。",
+  "photo": "照片或截图",
+  "create": "重现并保存",
+  "working": "正在匹配衣服…",
+  "saved": "已保存",
+  "empty": "上传照片以开始。",
+  "error": "请求失败。",
+  "open": "查看穿搭",
+  "noMatch": "无匹配",
+  "strength": "匹配度：{value}%",
+  "baseLayer": "添加的打底层"
+}

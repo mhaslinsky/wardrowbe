@@ -1,0 +1,14 @@
+{
+  "title": "Inspiration",
+  "description": "Recréez un look avec vos vêtements.",
+  "photo": "Photo ou capture d’écran",
+  "create": "Recréer et enregistrer",
+  "working": "Recherche de vêtements…",
+  "saved": "Enregistré",
+  "empty": "Importez une photo pour commencer.",
+  "error": "La demande a échoué.",
+  "open": "Ouvrir la tenue",
+  "noMatch": "Aucune correspondance",
+  "strength": "Correspondance : {value}%",
+  "baseLayer": "Couche de base ajoutée"
+}

@@ -1,0 +1,14 @@
+{
+  "title": "Ispirazione",
+  "description": "Ricrea un look con i tuoi vestiti.",
+  "photo": "Foto o screenshot",
+  "create": "Ricrea e salva",
+  "working": "Ricerca dei vestiti…",
+  "saved": "Salvato",
+  "empty": "Carica una foto per iniziare.",
+  "error": "Richiesta non riuscita.",
+  "open": "Apri outfit",
+  "noMatch": "Nessuna corrispondenza",
+  "strength": "Corrispondenza: {value}%",
+  "baseLayer": "Strato di base aggiunto"
+}
