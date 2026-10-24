@@ -21,6 +21,7 @@ from app.models.item import ClothingItem, ItemStatus
 from app.services.background_removal import get_provider
 from app.services.image_service import ImageService
 from app.services.mask_cleanup import clean_cutout
+from app.utils.garment_vocabulary import types_for_role
 from app.utils.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -238,6 +239,7 @@ class PhotoRedrawService:
         self.usage = {}
         self.mark_paid = None
         self.recorded_colors = {}
+        self.is_footwear = False
 
     async def request(self, image: bytes, prompt: str, modality: str) -> dict:
         """Make one Gemini call without automatically retrying a possible charge."""
@@ -260,6 +262,8 @@ class PhotoRedrawService:
             return payload
 
     def prompt(self, name: str) -> str:
+        if self.is_footwear:
+            name = name.replace("photo_redraw", "photo_redraw_footwear", 1)
         recorded = self.recorded_colors
         has_color = bool(recorded.get("primary_color") or recorded.get("colors"))
         instruction = (
@@ -326,6 +330,7 @@ class PhotoRedrawService:
             raise HTTPException(409, "Photo redraw already requested or item busy")
         if previous.get("paid", previous.get("provider_calls", 0) > 0) and not retry:
             raise HTTPException(409, "Confirm a paid retry")
+        self.is_footwear = item.type in types_for_role("footwear")
         self.recorded_colors = {
             "primary_color": item.primary_color,
             "colors": item.colors,
