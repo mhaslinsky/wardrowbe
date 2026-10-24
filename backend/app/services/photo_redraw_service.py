@@ -25,6 +25,11 @@ from app.utils.prompts import load_prompt
 PHOTO_FIELDS = ("image_path", "medium_path", "thumbnail_path")
 
 
+def photo_redraw_enabled() -> bool:
+    settings = get_settings()
+    return bool(settings.ai_image_model and settings.ai_api_key)
+
+
 async def lock_photo(db, item, missing_ok=False):
     """Lock and reload the latest photo paths before a write."""
     item_id = item.id if isinstance(item, ClothingItem) else item
@@ -287,8 +292,7 @@ class PhotoRedrawService:
     async def redraw(self, db, item, retry=False) -> None:
         """Persist one claim; failures after assessment starts need explicit paid retry."""
         item_id = item.id
-        settings = get_settings()
-        if not settings.ai_image_model or not settings.ai_api_key:
+        if not photo_redraw_enabled():
             raise HTTPException(503, "Photo redraw is disabled")
         item = await lock_photo(db, item)
         previous = item.photo_redraw or {}

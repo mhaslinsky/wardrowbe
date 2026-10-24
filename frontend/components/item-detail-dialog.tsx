@@ -80,6 +80,7 @@ import {
 import { ColorEyedropper } from '@/components/color-eyedropper';
 import { ACCEPTED_IMAGE_INPUT } from '@/lib/image-types';
 import { GeneratePairingsDialog } from '@/components/generate-pairings-dialog';
+import { PhotoRedrawControls } from '@/components/photo-redraw-controls';
 import { useFeatures } from '@/lib/hooks/use-features';
 import { useLocale, useTranslations } from 'next-intl';
 import { formatDate } from '@/lib/utils';
@@ -507,6 +508,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
             <div className="grid gap-6 sm:grid-cols-2 [&>*]:min-w-0">
             {/* Image Gallery */}
             <div className="space-y-2">
+              <PhotoRedrawControls key={item.id} item={item} />
               <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
                 {(() => {
                   const allImages = [

@@ -40,9 +40,16 @@ async def test_features_need_no_auth(client: AsyncClient):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "model,key,enabled",
-    [("test-model", "test-key", True), ("", "test-key", False), ("test-model", "", False), ("", "", False)],
+    [
+        ("test-model", "test-key", True),
+        ("", "test-key", False),
+        ("test-model", "", False),
+        ("", "", False),
+    ],
 )
-async def test_redraw_feature_matches_service_availability(client, monkeypatch, model, key, enabled):
+async def test_redraw_feature_matches_service_availability(
+    client, monkeypatch, model, key, enabled
+):
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, patch
 
@@ -56,7 +63,10 @@ async def test_redraw_feature_matches_service_availability(client, monkeypatch, 
     assert response.status_code == 200
     assert response.json()["photo_redraw"] is enabled
     item = SimpleNamespace(id="test-item")
-    with patch("app.services.photo_redraw_service.lock_photo", new=AsyncMock(side_effect=HTTPException(409, "locked"))):
+    with patch(
+        "app.services.photo_redraw_service.lock_photo",
+        new=AsyncMock(side_effect=HTTPException(409, "locked")),
+    ):
         with pytest.raises(HTTPException) as failure:
             await PhotoRedrawService().redraw(None, item)
     assert (failure.value.status_code != 503) is response.json()["photo_redraw"]

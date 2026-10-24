@@ -4,7 +4,7 @@ import { redrawPhotos } from '@/lib/photo-redraw';
 vi.mock('@/lib/api', async (original) => ({ ...(await original<typeof import('@/lib/api')>()), api: { post: vi.fn() } }));
 beforeEach(() => vi.clearAllMocks());
 it('chunks explicit selections at 20, deduplicates and preserves retry confirmation', async () => {
-  vi.mocked(api.post).mockResolvedValue({ results: [], has_more: false });
+  vi.mocked(api.post).mockImplementation(async (_, data) => ({ results: (data as { item_ids: string[] }).item_ids.map((id) => ({ id, status: 'generated' })), has_more: false }));
   const ids = Array.from({ length: 21 }, (_, index) => String(index));
   await redrawPhotos({ item_ids: [...ids, '0'], retry: true });
   expect(api.post).toHaveBeenCalledTimes(2);
@@ -36,4 +36,13 @@ it('does not retry a transport failure that may have charged', async () => {
   vi.mocked(api.post).mockRejectedValue(new Error('network'));
   await expect(redrawPhotos({ item_ids: ['one'], retry: false })).rejects.toThrow('network');
   expect(api.post).toHaveBeenCalledTimes(1);
+});
+
+it.each([{}, { results: null, has_more: false }, { results: [], has_more: false }, { results: [{ id: 'one' }], has_more: false }])('rejects a malformed or incomplete explicit response', async (batch) => {
+  vi.mocked(api.post).mockResolvedValue(batch);
+  await expect(redrawPhotos({ item_ids: ['one'], retry: false })).rejects.toThrow();
+});
+it('accepts an empty select-all response when no items match', async () => {
+  vi.mocked(api.post).mockResolvedValue({ results: [], has_more: false });
+  expect(await redrawPhotos({ select_all: true, retry: false })).toEqual([]);
 });

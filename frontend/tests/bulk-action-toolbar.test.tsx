@@ -57,3 +57,20 @@ describe('BulkActionToolbar placement', () => {
     expect(lowered).toEqual(['lg:bottom-6'])
   })
 })
+
+it('confirms bulk redraw and leaves paid retries off until selected', async () => {
+  const { fireEvent } = await import('@testing-library/react');
+  const redraw = vi.fn();
+  render(<BulkActionToolbar
+    selection={{ mode: 'some', selectedIds: new Set(['one']), excludedIds: new Set() }}
+    totalItems={1} pageItems={1} onSelectAll={vi.fn()} onSelectAllMatching={vi.fn()}
+    onClear={vi.fn()} onDelete={vi.fn()} onRedraw={redraw}
+  />);
+  fireEvent.click(screen.getByRole('button', { name: 'redraw' }));
+  expect(redraw).not.toHaveBeenCalled();
+  expect(screen.getByRole('checkbox', { name: 'includeRetries' })).not.toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'includeRetries' }));
+  expect(screen.getByText('paidRetry')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'confirm' }));
+  expect(redraw).toHaveBeenCalledWith(true);
+});

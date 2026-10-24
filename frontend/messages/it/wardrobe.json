@@ -277,5 +277,27 @@
     "daysAgo": "Indossato {days}g fa",
     "today": "Indossato oggi",
     "yesterday": "Indossato ieri"
+  },
+  "photoRedraw": {
+    "redraw": "Ridisegna foto",
+    "retry": "Riprova",
+    "useOriginal": "Usa originale",
+    "useRedrawn": "Usa foto ridisegnata",
+    "redrawn": "Ridisegnata",
+    "switchBack": "Tocca Ridisegnata per usare l’originale.",
+    "confirmTitle": "Ridisegnare le foto ({count})?",
+    "paidConfirm": "Ogni foto selezionata può comportare un costo IA.",
+    "paidRetry": "Riprovare le foto già addebitate comporta un altro costo IA.",
+    "includeRetries": "Includi nuovi tentativi a pagamento",
+    "generating": "Foto in elaborazione",
+    "skipped": "Nessuna nuova foto necessaria",
+    "color_drift": "Controlla i colori della foto ridisegnata prima di usarla.",
+    "source_changed": "Foto modificata durante l’elaborazione",
+    "failed": "Elaborazione non riuscita",
+    "error": "Aggiornamento della foto non riuscito",
+    "conflict": "Foto modificata; controlla lo stato attuale.",
+    "bulkResult": "Ridisegnate: {generated}. Non riuscite: {failed}.",
+    "bulkFailed": "Apri gli articoli non riusciti per controllare le foto.",
+    "bulkError": "Elaborazione interrotta; controlla gli articoli prima di riprovare."
   }
 }

@@ -277,5 +277,27 @@
     "daysAgo": "{days} 天前穿過",
     "today": "今天穿過",
     "yesterday": "昨天穿過"
+  },
+  "photoRedraw": {
+    "redraw": "重繪照片",
+    "retry": "重試重繪",
+    "useOriginal": "使用原圖",
+    "useRedrawn": "使用重繪圖",
+    "redrawn": "已重繪",
+    "switchBack": "點選「已重繪」即可使用原圖。",
+    "confirmTitle": "重繪{count}張照片？",
+    "paidConfirm": "每張所選照片都可能產生AI費用。",
+    "paidRetry": "重試已收費的照片將再次產生AI費用。",
+    "includeRetries": "包含付費重試",
+    "generating": "正在重繪照片",
+    "skipped": "無需重繪",
+    "color_drift": "使用前請檢查重繪照片的顏色。",
+    "source_changed": "重繪期間照片已變更",
+    "failed": "重繪失敗",
+    "error": "照片更新失敗",
+    "conflict": "照片已變更，請檢查目前狀態。",
+    "bulkResult": "已重繪：{generated}。失敗：{failed}。",
+    "bulkFailed": "開啟失敗的物品以檢查照片。",
+    "bulkError": "重繪已停止，請先檢查物品再重試。"
   }
 }

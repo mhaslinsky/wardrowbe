@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { redrawPhotos, type RedrawSelection } from '@/lib/photo-redraw';
 import { useQueries, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { api, API_BASE_PATH, getAccessToken, ApiError, NetworkError } from '@/lib/api';
@@ -118,6 +119,7 @@ export function useItem(itemId: string) {
   return useQuery({
     queryKey: queryKeys.item(itemId),
     queryFn: () => api.get<Item>(`/items/${itemId}`),
+    refetchInterval: (query) => processingPollInterval(query.state.data?.photo_redraw?.status === 'generating'),
     enabled: !!itemId && status !== 'loading',
   });
 }
@@ -1302,4 +1304,61 @@ export function useBulkCreateItems() {
     ...mutation,
     uploadProgress,
   };
+}
+
+export function useRedrawPhoto() {
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  return useMutation({
+    mutationFn: ({ id, retry }: { id: string; retry: boolean }) => {
+      applySessionToken(session);
+      return api.post<Item>(`/items/${id}/redraw-photo`, { retry });
+    },
+    retry: false,
+    meta: { toastsOwnErrors: true },
+    onSuccess: (item) => {
+      queryClient.setQueryData(queryKeys.item(item.id), item);
+      queryClient.setQueriesData({ queryKey: queryKeys.items.all }, (old: ItemListResponse | undefined) =>
+        old ? { ...old, items: old.items.map((current) => current.id === item.id ? item : current) } : old);
+    },
+    onSettled: (_, __, variables) => invalidatePrimaryImageQueries(queryClient, variables.id),
+  });
+}
+
+export function useChoosePhoto() {
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  return useMutation({
+    mutationFn: ({ id, choice }: { id: string; choice: 'original' | 'redrawn' }) => {
+      applySessionToken(session);
+      return api.post<Item>(`/items/${id}/photo/${choice}`);
+    },
+    retry: false,
+    meta: { toastsOwnErrors: true },
+    onSuccess: (item) => {
+      queryClient.setQueryData(queryKeys.item(item.id), item);
+      queryClient.setQueriesData({ queryKey: queryKeys.items.all }, (old: ItemListResponse | undefined) =>
+        old ? { ...old, items: old.items.map((current) => current.id === item.id ? item : current) } : old);
+    },
+    onSettled: (_, __, variables) => invalidatePrimaryImageQueries(queryClient, variables.id),
+  });
+}
+
+export function useBulkRedrawPhotos() {
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  return useMutation({
+    mutationFn: (params: RedrawSelection) => {
+      applySessionToken(session);
+      return redrawPhotos(params);
+    },
+    retry: false,
+    meta: { toastsOwnErrors: true },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.everyItem });
+      queryClient.invalidateQueries({ queryKey: queryKeys.outfits.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.calendarOutfits.all });
+    },
+  });
 }

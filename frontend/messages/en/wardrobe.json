@@ -277,5 +277,27 @@
     "daysAgo": "Worn {days}d ago",
     "today": "Worn today",
     "yesterday": "Worn yesterday"
+  },
+  "photoRedraw": {
+    "redraw": "Redraw photo",
+    "retry": "Retry redraw",
+    "useOriginal": "Use original",
+    "useRedrawn": "Use redrawn",
+    "redrawn": "Redrawn",
+    "switchBack": "Tap Redrawn to use the original.",
+    "confirmTitle": "Redraw photos ({count})?",
+    "paidConfirm": "Each selected photo may incur an AI charge.",
+    "paidRetry": "Retrying previously charged photos incurs another AI charge.",
+    "includeRetries": "Include paid retries",
+    "generating": "Redrawing photo",
+    "skipped": "No redraw needed",
+    "color_drift": "Check the redrawn photo’s colors before using it.",
+    "source_changed": "Photo changed during redraw",
+    "failed": "Redraw failed",
+    "error": "Photo update failed",
+    "conflict": "Photo changed; check its current status.",
+    "bulkResult": "Redrawn: {generated}. Failed: {failed}.",
+    "bulkFailed": "Open failed items to check their photos.",
+    "bulkError": "Redraw stopped; check items before retrying."
   }
 }

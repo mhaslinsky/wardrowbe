@@ -277,5 +277,27 @@
     "daysAgo": "Vor {days} T. getragen",
     "today": "Heute getragen",
     "yesterday": "Gestern getragen"
+  },
+  "photoRedraw": {
+    "redraw": "Foto neu zeichnen",
+    "retry": "Erneut zeichnen",
+    "useOriginal": "Original verwenden",
+    "useRedrawn": "Neuzeichnung verwenden",
+    "redrawn": "Neu gezeichnet",
+    "switchBack": "Tippe auf „Neu gezeichnet“, um das Original zu verwenden.",
+    "confirmTitle": "Fotos neu zeichnen ({count})?",
+    "paidConfirm": "Für jedes ausgewählte Foto können KI-Kosten anfallen.",
+    "paidRetry": "Ein erneuter Versuch verursacht weitere KI-Kosten.",
+    "includeRetries": "Kostenpflichtige Wiederholungen einbeziehen",
+    "generating": "Foto wird neu gezeichnet",
+    "skipped": "Keine Neuzeichnung nötig",
+    "color_drift": "Prüfe die Farben der Neuzeichnung vor der Verwendung.",
+    "source_changed": "Foto während der Neuzeichnung geändert",
+    "failed": "Neuzeichnung fehlgeschlagen",
+    "error": "Fotoaktualisierung fehlgeschlagen",
+    "conflict": "Foto geändert; prüfe den aktuellen Status.",
+    "bulkResult": "Neu gezeichnet: {generated}. Fehlgeschlagen: {failed}.",
+    "bulkFailed": "Öffne fehlgeschlagene Artikel und prüfe ihre Fotos.",
+    "bulkError": "Neuzeichnung gestoppt; prüfe die Artikel vor einem erneuten Versuch."
   }
 }

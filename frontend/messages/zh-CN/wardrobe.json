@@ -277,5 +277,27 @@
     "daysAgo": "{days}天前穿过",
     "today": "今天穿过",
     "yesterday": "昨天穿过"
+  },
+  "photoRedraw": {
+    "redraw": "重绘照片",
+    "retry": "重试重绘",
+    "useOriginal": "使用原图",
+    "useRedrawn": "使用重绘图",
+    "redrawn": "已重绘",
+    "switchBack": "点击“已重绘”即可使用原图。",
+    "confirmTitle": "重绘{count}张照片？",
+    "paidConfirm": "每张所选照片都可能产生AI费用。",
+    "paidRetry": "重试已收费的照片将再次产生AI费用。",
+    "includeRetries": "包含付费重试",
+    "generating": "正在重绘照片",
+    "skipped": "无需重绘",
+    "color_drift": "使用前请检查重绘照片的颜色。",
+    "source_changed": "重绘期间照片已更改",
+    "failed": "重绘失败",
+    "error": "照片更新失败",
+    "conflict": "照片已更改，请检查当前状态。",
+    "bulkResult": "已重绘：{generated}。失败：{failed}。",
+    "bulkFailed": "打开失败的物品以检查照片。",
+    "bulkError": "重绘已停止，请先检查物品再重试。"
   }
 }

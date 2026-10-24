@@ -277,5 +277,27 @@
     "daysAgo": "Porté il y a {days} j",
     "today": "Porté aujourd'hui",
     "yesterday": "Porté hier"
+  },
+  "photoRedraw": {
+    "redraw": "Redessiner la photo",
+    "retry": "Réessayer",
+    "useOriginal": "Utiliser l’original",
+    "useRedrawn": "Utiliser la nouvelle photo",
+    "redrawn": "Redessinée",
+    "switchBack": "Touchez Redessinée pour utiliser l’original.",
+    "confirmTitle": "Redessiner les photos ({count}) ?",
+    "paidConfirm": "Chaque photo sélectionnée peut entraîner des frais d’IA.",
+    "paidRetry": "Réessayer les photos déjà facturées entraîne de nouveaux frais d’IA.",
+    "includeRetries": "Inclure les nouvelles tentatives payantes",
+    "generating": "Photo en cours de création",
+    "skipped": "Aucune nouvelle photo nécessaire",
+    "color_drift": "Vérifiez les couleurs de la nouvelle photo avant utilisation.",
+    "source_changed": "Photo modifiée pendant la création",
+    "failed": "Création échouée",
+    "error": "Mise à jour de la photo échouée",
+    "conflict": "Photo modifiée ; vérifiez son état actuel.",
+    "bulkResult": "Redessinées : {generated}. Échecs : {failed}.",
+    "bulkFailed": "Ouvrez les articles en échec pour vérifier leurs photos.",
+    "bulkError": "Création arrêtée ; vérifiez les articles avant de réessayer."
   }
 }
