@@ -88,5 +88,5 @@ async def delete_trip(
     user: Annotated[User, Depends(get_current_user)],
     db: DbSession,
 ) -> None:
-    if not await TripService(db).delete(user.id, trip_id):
+    if not await TripService(db).delete(user, trip_id):
         raise HTTPException(404, detail="Trip not found")

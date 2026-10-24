@@ -12,9 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.item import ClothingItem
 from app.models.outfit import Outfit, TimeOfDay, UserFeedback
 from app.models.trip import Trip
+from app.models.user import User
 from app.services.ai_service import require_internal_ai
 from app.services.inspiration_service import InspirationService
 from app.services.recommendation_service import RecommendationService
+from app.services.wear_service import WearService
 from app.services.weather_service import WeatherData, WeatherService, WeatherServiceError
 from app.utils.clothing import BODY_SLOTS, OVER_LAYER_SUBTYPES, covered_body_slots
 from app.utils.garment_vocabulary import (
@@ -215,14 +217,20 @@ class TripService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def delete(self, user_id: UUID, trip_id: UUID) -> bool:
+    async def delete(self, user: User, trip_id: UUID) -> bool:
+        """Keep worn outfits and remove deleted outfits' images after commit."""
         deleted_outfits = []
         try:
+            wear = WearService(self.db)
+            await wear.begin(user)
+            user_id = user.id
             trip = await self.db.scalar(
                 select(Trip).where(Trip.id == trip_id, Trip.user_id == user_id).with_for_update()
             )
             if trip is None:
                 return False
+            for offset in range((trip.end_date - trip.start_date).days + 1):
+                await wear.lock_day(user_id, trip.start_date + timedelta(days=offset))
             outfit_ids = {UUID(day["outfit_id"]) for day in trip.days}
             outfits = list(
                 await self.db.scalars(
