@@ -43,21 +43,9 @@ class ItemService:
         )
         return result.scalar() or 0
 
-    async def get_list(
-        self,
-        user_id: UUID,
-        filters: ItemFilter,
-        page: int = 1,
-        page_size: int = 20,
-    ) -> tuple[list[ClothingItem], int]:
-        # Base query
-        query = (
-            select(ClothingItem)
-            .where(ClothingItem.user_id == user_id)
-            .options(selectinload(ClothingItem.additional_images))
-        )
-
-        # Apply filters
+    @staticmethod
+    def _apply_filters(query, user_id: UUID, filters: ItemFilter):
+        query = query.where(ClothingItem.user_id == user_id)
         if filters.type:
             query = query.where(ClothingItem.type == filters.type)
         if filters.subtype:
@@ -71,14 +59,11 @@ class ItemService:
         if filters.colors:
             query = query.where(ClothingItem.colors.overlap(filters.colors))
 
-        # Archive filter
         query = query.where(ClothingItem.is_archived == filters.is_archived)
 
-        # Needs wash filter
         if filters.needs_wash is not None:
             query = query.where(ClothingItem.needs_wash == filters.needs_wash)
 
-        # Search filter
         if filters.search:
             search_term = f"%{filters.search}%"
             query = query.where(
@@ -89,6 +74,19 @@ class ItemService:
                     ClothingItem.notes.ilike(search_term),
                 )
             )
+
+        return query
+
+    async def get_list(
+        self,
+        user_id: UUID,
+        filters: ItemFilter,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[ClothingItem], int]:
+        query = self._apply_filters(select(ClothingItem), user_id, filters).options(
+            selectinload(ClothingItem.additional_images)
+        )
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
@@ -124,24 +122,10 @@ class ItemService:
         excluded_ids: list[UUID] | None = None,
         after_id: UUID | None = None,
         limit: int | None = None,
+        filters: ItemFilter | None = None,
     ) -> list[UUID]:
-        query = select(ClothingItem.id).where(ClothingItem.user_id == user_id)
-
-        if type_filter:
-            query = query.where(ClothingItem.type == type_filter)
-
-        query = query.where(ClothingItem.is_archived == is_archived)
-
-        if search:
-            search_term = f"%{search}%"
-            query = query.where(
-                or_(
-                    ClothingItem.name.ilike(search_term),
-                    ClothingItem.brand.ilike(search_term),
-                    ClothingItem.type.ilike(search_term),
-                    ClothingItem.notes.ilike(search_term),
-                )
-            )
+        filters = filters or ItemFilter(type=type_filter, search=search, is_archived=is_archived)
+        query = self._apply_filters(select(ClothingItem.id), user_id, filters)
 
         if excluded_ids:
             query = query.where(ClothingItem.id.notin_(excluded_ids))

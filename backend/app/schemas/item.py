@@ -269,9 +269,9 @@ class BulkUploadResponse(BaseModel):
     results: list[BulkUploadResult]
 
 
-class BulkFilters(BaseModel):
-    type: str | None = None
-    search: str | None = None
+class BulkFilters(ItemFilter):
+    model_config = ConfigDict(extra="forbid")
+
     is_archived: bool | None = None
 
 
