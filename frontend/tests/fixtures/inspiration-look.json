@@ -1,0 +1,86 @@
+{
+  "id": "5fb1efcf-cad2-44f1-8ffa-3cf3c83fbdc5",
+  "slots": [
+    {
+      "type": "jacket",
+      "color": "brown",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": null,
+      "match_strength": 0,
+      "no_match": true
+    },
+    {
+      "type": "shirt",
+      "color": "white",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": "8e90cf3f-2703-4cd6-9454-b25a842a4ee7",
+      "match_strength": 0.55,
+      "no_match": false
+    },
+    {
+      "type": "scarf",
+      "color": "navy",
+      "fit": "regular",
+      "pattern": "polka-dot",
+      "item_id": null,
+      "match_strength": 0,
+      "no_match": true
+    },
+    {
+      "type": "belt",
+      "color": "brown",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": "3d0ded2e-8195-4762-819e-b1d9c7b83897",
+      "match_strength": 0.95,
+      "no_match": false
+    },
+    {
+      "type": "jeans",
+      "color": "blue",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": "dc64a577-fbe1-4426-8363-1fd3b85a2b2f",
+      "match_strength": 0.85,
+      "no_match": false
+    },
+    {
+      "type": "boots",
+      "color": "brown",
+      "fit": "regular",
+      "pattern": "solid",
+      "item_id": "62383b02-59f5-4732-b997-99de3c574fde",
+      "match_strength": 0.9,
+      "no_match": false
+    }
+  ],
+  "items": [
+    {
+      "id": "8e90cf3f-2703-4cd6-9454-b25a842a4ee7",
+      "name": "Light gray FLX zip-pocket collared knit",
+      "image_path": "86722a95-ab4f-4077-8ad3-a81fdb8110d9/20261017_221121_d8b77a64_thumb.jpg",
+      "image_url": "/api/v1/images/86722a95-ab4f-4077-8ad3-a81fdb8110d9/20261017_221121_d8b77a64_thumb.jpg"
+    },
+    {
+      "id": "dc64a577-fbe1-4426-8363-1fd3b85a2b2f",
+      "name": "Blue Levis 502 jeans",
+      "image_path": "86722a95-ab4f-4077-8ad3-a81fdb8110d9/20261011_211618_3e6f9aec_thumb.jpg",
+      "image_url": "/api/v1/images/86722a95-ab4f-4077-8ad3-a81fdb8110d9/20261011_211618_3e6f9aec_thumb.jpg"
+    },
+    {
+      "id": "62383b02-59f5-4732-b997-99de3c574fde",
+      "name": "Brown Skechers Chelsea boots",
+      "image_path": "86722a95-ab4f-4077-8ad3-a81fdb8110d9/20261013_041653_9e8a1e37_thumb.jpg",
+      "image_url": "/api/v1/images/86722a95-ab4f-4077-8ad3-a81fdb8110d9/20261013_041653_9e8a1e37_thumb.jpg"
+    },
+    {
+      "id": "3d0ded2e-8195-4762-819e-b1d9c7b83897",
+      "name": "Brown CHAOREN ratchet belt",
+      "image_path": "86722a95-ab4f-4077-8ad3-a81fdb8110d9/20261020_051513_3d38d342_thumb.jpg",
+      "image_url": "/api/v1/images/86722a95-ab4f-4077-8ad3-a81fdb8110d9/20261020_051513_3d38d342_thumb.jpg"
+    }
+  ],
+  "image_url": "/api/v1/inspiration/5fb1efcf-cad2-44f1-8ffa-3cf3c83fbdc5/image"
+}

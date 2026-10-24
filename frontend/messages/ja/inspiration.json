@@ -1,0 +1,21 @@
+{
+  "title": "インスピレーション",
+  "description": "手持ちの服でコーディネートを再現します。",
+  "photo": "写真またはスクリーンショット",
+  "create": "再現して保存",
+  "working": "服を照合中…",
+  "saved": "保存しました",
+  "empty": "写真をアップロードしてください。",
+  "error": "リクエストに失敗しました。",
+  "open": "コーディネートを開く",
+  "noMatch": "一致なし",
+  "strength": "一致度：{value}%",
+  "baseLayer": "追加したインナー",
+  "invalidPhoto": "有効な写真を選んでください。",
+  "photoTooLarge": "小さい写真を選んでください。",
+  "rateLimit": "少し待ってから再試行してください。",
+  "unavailable": "マッチングを利用できません。",
+  "photoAlt": "参考写真",
+  "deleteConfirm": "このコーディネートを削除しますか？",
+  "checkPhotoAndLocation": "写真と現在地を確認してください。"
+}

@@ -1,0 +1,21 @@
+{
+  "title": "靈感穿搭",
+  "description": "用自己的衣服重現喜歡的穿搭。",
+  "photo": "照片或截圖",
+  "create": "重現並儲存",
+  "working": "正在配對衣服…",
+  "saved": "已儲存",
+  "empty": "上傳照片以開始。",
+  "error": "請求失敗。",
+  "open": "查看穿搭",
+  "noMatch": "無符合項目",
+  "strength": "符合度：{value}%",
+  "baseLayer": "新增的打底層",
+  "invalidPhoto": "請選擇有效的照片。",
+  "photoTooLarge": "請選擇較小的照片。",
+  "rateLimit": "請稍後重試。",
+  "unavailable": "配對暫時無法使用。",
+  "photoAlt": "穿搭參考照片",
+  "deleteConfirm": "刪除此穿搭？",
+  "checkPhotoAndLocation": "請檢查照片和位置。"
+}

@@ -18,6 +18,7 @@ const WEAR_STATS = ['wear-stats'] as const;
 const WEAR_HISTORY = ['wear-history'] as const;
 
 export const queryKeys = {
+  inspiration: ['inspiration'] as const,
   authConfig: ['auth-config'] as const,
   authUser: ['auth-user'] as const,
   userProfile: ['user-profile'] as const,

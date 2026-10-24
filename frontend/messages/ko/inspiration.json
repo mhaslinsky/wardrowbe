@@ -1,0 +1,21 @@
+{
+  "title": "스타일 영감",
+  "description": "내 옷으로 마음에 드는 스타일을 재현하세요.",
+  "photo": "사진 또는 스크린샷",
+  "create": "재현하고 저장",
+  "working": "옷 찾는 중…",
+  "saved": "저장됨",
+  "empty": "사진을 업로드하세요.",
+  "error": "요청을 완료하지 못했습니다.",
+  "open": "코디 열기",
+  "noMatch": "일치하는 옷 없음",
+  "strength": "일치도: {value}%",
+  "baseLayer": "추가된 기본 레이어",
+  "invalidPhoto": "올바른 사진을 선택하세요.",
+  "photoTooLarge": "더 작은 사진을 선택하세요.",
+  "rateLimit": "잠시 후 다시 시도하세요.",
+  "unavailable": "매칭을 사용할 수 없습니다.",
+  "photoAlt": "스타일 참고 사진",
+  "deleteConfirm": "이 코디를 삭제할까요?",
+  "checkPhotoAndLocation": "사진과 위치를 확인하세요."
+}

@@ -1,0 +1,21 @@
+{
+  "title": "Inspiration",
+  "description": "Stelle einen Look mit deiner Kleidung nach.",
+  "photo": "Foto oder Screenshot",
+  "create": "Nachstellen und speichern",
+  "working": "Kleidung wird zugeordnet…",
+  "saved": "Gespeichert",
+  "empty": "Lade zuerst ein Foto hoch.",
+  "error": "Anfrage fehlgeschlagen.",
+  "open": "Outfit öffnen",
+  "noMatch": "Kein Treffer",
+  "strength": "Übereinstimmung: {value}%",
+  "baseLayer": "Ergänzte Basisschicht",
+  "invalidPhoto": "Wähle ein gültiges Foto.",
+  "photoTooLarge": "Wähle ein kleineres Foto.",
+  "rateLimit": "Versuche es gleich noch einmal.",
+  "unavailable": "Zuordnung nicht verfügbar.",
+  "photoAlt": "Inspirationsfoto",
+  "deleteConfirm": "Diesen Look löschen?",
+  "checkPhotoAndLocation": "Prüfe dein Foto und deinen Standort."
+}

@@ -1,0 +1,21 @@
+{
+  "title": "Inspiration",
+  "description": "Recréez un look avec vos vêtements.",
+  "photo": "Photo ou capture d’écran",
+  "create": "Recréer et enregistrer",
+  "working": "Recherche de vêtements…",
+  "saved": "Enregistré",
+  "empty": "Importez une photo pour commencer.",
+  "error": "La demande a échoué.",
+  "open": "Ouvrir la tenue",
+  "noMatch": "Aucune correspondance",
+  "strength": "Correspondance : {value}%",
+  "baseLayer": "Couche de base ajoutée",
+  "invalidPhoto": "Choisis une photo valide.",
+  "photoTooLarge": "Choisis une photo plus petite.",
+  "rateLimit": "Réessaie dans un instant.",
+  "unavailable": "Correspondance indisponible.",
+  "photoAlt": "Photo d’inspiration",
+  "deleteConfirm": "Supprimer ce look ?",
+  "checkPhotoAndLocation": "Vérifiez votre photo et votre localisation."
+}
