@@ -311,3 +311,33 @@ async def test_bulk_missing_disabled_and_ownership(
         assert response.json()["results"][0]["status"] == "skipped"
         assert response.json()["results"][1]["error"] == "Item not found"
         assert redraw.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_refreshes_stale_retained_paths(client, auth_headers, photo_item, db_session):
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.services.item_service import ItemService
+
+    service = ImageService()
+    redrawn = service.store_cutout(garment(), photo_item.user_id)
+    async with async_sessionmaker(db_session.bind, expire_on_commit=False)() as other:
+        current = await ItemService(other).get_by_id(photo_item.id, photo_item.user_id)
+        current.photo_redraw = {"status": "generated", "redrawn": redrawn}
+        await other.commit()
+    assert photo_item.photo_redraw is None
+    response = await client.delete(f"/api/v1/items/{photo_item.id}", headers=auth_headers)
+    assert response.status_code == 204
+    assert all(not service.get_image_path(path).exists() for path in redrawn.values())
+
+
+@pytest.mark.parametrize("alpha", [0, 255])
+def test_cutout_rejects_empty_and_opaque_masks(alpha):
+    from app.services.photo_redraw_service import cutout
+
+    provider = _mock_provider()
+    provider.remove.return_value = Image.new("RGBA", (64, 64), (*GREEN, alpha))
+    provider.remove.side_effect = None
+    with patch("app.services.photo_redraw_service.get_provider", return_value=provider):
+        with pytest.raises(ValueError):
+            cutout(garment().convert("RGB"))

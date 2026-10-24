@@ -198,10 +198,10 @@ class PhotoRedrawService:
             raise HTTPException(409, "Photo redraw already requested or item busy")
         # Commit before any paid call; an interrupted request must never buy a second image.
         await db.commit()
-        await db.refresh(item, attribute_names=["photo_redraw"])
         service = ImageService()
-        metadata = dict(item.photo_redraw)
+        metadata = {"status": "generating"}
         try:
+            await db.refresh(item, attribute_names=["photo_redraw"])
             original = service.copy_photo({field: getattr(item, field) for field in PHOTO_FIELDS})
             metadata = {**metadata, "original": original, "selected": "original"}
             item.photo_redraw = metadata
