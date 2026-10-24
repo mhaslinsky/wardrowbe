@@ -6,9 +6,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import DbSession
 from app.models.trip import Trip
 from app.models.user import User
 from app.services.recommendation_service import AIRecommendationError, InsufficientWardrobeError
@@ -45,7 +44,7 @@ class TripResponse(TripRequest):
 
 @router.get("", response_model=list[TripResponse])
 async def list_trips(
-    user: Annotated[User, Depends(get_current_user)], db: Annotated[AsyncSession, Depends(get_db)]
+    user: Annotated[User, Depends(get_current_user)], db: DbSession
 ):
     return (
         (
@@ -62,7 +61,7 @@ async def list_trips(
 async def plan_trip(
     request: TripRequest,
     user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: DbSession,
 ):
     try:
         return await TripService(db).plan(user, request)
