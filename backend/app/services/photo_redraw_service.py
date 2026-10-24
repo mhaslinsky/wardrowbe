@@ -401,7 +401,7 @@ class PhotoRedrawService:
                 metadata.update(
                     {
                         field: previous[field]
-                        for field in ("status", "redrawn", "selected", "live", "started_at")
+                        for field in ("status", "redrawn", "started_at")
                         if field in previous
                     }
                 )

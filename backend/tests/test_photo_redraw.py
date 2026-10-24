@@ -570,18 +570,22 @@ async def test_assessment_failure_requires_paid_retry(photo_item, db_session):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("retry", [False, True])
 async def test_skipped_assessment_preserves_concurrent_replace(
-    client, auth_headers, photo_item, db_session, test_user
+    retry, client, auth_headers, photo_item, db_session, test_user
 ):
     from sqlalchemy.ext.asyncio import async_sessionmaker
     from starlette.datastructures import UploadFile
 
     from app.api.items import replace_item_image
-    from app.services.photo_redraw_service import PhotoRedrawService
+    from app.services.photo_redraw_service import PHOTO_FIELDS, PhotoRedrawService
+
+    previous = await completed_redraw(photo_item, db_session) if retry else None
+    replacement = {}
 
     async def generate(source):
         async with async_sessionmaker(db_session.bind, expire_on_commit=False)() as other:
-            await replace_item_image(
+            replaced = await replace_item_image(
                 photo_item.id,
                 other,
                 test_user,
@@ -592,14 +596,26 @@ async def test_skipped_assessment_preserves_concurrent_replace(
                 ),
             )
             await other.commit()
+            replacement.update({field: getattr(replaced, field) for field in PHOTO_FIELDS})
+            replacement["live"] = replaced.photo_redraw.get("live", {})
         return None, {"status": "skipped"}
 
     with patch.object(PhotoRedrawService, "generate", side_effect=generate):
         response = await client.post(
-            f"/api/v1/items/{photo_item.id}/redraw-photo", headers=auth_headers
+            f"/api/v1/items/{photo_item.id}/redraw-photo",
+            json={"retry": retry},
+            headers=auth_headers,
         )
     assert response.status_code == 200, response.text
-    assert response.json()["photo_redraw"]["selected"] == "custom"
+    data = response.json()
+    assert data["photo_redraw"]["selected"] == "custom"
+    assert data["photo_redraw"].get("live", {}) == replacement["live"]
+    assert {field: data[field] for field in PHOTO_FIELDS} == {
+        field: replacement[field] for field in PHOTO_FIELDS
+    }
+    if previous:
+        assert data["photo_redraw"]["status"] == previous["status"]
+        assert data["photo_redraw"]["redrawn"] == previous["redrawn"]
 
 
 @pytest.mark.asyncio
