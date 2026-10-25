@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from PIL import ImageOps
@@ -21,12 +21,29 @@ from app.services.photo_redraw_service import (
     photo_redraw_enabled,
     response_parts,
 )
+from app.services.preview_face import face_reference, reference_hash
 from app.utils.prompts import load_prompt
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.signed_urls import sign_image_url
 
 logger = logging.getLogger(__name__)
 ANGLES = ("front", "quarter", "side")
+FACE_REFERENCE_TIMEOUT = 3.0
+# Matches the measurements used by RecommendationService._format_preferences_for_prompt.
+MEASUREMENT_FIELDS = frozenset(
+    (
+        "height",
+        "weight",
+        "chest",
+        "waist",
+        "hips",
+        "inseam",
+        "shirt_size",
+        "pants_size",
+        "dress_size",
+        "shoe_size",
+    )
+)
 
 
 def reference_urls(
@@ -39,9 +56,16 @@ def reference_urls(
     }
 
 
-def reference_key(key: str, paths: dict[str, dict[str, str]]) -> str:
-    """Hash outfit inputs with all reference paths for cache invalidation."""
-    return hashlib.sha256(json.dumps([key, paths], sort_keys=True).encode()).hexdigest()
+def reference_key(
+    key: str,
+    paths: dict[str, dict[str, str]],
+    measurements: dict[str, object] | None = None,
+    face_hash: str | None = None,
+) -> str:
+    """Hash outfit, reference, measurement and face inputs for cache validation."""
+    return hashlib.sha256(
+        json.dumps([key, paths, measurements, face_hash], sort_keys=True).encode()
+    ).hexdigest()
 
 
 def urls(paths):
@@ -69,6 +93,7 @@ def snapshot(outfit):
                 "colors": item.colors,
                 "primary_color": item.primary_color,
                 "layer": link.layer_type,
+                "fit": (item.tags or {}).get("fit"),
                 "content_hash": hashlib.sha256(image).hexdigest() if image else None,
             }
         )
@@ -191,6 +216,28 @@ class PreviewService:
             "stale": record.cache_key != key,
         }
 
+    async def person_inputs(
+        self, user_id: UUID, paths: dict[str, dict[str, str]], *, include_face: bool = True
+    ) -> tuple[dict[str, object] | None, bytes | None, str | None]:
+        """Read stored profile measurements and attempt a face crop within the deadline."""
+        user = await self.db.get(User, user_id, populate_existing=True)
+        measurements = {
+            field: value
+            for field, value in (user.body_measurements or {}).items()
+            if field in MEASUREMENT_FIELDS and value is not None and value != ""
+        }
+        face_hash = await asyncio.to_thread(reference_hash, paths)
+        if not include_face:
+            return measurements or None, None, face_hash
+        try:
+            crop, _ = await asyncio.wait_for(
+                asyncio.to_thread(face_reference, paths), timeout=FACE_REFERENCE_TIMEOUT
+            )
+        except TimeoutError:
+            logger.warning("Preview face crop timed out")
+            crop = None
+        return measurements or None, crop, face_hash
+
     async def saved(self, outfit_id, user_id):
         outfit = await self.outfit(outfit_id, user_id)
         record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
@@ -198,7 +245,9 @@ class PreviewService:
             raise HTTPException(404, "NO_PREVIEW")
         key, _, _ = await asyncio.to_thread(snapshot, outfit)
         reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
-        key = reference_key(key, reference.paths if reference else {})
+        paths = reference.paths if reference else {}
+        measurements, _, face_hash = await self.person_inputs(user_id, paths, include_face=False)
+        key = reference_key(key, paths, measurements, face_hash)
         return self.response(record, key)
 
     async def generate(self, outfit_id, user_id, regenerate):
@@ -227,7 +276,8 @@ class PreviewService:
             except HTTPException as error:
                 raise HTTPException(409, "NO_PREVIEW_PHOTO") from error
             key, images, records = await asyncio.to_thread(snapshot, outfit)
-            key = reference_key(key, reference.paths)
+            measurements, face, face_hash = await self.person_inputs(user_id, reference.paths)
+            key = reference_key(key, reference.paths, measurements, face_hash)
             if record and record.paths and record.cache_key == key and not regenerate:
                 result = self.response(record, key)
                 await self.db.commit()
@@ -246,6 +296,8 @@ class PreviewService:
                 for angle in ANGLES
                 if angle in reference.paths
             ]
+            if face is not None:
+                reference_images.insert(1, face)
             images = reference_images + images
             if record is None:
                 record = OutfitPreview(outfit_id=outfit_id, user_id=user_id)
@@ -254,7 +306,10 @@ class PreviewService:
             record.claim_id, record.started_at = claim_id, datetime.now(UTC)
             await self.db.commit()
             garments = [
-                {field: record[field] for field in ("type", "colors", "primary_color", "layer")}
+                {
+                    field: record[field]
+                    for field in ("type", "colors", "primary_color", "layer", "fit")
+                }
                 for record in records
             ]
             data = json.dumps(garments).replace("<", "\\u003c").replace(">", "\\u003e")
@@ -264,8 +319,11 @@ class PreviewService:
                 .replace(">", "\\u003e")
             )
             prompt = (
-                load_prompt("outfit_preview").replace(
-                    "{reference_count}", str(len(reference_images))
+                load_prompt("outfit_preview")
+                .replace("{reference_count}", str(len(reference_images)))
+                .replace(
+                    "{face_note}",
+                    "\n" + load_prompt("outfit_preview_face") if face is not None else "",
                 )
                 + "\n<present_slots>\n"
                 + slots
@@ -273,6 +331,12 @@ class PreviewService:
                 + data
                 + "\n</garment_data>"
             )
+            if measurements:
+                prompt += (
+                    "\n<body_measurements>\n"
+                    + json.dumps(measurements).replace("<", "\\u003c").replace(">", "\\u003e")
+                    + "\n</body_measurements>"
+                )
             provider = PhotoRedrawService()
             payload = await provider.request(images, prompt, "IMAGE", mime_type="image/jpeg")
             inline = next(
@@ -294,14 +358,20 @@ class PreviewService:
                 raise HTTPException(409, "Preview changed")
             current_key, _, _ = await asyncio.to_thread(snapshot, outfit)
             current_reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
+            current_paths = current_reference.paths if current_reference else {}
+            current_measurements, _, current_face_hash = await self.person_inputs(
+                user_id, current_paths, include_face=False
+            )
             current_key = reference_key(
-                current_key, current_reference.paths if current_reference else {}
+                current_key, current_paths, current_measurements, current_face_hash
             )
             old_paths = record.paths
             record.paths, record.cache_key = paths, key
             record.created_at, record.usage = datetime.now(UTC), provider.usage
             record.claim_id, record.started_at = None, None
-            result = self.response(record, current_key)
+            result = self.response(record, key)
+            if current_key != key:
+                result["stale"] = True
             await self.db.commit()
         except BaseException as error:
             if pending_store is not None:

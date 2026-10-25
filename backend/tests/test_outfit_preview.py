@@ -4,6 +4,7 @@ import json
 import threading
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
@@ -461,7 +462,9 @@ async def test_r1_jpeg_threads_and_prompt_fence(
     images, prompt, _ = provider.call_args.args
     assert provider.call_args.kwargs == {"mime_type": "image/jpeg"}
     garments = json.loads(prompt.split("<garment_data>\n", 1)[1].split("\n</garment_data>", 1)[0])
-    assert all(set(garment) == {"type", "colors", "primary_color", "layer"} for garment in garments)
+    assert all(
+        set(garment) == {"type", "colors", "primary_color", "layer", "fit"} for garment in garments
+    )
     assert all(data.startswith(b"\xff\xd8") for data in images)
     assert max(Image.open(BytesIO(images[0])).size) == 1600
     assert prompt.count("<garment_data>") == 2
@@ -824,3 +827,328 @@ async def test_angles_failed_reference_commit_restores_files(
     photos = (await client.get(PHOTO, headers=auth_headers)).json()["photos"]
     assert set(photos) == {"front", "quarter", "side"}
     assert (await client.get(photos[angle]["image_url"])).status_code == 200
+
+
+@pytest.fixture(autouse=True)
+def no_live_person_mask(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.services import preview_face
+
+    getattr(preview_face, "_cached_face", preview_face.crop_face).cache_clear()
+    monkeypatch.setattr(
+        preview_face,
+        "get_provider",
+        lambda: SimpleNamespace(remove=lambda image: Image.new("RGBA", image.size)),
+    )
+    yield
+    getattr(preview_face, "_cached_face", preview_face.crop_face).cache_clear()
+
+
+async def test_person_request_fit_measurements_and_face_order(
+    client, auth_headers, preview_setup, provider, db_session, monkeypatch
+):
+    from app.services import preview_service
+
+    user = await db_session.get(User, preview_setup["user"])
+    user.body_measurements = {"height": 180, "shirt_size": "XL"}
+    item = await db_session.get(ClothingItem, preview_setup["items"][0])
+    item.tags = {"fit": "relaxed"}
+    await db_session.commit()
+    for angle, color in [("front", "red"), ("quarter", "green"), ("side", "blue")]:
+        await upload_angle(client, auth_headers, angle, color)
+    monkeypatch.setattr(preview_service, "face_reference", lambda paths: (b"face-crop", "hash"))
+    response = await client.post(preview_setup["url"], headers=auth_headers)
+    assert response.status_code == 200, response.text
+    images, prompt, _ = provider.call_args.args
+    assert len(images) == 6 and images[1] == b"face-crop"
+    for image, channel in zip([images[0], images[2], images[3]], [0, 1, 2], strict=True):
+        pixel = Image.open(BytesIO(image)).getpixel((0, 0))
+        assert pixel[channel] > 100 and pixel[channel] == max(pixel)
+    garments = json.loads(prompt.split("<garment_data>\n")[1].split("\n</garment_data>")[0])
+    assert next(record for record in garments if record["type"] == "shirt")["fit"] == "relaxed"
+    assert (
+        json.loads(prompt.split("<body_measurements>\n")[1].split("\n</body_measurements>")[0])
+        == user.body_measurements
+    )
+    assert "Reference image 2 is a close-up" in prompt
+    assert "Never slim or idealize" in prompt
+    assert "Never make it tighter, shorter or cropped" in prompt
+    assert "first 4 images" in prompt
+
+
+@pytest.mark.parametrize("measurements", [None, {}, {"height": None, "shirt_size": ""}])
+async def test_person_missing_inputs_keep_image_order(
+    measurements, client, auth_headers, preview_setup, provider, db_session
+):
+    user = await db_session.get(User, preview_setup["user"])
+    user.body_measurements = measurements
+    await db_session.commit()
+    await upload(client, auth_headers)
+    response = await client.post(preview_setup["url"], headers=auth_headers)
+    assert response.status_code == 200, response.text
+    images, prompt, _ = provider.call_args.args
+    assert len(images) == 3
+    assert "<body_measurements>\n" not in prompt
+    assert "Reference image 2 is a close-up" not in prompt
+    garments = json.loads(prompt.split("<garment_data>\n")[1].split("\n</garment_data>")[0])
+    assert all(record["fit"] is None for record in garments)
+
+
+@pytest.mark.parametrize("edit", ["fit", "measurements", "reset", "front_pixels"])
+async def test_person_edits_make_preview_stale(
+    edit, client, auth_headers, preview_setup, provider, db_session, monkeypatch
+):
+    user = await db_session.get(User, preview_setup["user"])
+    user.body_measurements = {"height": 180}
+    await db_session.commit()
+    await upload(client, auth_headers)
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).json()["stale"] is False
+    if edit == "fit":
+        item = await db_session.get(ClothingItem, preview_setup["items"][0])
+        item.tags = {"fit": "relaxed"}
+    elif edit == "front_pixels":
+        photo = await db_session.get(PreviewPhoto, preview_setup["user"])
+        Image.new("RGB", (1800, 2400), "blue").save(
+            ImageService().get_image_path(photo.paths["front"]["image_path"])
+        )
+    else:
+        user.body_measurements = {} if edit == "reset" else {"height": 181}
+    await db_session.commit()
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).json()["stale"] is True
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).json()["stale"] is False
+    assert provider.await_count == 2
+
+
+@pytest.mark.parametrize("failure", ["empty", "opaque", "malformed", "exception"])
+def test_face_crop_unavailable(failure, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.services.preview_face import crop_face
+
+    def remove(image):
+        if failure == "exception":
+            raise ValueError("private data")
+        return Image.new("RGBA", image.size, (0, 0, 0, 255 if failure == "opaque" else 0))
+
+    monkeypatch.setattr(
+        "app.services.preview_face.get_provider", lambda: SimpleNamespace(remove=remove)
+    )
+    assert crop_face(b"invalid" if failure == "malformed" else _jpeg_bytes(), ".jpg") is None
+
+
+def stock_person_cutout(image):
+    mask_path = Path(__file__).parent / "fixtures" / "preview-person-mask.png"
+    with Image.open(mask_path) as captured:
+        mask = captured.resize(image.size, Image.Resampling.BILINEAR)
+    result = image.convert("RGBA")
+    result.putalpha(mask)
+    return result
+
+
+def test_face_crop_uses_original_pixels(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.services.preview_face import crop_face
+
+    monkeypatch.setattr(
+        "app.services.preview_face.get_provider",
+        lambda: SimpleNamespace(remove=stock_person_cutout),
+    )
+    crop = crop_face(_jpeg_bytes(size=(3600, 5400)), ".jpg")
+    assert crop is not None
+    image = Image.open(BytesIO(crop))
+    assert image.height > 800 and image.width > 800
+
+
+@pytest.mark.parametrize("field", ["dress_size", "shoe_size"])
+async def test_r1_supported_measurements_request_and_staleness(
+    field, client, auth_headers, preview_setup, provider, db_session
+):
+    user = await db_session.get(User, preview_setup["user"])
+    user.body_measurements = {field: "10"}
+    await db_session.commit()
+    await upload(client, auth_headers)
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).json()["stale"] is False
+    prompt = provider.call_args.args[1]
+    data = json.loads(prompt.split("<body_measurements>\n")[1].split("\n</body_measurements>")[0])
+    assert data == {field: "10"}
+    user.body_measurements = {field: "12"}
+    await db_session.commit()
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).json()["stale"] is True
+
+
+async def test_r1_crop_deadline_skips_blocked_face(
+    client, auth_headers, preview_setup, provider, monkeypatch
+):
+    from app.services import preview_service
+
+    await upload(client, auth_headers)
+    assert 0 < preview_service.FACE_REFERENCE_TIMEOUT <= 5
+    entered, release = asyncio.Event(), threading.Event()
+    loop = asyncio.get_running_loop()
+    deadlines = []
+
+    def blocked(paths):
+        loop.call_soon_threadsafe(entered.set)
+        release.wait()
+        return b"late-crop", "late-hash"
+
+    real_wait_for = asyncio.wait_for
+
+    async def expire_on_entry(awaitable, timeout):
+        if timeout != preview_service.FACE_REFERENCE_TIMEOUT:
+            return await real_wait_for(awaitable, timeout)
+        deadlines.append(timeout)
+        entered.clear()
+        task = asyncio.create_task(awaitable)
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        raise TimeoutError
+
+    monkeypatch.setattr(preview_service, "face_reference", blocked)
+    monkeypatch.setattr(preview_service.asyncio, "wait_for", expire_on_entry)
+    try:
+        response = await client.post(preview_setup["url"], headers=auth_headers)
+        assert response.status_code == 200, response.text
+        assert provider.await_count == 1 and not release.is_set()
+        images, prompt, _ = provider.call_args.args
+        assert len(images) == 3 and b"late-crop" not in images
+        assert "Reference image 2 is a close-up" not in prompt
+        saved = await client.get(preview_setup["url"], headers=auth_headers)
+        assert saved.status_code == 200
+        assert deadlines == [preview_service.FACE_REFERENCE_TIMEOUT]
+    finally:
+        release.set()
+
+
+def test_r1_crop_strips_exif_and_hashes_only_pixels(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from app.services.preview_face import crop_face, face_reference
+
+    monkeypatch.setattr(
+        "app.services.preview_face.get_provider",
+        lambda: SimpleNamespace(remove=stock_person_cutout),
+    )
+    source = Image.new("RGB", (1200, 1800), "red")
+    path = tmp_path / "front.jpg"
+    paths = {"front": {"image_path": str(path)}}
+    monkeypatch.setattr(ImageService, "get_image_path", lambda service, value: Path(value))
+    results = []
+    for comment in ("untrusted EXIF instruction", "changed EXIF instruction"):
+        exif = Image.Exif()
+        exif[37510] = comment
+        source.save(path, "JPEG", quality=95, exif=exif)
+        assert Image.open(path).getexif()[37510] == comment
+        crop, digest = face_reference(paths)
+        assert crop is not None
+        image = Image.open(BytesIO(crop))
+        assert not image.getexif() and "exif" not in image.info
+        results.append((crop, digest))
+    assert results[0] == results[1]
+    assert crop_face(path.read_bytes(), ".jpg") == results[1][0]
+
+
+async def test_r2_unsupported_measurements_do_not_reach_request_or_cache(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    user = await db_session.get(User, preview_setup["user"])
+    user.body_measurements = {"height": 180, "unsupported": "private note"}
+    await db_session.commit()
+    await upload(client, auth_headers)
+    result = await client.post(preview_setup["url"], headers=auth_headers)
+    assert result.status_code == 200 and result.json()["stale"] is False
+    prompt = provider.call_args.args[1]
+    data = json.loads(prompt.split("<body_measurements>\n")[1].split("\n</body_measurements>")[0])
+    assert data == {"height": 180} and "private note" not in prompt
+    user.body_measurements = {"height": 180, "unsupported": "changed note"}
+    await db_session.commit()
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).json()["stale"] is False
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).json()["stale"] is False
+    assert provider.await_count == 1
+
+
+async def test_r2_crop_timeout_then_success_keeps_preview_fresh(
+    client, auth_headers, preview_setup, provider, monkeypatch, db_session
+):
+    from app.services import preview_service
+
+    await upload(client, auth_headers)
+    entered, release, finished = asyncio.Event(), threading.Event(), asyncio.Event()
+    loop = asyncio.get_running_loop()
+    first = True
+    real_wait_for = asyncio.wait_for
+
+    def face(paths):
+        loop.call_soon_threadsafe(entered.set)
+        release.wait()
+        loop.call_soon_threadsafe(finished.set)
+        return b"available-crop", "source-hash"
+
+    async def first_timeout(awaitable, timeout):
+        nonlocal first
+        if timeout != preview_service.FACE_REFERENCE_TIMEOUT or not first:
+            return await real_wait_for(awaitable, timeout)
+        first = False
+        task = asyncio.create_task(awaitable)
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        release.set()
+        await finished.wait()
+        raise TimeoutError
+
+    monkeypatch.setattr(preview_service, "face_reference", face)
+    monkeypatch.setattr(preview_service.asyncio, "wait_for", first_timeout)
+    try:
+        response = await client.post(preview_setup["url"], headers=auth_headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["stale"] is False
+        images = provider.call_args.args[0]
+        assert b"available-crop" not in images
+        reference = await db_session.get(PreviewPhoto, preview_setup["user"])
+        assert (await asyncio.to_thread(face, reference.paths))[0] == b"available-crop"
+        assert (await client.get(preview_setup["url"], headers=auth_headers)).json()[
+            "stale"
+        ] is False
+        assert (await client.post(preview_setup["url"], headers=auth_headers)).json()[
+            "stale"
+        ] is False
+        assert provider.await_count == 1
+    finally:
+        release.set()
+
+
+def test_r2_failed_face_crop_can_retry(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.services.preview_face import crop_face
+
+    attempts = 0
+
+    def remove(image):
+        nonlocal attempts
+        attempts += 1
+        return Image.new("RGBA", image.size) if attempts == 1 else stock_person_cutout(image)
+
+    monkeypatch.setattr(
+        "app.services.preview_face.get_provider", lambda: SimpleNamespace(remove=remove)
+    )
+    data = _jpeg_bytes(size=(1200, 1800))
+    assert crop_face(data, ".jpg") is None
+    assert crop_face(data, ".jpg") is not None
+    assert attempts == 2
+
+
+async def test_r2_no_face_note_leaves_no_blank_line(client, auth_headers, preview_setup, provider):
+    await upload(client, auth_headers)
+    response = await client.post(preview_setup["url"], headers=auth_headers)
+    assert response.status_code == 200, response.text
+    opening = provider.call_args.args[1].split("Create one", 1)[0]
+    assert opening.endswith("front first.\n")
+    assert "\n\n" not in opening
+    assert all(line == line.lstrip() for line in opening.splitlines())
