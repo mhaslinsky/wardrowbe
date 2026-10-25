@@ -1903,6 +1903,7 @@ async def restore_item_original(
     try:
         image_service = ImageService()
         async with photos.edit_photo(db, item):
+            backup_path = item.original_image_path
             photos.retain_backup(item)
             await asyncio.to_thread(
                 image_service.restore_original,
@@ -1922,6 +1923,13 @@ async def restore_item_original(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to restore original image",
         ) from None
+
+    item = await photos.lock_photo(db, item)
+    if backup_path not in photos.retained_paths(item).values():
+        try:
+            image_service.delete_images({"backup": backup_path})
+        except OSError:
+            logger.exception("Could not remove restored backup for item %s", item_id)
 
     await db.refresh(item, attribute_names=["original_image_path", "updated_at"])
     return ItemResponse.model_validate(item)
@@ -2229,7 +2237,12 @@ async def choose_item_photo(
     try:
         await db.commit()
     except BaseException:
-        ImageService().delete_images(paths)
+        await db.rollback()
+        current = await photos.lock_photo(db, item_id, missing_ok=True)
+        owned = set(photos.retained_paths(current).values()) if current is not None else set()
+        ImageService().delete_images(
+            {field: path for field, path in paths.items() if path not in owned}
+        )
         raise
     if paths:
         ImageService().delete_images(old_live)

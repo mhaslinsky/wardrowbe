@@ -9,8 +9,8 @@ from app.models.item import ClothingItem, ItemStatus
 from app.services.image_service import ImageService
 from app.services.photo_redraw_service import (
     PHOTO_FIELDS,
+    edit_photo,
     lock_photo,
-    prepare_photo_edit,
     retain_backup,
 )
 from app.workers.db import get_db_session
@@ -41,20 +41,19 @@ async def remove_item_background_job(ctx: dict, item_id: str, bg_color_hex: str)
 
         try:
             item = await lock_photo(db, item)
-            prepare_photo_edit(item)
-            image_service = ImageService()
-            out = await asyncio.to_thread(
-                image_service.remove_background,
-                item.image_path,
-                bg_color,
-                {field: getattr(item, field) for field in PHOTO_FIELDS},
-            )
-            item.original_image_path = out["original_backup_path"]
-            retain_backup(item)
-            item.status = ItemStatus.ready
-            item.ai_started_at = None
-            item.processing_kind = None
-            await db.commit()
+            async with edit_photo(db, item):
+                image_service = ImageService()
+                out = await asyncio.to_thread(
+                    image_service.remove_background,
+                    item.image_path,
+                    bg_color,
+                    {field: getattr(item, field) for field in PHOTO_FIELDS},
+                )
+                item.original_image_path = out["original_backup_path"]
+                retain_backup(item)
+                item.status = ItemStatus.ready
+                item.ai_started_at = None
+                item.processing_kind = None
             return {"status": "success", "item_id": item_id}
         except Exception as e:
             logger.error(f"Background removal failed for item {item_id}: {e}")
@@ -62,6 +61,8 @@ async def remove_item_background_job(ctx: dict, item_id: str, bg_color_hex: str)
             # this as a background-removal failure, not a generic AI failure -
             # and ai_raw_response/ai_failed_at are left untouched since this
             # job never touched AI tagging's own failure bookkeeping.
+            await db.rollback()
+            item = await lock_photo(db, UUID(item_id))
             item.status = ItemStatus.error
             item.ai_started_at = None
             await db.commit()

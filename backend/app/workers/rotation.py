@@ -9,8 +9,8 @@ from app.models.item import ClothingItem, ItemStatus
 from app.services.image_service import ImageService
 from app.services.photo_redraw_service import (
     PHOTO_FIELDS,
+    edit_photo,
     lock_photo,
-    prepare_photo_edit,
     retain_backup,
 )
 from app.workers.db import get_db_session
@@ -37,19 +37,18 @@ async def rotate_item_image_job(ctx: dict, item_id: str, direction: str) -> dict
 
         try:
             item = await lock_photo(db, item)
-            prepare_photo_edit(item)
-            image_service = ImageService()
-            await asyncio.to_thread(
-                image_service.rotate_image,
-                item.image_path,
-                direction,
-                {field: getattr(item, field) for field in PHOTO_FIELDS},
-            )
-            retain_backup(item)
-            item.status = ItemStatus.ready
-            item.ai_started_at = None
-            item.processing_kind = None
-            await db.commit()
+            async with edit_photo(db, item):
+                image_service = ImageService()
+                await asyncio.to_thread(
+                    image_service.rotate_image,
+                    item.image_path,
+                    direction,
+                    {field: getattr(item, field) for field in PHOTO_FIELDS},
+                )
+                retain_backup(item)
+                item.status = ItemStatus.ready
+                item.ai_started_at = None
+                item.processing_kind = None
             return {"status": "success", "item_id": item_id}
         except Exception as e:
             logger.error(f"Rotation failed for item {item_id}: {e}")
@@ -57,6 +56,8 @@ async def rotate_item_image_job(ctx: dict, item_id: str, direction: str) -> dict
             # rotation failure, and ai_raw_response/ai_failed_at are left alone
             # because this job never touched AI tagging's failure bookkeeping -
             # writing ai_failed_at would start a bogus AI retry cooldown.
+            await db.rollback()
+            item = await lock_photo(db, UUID(item_id))
             item.status = ItemStatus.error
             item.ai_started_at = None
             await db.commit()

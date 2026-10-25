@@ -258,26 +258,37 @@ class ImageService:
     ) -> dict[str, str]:
         base_path = image_path.rsplit(".", 1)[0]
         paths = {}
-        for variant in VARIANTS:
-            if variant is ORIGINAL:
-                path = image_path
-            elif variant_paths is not None:
-                path = variant_paths.get(variant.path_field)
-                if not path:
-                    continue
-            else:
-                extension = ".webp" if image_path.endswith(".png") else ".jpg"
-                path = f"{base_path}{variant.suffix}{extension}"
-            extension = Path(path).suffix.lower()
-            if extension == ".png":
-                resized = image.copy()
-                resized.thumbnail(variant.box, Image.Resampling.LANCZOS)
-                resized.save(self.storage_path / path, "PNG")
-            elif extension == ".webp":
-                (self.storage_path / path).write_bytes(self.encode_cutout_variant(image, variant))
-            else:
-                (self.storage_path / path).write_bytes(self.encode_variant(image, variant))
-            paths[variant.path_field] = path
+        staged = []
+        try:
+            # Finish every write before replacing any stored variant.
+            for variant in VARIANTS:
+                if variant is ORIGINAL:
+                    path = image_path
+                elif variant_paths is not None:
+                    path = variant_paths.get(variant.path_field)
+                    if not path:
+                        continue
+                else:
+                    extension = ".webp" if image_path.endswith(".png") else ".jpg"
+                    path = f"{base_path}{variant.suffix}{extension}"
+                target = self.storage_path / path
+                temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+                staged.append((temporary, target))
+                extension = Path(path).suffix.lower()
+                if extension == ".png":
+                    resized = image.copy()
+                    resized.thumbnail(variant.box, Image.Resampling.LANCZOS)
+                    resized.save(temporary, "PNG")
+                elif extension == ".webp":
+                    temporary.write_bytes(self.encode_cutout_variant(image, variant))
+                else:
+                    temporary.write_bytes(self.encode_variant(image, variant))
+                paths[variant.path_field] = path
+            for temporary, target in staged:
+                os.replace(temporary, target)
+        finally:
+            for temporary, _target in staged:
+                temporary.unlink(missing_ok=True)
         return paths
 
     def remove_background(
@@ -335,7 +346,6 @@ class ImageService:
         if image.format != "PNG":
             image = image.convert("RGB")
         paths = self._save_all_sizes(image, image_path, variant_paths)
-        backup_full.unlink()
         return paths
 
     def rotate_image(

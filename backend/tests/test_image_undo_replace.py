@@ -103,7 +103,7 @@ class TestRemoveBackgroundBackup:
         assert _close(_pixel(svc.get_image_path(item_with_image.image_path)), GREEN)
         assert _close(_pixel(svc.get_image_path(restored["medium_path"])), GREEN)
         assert _close(_pixel(svc.get_image_path(restored["thumbnail_path"])), GREEN)
-        assert not svc.get_image_path(result["original_backup_path"]).exists()
+        assert svc.get_image_path(result["original_backup_path"]).exists()
 
     @pytest.mark.asyncio
     async def test_restore_missing_backup_raises(self, item_with_image: ClothingItem):
