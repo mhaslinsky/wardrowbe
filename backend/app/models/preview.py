@@ -9,7 +9,6 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 from app.database import Base
 from app.models.outfit import Outfit
 from app.models.user import User
-from app.services.image_service import ImageService
 
 
 class PreviewPhoto(Base):
@@ -51,6 +50,8 @@ def collect_deleted_preview_files(session, _context, _instances):
 
 @event.listens_for(Session, "after_commit")
 def remove_preview_files(session):
+    from app.services.image_service import ImageService
+
     paths = session.info.pop("preview_cleanup", {})
     try:
         ImageService().delete_images(paths)

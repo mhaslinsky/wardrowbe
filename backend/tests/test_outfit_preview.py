@@ -95,6 +95,7 @@ async def test_reference_roundtrip_private_and_delete(client, auth_headers, prev
         ("x.jpg", b"", "image/jpeg"),
         ("x.jpg", b"x" * (20 * 1024 * 1024 + 1), "image/jpeg"),
     ],
+    ids=["wrong-type", "malformed", "empty", "too-large"],
 )
 async def test_reject_invalid_reference(name, data, mime, client, auth_headers):
     response = await client.put(PHOTO, headers=auth_headers, files={"image": (name, data, mime)})
