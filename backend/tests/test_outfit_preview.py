@@ -307,3 +307,6 @@ async def test_other_users_outfit_is_hidden(
     assert (await client.get(url, headers=auth_headers)).status_code == 404
     assert (await client.post(url, headers=auth_headers)).status_code == 404
     assert provider.await_count == 0
+    await upload(client, auth_headers)
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).status_code == 200
+    assert provider.await_count == 1
