@@ -1197,6 +1197,9 @@ async def test_sizing_request_data(
     assert measurements == user.body_measurements
     assert len(images) == 3
     assert "untucked by default" in prompt
+    assert "hang and drape naturally with soft folds" in prompt
+    assert "never stretched tight across the chest or stomach" in prompt
+    assert "roomier and longer" in prompt
     assert "slight break" in prompt
     assert "usual size" in prompt
     assert "eyes, expression and gaze" in prompt
