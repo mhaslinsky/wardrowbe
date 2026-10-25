@@ -1213,3 +1213,108 @@ def test_prompt_selection_resets_to_garment():
     assert service.prompt("photo_redraw").startswith(load_prompt("photo_redraw_footwear"))
     service.is_footwear = False
     assert service.prompt("photo_redraw").startswith(load_prompt("photo_redraw"))
+
+
+@pytest.mark.asyncio
+async def test_per205_long_assessment_reason_proceeds(photo_item, db_session):
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    encoded = BytesIO()
+    garment().save(encoded, "PNG")
+    reason = "é" * 700
+    responses = [
+        reply(
+            [{"text": json.dumps({"needs_redraw": True, "confidence": 0.99, "reason": reason})}]
+        ).json(),
+        reply([{"inlineData": {"data": base64.b64encode(encoded.getvalue()).decode()}}]).json(),
+    ]
+    with (
+        patch.object(PhotoRedrawService, "request", AsyncMock(side_effect=responses)) as request,
+        patch("app.services.photo_redraw_service.cutout", return_value=garment()),
+    ):
+        await PhotoRedrawService().redraw(db_session, photo_item)
+    assert request.await_count == 2
+    assert photo_item.photo_redraw["status"] == "generated"
+    assert photo_item.photo_redraw["reason"] == reason[:500]
+
+
+@pytest.mark.parametrize("reason", ["", "ok", "x" * 500, None, 42])
+def test_per205_assessment_reason_contract(reason):
+    from pydantic import ValidationError
+
+    from app.services.photo_redraw_service import Assessment
+
+    data = {"needs_redraw": True, "confidence": 0.99, "reason": reason}
+    if isinstance(reason, str):
+        assert Assessment.model_validate(data, strict=True).reason == reason
+    else:
+        with pytest.raises(ValidationError):
+            Assessment.model_validate(data, strict=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stage,candidate",
+    [
+        (stage, candidate)
+        for stage in ("TEXT", "IMAGE")
+        for candidate in (
+            None,
+            {},
+            {"content": {}},
+            {"content": {"parts": []}},
+            {"content": {"parts": None}},
+            {"content": {"parts": [None]}},
+        )
+    ]
+    + [
+        ("IMAGE", {"content": {"parts": parts}})
+        for parts in (
+            [{"text": "No image"}],
+            [{"inlineData": {}}],
+            [{"inlineData": {"data": ""}}],
+        )
+    ],
+)
+async def test_per205_unusable_provider_response_preserves_original(
+    stage, candidate, photo_item, db_session
+):
+    from app.services.photo_redraw_service import (
+        PhotoRedrawService,
+        retained_paths,
+    )
+
+    service = ImageService()
+    original_path = photo_item.image_path
+    original_bytes = service.get_image_path(original_path).read_bytes()
+    directory = service.get_image_path(original_path).parent
+    before = set(directory.iterdir())
+
+    async def respond(image, prompt, modality):
+        if modality != stage:
+            return reply(
+                [
+                    {
+                        "text": json.dumps(
+                            {"needs_redraw": True, "confidence": 0.99, "reason": "Hanging"}
+                        )
+                    }
+                ]
+            ).json()
+        return {"candidates": [] if candidate is None else [candidate]}
+
+    with (
+        patch.object(PhotoRedrawService, "request", side_effect=respond),
+        patch("app.services.photo_redraw_service.cutout", return_value=garment()),
+    ):
+        with pytest.raises(ValueError, match="Provider returned no"):
+            await PhotoRedrawService().redraw(db_session, photo_item)
+        assert photo_item.photo_redraw["status"] == "failed"
+        assert photo_item.photo_redraw["error"] == "PhotoRedrawProviderError"
+        assert photo_item.photo_redraw["selected"] == "original"
+        assert photo_item.image_path == original_path
+        assert service.get_image_path(original_path).read_bytes() == original_bytes
+        owned = {service.get_image_path(path) for path in retained_paths(photo_item).values()}
+        assert set(directory.iterdir()) - before <= owned
+        with pytest.raises(ValueError, match="Provider returned no"):
+            await PhotoRedrawService().redraw(db_session, photo_item, retry=True)
