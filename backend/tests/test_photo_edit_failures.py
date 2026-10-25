@@ -103,3 +103,69 @@ def test_thumbnail_write_failure_preserves_all_variants(tmp_path, monkeypatch, e
     with pytest.raises(OSError, match="thumbnail write failed"):
         service._save_all_sizes(Image.new("RGB", (1000, 1000), "blue"), paths["image_path"], paths)
     assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
+
+
+@pytest.mark.parametrize("operation", ["rotate", "restore-original", "photo/redrawn"])
+async def test_lost_commit_acknowledgement_keeps_owned_files(
+    db_session, test_user, client, auth_headers, operation
+):
+    service, item = await persisted_cutout(db_session, test_user, metadata=True)
+    item_id, previous_paths = item.id, paths_of(item)
+    backup = item.image_path.rsplit(".", 1)[0] + "_orig.jpg"
+    Image.new("RGB", (300, 600), "green").save(service.get_image_path(backup))
+    item.original_image_path = backup
+    await db_session.commit()
+    backup_bytes = service.get_image_path(backup).read_bytes()
+    commit = db_session.commit
+
+    async def commit_then_fail():
+        await commit()
+        raise RuntimeError("commit acknowledgement lost")
+
+    with patch.object(db_session, "commit", commit_then_fail):
+        if operation == "photo/redrawn":
+            with pytest.raises(RuntimeError, match="commit acknowledgement lost"):
+                await client.post(f"/api/v1/items/{item_id}/{operation}", headers=auth_headers)
+        else:
+            response = await client.post(
+                f"/api/v1/items/{item_id}/{operation}", headers=auth_headers
+            )
+            assert response.status_code == 500, response.text
+    await db_session.rollback()
+    await db_session.refresh(item)
+    assert paths_of(item) != previous_paths
+    owned = photos.retained_paths(item)
+    assert all(service.get_image_path(path).exists() for path in owned.values())
+    if operation == "restore-original":
+        assert item.original_image_path is None
+        assert backup in owned.values()
+    assert service.get_image_path(backup).read_bytes() == backup_bytes
+
+
+async def test_restore_cleanup_rechecks_backup_owner(
+    db_session, session_maker, test_user, client, auth_headers
+):
+    service, item = await persisted_cutout(db_session, test_user)
+    item_id = item.id
+    backup = item.image_path.rsplit(".", 1)[0] + "_orig.jpg"
+    Image.new("RGB", (300, 600), "green").save(service.get_image_path(backup))
+    item.original_image_path = backup
+    await db_session.commit()
+    backup_bytes = service.get_image_path(backup).read_bytes()
+    commit = db_session.commit
+
+    async def commit_then_claim_backup():
+        await commit()
+        async with session_maker() as other:
+            current = await photos.lock_photo(other, item_id)
+            current.original_image_path = backup
+            await other.commit()
+
+    with patch.object(db_session, "commit", commit_then_claim_backup):
+        response = await client.post(
+            f"/api/v1/items/{item_id}/restore-original", headers=auth_headers
+        )
+    assert response.status_code == 200, response.text
+    await db_session.refresh(item)
+    assert item.original_image_path == backup
+    assert service.get_image_path(backup).read_bytes() == backup_bytes
