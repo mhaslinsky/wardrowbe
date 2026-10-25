@@ -304,6 +304,9 @@
     "bulkError": "다시 그리기가 중단되었습니다. 재시도 전에 항목을 확인하세요."
   },
   "photoViewer": {
+    "versionAlt": "{name} ({version})",
+    "original": "원본",
+    "redrawn": "다시 그린 사진",
     "open": "사진 열기",
     "lightbox": "사진 뷰어",
     "gallery": "사진 갤러리",

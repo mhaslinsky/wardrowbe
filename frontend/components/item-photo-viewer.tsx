@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import Lightbox, { ControllerRef } from 'yet-another-react-lightbox';
 import Zoom, { ZoomRef } from 'yet-another-react-lightbox/plugins/zoom';
@@ -8,22 +8,24 @@ import { useTranslations } from 'next-intl';
 import 'yet-another-react-lightbox/styles.css';
 
 interface ItemPhotoViewerProps {
-  images: { url: string; id: string }[];
+  images: { url: string; id: string; label?: string }[];
   index: number;
+  resetKey?: number;
   alt: string;
   children: ReactNode;
 }
 
-export function ItemPhotoViewer({ images, index, alt, children }: ItemPhotoViewerProps) {
+export function ItemPhotoViewer({ images, index, resetKey, alt, children }: ItemPhotoViewerProps) {
   const t = useTranslations('wardrobe.photoViewer');
   const common = useTranslations('common');
   const [currentIndex, setCurrentIndex] = useState(index);
+  useEffect(() => { setCurrentIndex(index); }, [index, resetKey]);
   const [open, setOpen] = useState(false);
   const [portal, setPortal] = useState<HTMLDivElement | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const zoom = useRef<ZoomRef>(null);
   const controller = useRef<ControllerRef>(null);
-  const slides = useMemo(() => images.map((image) => ({ src: image.url, alt })), [images, alt]);
+  const slides = useMemo(() => images.map((image) => ({ src: image.url, alt: image.label ? t('versionAlt', { name: alt, version: image.label }) : alt })), [images, alt, t]);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const dragged = useRef(false);
   const toggleZoom = () => {
@@ -95,7 +97,12 @@ export function ItemPhotoViewer({ images, index, alt, children }: ItemPhotoViewe
                 controller={{ ref: controller, closeOnBackdropClick: true }}
                 carousel={{ preload: 0 }}
                 toolbar={{ buttons: ['close'] }}
-                render={{ buttonZoom: ({ zoom: level, disabled }) => (
+                render={{ slideFooter: ({ slide }) => {
+                  const label = images.find((image) => image.url === slide.src)?.label;
+                  return label ? <div data-testid="photo-version-label" className="absolute bottom-4 inset-x-0 text-center text-white pointer-events-none">
+                    <span className="rounded bg-black/70 px-3 py-1">{label}</span>
+                  </div> : null;
+                }, buttonZoom: ({ zoom: level, disabled }) => (
                   <button type="button" className="yarl__button" disabled={disabled}
                     aria-label={level > 1 ? t('fit') : t('actualSize')}
                     aria-pressed={level > 1} aria-keyshortcuts="Z" onClick={toggleZoom}>

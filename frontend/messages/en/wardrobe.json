@@ -304,6 +304,9 @@
     "bulkError": "Redraw stopped; check items before retrying."
   },
   "photoViewer": {
+    "versionAlt": "{name}: {version}",
+    "original": "Original",
+    "redrawn": "Redrawn",
     "open": "Open photo",
     "lightbox": "Photo viewer",
     "gallery": "Photo gallery",

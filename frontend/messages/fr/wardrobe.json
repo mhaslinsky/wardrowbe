@@ -304,6 +304,9 @@
     "bulkError": "Création arrêtée ; vérifiez les articles avant de réessayer."
   },
   "photoViewer": {
+    "versionAlt": "{name} : {version}",
+    "original": "Originale",
+    "redrawn": "Redessinée",
     "open": "Ouvrir la photo",
     "lightbox": "Visionneuse photo",
     "gallery": "Galerie photo",
