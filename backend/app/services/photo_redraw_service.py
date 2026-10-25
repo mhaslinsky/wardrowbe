@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
-from app.models.item import ClothingItem, ItemStatus
+from app.models.item import ClothingItem, ItemImage, ItemStatus
 from app.services.background_removal import get_provider
 from app.services.image_service import ImageService
 from app.services.mask_cleanup import clean_cutout
@@ -168,10 +168,60 @@ def prepare_photo_edit(item) -> dict[str, str]:
     return paths if created else {}
 
 
+async def delete_unreferenced_photos(db, service, paths):
+    candidates = set(paths)
+    if not candidates:
+        return
+    owned = set()
+    rows = await db.execute(
+        select(
+            *(getattr(ClothingItem, field) for field in PHOTO_FIELDS),
+            ClothingItem.original_image_path,
+            ClothingItem.photo_redraw,
+        )
+    )
+    for row in rows.all():
+        owned.update(retained_paths(row).values())
+    images = await db.execute(select(*(getattr(ItemImage, field) for field in PHOTO_FIELDS)))
+    for row in images.all():
+        owned.update(row)
+    service.delete_images({path: path for path in candidates if path not in owned})
+
+
+def record_variant_paths(item, paths):
+    previous = {field: getattr(item, field) for field in PHOTO_FIELDS}
+    was_live = bool(live_paths(item))
+    for field in PHOTO_FIELDS:
+        setattr(item, field, paths[field])
+    if item.photo_redraw:
+        photo = dict(item.photo_redraw)
+        if was_live:
+            photo["live"] = {field: paths[field] for field in PHOTO_FIELDS}
+        replaced = {previous[field] for field in PHOTO_FIELDS if previous[field] != paths[field]}
+        item.photo_redraw = {**photo, "files": []}
+        protected = set(retained_paths(item).values())
+        item.photo_redraw = {
+            **photo,
+            "files": list(
+                dict.fromkeys(
+                    [
+                        *(
+                            path
+                            for path in photo.get("files", [])
+                            if path not in replaced or path in protected
+                        ),
+                        *(paths[field] for field in PHOTO_FIELDS),
+                    ]
+                )
+            ),
+        }
+
+
 @asynccontextmanager
 async def edit_photo(db, item):
     """Commit an edit's ownership or remove its newly created working files."""
     created = prepare_photo_edit(item)
+    previous = {field: getattr(item, field) for field in PHOTO_FIELDS}
     try:
         yield
         await db.commit()
@@ -184,6 +234,11 @@ async def edit_photo(db, item):
                 }
             )
         raise
+    await delete_unreferenced_photos(
+        db,
+        ImageService(),
+        [path for field, path in previous.items() if path and path != getattr(item, field)],
+    )
 
 
 def cutout(image: Image.Image) -> Image.Image:

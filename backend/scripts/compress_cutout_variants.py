@@ -5,17 +5,21 @@ import copy
 import json
 import sys
 from pathlib import Path
-from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.database import async_session_maker, engine
-from app.models.item import ClothingItem
+from app.models.item import ClothingItem, ItemImage
 from app.services.image_service import VARIANTS, ImageService
-from app.services.photo_redraw_service import PHOTO_FIELDS, lock_photo, retained_paths
+from app.services.photo_redraw_service import (
+    PHOTO_FIELDS,
+    delete_unreferenced_photos,
+    lock_photo,
+    retained_paths,
+)
 
 
 def replace_paths(value, replacements):
@@ -38,45 +42,68 @@ def plan_variants(item, service):
         limit = 120_000 if variant.path_field == "medium_path" else 40_000
         if len(payload) >= limit:
             raise ValueError(f"Compressed variant exceeds {limit} bytes: {source}")
-        target = str(path.with_name(f"{path.stem}_{uuid4().hex}.webp"))
+        target = str(path.with_suffix(".webp"))
+        if (
+            service.get_image_path(target).exists()
+            and service.get_image_path(target).read_bytes() != payload
+        ):
+            raise ValueError(f"Target already contains a different preview: {target}")
         planned[source] = (target, payload)
     return planned
 
 
 async def compress_item(db, item_id, service, dry_run=True):
     item = await lock_photo(db, item_id)
+    if (item.photo_redraw or {}).get("status") == "generating":
+        await db.rollback()
+        return {"variants": 0, "before_bytes": 0, "after_bytes": 0, "skipped": 1}
     planned = plan_variants(item, service)
     summary = {
         "variants": len(planned),
         "before_bytes": sum(service.get_image_path(path).stat().st_size for path in planned),
         "after_bytes": sum(len(payload) for _, payload in planned.values()),
+        "skipped": 0,
     }
     if dry_run or not planned:
         await db.rollback()
         return summary
     created = {}
     try:
+        images = list(
+            (
+                await db.scalars(
+                    select(ItemImage)
+                    .where(or_(*(getattr(ItemImage, field).in_(planned) for field in PHOTO_FIELDS)))
+                    .with_for_update()
+                )
+            ).all()
+        )
         for target, payload in planned.values():
-            created[target] = target
-            service.get_image_path(target).write_bytes(payload)
+            if not service.get_image_path(target).exists():
+                created[target] = target
+                service.get_image_path(target).write_bytes(payload)
         replacements = {source: target for source, (target, _) in planned.items()}
         for field in (*PHOTO_FIELDS, "original_image_path"):
             setattr(item, field, replacements.get(getattr(item, field), getattr(item, field)))
         item.photo_redraw = replace_paths(copy.deepcopy(item.photo_redraw), replacements)
+        for image in images:
+            for field in PHOTO_FIELDS:
+                setattr(
+                    image, field, replacements.get(getattr(image, field), getattr(image, field))
+                )
         await db.commit()
     except BaseException:
         await db.rollback()
-        current = await lock_photo(db, item_id, missing_ok=True)
-        owned = set(retained_paths(current).values()) if current is not None else set()
-        service.delete_images({path: path for path in created if path not in owned})
+        await delete_unreferenced_photos(db, service, created)
         await db.rollback()
         raise
-    service.delete_images({source: source for source in planned})
+    await delete_unreferenced_photos(db, service, planned)
+    await db.rollback()
     return summary
 
 
 async def main(dry_run):
-    totals = {"items": 0, "variants": 0, "before_bytes": 0, "after_bytes": 0}
+    totals = {"items": 0, "variants": 0, "before_bytes": 0, "after_bytes": 0, "skipped": 0}
     service = ImageService()
     try:
         async with async_session_maker() as db:
