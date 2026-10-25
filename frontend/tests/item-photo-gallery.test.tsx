@@ -4,13 +4,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ItemDetailDialog } from '@/components/item-detail-dialog';
 import type { Item } from '@/lib/types';
 
+const mutations = vi.hoisted(() => ({ deleteImage: vi.fn(), setPrimary: vi.fn() }));
 vi.mock('next/image', () => ({ default: ({ fill, ...props }: any) => <img {...props} /> }));
 vi.mock('@/components/generate-pairings-dialog', () => ({ GeneratePairingsDialog: () => null }));
 vi.mock('@/lib/hooks/use-features', () => ({ useFeatures: () => ({ data: {} }) }));
 vi.mock('@/lib/hooks/use-items', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/hooks/use-items')>();
   return Object.fromEntries(Object.keys(original).map((key) => [key,
-    () => ({ data: undefined, isPending: false, mutateAsync: vi.fn() }),
+    () => ({ data: undefined, isPending: false, mutateAsync: vi.fn(), mutate: key === 'useDeleteItemImage' ? mutations.deleteImage : mutations.setPrimary }),
   ]));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -60,7 +61,8 @@ it.each([['redrawn', 'original'], ['original', 'redrawn']] as const)(
     fireEvent.click(screen.getByLabelText('open', { exact: true }));
     await waitFor(() => expect(document.querySelector('.yarl__slide_current img'))
       .toHaveAttribute('src', comparisonItem.photo_choices![alternate]));
-    expect(screen.getByTestId('photo-version-label')).toHaveTextContent(alternate);
+    expect(document.querySelector('.yarl__slide_current [data-testid=photo-version-label]')).toHaveTextContent(alternate);
+    expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('alt', `Shirt: photoViewer.${alternate}`);
     expect(request).not.toHaveBeenCalled();
     fireEvent.click(screen.getByLabelText('next', { exact: true }));
     await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', '/extra.webp'));
@@ -74,3 +76,44 @@ it.each([undefined, {}, { original: '/original.jpg' }, { redrawn: '/redrawn.jpg'
     expect(screen.queryByRole('button', { name: 'photoViewer.original', exact: true })).toBeNull();
     expect(screen.queryByRole('button', { name: 'photoViewer.redrawn', exact: true })).toBeNull();
   });
+
+const customItem = { ...item, photo_redraw: { selected: 'custom' },
+  photo_choices: { original: '/original.jpg', redrawn: '/redrawn.jpg' } } as Item;
+
+it('shows both stored versions after a custom primary photo', async () => {
+  render(<QueryClientProvider client={new QueryClient()}>
+    <ItemDetailDialog item={customItem} open onOpenChange={vi.fn()} />
+  </QueryClientProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'photoViewer.original', exact: true }));
+  fireEvent.click(screen.getByLabelText('open', { exact: true }));
+  await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', '/original.jpg'));
+  fireEvent.click(screen.getByLabelText('next', { exact: true }));
+  await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', '/redrawn.jpg'));
+});
+
+it.each(['titles.deleteImage', 'titles.setAsPrimary'])('keeps extra-photo actions correct with comparison slides: %s', async (action) => {
+  render(<QueryClientProvider client={new QueryClient()}>
+    <ItemDetailDialog item={customItem} open onOpenChange={vi.fn()} />
+  </QueryClientProvider>);
+  fireEvent.click(screen.getByTitle('actions.editItem'));
+  const extra = document.querySelector('button img[src="/extra.webp"]')!;
+  fireEvent.click(extra.closest('button')!);
+  fireEvent.click(screen.getByTitle(action));
+  const mutation = action === 'titles.deleteImage' ? mutations.deleteImage : mutations.setPrimary;
+  expect(mutation).toHaveBeenCalledWith({ itemId: 'shirt', imageId: 'extra' });
+  fireEvent.click(screen.getByLabelText('open', { exact: true }));
+  const source = action === 'titles.deleteImage' ? '/redrawn.jpg' : item.image_url;
+  await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', source));
+});
+
+it('resets to primary when comparison slides appear while an extra photo is active', async () => {
+  const client = new QueryClient();
+  const view = (value: Item) => <QueryClientProvider client={client}>
+    <ItemDetailDialog item={value} open onOpenChange={vi.fn()} />
+  </QueryClientProvider>;
+  const { rerender } = render(view(item));
+  fireEvent.click(document.querySelector('button img[src="/extra.webp"]')!.closest('button')!);
+  rerender(view(customItem));
+  fireEvent.click(screen.getByLabelText('open', { exact: true }));
+  await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', item.image_url));
+});

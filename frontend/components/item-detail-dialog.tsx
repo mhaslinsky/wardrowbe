@@ -183,6 +183,10 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     }
   }, [item?.id]);
 
+  const comparisonCount = item?.photo_choices?.original && item?.photo_choices?.redrawn
+    ? (item.photo_redraw?.selected === 'original' || item.photo_redraw?.selected === 'redrawn' ? 1 : 2) : 0;
+  useEffect(() => { setActiveImageIndex(0); }, [comparisonCount]);
+
   if (!item) return null;
 
   const handleSave = async () => {
@@ -324,12 +328,12 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
 
   // Use signed URL from backend for better quality in detail view
   const imageUrl = garmentImageUrl(item, 'detail') || item.image_path;
-  const alternateChoice = item.photo_redraw?.selected === 'redrawn' ? 'original' : 'redrawn';
-  const alternateUrl = item.photo_choices?.original && item.photo_choices?.redrawn
-    ? item.photo_choices[alternateChoice] : undefined;
-  const comparisonImages = alternateUrl ? [{
-    url: alternateUrl, id: alternateChoice, label: tw(`photoViewer.${alternateChoice}`),
-  }] : [];
+  const comparisonChoices = item.photo_choices?.original && item.photo_choices?.redrawn
+    ? (['original', 'redrawn'] as const).filter((choice) => choice !== item.photo_redraw?.selected)
+    : [];
+  const comparisonImages = comparisonChoices.map((choice) => ({
+    url: item.photo_choices![choice]!, id: choice, label: tw(`photoViewer.${choice}`),
+  }));
 
   const colorInfo = clothingColors.find((c) => c.value === item.primary_color);
   const typeInfo = clothingTypes.find((type) => type.value === item.type);
@@ -599,10 +603,10 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                   >
                     <Image src={imageUrl} alt={t('view.primaryImage')} fill className="object-cover" sizes="48px" />
                   </button>
-                  {comparisonImages.map((image) => (
+                  {comparisonImages.map((image, comparisonIndex) => (
                     <button key={image.id} aria-label={image.label}
-                      className={`relative w-20 h-16 rounded border-2 overflow-hidden flex-shrink-0 ${activeImageIndex === 1 ? 'border-primary' : 'border-transparent'}`}
-                      onClick={() => setActiveImageIndex(1)}>
+                      className={`relative w-20 h-16 rounded border-2 overflow-hidden flex-shrink-0 ${activeImageIndex === comparisonIndex + 1 ? 'border-primary' : 'border-transparent'}`}
+                      onClick={() => setActiveImageIndex(comparisonIndex + 1)}>
                       <Image src={image.url} alt="" fill className="object-cover" sizes="80px" />
                       <span className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-xs">{image.label}</span>
                     </button>

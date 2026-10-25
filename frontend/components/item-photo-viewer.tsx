@@ -23,7 +23,7 @@ export function ItemPhotoViewer({ images, index, alt, children }: ItemPhotoViewe
   const trigger = useRef<HTMLButtonElement>(null);
   const zoom = useRef<ZoomRef>(null);
   const controller = useRef<ControllerRef>(null);
-  const slides = useMemo(() => images.map((image) => ({ src: image.url, alt })), [images, alt]);
+  const slides = useMemo(() => images.map((image) => ({ src: image.url, alt: image.label ? `${alt}: ${image.label}` : alt })), [images, alt]);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const dragged = useRef(false);
   const toggleZoom = () => {
@@ -84,11 +84,6 @@ export function ItemPhotoViewer({ images, index, alt, children }: ItemPhotoViewe
             }}
             onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus(); }}>
             <Dialog.Title className="sr-only">{alt}</Dialog.Title>
-            {images[currentIndex]?.label && (
-              <div data-testid="photo-version-label" className="absolute bottom-4 inset-x-0 z-[70] text-center text-white pointer-events-none">
-                <span className="rounded bg-black/70 px-3 py-1">{images[currentIndex].label}</span>
-              </div>
-            )}
             {portal && (
               <Lightbox
                 open={open} close={() => setOpen(false)}
@@ -100,7 +95,12 @@ export function ItemPhotoViewer({ images, index, alt, children }: ItemPhotoViewe
                 controller={{ ref: controller, closeOnBackdropClick: true }}
                 carousel={{ preload: 0 }}
                 toolbar={{ buttons: ['close'] }}
-                render={{ buttonZoom: ({ zoom: level, disabled }) => (
+                render={{ slideFooter: ({ slide }) => {
+                  const label = images.find((image) => image.url === slide.src)?.label;
+                  return label ? <div data-testid="photo-version-label" className="absolute bottom-4 inset-x-0 text-center text-white pointer-events-none">
+                    <span className="rounded bg-black/70 px-3 py-1">{label}</span>
+                  </div> : null;
+                }, buttonZoom: ({ zoom: level, disabled }) => (
                   <button type="button" className="yarl__button" disabled={disabled}
                     aria-label={level > 1 ? t('fit') : t('actualSize')}
                     aria-pressed={level > 1} aria-keyshortcuts="Z" onClick={toggleZoom}>
