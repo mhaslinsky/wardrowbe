@@ -652,3 +652,131 @@ async def test_r2_cancelled_reference_storage(preview_setup, session_maker, monk
         await stored.wait()
         assert await session.get(PreviewPhoto, preview_setup["user"]) is None
     assert not list(preview_setup["folder"].glob("*.jpg"))
+
+
+async def upload_angle(client, headers, angle, color):
+    buffer = BytesIO()
+    Image.new("RGB", (64, 96), color).save(buffer, "JPEG")
+    response = await client.put(
+        PHOTO + "?angle=" + angle,
+        headers=headers,
+        files={"image": ("ref.jpg", buffer.getvalue(), "image/jpeg")},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def test_angles_front_only_and_migrated_reference(
+    client, auth_headers, preview_setup, db_session, provider
+):
+    photo = await upload(client, auth_headers)
+    response = (await client.get(PHOTO, headers=auth_headers)).json()
+    assert set(response["photos"]) == {"front"}
+    assert response["photos"]["front"]["image_url"] == photo["image_url"]
+    async with migration_downgrade(db_session, "e187a1b2c3d4"):
+        paths = await db_session.scalar(text("SELECT paths FROM preview_photos"))
+        assert "image_path" in paths and "front" not in paths
+    paths = await db_session.scalar(text("SELECT paths FROM preview_photos"))
+    assert set(paths) == {"front"}
+    assert (await client.get(photo["image_url"])).status_code == 200
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).status_code == 200
+    assert provider.await_count == 1
+
+
+async def test_angles_reference_order(client, auth_headers, preview_setup, provider):
+    for angle, color in [("side", "blue"), ("front", "red"), ("quarter", "green")]:
+        await upload_angle(client, auth_headers, angle, color)
+    photos = (await client.get(PHOTO, headers=auth_headers)).json()["photos"]
+    assert set(photos) == {"front", "quarter", "side"}
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).status_code == 200
+    images, prompt, _modality = provider.call_args.args
+    assert len(images) == 5
+    for image, channel in zip(images[:3], [0, 1, 2], strict=True):
+        pixel = Image.open(BytesIO(image)).getpixel((0, 0))
+        assert pixel[channel] == max(pixel) and pixel[channel] > 100
+    assert "first 3 images" in prompt
+    assert "same person" in prompt
+    assert provider.await_count == 1
+
+
+@pytest.mark.parametrize("angle", ["quarter", "side"])
+async def test_angles_optional_changes_stale_once(
+    angle, client, auth_headers, preview_setup, provider
+):
+    await upload(client, auth_headers)
+    url = preview_setup["url"]
+    first = (await client.post(url, headers=auth_headers)).json()
+    await upload_angle(client, auth_headers, angle, "blue")
+    assert (await client.get(first["image_url"])).status_code == 200
+    assert (await client.get(url, headers=auth_headers)).json()["stale"] is True
+    assert (await client.post(url, headers=auth_headers)).json()["stale"] is False
+    assert provider.await_count == 2
+    await upload_angle(client, auth_headers, angle, "green")
+    assert (await client.get(url, headers=auth_headers)).json()["stale"] is True
+    assert (await client.post(url, headers=auth_headers)).status_code == 200
+    assert provider.await_count == 3
+    saved = (await client.get(url, headers=auth_headers)).json()
+    removed = (await client.get(PHOTO, headers=auth_headers)).json()["photos"][angle]
+    assert (await client.delete(PHOTO + "?angle=" + angle, headers=auth_headers)).status_code == 204
+    assert (await client.get(removed["image_url"])).status_code == 404
+    assert (await client.get(saved["image_url"])).status_code == 200
+    assert (await client.get(url, headers=auth_headers)).json()["stale"] is True
+    assert (await client.post(url, headers=auth_headers)).json()["stale"] is False
+    assert (await client.post(url, headers=auth_headers)).status_code == 200
+    assert provider.await_count == 4
+
+
+async def test_angles_front_delete_clears_previews(
+    client, auth_headers, preview_setup, provider
+):
+    await upload(client, auth_headers)
+    await upload_angle(client, auth_headers, "side", "blue")
+    saved = (await client.post(preview_setup["url"], headers=auth_headers)).json()
+    assert (await client.delete(PHOTO, headers=auth_headers)).status_code == 204
+    assert (await client.get(saved["image_url"])).status_code == 404
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).status_code == 404
+    photos = (await client.get(PHOTO, headers=auth_headers)).json()["photos"]
+    assert set(photos) == {"side"}
+    assert (await client.get(photos["side"]["image_url"])).status_code == 200
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).json() == {
+        "detail": "NO_PREVIEW_PHOTO"
+    }
+
+
+async def test_angles_user_cleanup(client, auth_headers, preview_setup, provider, db_session):
+    for angle in ["front", "quarter", "side"]:
+        await upload_angle(client, auth_headers, angle, "blue")
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).status_code == 200
+    files = list(preview_setup["folder"].glob("*.jpg"))
+    assert len(files) == 8
+    await db_session.delete(await db_session.get(User, preview_setup["user"]))
+    await db_session.commit()
+    assert all(not path.exists() for path in files)
+    assert await db_session.get(PreviewPhoto, preview_setup["user"]) is None
+    assert await db_session.get(OutfitPreview, preview_setup["outfit"]) is None
+
+
+async def test_angles_downgrade_removes_only_optional_files(
+    client, auth_headers, preview_setup, db_session
+):
+    await upload(client, auth_headers)
+    for angle in ["quarter", "side"]:
+        await upload_angle(client, auth_headers, angle, "blue")
+    assert len(list(preview_setup["folder"].glob("*.jpg"))) == 6
+    async with migration_downgrade(db_session, "e187a1b2c3d4"):
+        assert len(list(preview_setup["folder"].glob("*.jpg"))) == 2
+        paths = await db_session.scalar(text("SELECT paths FROM preview_photos"))
+        assert set(paths) == {"image_path", "medium_path"}
+    assert set((await client.get(PHOTO, headers=auth_headers)).json()["photos"]) == {"front"}
+
+
+@pytest.mark.parametrize("angle", ["", "back", "FRONT"])
+async def test_angles_invalid_rejected(angle, client, auth_headers):
+    response = await client.put(
+        PHOTO + "?angle=" + angle,
+        headers=auth_headers,
+        files={"image": ("ref.jpg", _jpeg_bytes(), "image/jpeg")},
+    )
+    assert response.status_code == 422
+    assert (await client.delete(PHOTO + "?angle=" + angle, headers=auth_headers)).status_code == 422
+    assert (await client.get(PHOTO, headers=auth_headers)).status_code == 404
