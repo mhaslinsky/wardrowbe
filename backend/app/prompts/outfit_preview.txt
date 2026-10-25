@@ -1,4 +1,5 @@
 The first {reference_count} images show the same person from different angles, front first.
+{face_note}
 Create one realistic full-length photograph of that person wearing exactly the garments
 in the remaining images. Preserve their face,
 build and skin tone. Use a plain light background and natural studio lighting.

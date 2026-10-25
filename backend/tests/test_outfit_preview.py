@@ -4,6 +4,7 @@ import json
 import threading
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
@@ -935,30 +936,116 @@ def test_face_crop_unavailable(failure, monkeypatch):
     assert crop_face(b"invalid" if failure == "malformed" else _jpeg_bytes(), ".jpg") is None
 
 
-def test_face_crop_uses_original_pixels_and_mask_cache(monkeypatch):
-    from types import SimpleNamespace
+def stock_person_cutout(image):
+    mask_path = Path(__file__).parent / "fixtures" / "preview-person-mask.png"
+    with Image.open(mask_path) as captured:
+        mask = captured.resize(image.size, Image.Resampling.BILINEAR)
+    result = image.convert("RGBA")
+    result.putalpha(mask)
+    return result
 
-    from PIL import ImageDraw
+
+def test_face_crop_uses_original_pixels(monkeypatch):
+    from types import SimpleNamespace
 
     from app.services.preview_face import crop_face
 
-    calls = []
-
-    def remove(image):
-        calls.append(image.size)
-        mask = Image.new("RGBA", image.size)
-        draw = ImageDraw.Draw(mask)
-        draw.rectangle((200, 40, 330, 180), fill=(0, 0, 0, 255))
-        draw.rectangle((150, 180, 380, 760), fill=(0, 0, 0, 255))
-        return mask
-
     monkeypatch.setattr(
-        "app.services.preview_face.get_provider", lambda: SimpleNamespace(remove=remove)
+        "app.services.preview_face.get_provider",
+        lambda: SimpleNamespace(remove=stock_person_cutout),
     )
-    data = _jpeg_bytes(size=(1800, 2400))
-    crop = crop_face(data, ".jpg")
+    crop = crop_face(_jpeg_bytes(size=(3600, 5400)), ".jpg")
     assert crop is not None
     image = Image.open(BytesIO(crop))
-    assert image.height > 480 and image.width > 480
-    assert crop_face(data, ".jpg") == crop
-    assert calls == [(600, 800)]
+    assert image.height > 800 and image.width > 800
+
+
+@pytest.mark.parametrize("field", ["dress_size", "shoe_size"])
+async def test_r1_supported_measurements_request_and_staleness(
+    field, client, auth_headers, preview_setup, provider, db_session
+):
+    user = await db_session.get(User, preview_setup["user"])
+    user.body_measurements = {field: "10"}
+    await db_session.commit()
+    await upload(client, auth_headers)
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).json()["stale"] is False
+    prompt = provider.call_args.args[1]
+    data = json.loads(prompt.split("<body_measurements>\n")[1].split("\n</body_measurements>")[0])
+    assert data == {field: "10"}
+    user.body_measurements = {field: "12"}
+    await db_session.commit()
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).json()["stale"] is True
+
+
+async def test_r1_crop_deadline_skips_blocked_face(
+    client, auth_headers, preview_setup, provider, monkeypatch
+):
+    from app.services import preview_service
+
+    await upload(client, auth_headers)
+    assert 0 < preview_service.FACE_REFERENCE_TIMEOUT <= 5
+    entered, release = asyncio.Event(), threading.Event()
+    loop = asyncio.get_running_loop()
+    deadlines = []
+
+    def blocked(paths):
+        loop.call_soon_threadsafe(entered.set)
+        release.wait()
+        return b"late-crop", "late-hash"
+
+    real_wait_for = asyncio.wait_for
+
+    async def expire_on_entry(awaitable, timeout):
+        if timeout != preview_service.FACE_REFERENCE_TIMEOUT:
+            return await real_wait_for(awaitable, timeout)
+        deadlines.append(timeout)
+        entered.clear()
+        task = asyncio.create_task(awaitable)
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        raise TimeoutError
+
+    monkeypatch.setattr(preview_service, "face_reference", blocked)
+    monkeypatch.setattr(preview_service.asyncio, "wait_for", expire_on_entry)
+    try:
+        response = await client.post(preview_setup["url"], headers=auth_headers)
+        assert response.status_code == 200, response.text
+        assert provider.await_count == 1 and not release.is_set()
+        images, prompt, _ = provider.call_args.args
+        assert len(images) == 3 and b"late-crop" not in images
+        assert "Reference image 2 is a close-up" not in prompt
+        saved = await client.get(preview_setup["url"], headers=auth_headers)
+        assert saved.status_code == 200
+        assert deadlines == [preview_service.FACE_REFERENCE_TIMEOUT] * 3
+    finally:
+        release.set()
+
+
+def test_r1_crop_strips_exif_and_hashes_only_pixels(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from app.services.preview_face import crop_face, face_reference
+
+    monkeypatch.setattr(
+        "app.services.preview_face.get_provider",
+        lambda: SimpleNamespace(remove=stock_person_cutout),
+    )
+    source = Image.new("RGB", (1200, 1800), "red")
+    path = tmp_path / "front.jpg"
+    paths = {"front": {"image_path": str(path)}}
+    monkeypatch.setattr(ImageService, "get_image_path", lambda service, value: Path(value))
+    results = []
+    for comment in ("untrusted EXIF instruction", "changed EXIF instruction"):
+        exif = Image.Exif()
+        exif[37510] = comment
+        source.save(path, "JPEG", quality=95, exif=exif)
+        assert Image.open(path).getexif()[37510] == comment
+        crop, digest = face_reference(paths)
+        assert crop is not None
+        image = Image.open(BytesIO(crop))
+        assert not image.getexif() and "exif" not in image.info
+        results.append((crop, digest))
+    assert results[0] == results[1]
+    assert crop_face(path.read_bytes(), ".jpg") == results[1][0]

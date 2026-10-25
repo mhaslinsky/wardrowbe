@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from PIL import ImageOps
@@ -28,6 +28,7 @@ from app.utils.signed_urls import sign_image_url
 
 logger = logging.getLogger(__name__)
 ANGLES = ("front", "quarter", "side")
+FACE_REFERENCE_TIMEOUT = 3.0
 
 
 def reference_urls(
@@ -41,9 +42,12 @@ def reference_urls(
 
 
 def reference_key(
-    key: str, paths: dict[str, dict[str, str]], measurements=None, face_hash=None
+    key: str,
+    paths: dict[str, dict[str, str]],
+    measurements: dict[str, object] | None = None,
+    face_hash: str | None = None,
 ) -> str:
-    """Hash outfit inputs with all reference paths for cache invalidation."""
+    """Hash outfit, reference, measurement and face inputs for cache validation."""
     return hashlib.sha256(
         json.dumps([key, paths, measurements, face_hash], sort_keys=True).encode()
     ).hexdigest()
@@ -197,17 +201,23 @@ class PreviewService:
             "stale": record.cache_key != key,
         }
 
-    async def person_inputs(self, user_id, paths):
+    async def person_inputs(
+        self, user_id: UUID, paths: dict[str, dict[str, str]]
+    ) -> tuple[dict[str, object] | None, bytes | None, str | None]:
+        """Read stored profile measurements and attempt a face crop within the deadline."""
         user = await self.db.get(User, user_id, populate_existing=True)
         measurements = {
             field: value
             for field, value in (user.body_measurements or {}).items()
-            if field
-            in ("height", "weight", "chest", "waist", "hips", "inseam", "shirt_size", "pants_size")
-            and value is not None
-            and value != ""
+            if value is not None and value != ""
         }
-        crop, face_hash = await asyncio.to_thread(face_reference, paths)
+        try:
+            crop, face_hash = await asyncio.wait_for(
+                asyncio.to_thread(face_reference, paths), timeout=FACE_REFERENCE_TIMEOUT
+            )
+        except TimeoutError:
+            logger.warning("Preview face crop timed out")
+            crop, face_hash = None, None
         return measurements or None, crop, face_hash
 
     async def saved(self, outfit_id, user_id):
@@ -291,8 +301,10 @@ class PreviewService:
                 .replace(">", "\\u003e")
             )
             prompt = (
-                load_prompt("outfit_preview").replace(
-                    "{reference_count}", str(len(reference_images))
+                load_prompt("outfit_preview")
+                .replace("{reference_count}", str(len(reference_images)))
+                .replace(
+                    "{face_note}", load_prompt("outfit_preview_face") if face is not None else ""
                 )
                 + "\n<present_slots>\n"
                 + slots
@@ -300,12 +312,6 @@ class PreviewService:
                 + data
                 + "\n</garment_data>"
             )
-            if face is not None:
-                prompt = prompt.replace(
-                    "images show the same person from different angles, front first.",
-                    "images show the same person: front photo, face close-up, then any other angles.",
-                )
-                prompt += "\nReference image 2 is a close-up of the same person's face, immediately after the front photo. Other full-body angles follow it. Preserve their face shape and features."
             if measurements:
                 prompt += (
                     "\n<body_measurements>\n"

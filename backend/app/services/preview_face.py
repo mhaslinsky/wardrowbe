@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=8)
 def crop_face(data: bytes, suffix: str) -> bytes | None:
+    """Return a metadata-free head crop located by the person mask, or None."""
     try:
         original = ImageOps.exif_transpose(ImageService()._open_bounded(data, suffix)).convert(
             "RGB"
@@ -48,14 +49,19 @@ def crop_face(data: bytes, suffix: str) -> bytes | None:
         if min(box[2] - box[0], box[3] - box[1]) < 32:
             return None
         buffer = BytesIO()
-        original.crop(box).save(buffer, "JPEG", quality=95)
+        cropped = original.crop(box)
+        cropped.info.clear()
+        cropped.save(buffer, "JPEG", quality=95, exif=b"")
         return buffer.getvalue()
     except Exception as error:
         logger.warning("Preview face crop unavailable: %s", type(error).__name__)
         return None
 
 
-def face_reference(paths):
+def face_reference(
+    paths: dict[str, dict[str, str]],
+) -> tuple[bytes | None, str | None]:
+    """Read the front photo and hash decoded pixels and the metadata-free crop."""
     path = paths.get("front", {}).get("image_path")
     if not path:
         return None, None
@@ -64,5 +70,12 @@ def face_reference(paths):
     except OSError:
         return None, None
     crop = crop_face(data, Path(path).suffix)
-    digest = hashlib.sha256(data + (crop or b"")).hexdigest()
+    try:
+        image = ImageOps.exif_transpose(
+            ImageService()._open_bounded(data, Path(path).suffix)
+        ).convert("RGB")
+    except Exception:
+        return None, None
+    pixels = str(image.size).encode() + image.tobytes()
+    digest = hashlib.sha256(pixels + (crop or b"")).hexdigest()
     return crop, digest

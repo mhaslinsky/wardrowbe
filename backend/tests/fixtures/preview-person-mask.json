@@ -1,0 +1,10 @@
+{
+  "source": "https://pxhere.com/en/photo/1634246",
+  "image_url": "https://c.pxhere.com/images/e7/aa/f7812d0f227dc12dac9568e58cd3-1634246.jpg!d",
+  "license": "CC0-1.0",
+  "author": "katik08",
+  "source_sha256": "b973880778cd239d7a2a41e81d9ee5268427898d54035ccab6ed9449642f0e79",
+  "mask_sha256": "84398280a1dabc1cef10bdc7f0309e36447d38f92d81894ef2a157418cc6f51d",
+  "provider": "RembgProvider",
+  "capture": "backend container, real provider, alpha resized to fit 160x240"
+}
