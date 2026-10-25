@@ -1770,7 +1770,12 @@ async def rotate_item_image(
             # to_thread because rotate_image is a blocking decode/resize/encode
             # cycle; calling it directly stalls the whole event loop for its
             # duration, which on a large image is seconds of dead API.
-            await asyncio.to_thread(image_service.rotate_image, item.image_path, direction)
+            await asyncio.to_thread(
+                image_service.rotate_image,
+                item.image_path,
+                direction,
+                {field: getattr(item, field) for field in photos.PHOTO_FIELDS},
+            )
             photos.retain_backup(item)
         await db.refresh(item, attribute_names=["updated_at"])
         return ItemResponse.model_validate(item)
@@ -1831,7 +1836,10 @@ async def remove_item_background(
         image_service = ImageService()
         async with photos.edit_photo(db, item):
             result = await asyncio.to_thread(
-                image_service.remove_background, item.image_path, bg_color
+                image_service.remove_background,
+                item.image_path,
+                bg_color,
+                {field: getattr(item, field) for field in photos.PHOTO_FIELDS},
             )
             item.original_image_path = result["original_backup_path"]
             photos.retain_backup(item)
@@ -1897,7 +1905,10 @@ async def restore_item_original(
         async with photos.edit_photo(db, item):
             photos.retain_backup(item)
             await asyncio.to_thread(
-                image_service.restore_original, item.image_path, item.original_image_path
+                image_service.restore_original,
+                item.image_path,
+                item.original_image_path,
+                {field: getattr(item, field) for field in photos.PHOTO_FIELDS},
             )
             item.original_image_path = None
     except ValueError as e:

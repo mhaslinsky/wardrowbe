@@ -7,7 +7,12 @@ from sqlalchemy import select
 
 from app.models.item import ClothingItem, ItemStatus
 from app.services.image_service import ImageService
-from app.services.photo_redraw_service import lock_photo, prepare_photo_edit, retain_backup
+from app.services.photo_redraw_service import (
+    PHOTO_FIELDS,
+    lock_photo,
+    prepare_photo_edit,
+    retain_backup,
+)
 from app.workers.db import get_db_session
 
 logger = logging.getLogger(__name__)
@@ -39,7 +44,10 @@ async def remove_item_background_job(ctx: dict, item_id: str, bg_color_hex: str)
             prepare_photo_edit(item)
             image_service = ImageService()
             out = await asyncio.to_thread(
-                image_service.remove_background, item.image_path, bg_color
+                image_service.remove_background,
+                item.image_path,
+                bg_color,
+                {field: getattr(item, field) for field in PHOTO_FIELDS},
             )
             item.original_image_path = out["original_backup_path"]
             retain_backup(item)
