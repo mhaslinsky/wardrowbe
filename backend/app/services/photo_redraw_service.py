@@ -171,17 +171,24 @@ def prepare_photo_edit(item) -> dict[str, str]:
 @asynccontextmanager
 async def edit_photo(db, item):
     """Commit an edit's ownership or remove its newly created working files."""
-    created = prepare_photo_edit(item)
+    item_id = item.id
+    created = {}
     try:
+        created = prepare_photo_edit(item)
         yield
         await db.commit()
     except BaseException:
+        await db.rollback()
         if created:
+            # A failed commit acknowledgement can still leave committed owners.
+            current = await lock_photo(db, item_id, missing_ok=True)
+            owned = set(retained_paths(current).values()) if current is not None else set()
+            candidates = {
+                **created,
+                "backup": f"{created['image_path'].rsplit('.', 1)[0]}_orig.jpg",
+            }
             ImageService().delete_images(
-                {
-                    **created,
-                    "backup": f"{created['image_path'].rsplit('.', 1)[0]}_orig.jpg",
-                }
+                {field: path for field, path in candidates.items() if path not in owned}
             )
         raise
 

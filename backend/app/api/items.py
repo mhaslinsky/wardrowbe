@@ -1903,6 +1903,7 @@ async def restore_item_original(
     try:
         image_service = ImageService()
         async with photos.edit_photo(db, item):
+            backup_path = item.original_image_path
             photos.retain_backup(item)
             await asyncio.to_thread(
                 image_service.restore_original,
@@ -1922,6 +1923,12 @@ async def restore_item_original(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to restore original image",
         ) from None
+
+    if backup_path not in photos.retained_paths(item).values():
+        try:
+            image_service.delete_images({"backup": backup_path})
+        except OSError:
+            logger.exception("Could not remove restored backup for item %s", item_id)
 
     await db.refresh(item, attribute_names=["original_image_path", "updated_at"])
     return ItemResponse.model_validate(item)
