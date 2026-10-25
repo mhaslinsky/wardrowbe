@@ -93,8 +93,10 @@ class PreviewService:
     def __init__(self, db):
         self.db = db
 
-    async def lock_user(self, user_id):
-        found = await self.db.scalar(select(User.id).where(User.id == user_id).with_for_update())
+    async def lock_user(self, user_id, key_share=False):
+        found = await self.db.scalar(
+            select(User.id).where(User.id == user_id).with_for_update(key_share=key_share)
+        )
         if found is None:
             raise HTTPException(404, "User not found")
 
@@ -124,12 +126,18 @@ class PreviewService:
 
     async def replace_reference(self, user_id, data, filename):
         await self.clear(user_id)
-        paths = await asyncio.to_thread(store_photo, user_id, data, filename)
+        pending = asyncio.create_task(asyncio.to_thread(store_photo, user_id, data, filename))
+        paths = {}
         try:
+            paths = await asyncio.shield(pending)
             self.db.add(PreviewPhoto(user_id=user_id, paths=paths))
             await self.db.commit()
         except BaseException:
             await self.db.rollback()
+            try:
+                paths = await pending
+            except BaseException:
+                logger.warning("Reference storage failed")
             delete_preview_files(paths)
             raise
         return urls(paths)
@@ -170,7 +178,7 @@ class PreviewService:
             )
             if not acquired:
                 raise HTTPException(409, "PREVIEW_IN_PROGRESS")
-            await self.lock_user(user_id)
+            await self.lock_user(user_id, key_share=True)
             await self.db.execute(select(Outfit.id).where(Outfit.id == outfit_id).with_for_update())
             outfit = await self.outfit(outfit_id, user_id)
             record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
@@ -206,7 +214,11 @@ class PreviewService:
             claim_id = uuid4().hex
             record.claim_id, record.started_at = claim_id, datetime.now(UTC)
             await self.db.commit()
-            data = json.dumps(records).replace("<", "\\u003c").replace(">", "\\u003e")
+            garments = [
+                {field: record[field] for field in ("type", "colors", "primary_color", "layer")}
+                for record in records
+            ]
+            data = json.dumps(garments).replace("<", "\\u003c").replace(">", "\\u003e")
             prompt = (
                 load_prompt("outfit_preview") + "\n<garment_data>\n" + data + "\n</garment_data>"
             )
