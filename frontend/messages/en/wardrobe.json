@@ -299,5 +299,11 @@
     "bulkResult": "Redrawn: {generated}. Failed: {failed}.",
     "bulkFailed": "Open failed items to check their photos.",
     "bulkError": "Redraw stopped; check items before retrying."
+  },
+  "photoViewer": {
+    "open": "Open photo",
+    "close": "Close",
+    "previous": "Previous",
+    "next": "Next"
   }
 }

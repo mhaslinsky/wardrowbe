@@ -299,5 +299,11 @@
     "bulkResult": "완료: {generated}. 실패: {failed}.",
     "bulkFailed": "실패한 항목을 열어 사진을 확인하세요.",
     "bulkError": "다시 그리기가 중단되었습니다. 재시도 전에 항목을 확인하세요."
+  },
+  "photoViewer": {
+    "open": "사진 열기",
+    "close": "닫기",
+    "previous": "이전",
+    "next": "다음"
   }
 }

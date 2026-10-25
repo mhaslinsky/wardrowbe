@@ -299,5 +299,11 @@
     "bulkResult": "Ridisegnate: {generated}. Non riuscite: {failed}.",
     "bulkFailed": "Apri gli articoli non riusciti per controllare le foto.",
     "bulkError": "Elaborazione interrotta; controlla gli articoli prima di riprovare."
+  },
+  "photoViewer": {
+    "open": "Apri foto",
+    "close": "Chiudi",
+    "previous": "Precedente",
+    "next": "Successiva"
   }
 }

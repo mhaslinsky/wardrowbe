@@ -299,5 +299,11 @@
     "bulkResult": "Redessinées : {generated}. Échecs : {failed}.",
     "bulkFailed": "Ouvrez les articles en échec pour vérifier leurs photos.",
     "bulkError": "Création arrêtée ; vérifiez les articles avant de réessayer."
+  },
+  "photoViewer": {
+    "open": "Ouvrir la photo",
+    "close": "Fermer",
+    "previous": "Précédente",
+    "next": "Suivante"
   }
 }

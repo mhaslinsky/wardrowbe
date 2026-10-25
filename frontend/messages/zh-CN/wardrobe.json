@@ -299,5 +299,11 @@
     "bulkResult": "已重绘：{generated}。失败：{failed}。",
     "bulkFailed": "打开失败的物品以检查照片。",
     "bulkError": "重绘已停止，请先检查物品再重试。"
+  },
+  "photoViewer": {
+    "open": "打开照片",
+    "close": "关闭",
+    "previous": "上一张",
+    "next": "下一张"
   }
 }

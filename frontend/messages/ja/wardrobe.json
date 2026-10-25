@@ -299,5 +299,11 @@
     "bulkResult": "再描画済み：{generated}。失敗：{failed}。",
     "bulkFailed": "失敗したアイテムを開いて写真を確認してください。",
     "bulkError": "再描画が停止しました。再試行する前にアイテムを確認してください。"
+  },
+  "photoViewer": {
+    "open": "写真を開く",
+    "close": "閉じる",
+    "previous": "前へ",
+    "next": "次へ"
   }
 }

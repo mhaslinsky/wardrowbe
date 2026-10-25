@@ -299,5 +299,11 @@
     "bulkResult": "Neu gezeichnet: {generated}. Fehlgeschlagen: {failed}.",
     "bulkFailed": "Öffne fehlgeschlagene Artikel und prüfe ihre Fotos.",
     "bulkError": "Neuzeichnung gestoppt; prüfe die Artikel vor einem erneuten Versuch."
+  },
+  "photoViewer": {
+    "open": "Foto öffnen",
+    "close": "Schließen",
+    "previous": "Zurück",
+    "next": "Weiter"
   }
 }
