@@ -16,7 +16,7 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
   return <div className={children && preview ? (detail ? "grid items-start gap-4 sm:grid-cols-2" : "grid grid-cols-2 gap-3 items-start") : "space-y-3"}>
     {children}
     <div className="space-y-2 min-w-0">
-    <Button variant="outline" disabled={pending} onClick={() => draw()}>{pending ? t('drawing') : t('see')}</Button>
+    {!preview && <Button variant="outline" disabled={pending} onClick={() => draw()}>{pending ? t('drawing') : t('see')}</Button>}
     {pending && <p role="status" className="text-sm text-muted-foreground">{t('drawing')}</p>}
     {missingPhoto && <Link className="block text-sm underline" href="/dashboard/settings#preview-photo">{t('addPhoto')}</Link>}
     {error && <p role="alert" className="text-sm text-destructive">{t('failed')}</p>}

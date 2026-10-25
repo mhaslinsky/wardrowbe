@@ -44,13 +44,25 @@ const response = (data: unknown, status = 200) => ({ ok: status < 400, status, j
 beforeEach(() => { translation.locale = null; vi.mocked(toast.error).mockClear(); vi.mocked(fetch).mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
 afterEach(() => { client.clear(); vi.useRealTimers(); });
 
-it('shows a saved preview without drawing, including on a second tap', async () => {
-  vi.mocked(fetch).mockResolvedValueOnce(response(saved) as Response).mockResolvedValue(response({ ...saved, image_url: '/fresh', medium_url: '/fresh-medium' }) as Response);
+it.each([false, true])('loads a saved preview on mount with stale=%s without drawing', async (stale) => {
+  vi.mocked(fetch).mockResolvedValue(response({ ...saved, stale }) as Response);
   render(<OutfitPreview outfitId="one" />);
-  fireEvent.click(screen.getByText('see'));
   expect(await screen.findByRole('img')).toHaveAttribute('src', saved.medium_url);
-  fireEvent.click(screen.getByText('see'));
-  await waitFor(() => expect(screen.getByRole('img')).toHaveAttribute('src', '/fresh-medium'));
+  expect(screen.queryByRole('button', { name: 'see' })).not.toBeInTheDocument();
+  expect(Boolean(screen.queryByText('changed'))).toBe(stale);
+  expect(Boolean(screen.queryByRole('button', { name: 'redraw' }))).toBe(stale);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview', expect.objectContaining({ method: 'GET' }));
+});
+
+it.each(['NO_PREVIEW', 'NO_PREVIEW_PHOTO'])('keeps the button after a missing preview: %s', async (detail) => {
+  vi.mocked(fetch).mockResolvedValue(response({ detail }, 404) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  await waitFor(() => expect(client.getQueryState(['outfit-preview', 'one'])?.fetchStatus).toBe('idle'));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: 'see' })).toBeEnabled();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(vi.mocked(fetch).mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
 });
 
@@ -251,7 +263,7 @@ it('invalidates preview and photo queries after replacing the photo', async () =
   await waitFor(() => expect(screen.getByRole('img', { name: 'title' }).closest('a')).toHaveAttribute('href', '/new-photo'));
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['preview-photo'] });
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['outfit-preview'] });
-  expect(screen.queryByRole('img', { name: 'see' })).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole('img', { name: 'see' }).closest('a')).toHaveAttribute('href', '/new-photo'));
 });
 
 it('guards two draw calls before React renders', async () => {

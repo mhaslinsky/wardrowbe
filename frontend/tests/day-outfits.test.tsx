@@ -9,7 +9,13 @@ const state = vi.hoisted(() => ({
   log: vi.fn().mockResolvedValue({}), name: vi.fn().mockResolvedValue('Blue outfit'),
   extraOutfits: [] as Outfit[], loading: false, more: false, profileReady: true, date: '', worn: false, fail: false, outfit: {} as Outfit, items: [] as Item[], post: vi.fn().mockResolvedValue([]),
 }))
-vi.mock('@/lib/api', () => ({ api: { post: (...args: unknown[]) => state.post(...args) } }))
+vi.mock('@/lib/api', async (original) => {
+  const actual = await original<typeof import('@/lib/api')>()
+  return { ...actual, api: {
+    get: vi.fn().mockRejectedValue(new actual.ApiError('No preview', 404, { detail: 'NO_PREVIEW' })),
+    post: (...args: unknown[]) => state.post(...args),
+  } }
+})
 vi.mock('@/lib/hooks/use-user', () => ({ useUserToday: () => () => '2026-10-24', useUserProfile: () => ({ data: state.profileReady ? { timezone: 'America/New_York' } : undefined }) }))
 vi.mock('@/lib/hooks/use-preferences', () => ({ usePreferences: () => ({ data: { default_occasion: 'casual' } }) }))
 vi.mock('@/lib/hooks/use-day-outfits', async (original) => ({
