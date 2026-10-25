@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
@@ -152,9 +152,11 @@ async def complete_onboarding(
 async def get_preview_photo(
     db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
 ):
-    from app.services.preview_service import PreviewService, urls
+    from app.services.preview_service import PreviewService, reference_urls
 
-    return urls((await PreviewService(db).reference(current_user.id)).paths)
+    return reference_urls(
+        (await PreviewService(db).reference(current_user.id, require_front=False)).paths
+    )
 
 
 @router.put("/preview-photo")
@@ -162,6 +164,7 @@ async def put_preview_photo(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
     image: UploadFile,
+    angle: Literal["front", "quarter", "side"] = "front",
 ):
     from app.services.image_service import ALLOWED_EXTENSIONS, ImageService
     from app.services.preview_service import PreviewService
@@ -174,7 +177,9 @@ async def put_preview_photo(
     ):
         raise HTTPException(400, "Invalid image")
     try:
-        return await PreviewService(db).replace_reference(current_user.id, data, image.filename)
+        return await PreviewService(db).replace_reference(
+            current_user.id, data, image.filename, angle
+        )
     except (ValueError, OSError) as error:
         await db.rollback()
         raise HTTPException(400, "Invalid image") from error
@@ -182,11 +187,13 @@ async def put_preview_photo(
 
 @router.delete("/preview-photo", status_code=204)
 async def delete_preview_photo(
-    db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    angle: Literal["front", "quarter", "side"] = "front",
 ):
     from app.services.preview_service import PreviewService
 
-    await PreviewService(db).clear(current_user.id)
+    await PreviewService(db).clear(current_user.id, angle)
     await db.commit()
 
 
@@ -194,7 +201,7 @@ async def delete_preview_photo(
 async def get_preview_file(user_id: UUID, filename: str, expires: str, sig: str, db: DbSession):
     from sqlalchemy import select
 
-    from app.models.preview import OutfitPreview, PreviewPhoto
+    from app.models.preview import OutfitPreview, PreviewPhoto, preview_file_paths
     from app.services.image_service import ImageService
     from app.utils.signed_urls import verify_signature
 
@@ -207,7 +214,9 @@ async def get_preview_file(user_id: UUID, filename: str, expires: str, sig: str,
         await db.get(PreviewPhoto, user_id),
         *(await db.scalars(select(OutfitPreview).where(OutfitPreview.user_id == user_id))).all(),
     ]
-    if not any(record is not None and path in record.paths.values() for record in records):
+    if not any(
+        record is not None and path in preview_file_paths(record.paths) for record in records
+    ):
         raise HTTPException(404, "Image not found")
     target = ImageService().get_image_path(path)
     if not target.is_file():

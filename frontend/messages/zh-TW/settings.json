@@ -157,6 +157,12 @@
     "upload": "上傳照片",
     "replace": "更換照片",
     "confirm": "刪除照片及已儲存的預覽？",
-    "failed": "照片更新失敗"
+    "failed": "照片更新失敗",
+    "front": "正面",
+    "quarter": "四分之三側面",
+    "side": "側面",
+    "confirmAngle": "刪除照片？",
+    "uploadAngle": "{angle}：上傳照片",
+    "replaceAngle": "{angle}：更換照片"
   }
 }

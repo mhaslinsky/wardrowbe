@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { act, fireEvent, render as testingRender, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as testingRender, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ComponentType, ReactElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -7,6 +7,27 @@ import { useOutfitPreview } from '@/lib/hooks/use-outfit-preview';
 import { createQueryClient } from '@/lib/query-client';
 import { toast } from 'sonner';
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+const translation = vi.hoisted(() => ({ locale: null as 'ja' | 'zh-CN' | 'zh-TW' | null }));
+vi.mock('next-intl', async (original) => {
+  const actual = await original<typeof import('next-intl')>();
+  const catalogs = {
+    ja: (await import('@/messages/ja/settings.json')).default,
+    'zh-CN': (await import('@/messages/zh-CN/settings.json')).default,
+    'zh-TW': (await import('@/messages/zh-TW/settings.json')).default,
+  };
+  return { ...actual, useTranslations: (namespace?: string) => {
+    if (!translation.locale) return (key: string) => key;
+    return actual.createTranslator({
+      locale: translation.locale, namespace,
+      messages: { settings: catalogs[translation.locale], common: { remove: 'remove', cancel: 'cancel', loading: 'loading' } },
+    });
+  } };
+});
+
+function frontInput(label: 'uploadAngle' | 'replaceAngle') {
+  return within(screen.getByRole('group', { name: 'front' })).getByLabelText(label);
+}
+
 
 let client: QueryClient;
 function render(ui: ReactElement) {
@@ -20,7 +41,7 @@ const PreviewPhotoSettings = (modules['../components/preview-photo-settings.tsx'
 
 const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24' };
 const response = (data: unknown, status = 200) => ({ ok: status < 400, status, json: async () => data });
-beforeEach(() => { vi.mocked(toast.error).mockClear(); vi.mocked(fetch).mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
+beforeEach(() => { translation.locale = null; vi.mocked(toast.error).mockClear(); vi.mocked(fetch).mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
 afterEach(() => { client.clear(); vi.useRealTimers(); });
 
 it('shows a saved preview without drawing, including on a second tap', async () => {
@@ -83,14 +104,14 @@ it('uploads, replaces, confirms removal and resets the file input', async () => 
     return response(photo ?? { detail: 'NO_PREVIEW_PHOTO' }, photo ? 200 : 404) as Response;
   });
   render(<PreviewPhotoSettings />);
-  const input = screen.getByLabelText('upload');
+  const input = frontInput('uploadAngle');
   await waitFor(() => expect(input).toBeEnabled());
   const file = new File(['photo'], 'photo.jpg', { type: 'image/jpeg' });
   fireEvent.change(input, { target: { files: [file] } });
   expect(await screen.findByRole('img')).toBeVisible();
   expect(input).toHaveValue('');
   expect((vi.mocked(fetch).mock.calls[1][1]?.body as FormData).get('image')).toEqual(file);
-  fireEvent.change(screen.getByLabelText('replace'), { target: { files: [file] } });
+  fireEvent.change(frontInput('replaceAngle'), { target: { files: [file] } });
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(2));
   await waitFor(() => expect(screen.getByText('remove')).toBeEnabled());
   fireEvent.click(screen.getByText('remove'));
@@ -109,7 +130,7 @@ it('reports photo load and upload failures', async () => {
   vi.mocked(fetch).mockResolvedValue(response({}, 502) as Response);
   render(<PreviewPhotoSettings />);
   expect(await screen.findByRole('alert')).toBeVisible();
-  fireEvent.change(screen.getByLabelText('upload'), { target: { files: [new File(['bad'], 'bad.jpg')] } });
+  fireEvent.change(frontInput('uploadAngle'), { target: { files: [new File(['bad'], 'bad.jpg')] } });
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
 });
@@ -198,7 +219,7 @@ it('keeps failed removal open and clears its error after a successful upload', a
   expect(await screen.findByRole('alert')).toBeVisible();
   expect(screen.getByText('confirm')).toBeVisible();
   expect(screen.getByText('cancel')).toBeEnabled();
-  fireEvent.change(screen.getByLabelText('replace'), { target: { files: [new File(['photo'], 'photo.jpg')] } });
+  fireEvent.change(frontInput('replaceAngle'), { target: { files: [new File(['photo'], 'photo.jpg')] } });
   await waitFor(() => expect(screen.getByText('remove')).toBeEnabled());
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
@@ -226,7 +247,7 @@ it('invalidates preview and photo queries after replacing the photo', async () =
   fireEvent.click(screen.getByText('see'));
   expect(await screen.findByRole('img', { name: 'see' })).toBeVisible();
   const invalidate = vi.spyOn(client, 'invalidateQueries');
-  fireEvent.change(screen.getByLabelText('replace'), { target: { files: [new File(['photo'], 'photo.jpg')] } });
+  fireEvent.change(frontInput('replaceAngle'), { target: { files: [new File(['photo'], 'photo.jpg')] } });
   await waitFor(() => expect(screen.getByRole('img', { name: 'title' }).closest('a')).toHaveAttribute('href', '/new-photo'));
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['preview-photo'] });
   expect(invalidate).toHaveBeenCalledWith({ queryKey: ['outfit-preview'] });
@@ -298,4 +319,65 @@ it('refreshes displayed signed URLs after nine minutes without a POST', async ()
   expect(screen.getByRole('img')).toHaveAttribute('src', '/renewed-url');
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(vi.mocked(fetch).mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
+});
+
+it('shows three angle slots with independent upload and removal', async () => {
+  const photos: Record<string, typeof saved> = { front: saved };
+  vi.mocked(fetch).mockImplementation(async (url, options) => {
+    const angle = new URL(String(url), 'https://test.local').searchParams.get('angle') ?? 'front';
+    if (options?.method === 'PUT') photos[angle] = { ...saved, image_url: `/${angle}`, medium_url: `/${angle}-medium` };
+    if (options?.method === 'DELETE') { delete photos[angle]; return response(null, 204) as Response; }
+    return response({ ...photos.front, photos: { ...photos } }) as Response;
+  });
+  render(<PreviewPhotoSettings />);
+  await screen.findByRole('img', { name: 'title' });
+  expect(screen.getAllByRole('group')).toHaveLength(3);
+  for (const angle of ['quarter', 'side']) {
+    const input = within(screen.getByRole('group', { name: angle })).getByLabelText('uploadAngle');
+    fireEvent.change(input, { target: { files: [new File(['photo'], `${angle}.jpg`)] } });
+    expect(await screen.findByRole('img', { name: angle })).toHaveAttribute('src', `/${angle}-medium`);
+    await waitFor(() => expect(input).toBeEnabled());
+    expect(input).toHaveValue('');
+    expect(fetch).toHaveBeenCalledWith(`/api/v1/users/me/preview-photo?angle=${angle}`, expect.objectContaining({ method: 'PUT' }));
+  }
+  const side = within(screen.getByRole('group', { name: 'side' }));
+  fireEvent.click(side.getByText('remove'));
+  expect(side.getByText('confirmAngle')).toBeVisible();
+  fireEvent.click(side.getByText('remove'));
+  await waitFor(() => expect(screen.queryByRole('img', { name: 'side' })).not.toBeInTheDocument());
+  expect(screen.getByRole('img', { name: 'quarter' })).toBeVisible();
+  expect(screen.getByRole('img', { name: 'title' })).toBeVisible();
+  expect(fetch).toHaveBeenCalledWith('/api/v1/users/me/preview-photo?angle=side', expect.objectContaining({ method: 'DELETE' }));
+});
+
+it('shows optional photos without a front photo', async () => {
+  vi.mocked(fetch).mockResolvedValue(response({ photos: { side: saved } }) as Response);
+  render(<PreviewPhotoSettings />);
+  expect(await screen.findByRole('img', { name: 'side' })).toBeVisible();
+  expect(frontInput('uploadAngle')).toBeEnabled();
+  expect(screen.queryByRole('img', { name: 'title' })).not.toBeInTheDocument();
+});
+
+it.each([{}, { photos: {} }, { photos: { side: {} } }, { photos: { back: saved } }])('rejects malformed photo collections %j', async (data) => {
+  vi.mocked(fetch).mockResolvedValue(response(data) as Response);
+  render(<PreviewPhotoSettings />);
+  expect(await screen.findByRole('alert')).toBeVisible();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+
+
+it.each([
+  { locale: 'ja' as const, upload: '側面：写真をアップロード', replace: '正面：写真を変更' },
+  { locale: 'zh-CN' as const, upload: '侧面：上传照片', replace: '正面：更换照片' },
+  { locale: 'zh-TW' as const, upload: '側面：上傳照片', replace: '正面：更換照片' },
+])('localizes angle upload and replace labels with ICU messages in $locale', async ({ locale, upload, replace }) => {
+  translation.locale = locale;
+  vi.mocked(fetch).mockResolvedValue(response({ photos: { front: saved } }) as Response);
+  render(<PreviewPhotoSettings />);
+  await screen.findByRole('img');
+  for (const label of [upload, replace]) {
+    expect(screen.getByText(label)).toBeVisible();
+    expect(screen.getByLabelText(label)).toHaveAttribute('aria-label', label);
+    expect(screen.getByLabelText(label)).toBeEnabled();
+  }
 });

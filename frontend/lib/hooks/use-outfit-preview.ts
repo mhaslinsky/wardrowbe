@@ -7,6 +7,9 @@ import { api, ApiError, API_BASE_PATH, getAccessToken } from '@/lib/api';
 import { useSetTokenIfAvailable } from '@/lib/hooks/use-session-token';
 import { queryKeys } from '@/lib/hooks/query-keys';
 
+export type PreviewAngle = 'front' | 'quarter' | 'side';
+export const previewAngles: PreviewAngle[] = ['front', 'quarter', 'side'];
+type PreviewPhotos = Partial<Record<PreviewAngle, PreviewPhoto>>;
 export interface PreviewPhoto { image_url: string; medium_url: string }
 export interface OutfitPreview extends PreviewPhoto { created_at: string; stale: boolean }
 
@@ -24,6 +27,19 @@ function checkedPhoto<Value extends PreviewPhoto>(value: Value): Value {
   return value;
 }
 
+function checkedPhotos(value: { photos?: PreviewPhotos } & Partial<PreviewPhoto>): PreviewPhotos {
+  if (value?.photos && typeof value.photos === 'object' && !Array.isArray(value.photos)) {
+    const entries = Object.entries(value.photos);
+    if (!entries.length) throw new Error('Invalid photos');
+    for (const [angle, photo] of entries) {
+      if (!previewAngles.includes(angle as PreviewAngle)) throw new Error('Invalid angle');
+      checkedPhoto(photo);
+    }
+    return value.photos;
+  }
+  return { front: checkedPhoto(value as PreviewPhoto) };
+}
+
 export function usePreviewPhoto() {
   const { status, data: session } = useSession();
   useSetTokenIfAvailable();
@@ -32,17 +48,16 @@ export function usePreviewPhoto() {
     queryKey: queryKeys.previewPhoto, retry: false, gcTime: 0, meta: { toastsOwnErrors: true },
     enabled: status !== 'loading',
     queryFn: async () => {
-      try { return checkedPhoto(await api.get<PreviewPhoto>('/users/me/preview-photo')); }
+      try { return checkedPhotos(await api.get<{ photos?: PreviewPhotos } & Partial<PreviewPhoto>>('/users/me/preview-photo')); }
       catch (error) {
         if (error instanceof ApiError && error.status === 404 && previewErrorCode(error) === 'NO_PREVIEW_PHOTO') return null;
         throw error;
       }
     },
   });
-  const refresh = async (photo: PreviewPhoto | null) => {
+  const refresh = async () => {
     await client.cancelQueries({ queryKey: queryKeys.outfitPreviews });
     await client.resetQueries({ queryKey: queryKeys.outfitPreviews });
-    client.setQueryData(queryKeys.previewPhoto, photo);
     await Promise.all([
       client.invalidateQueries({ queryKey: queryKeys.previewPhoto }),
       client.invalidateQueries({ queryKey: queryKeys.outfitPreviews }),
@@ -50,29 +65,29 @@ export function usePreviewPhoto() {
   };
   const upload = useMutation({
     meta: { toastsOwnErrors: true },
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, angle }: { file: File; angle: PreviewAngle }) => {
       const body = new FormData();
       body.append('image', file);
       const token = session?.accessToken || getAccessToken();
-      const response = await fetch(`${API_BASE_PATH}/users/me/preview-photo`, {
+      const response = await fetch(`${API_BASE_PATH}/users/me/preview-photo${angle === 'front' ? '' : `?angle=${angle}`}`, {
         method: 'PUT', body, credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!response.ok) throw new ApiError('Photo update failed', response.status, await response.json());
-      return checkedPhoto(await response.json() as PreviewPhoto);
+      return checkedPhotos(await response.json());
     },
     onSuccess: refresh,
   });
   const remove = useMutation({
     meta: { toastsOwnErrors: true },
-    mutationFn: async () => { await api.delete('/users/me/preview-photo'); return null; },
+    mutationFn: async (angle: PreviewAngle) => { await api.delete(`/users/me/preview-photo${angle === 'front' ? '' : `?angle=${angle}`}`); },
     onSuccess: refresh,
   });
-  return { photo: query.data, loading: query.isPending, pending: upload.isPending || remove.isPending,
+  return { photo: query.data?.front, photos: query.data, loading: query.isPending, pending: upload.isPending || remove.isPending,
     error: query.isError || upload.isError || remove.isError,
-    save: async (file?: File) => {
+    save: async (file?: File, angle: PreviewAngle = 'front') => {
       upload.reset(); remove.reset();
-      try { if (file) await upload.mutateAsync(file); else await remove.mutateAsync(); return true; }
+      try { if (file) await upload.mutateAsync({ file, angle }); else await remove.mutateAsync(angle); return true; }
       catch { return false; }
     } };
 }

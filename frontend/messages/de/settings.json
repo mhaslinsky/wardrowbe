@@ -157,6 +157,12 @@
     "upload": "Foto hochladen",
     "replace": "Foto ersetzen",
     "confirm": "Foto und gespeicherte Vorschauen entfernen?",
-    "failed": "Fotoaktualisierung fehlgeschlagen"
+    "failed": "Fotoaktualisierung fehlgeschlagen",
+    "front": "Vorderansicht",
+    "quarter": "Vierteldrehung",
+    "side": "Seitenansicht",
+    "confirmAngle": "Foto entfernen?",
+    "uploadAngle": "{angle}: Foto hochladen",
+    "replaceAngle": "{angle}: Foto ersetzen"
   }
 }
