@@ -2174,7 +2174,7 @@ async def set_primary_image(
     item_image.medium_path = old_primary["medium_path"]
 
     await db.flush()
-    await db.refresh(item)
+    item = await item_service.get_by_id(item_id, current_user.id)
     return ItemResponse.model_validate(item)
 
 
