@@ -20,7 +20,7 @@ from app.config import get_settings
 from app.models.item import ClothingItem, ItemStatus
 from app.services.background_removal import get_provider
 from app.services.image_service import ImageService
-from app.services.mask_cleanup import clean_cutout
+from app.services.mask_cleanup import NoGarmentFound, clean_cutout
 from app.utils.garment_vocabulary import types_for_role
 from app.utils.prompts import load_prompt
 
@@ -340,7 +340,11 @@ class PhotoRedrawService:
         metadata = gate.model_dump()
         if not gate.needs_redraw or gate.confidence < 0.85:
             return None, {**metadata, "status": "skipped"}
-        mask = await asyncio.to_thread(cutout, source)
+        try:
+            mask = await asyncio.to_thread(cutout, source)
+        except NoGarmentFound:
+            # Generation uses the original photo even when segmentation cannot isolate it.
+            mask = None
         payload = await self.request(image, self.prompt("photo_redraw"), "IMAGE")
         parts = response_parts(payload)
         inline = next(
@@ -360,7 +364,11 @@ class PhotoRedrawService:
         )
         result = await asyncio.to_thread(cutout, decoded)
         await asyncio.to_thread(reject_checkerboard, decoded, result)
-        check = await asyncio.to_thread(color_check, mask, result)
+        check = (
+            await asyncio.to_thread(color_check, mask, result)
+            if mask is not None
+            else {"passed": None, "reason": "Original garment could not be isolated"}
+        )
         return result, {
             **metadata,
             "color_check": check,

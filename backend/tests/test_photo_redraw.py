@@ -1421,3 +1421,47 @@ def test_belt_prompt_selection_resets_to_garment():
     assert service.prompt("photo_redraw").startswith(load_prompt("photo_redraw_belt"))
     service.is_belt = False
     assert service.prompt("photo_redraw").startswith(load_prompt("photo_redraw") + "\n\n")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("generated_alpha", [255, 0])
+async def test_dark_original_empty_mask_allows_generation(generated_alpha):
+    from app.services.mask_cleanup import NoGarmentFound
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    source = Image.new("RGB", (64, 64), (20, 20, 20))
+    source.paste((30, 30, 30), (10, 10, 54, 54))
+    generated = Image.new("RGB", (64, 64), "white")
+    generated.paste((30, 30, 30), (10, 10, 54, 54))
+    encoded = BytesIO()
+    generated.save(encoded, "PNG")
+    assessment = reply(
+        [{"text": json.dumps({"needs_redraw": True, "confidence": 0.99, "reason": "Dark"})}]
+    ).json()
+    generation = reply(
+        [{"inlineData": {"data": base64.b64encode(encoded.getvalue()).decode()}}]
+    ).json()
+    provider = _mock_provider()
+    provider.remove.side_effect = [
+        Image.new("RGBA", source.size, (0, 0, 0, 0)),
+        garment((30, 30, 30)) if generated_alpha else Image.new("RGBA", source.size),
+    ]
+    with (
+        patch.object(
+            PhotoRedrawService, "request", AsyncMock(side_effect=[assessment, generation])
+        ) as request,
+        patch("app.services.photo_redraw_service.get_provider", return_value=provider),
+    ):
+        if generated_alpha:
+            result, details = await PhotoRedrawService().generate(source)
+            assert result.getchannel("A").getextrema() == (0, 255)
+            assert details["status"] == "generated"
+            assert details["color_check"] == {
+                "passed": None,
+                "reason": "Original garment could not be isolated",
+            }
+        else:
+            with pytest.raises(NoGarmentFound):
+                await PhotoRedrawService().generate(source)
+        assert request.await_count == 2
+        assert provider.remove.call_count == 2
