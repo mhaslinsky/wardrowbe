@@ -1513,6 +1513,7 @@ async def put_item_in_the_wash(
     item = await db.scalar(
         select(ClothingItem)
         .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id)
+        .options(selectinload(ClothingItem.additional_images))
         .with_for_update()
         .execution_options(populate_existing=True)
     )
@@ -1536,6 +1537,7 @@ async def log_item_wash(
     item = await db.scalar(
         select(ClothingItem)
         .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id)
+        .options(selectinload(ClothingItem.additional_images))
         .with_for_update()
         .execution_options(populate_existing=True)
     )
