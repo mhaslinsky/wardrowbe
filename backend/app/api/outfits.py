@@ -1546,3 +1546,24 @@ async def delete_family_rating(
 
     await db.delete(rating)
     await db.flush()
+
+
+@router.get("/{outfit_id}/preview")
+async def get_outfit_preview(
+    outfit_id: UUID, db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
+):
+    from app.services.preview_service import PreviewService
+
+    return await PreviewService(db).saved(outfit_id, current_user.id)
+
+
+@router.post("/{outfit_id}/preview")
+async def create_outfit_preview(
+    outfit_id: UUID,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    regenerate: bool = False,
+):
+    from app.services.preview_service import PreviewService
+
+    return await PreviewService(db).generate(outfit_id, current_user.id, regenerate)
