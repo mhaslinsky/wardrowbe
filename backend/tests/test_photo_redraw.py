@@ -1472,6 +1472,7 @@ def test_footwear_background_contrasts_with_white_shoes():
 
     service = PhotoRedrawService()
     service.is_footwear = True
+    service.recorded_colors = {"primary_color": "white"}
     prompt = service.prompt("photo_redraw")
     assert "solid pale blue background (#B8D8F0)" in prompt
     assert "including gaps between and within" in prompt
@@ -1505,3 +1506,57 @@ def test_white_shoe_checkerboard_guard(background):
     removed = Image.new("RGBA", source.size)
     removed.paste((248, 248, 248, 255), (32, 40, 96, 88))
     reject_checkerboard(source, removed)
+
+
+@pytest.mark.parametrize(
+    "primary", ["white", "cream", "off-white", "ivory", "light gray", "light-grey", "beige"]
+)
+def test_light_footwear_background_aliases(primary):
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    service = PhotoRedrawService()
+    service.is_footwear = True
+    service.recorded_colors = {"primary_color": primary}
+    assert "#B8D8F0" in service.prompt("photo_redraw")
+    service.recorded_colors = {"primary_color": "black"}
+    assert "Use a plain white background" in service.prompt("photo_redraw")
+    assert not service.uses_blue_background()
+
+
+@pytest.mark.parametrize(
+    "primary", [None, "", 123, "unknown", "blue", "navy", "black", "gray", "dark gray"]
+)
+def test_other_footwear_keeps_white_background(primary):
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    service = PhotoRedrawService()
+    service.is_footwear = True
+    service.recorded_colors = {"primary_color": primary}
+    assert "Use a plain white background" in service.prompt("photo_redraw")
+    assert not service.uses_blue_background()
+
+
+def test_blue_spill_removed_only_at_white_shoe_boundary():
+    from app.services.photo_redraw_service import suppress_blue_spill
+
+    cutout = Image.new("RGBA", (20, 20))
+    cutout.paste((184, 216, 240, 255), (3, 3, 17, 17))
+    cutout.putpixel((10, 10), (184, 216, 240, 255))
+    cutout.putpixel((7, 3), (216, 232, 244, 128))
+    result = suppress_blue_spill(cutout)
+    for point in [(3, 10), (4, 10), (7, 3)]:
+        red, green, blue, alpha = result.getpixel(point)
+        assert max(red, green, blue) - min(red, green, blue) <= 2
+        assert alpha == cutout.getpixel(point)[3]
+    assert result.getpixel((10, 10)) == cutout.getpixel((10, 10))
+    assert result.getpixel((5, 10)) == cutout.getpixel((5, 10))
+    assert result.getchannel("A").tobytes() == cutout.getchannel("A").tobytes()
+
+
+@pytest.mark.parametrize("color", [(25, 70, 220, 128), (220, 220, 220, 128), (240, 210, 180, 255)])
+def test_spill_suppression_preserves_other_edge_hues(color):
+    from app.services.photo_redraw_service import suppress_blue_spill
+
+    cutout = Image.new("RGBA", (20, 20))
+    cutout.paste(color, (3, 3, 17, 17))
+    assert suppress_blue_spill(cutout).tobytes() == cutout.tobytes()

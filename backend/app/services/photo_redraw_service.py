@@ -11,7 +11,7 @@ from uuid import uuid4
 import httpx
 import numpy as np
 from fastapi import HTTPException
-from PIL import Image
+from PIL import Image, ImageFilter
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -21,7 +21,7 @@ from app.models.item import ClothingItem, ItemStatus
 from app.services.background_removal import get_provider
 from app.services.image_service import ImageService
 from app.services.mask_cleanup import NoGarmentFound, clean_cutout
-from app.utils.garment_vocabulary import types_for_role
+from app.utils.garment_vocabulary import canonical_color, types_for_role
 from app.utils.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -227,6 +227,23 @@ def reject_checkerboard(source: Image.Image, result: Image.Image) -> None:
         raise ValueError("Generated photo retains a checkerboard background")
 
 
+def suppress_blue_spill(image: Image.Image) -> Image.Image:
+    """Neutralize pale blue spill only at the cutout boundary."""
+    pixels = np.array(image.convert("RGBA"))
+    alpha = pixels[..., 3]
+    nearby_alpha = np.asarray(Image.fromarray(alpha).filter(ImageFilter.MinFilter(5)))
+    edge = (alpha > 0) & ((alpha < 255) | (nearby_alpha < 255))
+    rgb = pixels[..., :3].astype(float)
+    red, green, blue = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    blue_lean, green_lean = blue - red, green - red
+    # Match the background hue without desaturating blue material or changing the interior.
+    spill = edge & (red >= 140) & (blue_lean > 0) & (green_lean > 0)
+    spill &= (green_lean >= blue_lean * 0.35) & (green_lean <= blue_lean * 0.8)
+    neutral = np.rint(rgb.mean(axis=2)).astype(np.uint8)
+    pixels[spill, :3] = neutral[spill, None]
+    return Image.fromarray(pixels)
+
+
 def garment_color(image: Image.Image) -> tuple[float, float]:
     """Measure circular mean hue and mean lightness inside the opaque garment."""
     pixels = np.asarray(image.convert("RGBA"), dtype=float) / 255
@@ -299,6 +316,16 @@ class PhotoRedrawService:
             self.usage[modality] = payload.get("usageMetadata", {})
             return payload
 
+    def uses_blue_background(self) -> bool:
+        primary = self.recorded_colors.get("primary_color")
+        if not self.is_footwear or not isinstance(primary, str):
+            return False
+        light_gray = " ".join(primary.lower().replace("-", " ").split()) in {
+            "light gray",
+            "light grey",
+        }
+        return light_gray or canonical_color(primary) in {"white", "cream", "beige"}
+
     def prompt(self, name: str) -> str:
         if self.is_footwear:
             name = name.replace("photo_redraw", "photo_redraw_footwear", 1)
@@ -306,6 +333,8 @@ class PhotoRedrawService:
             name = name.replace("photo_redraw", "photo_redraw_socks", 1)
         elif self.is_belt:
             name = name.replace("photo_redraw", "photo_redraw_belt", 1)
+        if name == "photo_redraw_footwear" and self.uses_blue_background():
+            name = "photo_redraw_footwear_light"
         recorded = self.recorded_colors
         has_color = bool(recorded.get("primary_color") or recorded.get("colors"))
         instruction = (
@@ -364,6 +393,8 @@ class PhotoRedrawService:
         )
         result = await asyncio.to_thread(cutout, decoded)
         await asyncio.to_thread(reject_checkerboard, decoded, result)
+        if self.uses_blue_background():
+            result = await asyncio.to_thread(suppress_blue_spill, result)
         check = (
             await asyncio.to_thread(color_check, mask, result)
             if mask is not None
