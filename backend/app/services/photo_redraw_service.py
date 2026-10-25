@@ -271,6 +271,7 @@ class PhotoRedrawService:
         self.recorded_colors = {}
         self.is_footwear = False
         self.is_socks = False
+        self.is_belt = False
 
     async def request(
         self, image: bytes | list[bytes], prompt: str, modality: str, mime_type: str = "image/png"
@@ -303,6 +304,8 @@ class PhotoRedrawService:
             name = name.replace("photo_redraw", "photo_redraw_footwear", 1)
         elif self.is_socks:
             name = name.replace("photo_redraw", "photo_redraw_socks", 1)
+        elif self.is_belt:
+            name = name.replace("photo_redraw", "photo_redraw_belt", 1)
         recorded = self.recorded_colors
         has_color = bool(recorded.get("primary_color") or recorded.get("colors"))
         instruction = (
@@ -383,6 +386,7 @@ class PhotoRedrawService:
             raise HTTPException(409, "Confirm a paid retry")
         self.is_footwear = item.type in types_for_role("footwear")
         self.is_socks = item.type == "socks"
+        self.is_belt = item.type == "belt"
         self.recorded_colors = {
             "primary_color": item.primary_color,
             "colors": item.colors,
