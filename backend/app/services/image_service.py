@@ -250,17 +250,25 @@ class ImageService:
         """
         return ImageService.hash_distance(hash1, hash2) <= threshold
 
-    def _save_all_sizes(self, image: Image.Image, image_path: str) -> dict[str, str]:
+    def _save_all_sizes(
+        self,
+        image: Image.Image,
+        image_path: str,
+        variant_paths: dict[str, str | None] | None = None,
+    ) -> dict[str, str]:
         base_path = image_path.rsplit(".", 1)[0]
         paths = {}
         for variant in VARIANTS:
-            # The original is written back to image_path itself so that the stored path stays valid.
-            extension = (
-                (".png" if variant is ORIGINAL else ".webp")
-                if image_path.endswith(".png")
-                else ".jpg"
-            )
-            path = image_path if variant is ORIGINAL else f"{base_path}{variant.suffix}{extension}"
+            if variant is ORIGINAL:
+                path = image_path
+            elif variant_paths is not None:
+                path = variant_paths.get(variant.path_field)
+                if not path:
+                    continue
+            else:
+                extension = ".webp" if image_path.endswith(".png") else ".jpg"
+                path = f"{base_path}{variant.suffix}{extension}"
+            extension = Path(path).suffix.lower()
             if extension == ".png":
                 resized = image.copy()
                 resized.thumbnail(variant.box, Image.Resampling.LANCZOS)
@@ -276,6 +284,7 @@ class ImageService:
         self,
         image_path: str,
         bg_color: tuple[int, int, int] = (255, 255, 255),
+        variant_paths: dict[str, str | None] | None = None,
     ) -> dict[str, str]:
         base_path = image_path.rsplit(".", 1)[0]
         original_full = self.storage_path / image_path
@@ -311,11 +320,13 @@ class ImageService:
         background.paste(result, mask=result.split()[3])
         final = background.convert("RGB")
 
-        paths = self._save_all_sizes(final, image_path)
+        paths = self._save_all_sizes(final, image_path, variant_paths)
         paths["original_backup_path"] = backup_path
         return paths
 
-    def restore_original(self, image_path: str, backup_path: str) -> dict[str, str]:
+    def restore_original(
+        self, image_path: str, backup_path: str, variant_paths: dict[str, str | None] | None = None
+    ) -> dict[str, str]:
         backup_full = self.storage_path / backup_path
         if not backup_full.exists():
             raise ValueError(f"Backup not found: {backup_path}")
@@ -323,11 +334,16 @@ class ImageService:
         image = Image.open(backup_full)
         if image.format != "PNG":
             image = image.convert("RGB")
-        paths = self._save_all_sizes(image, image_path)
+        paths = self._save_all_sizes(image, image_path, variant_paths)
         backup_full.unlink()
         return paths
 
-    def rotate_image(self, image_path: str, direction: str = "cw") -> dict[str, str]:
+    def rotate_image(
+        self,
+        image_path: str,
+        direction: str = "cw",
+        variant_paths: dict[str, str | None] | None = None,
+    ) -> dict[str, str]:
         """
         Rotate an image and regenerate all sizes.
 
@@ -362,7 +378,7 @@ class ImageService:
                 backup = _flatten_to_rgb(backup)
             backup = backup.rotate(angle, expand=True)
 
-        paths = self._save_all_sizes(rotated, image_path)
+        paths = self._save_all_sizes(rotated, image_path, variant_paths)
         if backup is not None:
             _replace_atomically(
                 backup_full,

@@ -8,9 +8,9 @@ from sqlalchemy import select
 from app.models.item import ClothingItem, ItemStatus
 from app.services.image_service import ImageService
 from app.services.photo_redraw_service import (
-    edit_photo,
+    PHOTO_FIELDS,
     lock_photo,
-    record_variant_paths,
+    prepare_photo_edit,
     retain_backup,
 )
 from app.workers.db import get_db_session
@@ -19,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 async def rotate_item_image_job(ctx: dict, item_id: str, direction: str) -> dict:
-    """Rotate one item and persist its regenerated variant paths."""
+    """Rotate one item's stored image and regenerate its size variants.
+
+    Rotation overwrites in place, so the item's three paths are unchanged and
+    only status bookkeeping is written back.
+    """
     db = get_db_session(ctx)
     try:
         result = await db.execute(select(ClothingItem).where(ClothingItem.id == UUID(item_id)))
@@ -33,16 +37,19 @@ async def rotate_item_image_job(ctx: dict, item_id: str, direction: str) -> dict
 
         try:
             item = await lock_photo(db, item)
-            async with edit_photo(db, item):
-                image_service = ImageService()
-                paths = await asyncio.to_thread(
-                    image_service.rotate_image, item.image_path, direction
-                )
-                record_variant_paths(item, paths)
-                retain_backup(item)
-                item.status = ItemStatus.ready
-                item.ai_started_at = None
-                item.processing_kind = None
+            prepare_photo_edit(item)
+            image_service = ImageService()
+            await asyncio.to_thread(
+                image_service.rotate_image,
+                item.image_path,
+                direction,
+                {field: getattr(item, field) for field in PHOTO_FIELDS},
+            )
+            retain_backup(item)
+            item.status = ItemStatus.ready
+            item.ai_started_at = None
+            item.processing_kind = None
+            await db.commit()
             return {"status": "success", "item_id": item_id}
         except Exception as e:
             logger.error(f"Rotation failed for item {item_id}: {e}")

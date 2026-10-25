@@ -8,9 +8,9 @@ from sqlalchemy import select
 from app.models.item import ClothingItem, ItemStatus
 from app.services.image_service import ImageService
 from app.services.photo_redraw_service import (
-    edit_photo,
+    PHOTO_FIELDS,
     lock_photo,
-    record_variant_paths,
+    prepare_photo_edit,
     retain_backup,
 )
 from app.workers.db import get_db_session
@@ -41,17 +41,20 @@ async def remove_item_background_job(ctx: dict, item_id: str, bg_color_hex: str)
 
         try:
             item = await lock_photo(db, item)
-            async with edit_photo(db, item):
-                image_service = ImageService()
-                out = await asyncio.to_thread(
-                    image_service.remove_background, item.image_path, bg_color
-                )
-                record_variant_paths(item, out)
-                item.original_image_path = out["original_backup_path"]
-                retain_backup(item)
-                item.status = ItemStatus.ready
-                item.ai_started_at = None
-                item.processing_kind = None
+            prepare_photo_edit(item)
+            image_service = ImageService()
+            out = await asyncio.to_thread(
+                image_service.remove_background,
+                item.image_path,
+                bg_color,
+                {field: getattr(item, field) for field in PHOTO_FIELDS},
+            )
+            item.original_image_path = out["original_backup_path"]
+            retain_backup(item)
+            item.status = ItemStatus.ready
+            item.ai_started_at = None
+            item.processing_kind = None
+            await db.commit()
             return {"status": "success", "item_id": item_id}
         except Exception as e:
             logger.error(f"Background removal failed for item {item_id}: {e}")

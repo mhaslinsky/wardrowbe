@@ -32,7 +32,17 @@ def replace_paths(value, replacements):
 
 def plan_variants(item, service):
     planned = {}
+    missing_history = 0
+    photo = item.photo_redraw or {}
+    required = {getattr(item, field) for field in (*PHOTO_FIELDS, "original_image_path")}
+    for name in ("original", "redrawn", "live"):
+        required.update(photo.get(name, {}).values())
     for source in retained_paths(item).values():
+        if not service.get_image_path(source).exists():
+            if source in required:
+                raise FileNotFoundError(f"Required photo missing: {source}")
+            missing_history += 1
+            continue
         path = Path(source)
         variant = next((entry for entry in VARIANTS[1:] if path.stem.endswith(entry.suffix)), None)
         if path.suffix.lower() != ".png" or variant is None or source in planned:
@@ -49,20 +59,27 @@ def plan_variants(item, service):
         ):
             raise ValueError(f"Target already contains a different preview: {target}")
         planned[source] = (target, payload)
-    return planned
+    return planned, missing_history
 
 
 async def compress_item(db, item_id, service, dry_run=True):
     item = await lock_photo(db, item_id)
     if (item.photo_redraw or {}).get("status") == "generating":
         await db.rollback()
-        return {"variants": 0, "before_bytes": 0, "after_bytes": 0, "skipped": 1}
-    planned = plan_variants(item, service)
+        return {
+            "variants": 0,
+            "before_bytes": 0,
+            "after_bytes": 0,
+            "skipped": 1,
+            "missing_history": 0,
+        }
+    planned, missing_history = plan_variants(item, service)
     summary = {
         "variants": len(planned),
         "before_bytes": sum(service.get_image_path(path).stat().st_size for path in planned),
         "after_bytes": sum(len(payload) for _, payload in planned.values()),
         "skipped": 0,
+        "missing_history": missing_history,
     }
     if dry_run or not planned:
         await db.rollback()
@@ -94,27 +111,47 @@ async def compress_item(db, item_id, service, dry_run=True):
         await db.commit()
     except BaseException:
         await db.rollback()
-        await delete_unreferenced_photos(db, service, created)
+        await delete_unreferenced_photos(db, service, created, item_id)
         await db.rollback()
         raise
-    await delete_unreferenced_photos(db, service, planned)
+    await delete_unreferenced_photos(db, service, planned, item_id)
     await db.rollback()
     return summary
 
 
+async def compress_items(db, item_ids, service, dry_run):
+    totals = {
+        "items": 0,
+        "variants": 0,
+        "before_bytes": 0,
+        "after_bytes": 0,
+        "skipped": 0,
+        "missing_history": 0,
+        "failed": 0,
+    }
+    for item_id in item_ids:
+        try:
+            result = await compress_item(db, item_id, service, dry_run)
+        except Exception as error:
+            await db.rollback()
+            totals["failed"] += 1
+            print(json.dumps({"item_id": str(item_id), "error": str(error)}))
+            continue
+        totals["items"] += bool(result["variants"])
+        for field in result:
+            totals[field] += result[field]
+    return totals
+
+
 async def main(dry_run):
-    totals = {"items": 0, "variants": 0, "before_bytes": 0, "after_bytes": 0, "skipped": 0}
     service = ImageService()
     try:
         async with async_session_maker() as db:
             item_ids = list((await db.scalars(select(ClothingItem.id))).all())
             await db.rollback()
-            for item_id in item_ids:
-                result = await compress_item(db, item_id, service, dry_run)
-                totals["items"] += bool(result["variants"])
-                for field in result:
-                    totals[field] += result[field]
+            totals = await compress_items(db, item_ids, service, dry_run)
         print(json.dumps({"dry_run": dry_run, **totals}, sort_keys=True))
+        return totals["failed"]
     finally:
         await engine.dispose()
 
@@ -122,4 +159,4 @@ async def main(dry_run):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--execute", action="store_true")
-    asyncio.run(main(dry_run=not parser.parse_args().execute))
+    sys.exit(bool(asyncio.run(main(dry_run=not parser.parse_args().execute))))
