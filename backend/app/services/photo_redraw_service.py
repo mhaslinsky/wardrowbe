@@ -12,7 +12,7 @@ import httpx
 import numpy as np
 from fastapi import HTTPException
 from PIL import Image
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -60,6 +60,29 @@ class Assessment(BaseModel):
     needs_redraw: bool
     confidence: float = Field(ge=0, le=1)
     reason: str = Field(max_length=500)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def truncate_reason(cls, value):
+        return value[:500] if isinstance(value, str) else value
+
+
+class PhotoRedrawProviderError(ValueError):
+    pass
+
+
+def response_parts(payload):
+    try:
+        parts = payload["candidates"][0]["content"]["parts"]
+        if (
+            not isinstance(parts, list)
+            or not parts
+            or not all(isinstance(part, dict) for part in parts)
+        ):
+            raise ValueError("Invalid parts")
+        return parts
+    except (KeyError, IndexError, TypeError, ValueError) as error:
+        raise PhotoRedrawProviderError("Provider returned no usable parts") from error
 
 
 def stale_claim(photo) -> bool:
@@ -288,9 +311,7 @@ class PhotoRedrawService:
         if self.mark_paid is not None:
             await self.mark_paid()
         assessment = await self.request(image, self.prompt("photo_redraw_assessment"), "TEXT")
-        text = "".join(
-            part.get("text", "") for part in assessment["candidates"][0]["content"]["parts"]
-        ).strip()
+        text = "".join(part.get("text", "") for part in response_parts(assessment)).strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0]
         gate = Assessment.model_validate(json.loads(text), strict=True)
@@ -299,8 +320,19 @@ class PhotoRedrawService:
             return None, {**metadata, "status": "skipped"}
         mask = await asyncio.to_thread(cutout, source)
         payload = await self.request(image, self.prompt("photo_redraw"), "IMAGE")
-        parts = payload["candidates"][0]["content"]["parts"]
-        inline = next(part["inlineData"] for part in parts if "inlineData" in part)
+        parts = response_parts(payload)
+        inline = next(
+            (
+                part["inlineData"]
+                for part in parts
+                if isinstance(part.get("inlineData"), dict)
+                and isinstance(part["inlineData"].get("data"), str)
+                and part["inlineData"]["data"]
+            ),
+            None,
+        )
+        if inline is None:
+            raise PhotoRedrawProviderError("Provider returned no image data")
         decoded = ImageService()._open_bounded(
             base64.b64decode(inline["data"], validate=True), ".png"
         )
