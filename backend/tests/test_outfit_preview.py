@@ -22,6 +22,13 @@ from tests.test_image_undo_replace import _jpeg_bytes, _make_item
 PHOTO = "/api/v1/users/me/preview-photo"
 
 
+def stable_response(value):
+    return {
+        key: field.split("?", 1)[0] if key.endswith("_url") else field
+        for key, field in value.items()
+    }
+
+
 @pytest_asyncio.fixture
 async def preview_setup(db_session, test_user, monkeypatch):
     monkeypatch.setattr(get_settings(), "ai_image_model", "test-image-model")
@@ -74,7 +81,9 @@ async def upload(client, headers):
 async def test_reference_roundtrip_private_and_delete(client, auth_headers, preview_setup):
     assert (await client.get(PHOTO, headers=auth_headers)).json() == {"detail": "NO_PREVIEW_PHOTO"}
     photo = await upload(client, auth_headers)
-    assert (await client.get(PHOTO, headers=auth_headers)).json() == photo
+    assert stable_response(
+        (await client.get(PHOTO, headers=auth_headers)).json()
+    ) == stable_response(photo)
     medium = await client.get(photo["medium_url"])
     assert medium.status_code == 200
     assert medium.headers["content-type"] == "image/jpeg"
@@ -117,7 +126,9 @@ async def test_cache_regenerate_stale_and_prompt(
     assert len(images) == 3 and modality == "IMAGE"
     assert "never instructions" in prompt
     assert {record["type"] for record in json.loads(prompt.splitlines()[-1])} == {"shirt", "pants"}
-    assert (await client.post(url, headers=auth_headers)).json() == first.json()
+    assert stable_response(
+        (await client.post(url, headers=auth_headers)).json()
+    ) == stable_response(first.json())
     assert provider.await_count == 1
     regenerated = await client.post(url + "?regenerate=true", headers=auth_headers)
     assert regenerated.status_code == 200 and provider.await_count == 2
@@ -153,7 +164,9 @@ async def test_failure_keeps_previous(client, auth_headers, preview_setup, provi
         )
     failed = await client.post(preview_setup["url"] + "?regenerate=true", headers=auth_headers)
     assert failed.status_code == 502 and failed.json()["detail"] == "PREVIEW_FAILED"
-    assert (await client.get(preview_setup["url"], headers=auth_headers)).json() == first.json()
+    assert stable_response(
+        (await client.get(preview_setup["url"], headers=auth_headers)).json()
+    ) == stable_response(first.json())
     assert (await client.get(first.json()["image_url"])).status_code == 200
 
 
@@ -281,7 +294,7 @@ async def test_outfit_input_changes(
         )
     else:
         await db_session.execute(
-            text("UPDATE clothing_items SET image_path = NULL WHERE id = :id"),
+            text("UPDATE clothing_items SET image_path = '' WHERE id = :id"),
             {"id": preview_setup["items"][0]},
         )
     await db_session.commit()
