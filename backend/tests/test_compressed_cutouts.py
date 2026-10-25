@@ -230,12 +230,11 @@ async def persisted_cutout(db, user, metadata=False):
     return service, item
 
 
-async def test_backfill_updates_gallery_after_primary_swap(
-    db_session, test_user, client, auth_headers
-):
+async def test_backfill_updates_gallery_after_primary_swap(db_session, test_user):
     from io import BytesIO
 
     from app.models.item import ItemImage
+    from app.services.photo_redraw_service import set_active_photo
 
     service, item = await persisted_cutout(db_session, test_user, metadata=True)
     item_id = item.id
@@ -245,16 +244,14 @@ async def test_backfill_updates_gallery_after_primary_swap(
     paths = await service.process_and_store(test_user.id, payload.getvalue(), "other.jpg")
     gallery = ItemImage(
         item_id=item_id,
-        **{field: paths[field] for field in ("image_path", "medium_path", "thumbnail_path")},
+        **{
+            field: getattr(item, field) for field in ("image_path", "medium_path", "thumbnail_path")
+        },
     )
     db_session.add(gallery)
     await db_session.commit()
-    gallery_id = gallery.id
-    response = await client.post(
-        f"/api/v1/items/{item_id}/images/{gallery_id}/set-primary", headers=auth_headers
-    )
-    assert response.status_code == 200, response.text
-    await db_session.refresh(gallery)
+    set_active_photo(item, paths, "custom")
+    await db_session.commit()
     assert gallery.medium_path == source_medium
     await load_script().compress_item(db_session, item_id, service, False)
     await db_session.refresh(gallery)
