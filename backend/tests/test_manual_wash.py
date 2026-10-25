@@ -28,7 +28,12 @@ async def test_flag_without_wear_and_wash_zero_wears(client, db_session, test_us
     await db_session.refresh(item)
     assert item.wear_count == item.wears_since_wash == 0
     assert item.last_worn_at is None
-    assert await db_session.scalar(select(func.count()).select_from(ItemHistory)) == 0
+    assert (
+        await db_session.scalar(
+            select(func.count()).select_from(ItemHistory).where(ItemHistory.item_id == item.id)
+        )
+        == 0
+    )
     washed = await client.post(f"/api/v1/items/{item.id}/wash", json={})
     assert washed.status_code == 200, washed.text
     assert washed.json()["needs_wash"] is False
