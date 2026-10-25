@@ -219,8 +219,18 @@ class PreviewService:
                 for record in records
             ]
             data = json.dumps(garments).replace("<", "\\u003c").replace(">", "\\u003e")
+            slots = (
+                json.dumps(sorted({garment["type"] for garment in garments}))
+                .replace("<", "\\u003c")
+                .replace(">", "\\u003e")
+            )
             prompt = (
-                load_prompt("outfit_preview") + "\n<garment_data>\n" + data + "\n</garment_data>"
+                load_prompt("outfit_preview")
+                + "\n<present_slots>\n"
+                + slots
+                + "\n</present_slots>\n<garment_data>\n"
+                + data
+                + "\n</garment_data>"
             )
             provider = PhotoRedrawService()
             payload = await provider.request(images, prompt, "IMAGE", mime_type="image/jpeg")
