@@ -475,7 +475,10 @@ class ItemService:
                     ),
                     needs_wash=case(
                         (ClothingItem.last_washed_at > worn_at, ClothingItem.needs_wash),
-                        else_=ClothingItem.wears_since_wash + 1 >= effective_interval,
+                        else_=or_(
+                            ClothingItem.manually_needs_wash,
+                            ClothingItem.wears_since_wash + 1 >= effective_interval,
+                        ),
                     ),
                 )
             )
@@ -506,6 +509,7 @@ class ItemService:
             washed_at=washed_at,
             method=method,
             notes=notes,
+            manually_needed_wash=item.manually_needs_wash,
         )
         self.db.add(wash)
 
@@ -513,6 +517,7 @@ class ItemService:
         item.wears_since_wash = 0
         item.last_washed_at = washed_at
         item.needs_wash = False
+        item.manually_needs_wash = False
 
         await self.db.flush()
         await self.db.refresh(wash)

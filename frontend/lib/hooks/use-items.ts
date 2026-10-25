@@ -380,6 +380,24 @@ export function useLogWear() {
   });
 }
 
+export function usePutInWash() {
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      applySessionToken(session);
+      return api.post<Item>(`/items/${id}/in-the-wash`);
+    },
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.item(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.outfits.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.calendarOutfits.all });
+    },
+  });
+}
+
 export function useLogWash() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();

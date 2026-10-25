@@ -132,6 +132,9 @@ class ClothingItem(Base):
     last_washed_at: Mapped[date | None] = mapped_column(Date)
     wash_interval: Mapped[int | None] = mapped_column(Integer)
     needs_wash: Mapped[bool] = mapped_column(Boolean, default=False)
+    manually_needs_wash: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
 
     # AI description (human-readable caption)
     ai_description: Mapped[str | None] = mapped_column(Text)
@@ -194,6 +197,10 @@ class ItemHistory(Base):
 
 class WashHistory(Base):
     __tablename__ = "wash_history"
+
+    manually_needed_wash: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     item_id: Mapped[uuid.UUID] = mapped_column(

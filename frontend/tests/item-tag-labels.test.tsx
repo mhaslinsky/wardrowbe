@@ -124,3 +124,28 @@ describe('log wear', () => {
     await waitFor(() => expect(historyFetches()).toBe(2))
   })
 })
+
+describe('manual wash', () => {
+  it('puts a clean item in the wash without logging a wear', async () => {
+    vi.mocked(api.post).mockClear().mockResolvedValueOnce({ ...item, needs_wash: true })
+    render(<ItemDetailDialog item={{ ...item, needs_wash: false }} open onOpenChange={() => {}} />, {
+      wrapper: wrapperFor('en'),
+    })
+    expect(screen.queryByRole('button', { name: 'Mark Washed' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Put in the wash' }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/items/i1/in-the-wash'))
+    expect(api.post).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks an item in the wash clean even with zero wears', async () => {
+    vi.mocked(api.post).mockClear().mockResolvedValueOnce({ ...item, needs_wash: false })
+    render(<ItemDetailDialog item={{ ...item, needs_wash: true }} open onOpenChange={() => {}} />, {
+      wrapper: wrapperFor('en'),
+    })
+    expect(screen.queryByRole('button', { name: 'Put in the wash' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Washed' }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/items/i1/wash', {
+      washed_at: undefined, method: undefined, notes: undefined,
+    }))
+  })
+})

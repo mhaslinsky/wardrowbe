@@ -102,6 +102,9 @@ class UndoWearService:
             if item.last_worn_at == undone_date:
                 item.last_worn_at = max((history.worn_at for history in remaining), default=None)
             if item.id not in confirmed:
+                item.manually_needs_wash = item.manually_needs_wash or any(
+                    wash.manually_needed_wash for wash in later_washes[item.id]
+                )
                 for wash in later_washes[item.id]:
                     await self.db.delete(wash)
                 kept = [
@@ -125,7 +128,7 @@ class UndoWearService:
                     if item.wash_interval is not None
                     else DEFAULT_WASH_INTERVALS.get(item.type, 3)
                 )
-                item.needs_wash = item.wears_since_wash >= interval
+                item.needs_wash = item.manually_needs_wash or item.wears_since_wash >= interval
         for history in target_rows:
             await self.db.delete(history)
         outfit.status = OutfitStatus.skipped

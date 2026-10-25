@@ -62,7 +62,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { useUpdateItem, useDeleteItem, useReanalyzeItem, useRotateImage, useRemoveBackground, useRestoreOriginal, useReplaceItemImage, useLogWear, useLogWash, useWashHistory, useItemWearStats, useItemWearHistory, useAddItemImage, useDeleteItemImage, useSetPrimaryImage } from '@/lib/hooks/use-items';
+import { useUpdateItem, useDeleteItem, useReanalyzeItem, useRotateImage, useRemoveBackground, useRestoreOriginal, useReplaceItemImage, useLogWear, useLogWash, usePutInWash, useWashHistory, useItemWearStats, useItemWearHistory, useAddItemImage, useDeleteItemImage, useSetPrimaryImage } from '@/lib/hooks/use-items';
 import { CLOTHING_SUBTYPES, Item } from '@/lib/types';
 import {
   useClothingTypes,
@@ -167,6 +167,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
   const { data: features } = useFeatures();
   const logWear = useLogWear();
   const logWash = useLogWash();
+  const putInWash = usePutInWash();
   const { data: washHistory } = useWashHistory(item?.id || '');
   const { data: wearStats } = useItemWearStats(item?.id || '');
   const { data: wearHistory } = useItemWearHistory(item?.id || '', 20);
@@ -213,6 +214,15 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     } catch (error) {
       console.error('Failed to log wear:', error);
       toast.error(t('actions.wearLogError'));
+    }
+  };
+
+  const handlePutInWash = async () => {
+    try {
+      await putInWash.mutateAsync(item.id);
+      toast.success(t('actions.putInWashSuccess'));
+    } catch {
+      toast.error(t('actions.putInWashError'));
     }
   };
 
@@ -849,15 +859,15 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                           variant="outline"
                           size="sm"
                           className="h-7 text-xs"
-                          onClick={handleMarkWashed}
-                          disabled={logWash.isPending}
+                          onClick={item.needs_wash ? handleMarkWashed : handlePutInWash}
+                          disabled={logWash.isPending || putInWash.isPending}
                         >
-                          {logWash.isPending ? (
+                          {logWash.isPending || putInWash.isPending ? (
                             <Loader2 className="h-3 w-3 animate-spin mr-1" />
                           ) : (
                             <Droplets className="h-3 w-3 mr-1" />
                           )}
-                          {t('actions.markWashed')}
+                          {t(item.needs_wash ? 'actions.markWashed' : 'actions.putInWash')}
                         </Button>
                       </div>
                     </div>
