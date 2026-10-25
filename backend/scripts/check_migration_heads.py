@@ -1,13 +1,10 @@
 """Check that Alembic migrations have exactly one head and no duplicate revision IDs."""
 
-import re
+import ast
 import sys
 from pathlib import Path
 
 VERSIONS_DIR = Path(__file__).resolve().parent.parent / "migrations" / "versions"
-
-REV_RE = re.compile(r'^revision:\s*str\s*=\s*"(.+?)"', re.MULTILINE)
-DOWN_RE = re.compile(r'^down_revision:\s*str\s*\|\s*None\s*=\s*"(.+?)"', re.MULTILINE)
 
 
 def main() -> int:
@@ -16,14 +13,35 @@ def main() -> int:
     errors = 0
 
     for path in sorted(VERSIONS_DIR.glob("*.py")):
-        content = path.read_text()
-        rev_match = REV_RE.search(content)
-        down_match = DOWN_RE.search(content)
-
-        if not rev_match:
+        declarations = {}
+        try:
+            for node in ast.parse(path.read_text(), filename=str(path)).body:
+                if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    for target in targets:
+                        if isinstance(target, ast.Name) and target.id in (
+                            "revision",
+                            "down_revision",
+                        ):
+                            declarations[target.id] = ast.literal_eval(node.value)
+            if "revision" not in declarations:
+                raise ValueError("No revision defined")
+            rev_id = declarations["revision"]
+            if not isinstance(rev_id, str) or not rev_id:
+                raise ValueError("Invalid revision ID")
+            parents = declarations.get("down_revision")
+            if parents is None:
+                parents = ()
+            elif isinstance(parents, str):
+                parents = (parents,)
+            if not isinstance(parents, (tuple, list)) or any(
+                not isinstance(parent, str) or not parent for parent in parents
+            ):
+                raise ValueError("Invalid down_revision")
+        except (SyntaxError, ValueError, TypeError) as error:
+            print(f"FAIL: {path.name}: {error}")
+            errors += 1
             continue
-
-        rev_id = rev_match.group(1)
 
         if rev_id in revisions:
             print(
@@ -34,8 +52,7 @@ def main() -> int:
 
         revisions[rev_id] = str(path)
 
-        if down_match:
-            down_refs.add(down_match.group(1))
+        down_refs.update(parents)
 
     heads = set(revisions.keys()) - down_refs
 
@@ -44,10 +61,10 @@ def main() -> int:
         errors += 1
     elif len(heads) > 1:
         print(f"FAIL: Multiple migration heads found: {heads}")
-        for h in heads:
-            print(f"  {h} -> {Path(revisions[h]).name}")
+        for head in sorted(heads):
+            print(f"  {head} -> {Path(revisions[head]).name}")
         errors += 1
-    else:
+    elif not errors:
         print(f"OK: Single migration head: {heads.pop()}")
 
     if errors:
