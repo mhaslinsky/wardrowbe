@@ -18,6 +18,8 @@ damage, invent branding, add accessories or redesign the footwear.
 Preserve uncertain details as faithfully as possible. Remove the person,
 background clutter and other garments. Use consistent soft studio lighting.
 
-Use a plain white background, including gaps between and within the shoes.
+Use a solid pale blue background (#B8D8F0), including gaps between and within
+the shoes. Keep this background colour uniform, even for white footwear.
+Render an opaque RGB photograph, never a transparent image or transparency preview.
 No checkerboard, floor, cast shadow, text, border or watermark.
 Keep the footwear itself opaque and its edges clean.

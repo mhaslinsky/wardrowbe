@@ -1465,3 +1465,43 @@ async def test_dark_original_empty_mask_allows_generation(generated_alpha):
                 await PhotoRedrawService().generate(source)
         assert request.await_count == 2
         assert provider.remove.call_count == 2
+
+
+def test_footwear_background_contrasts_with_white_shoes():
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    service = PhotoRedrawService()
+    service.is_footwear = True
+    prompt = service.prompt("photo_redraw")
+    assert "solid pale blue background (#B8D8F0)" in prompt
+    assert "including gaps between and within" in prompt
+    assert "never a transparent image or transparency preview" in prompt
+    assert "No checkerboard" in prompt
+    service.is_footwear = False
+    assert "Use a plain white background" in service.prompt("photo_redraw")
+
+
+@pytest.mark.parametrize("background", ["white", "checkerboard"])
+def test_white_shoe_checkerboard_guard(background):
+    from app.services.photo_redraw_service import reject_checkerboard
+
+    source = Image.new("RGB", (128, 128), "white")
+    if background == "checkerboard":
+        for row in range(8):
+            for column in range(8):
+                shade = 192 if (row + column) % 2 else 255
+                source.paste(
+                    (shade, shade, shade),
+                    (column * 16, row * 16, column * 16 + 16, row * 16 + 16),
+                )
+    source.paste((248, 248, 248), (32, 40, 96, 88))
+    retained = source.convert("RGBA")
+    retained.putpixel((0, 0), (255, 255, 255, 0))
+    if background == "checkerboard":
+        with pytest.raises(ValueError, match="checkerboard"):
+            reject_checkerboard(source, retained)
+    else:
+        reject_checkerboard(source, retained)
+    removed = Image.new("RGBA", source.size)
+    removed.paste((248, 248, 248, 255), (32, 40, 96, 88))
+    reject_checkerboard(source, removed)
