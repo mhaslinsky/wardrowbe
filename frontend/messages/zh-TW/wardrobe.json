@@ -304,6 +304,7 @@
     "bulkError": "重繪已停止，請先檢查物品再重試。"
   },
   "photoViewer": {
+    "versionAlt": "{name}（{version}）",
     "original": "原圖",
     "redrawn": "重繪圖",
     "open": "開啟照片",

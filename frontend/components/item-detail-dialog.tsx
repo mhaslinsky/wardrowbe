@@ -547,6 +547,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                           ...image,
                           url: imageIndex === 0 ? (item.image_url || '') : image.url,
                         }))}
+                        resetKey={comparisonCount}
                         index={activeImageIndex}
                         alt={item.name || typeLabel(item.type)}
                       >

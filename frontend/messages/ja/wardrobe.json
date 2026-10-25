@@ -304,6 +304,7 @@
     "bulkError": "再描画が停止しました。再試行する前にアイテムを確認してください。"
   },
   "photoViewer": {
+    "versionAlt": "{name}（{version}）",
     "original": "元の写真",
     "redrawn": "描き直した写真",
     "open": "写真を開く",

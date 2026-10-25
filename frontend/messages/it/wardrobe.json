@@ -304,6 +304,7 @@
     "bulkError": "Elaborazione interrotta; controlla gli articoli prima di riprovare."
   },
   "photoViewer": {
+    "versionAlt": "{name}: {version}",
     "original": "Originale",
     "redrawn": "Ridisegnata",
     "open": "Apri foto",

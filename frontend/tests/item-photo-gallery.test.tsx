@@ -62,7 +62,7 @@ it.each([['redrawn', 'original'], ['original', 'redrawn']] as const)(
     await waitFor(() => expect(document.querySelector('.yarl__slide_current img'))
       .toHaveAttribute('src', comparisonItem.photo_choices![alternate]));
     expect(document.querySelector('.yarl__slide_current [data-testid=photo-version-label]')).toHaveTextContent(alternate);
-    expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('alt', `Shirt: photoViewer.${alternate}`);
+    expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('alt', 'versionAlt');
     expect(request).not.toHaveBeenCalled();
     fireEvent.click(screen.getByLabelText('next', { exact: true }));
     await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', '/extra.webp'));
@@ -116,4 +116,28 @@ it('resets to primary when comparison slides appear while an extra photo is acti
   rerender(view(customItem));
   fireEvent.click(screen.getByLabelText('open', { exact: true }));
   await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', item.image_url));
+});
+
+it('resets an open viewer when stored comparison photos arrive', async () => {
+  const client = new QueryClient();
+  const view = (value: Item) => <QueryClientProvider client={client}>
+    <ItemDetailDialog item={value} open onOpenChange={vi.fn()} />
+  </QueryClientProvider>;
+  const { rerender } = render(view(item));
+  fireEvent.click(document.querySelector('button img[src="/extra.webp"]')!.closest('button')!);
+  fireEvent.click(screen.getByLabelText('open', { exact: true }));
+  await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', '/extra.webp'));
+  rerender(view(customItem));
+  await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', item.image_url));
+});
+
+it('keeps the active comparison when an extra photo is deleted', async () => {
+  render(<QueryClientProvider client={new QueryClient()}>
+    <ItemDetailDialog item={customItem} open onOpenChange={vi.fn()} />
+  </QueryClientProvider>);
+  fireEvent.click(screen.getByTitle('actions.editItem'));
+  fireEvent.click(screen.getByRole('button', { name: 'photoViewer.redrawn', exact: true }));
+  fireEvent.click(screen.getByTitle('titles.deleteImage'));
+  fireEvent.click(screen.getByLabelText('open', { exact: true }));
+  await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', '/redrawn.jpg'));
 });
