@@ -161,6 +161,8 @@
     "front": "Frontale",
     "quarter": "Tre quarti",
     "side": "Profilo",
-    "confirmAngle": "Rimuovere la foto?"
+    "confirmAngle": "Rimuovere la foto?",
+    "uploadAngle": "{angle}: Carica foto",
+    "replaceAngle": "{angle}: Sostituisci foto"
   }
 }

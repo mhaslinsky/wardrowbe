@@ -161,6 +161,8 @@
     "front": "正面",
     "quarter": "四分之三侧面",
     "side": "侧面",
-    "confirmAngle": "删除照片？"
+    "confirmAngle": "删除照片？",
+    "uploadAngle": "{angle}：上传照片",
+    "replaceAngle": "{angle}：更换照片"
   }
 }

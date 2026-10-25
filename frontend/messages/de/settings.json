@@ -161,6 +161,8 @@
     "front": "Vorderansicht",
     "quarter": "Vierteldrehung",
     "side": "Seitenansicht",
-    "confirmAngle": "Foto entfernen?"
+    "confirmAngle": "Foto entfernen?",
+    "uploadAngle": "{angle}: Foto hochladen",
+    "replaceAngle": "{angle}: Foto ersetzen"
   }
 }

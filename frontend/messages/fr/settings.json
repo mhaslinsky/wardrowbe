@@ -161,6 +161,8 @@
     "front": "De face",
     "quarter": "De trois quarts",
     "side": "De profil",
-    "confirmAngle": "Supprimer la photo ?"
+    "confirmAngle": "Supprimer la photo ?",
+    "uploadAngle": "{angle} : Importer une photo",
+    "replaceAngle": "{angle} : Remplacer la photo"
   }
 }

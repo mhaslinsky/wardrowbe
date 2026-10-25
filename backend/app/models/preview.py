@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterator, Mapping
 from datetime import datetime
 from uuid import UUID
 
@@ -50,7 +51,8 @@ def collect_deleted_preview_files(session, _context, _instances):
             paths.update({path: path for path in preview_file_paths(record.paths)})
 
 
-def preview_file_paths(paths):
+def preview_file_paths(paths: Mapping[str, str | dict[str, str]]) -> Iterator[str]:
+    """Yield files from flat preview paths or references grouped by angle."""
     for value in paths.values():
         if isinstance(value, dict):
             yield from preview_file_paths(value)

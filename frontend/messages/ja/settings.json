@@ -161,6 +161,8 @@
     "front": "正面",
     "quarter": "斜め",
     "side": "側面",
-    "confirmAngle": "写真を削除しますか？"
+    "confirmAngle": "写真を削除しますか？",
+    "uploadAngle": "{angle}：写真をアップロード",
+    "replaceAngle": "{angle}：写真を変更"
   }
 }

@@ -58,7 +58,7 @@ it('keeps the original outfit grid until a preview loads', async () => {
 it('wires preview photo controls into Settings', async () => {
   render(<SettingsPage />, { wrapper });
   expect(await screen.findByRole('img', { name: 'title' })).toHaveAttribute('src', '/medium');
-  expect(screen.getByLabelText('replace')).toBeEnabled();
+  expect(screen.getByLabelText('replaceAngle')).toBeEnabled();
   expect(fetch).toHaveBeenCalledWith('/api/v1/users/me/preview-photo', expect.objectContaining({ method: 'GET' }));
 });
 

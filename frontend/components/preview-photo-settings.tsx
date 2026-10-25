@@ -18,6 +18,7 @@ export function PreviewPhotoSettings() {
       <div className="grid gap-6 sm:grid-cols-3">
         {previewAngles.map((angle) => {
           const photo = photos?.[angle];
+          const label = t(photo ? 'replaceAngle' : 'uploadAngle', { angle: t(angle) });
           return <fieldset key={angle} className="min-w-0 space-y-3">
             <legend className="font-medium">{t(angle)}</legend>
             {photo && <a href={photo.image_url} target="_blank" rel="noopener noreferrer">
@@ -25,9 +26,9 @@ export function PreviewPhotoSettings() {
               <img src={photo.medium_url || photo.image_url} alt={t(angle === 'front' ? 'title' : angle)} className="max-h-64 rounded-lg object-contain" />
             </a>}
             <label className="block space-y-2 text-sm font-medium">
-              <span>{angle === 'front' ? (photo ? t('replace') : t('upload')) : `${t(angle)}: ${photo ? t('replace') : t('upload')}`}</span>
+              <span>{label}</span>
               <input type="file" accept={ACCEPTED_IMAGE_INPUT} disabled={loading || pending}
-                aria-label={angle === 'front' ? undefined : `${t(angle)}: ${photo ? t('replace') : t('upload')}`}
+                aria-label={label}
                 className="block w-full text-sm" onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.target.value = '';

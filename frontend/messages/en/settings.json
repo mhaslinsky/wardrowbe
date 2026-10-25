@@ -161,6 +161,8 @@
     "front": "Front",
     "quarter": "Quarter turn",
     "side": "Side",
-    "confirmAngle": "Remove photo?"
+    "confirmAngle": "Remove photo?",
+    "uploadAngle": "{angle}: Upload photo",
+    "replaceAngle": "{angle}: Replace photo"
   }
 }

@@ -161,6 +161,8 @@
     "front": "정면",
     "quarter": "45도 측면",
     "side": "측면",
-    "confirmAngle": "사진을 삭제할까요?"
+    "confirmAngle": "사진을 삭제할까요?",
+    "uploadAngle": "{angle}: 사진 업로드",
+    "replaceAngle": "{angle}: 사진 교체"
   }
 }

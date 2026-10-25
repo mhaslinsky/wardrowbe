@@ -29,14 +29,18 @@ logger = logging.getLogger(__name__)
 ANGLES = ("front", "quarter", "side")
 
 
-def reference_urls(paths):
+def reference_urls(
+    paths: dict[str, dict[str, str]],
+) -> dict[str, str | dict[str, dict[str, str]]]:
+    """Return signed URLs for every angle and the legacy front fields."""
     return {
         **urls(paths.get("front", {})),
         "photos": {angle: urls(paths[angle]) for angle in ANGLES if angle in paths},
     }
 
 
-def reference_key(key, paths):
+def reference_key(key: str, paths: dict[str, dict[str, str]]) -> str:
+    """Hash outfit inputs with all reference paths for cache invalidation."""
     return hashlib.sha256(json.dumps([key, paths], sort_keys=True).encode()).hexdigest()
 
 
