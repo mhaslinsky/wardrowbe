@@ -101,7 +101,5 @@ def test_thumbnail_write_failure_preserves_all_variants(tmp_path, monkeypatch, e
 
     monkeypatch.setattr(Image.Image, "save", fail_thumbnail)
     with pytest.raises(OSError, match="thumbnail write failed"):
-        service._save_all_sizes(
-            Image.new("RGB", (1000, 1000), "blue"), paths["image_path"], paths
-        )
+        service._save_all_sizes(Image.new("RGB", (1000, 1000), "blue"), paths["image_path"], paths)
     assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
