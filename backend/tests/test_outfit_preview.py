@@ -179,6 +179,42 @@ async def test_cache_regenerate_stale_and_prompt(
     assert (await client.get(url, headers=auth_headers)).json()["stale"] is True
 
 
+@pytest.mark.parametrize("second_type", ["pants", "shoes", "socks", "hat", "bag", "jewellery"])
+async def test_preview_present_slots_and_bare_slot_rule(
+    client, auth_headers, preview_setup, provider, db_session, second_type
+):
+    item = await db_session.get(ClothingItem, preview_setup["items"][1])
+    item.type = second_type
+    await db_session.commit()
+    await upload(client, auth_headers)
+    response = await client.post(preview_setup["url"], headers=auth_headers)
+    assert response.status_code == 200, response.text
+    prompt = provider.call_args.args[1]
+    slots = json.loads(prompt.split("<present_slots>\n", 1)[1].split("\n</present_slots>", 1)[0])
+    assert slots == sorted({"shirt", second_type})
+    assert "Any slot not listed stays bare or plain skin" in prompt
+    assert "If no shoe slot is listed, show bare feet" in prompt
+    assert "shoes, socks, outerwear, hats, bags, jewellery" in prompt
+    assert "Do not copy clothing or accessories from the reference photo" in prompt
+    assert provider.await_count == 1
+
+
+async def test_preview_slots_update_on_regenerate(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    await upload(client, auth_headers)
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).status_code == 200
+    item = await db_session.get(ClothingItem, preview_setup["items"][1])
+    item.type = "shoes"
+    await db_session.commit()
+    response = await client.post(preview_setup["url"] + "?regenerate=true", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    prompt = provider.call_args.args[1]
+    slots = json.loads(prompt.split("<present_slots>\n", 1)[1].split("\n</present_slots>", 1)[0])
+    assert slots == ["shirt", "shoes"]
+    assert provider.await_count == 2
+
+
 @pytest.mark.parametrize("failure", ["provider", "empty", "malformed", "http"])
 async def test_failure_keeps_previous(
     client, auth_headers, preview_setup, provider, failure, caplog, db_session
