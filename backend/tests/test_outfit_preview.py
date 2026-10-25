@@ -266,3 +266,44 @@ async def test_multiple_images_use_redraw_transport(monkeypatch):
             b"first",
             b"second",
         ]
+
+
+@pytest.mark.parametrize("mode", ["empty", "missing-photo", "removed-item"])
+async def test_outfit_input_changes(
+    mode, client, auth_headers, preview_setup, provider, db_session
+):
+    await upload(client, auth_headers)
+    if mode == "removed-item":
+        assert (await client.post(preview_setup["url"], headers=auth_headers)).status_code == 200
+    if mode in ("empty", "removed-item"):
+        await db_session.execute(
+            text("DELETE FROM outfit_items WHERE outfit_id = :id"), {"id": preview_setup["outfit"]}
+        )
+    else:
+        await db_session.execute(
+            text("UPDATE clothing_items SET image_path = NULL WHERE id = :id"),
+            {"id": preview_setup["items"][0]},
+        )
+    await db_session.commit()
+    if mode == "removed-item":
+        assert (await client.get(preview_setup["url"], headers=auth_headers)).json()[
+            "stale"
+        ] is True
+    response = await client.post(preview_setup["url"], headers=auth_headers)
+    assert response.status_code == 422
+    assert provider.await_count == (1 if mode == "removed-item" else 0)
+
+
+async def test_other_users_outfit_is_hidden(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    other_id = uuid4()
+    db_session.add(User(id=other_id, email=f"{other_id}@test.invalid", display_name="Other"))
+    await db_session.flush()
+    other = Outfit(user_id=other_id, occasion="casual")
+    db_session.add(other)
+    await db_session.commit()
+    url = f"/api/v1/outfits/{other.id}/preview"
+    assert (await client.get(url, headers=auth_headers)).status_code == 404
+    assert (await client.post(url, headers=auth_headers)).status_code == 404
+    assert provider.await_count == 0
