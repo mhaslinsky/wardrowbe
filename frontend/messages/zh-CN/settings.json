@@ -156,10 +156,7 @@
     "guidance": "全身、正对镜头、合身衣物、均匀光线。",
     "upload": "上传照片",
     "replace": "更换照片",
-    "remove": "删除",
     "confirm": "删除照片及已保存的预览？",
-    "cancel": "取消",
-    "loading": "加载中…",
     "failed": "照片更新失败"
   }
 }

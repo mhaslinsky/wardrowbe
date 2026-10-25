@@ -97,3 +97,5 @@ describe('outfit title', () => {
     expect(pageTitle()).toBe(expected)
   })
 })
+
+vi.mock('@/components/outfit-preview', () => ({ OutfitPreview: ({ children }: { children: React.ReactNode }) => children }))

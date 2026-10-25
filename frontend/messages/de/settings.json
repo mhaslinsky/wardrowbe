@@ -156,10 +156,7 @@
     "guidance": "Ganzkörper, zur Kamera, eng anliegende Kleidung, gleichmäßiges Licht.",
     "upload": "Foto hochladen",
     "replace": "Foto ersetzen",
-    "remove": "Entfernen",
     "confirm": "Foto und gespeicherte Vorschauen entfernen?",
-    "cancel": "Abbrechen",
-    "loading": "Laden…",
     "failed": "Fotoaktualisierung fehlgeschlagen"
   }
 }

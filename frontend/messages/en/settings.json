@@ -156,10 +156,7 @@
     "guidance": "Full-length, facing the camera, fitted clothes, even light.",
     "upload": "Upload photo",
     "replace": "Replace photo",
-    "remove": "Remove",
     "confirm": "Remove photo and saved previews?",
-    "cancel": "Cancel",
-    "loading": "Loading…",
     "failed": "Photo update failed"
   }
 }

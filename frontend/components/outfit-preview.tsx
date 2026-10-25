@@ -6,10 +6,14 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { useOutfitPreview } from '@/lib/hooks/use-outfit-preview';
 
-export function OutfitPreview({ outfitId, children }: { outfitId: string; children?: ReactNode }) {
+export function OutfitPreview(props: { outfitId: string; children?: ReactNode; detail?: boolean }) {
+  return <PreviewContent key={props.outfitId} {...props} />;
+}
+
+function PreviewContent({ outfitId, children, detail }: { outfitId: string; children?: ReactNode; detail?: boolean }) {
   const t = useTranslations('outfits.preview');
   const { preview, pending, error, missingPhoto, draw } = useOutfitPreview(outfitId);
-  return <div className={children && preview ? "grid grid-cols-2 gap-3 items-start" : "space-y-3"}>
+  return <div className={children && preview ? (detail ? "grid items-start gap-4 sm:grid-cols-2" : "grid grid-cols-2 gap-3 items-start") : "space-y-3"}>
     {children}
     <div className="space-y-2 min-w-0">
     <Button variant="outline" disabled={pending} onClick={() => draw()}>{pending ? t('drawing') : t('see')}</Button>

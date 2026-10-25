@@ -9,6 +9,7 @@ import { usePreviewPhoto } from '@/lib/hooks/use-outfit-preview';
 
 export function PreviewPhotoSettings() {
   const t = useTranslations('settings.previewPhoto');
+  const common = useTranslations('common');
   const { photo, loading, pending, error, save } = usePreviewPhoto();
   const [confirm, setConfirm] = useState(false);
   return <Card id="preview-photo">
@@ -26,15 +27,15 @@ export function PreviewPhotoSettings() {
           if (file) { setConfirm(false); void save(file); }
         }} />
       </label>
-      {photo && !confirm && <Button variant="outline" disabled={pending} onClick={() => setConfirm(true)}>{t('remove')}</Button>}
+      {photo && !confirm && <Button variant="outline" disabled={pending} onClick={() => setConfirm(true)}>{common('remove')}</Button>}
       {confirm && <div className="space-y-2">
         <p>{t('confirm')}</p>
         <div className="flex gap-2">
-          <Button variant="destructive" disabled={pending} onClick={async () => { await save(); setConfirm(false); }}>{t('remove')}</Button>
-          <Button variant="outline" disabled={pending} onClick={() => setConfirm(false)}>{t('cancel')}</Button>
+          <Button variant="destructive" disabled={pending} onClick={async () => { if (await save()) setConfirm(false); }}>{common('remove')}</Button>
+          <Button variant="outline" disabled={pending} onClick={() => setConfirm(false)}>{common('cancel')}</Button>
         </div>
       </div>}
-      {(loading || pending) && <p role="status">{t('loading')}</p>}
+      {(loading || pending) && <p role="status">{common('loading')}</p>}
       {error && <p role="alert" className="text-destructive">{t('failed')}</p>}
     </CardContent>
   </Card>;

@@ -68,3 +68,5 @@ describe('outfit wash card', () => {
     expect(screen.queryByText('1 piece in the wash')).not.toBeInTheDocument()
   })
 })
+
+vi.mock('@/components/outfit-preview', () => ({ OutfitPreview: ({ children }: { children: React.ReactNode }) => children }))

@@ -156,10 +156,7 @@
     "guidance": "En pied, face caméra, vêtements ajustés, lumière uniforme.",
     "upload": "Importer une photo",
     "replace": "Remplacer la photo",
-    "remove": "Supprimer",
     "confirm": "Supprimer la photo et les aperçus enregistrés ?",
-    "cancel": "Annuler",
-    "loading": "Chargement…",
     "failed": "Échec de la mise à jour"
   }
 }

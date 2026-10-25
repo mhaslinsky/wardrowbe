@@ -101,3 +101,5 @@ describe('outfit detail source label', () => {
     outfit.replaces_outfit_id = null
   })
 })
+
+vi.mock('@/components/outfit-preview', () => ({ OutfitPreview: ({ children }: { children: React.ReactNode }) => children }))
