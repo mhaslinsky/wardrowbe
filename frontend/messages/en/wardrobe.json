@@ -299,5 +299,15 @@
     "bulkResult": "Redrawn: {generated}. Failed: {failed}.",
     "bulkFailed": "Open failed items to check their photos.",
     "bulkError": "Redraw stopped; check items before retrying."
+  },
+  "photoViewer": {
+    "open": "Open photo",
+    "lightbox": "Photo viewer",
+    "gallery": "Photo gallery",
+    "carousel": "Carousel",
+    "slide": "Slide",
+    "slideCount": "{index} of {total}",
+    "actualSize": "Actual size",
+    "fit": "Fit to screen"
   }
 }

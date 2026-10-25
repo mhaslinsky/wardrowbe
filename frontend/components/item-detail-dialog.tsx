@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+import { ItemPhotoViewer } from '@/components/item-photo-viewer';
 import { garmentImageUrl } from '@/lib/garment-image';
 import { useRouter } from 'next/navigation';
 import {
@@ -518,14 +519,24 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                   const currentImage = allImages[activeImageIndex] || allImages[0];
                   return (
                     <>
-                      <Image
-                        key={`${currentImage.id}-${imageKey}`}
-                        src={currentImage.url}
+                      <ItemPhotoViewer
+                        key={item.id}
+                        images={allImages.map((image, imageIndex) => ({
+                          ...image,
+                          url: imageIndex === 0 ? (item.image_url || '') : image.url,
+                        }))}
+                        index={activeImageIndex}
                         alt={item.name || typeLabel(item.type)}
-                        fill
-                        className="object-contain"
-                        sizes="(max-width: 640px) 100vw, 50vw"
-                      />
+                      >
+                        <Image
+                          key={`${currentImage.id}-${imageKey}`}
+                          src={currentImage.url}
+                          alt={item.name || typeLabel(item.type)}
+                          fill
+                          className="object-contain"
+                          sizes="(max-width: 640px) 100vw, 50vw"
+                        />
+                      </ItemPhotoViewer>
                       {allImages.length > 1 && (
                         <>
                           <button

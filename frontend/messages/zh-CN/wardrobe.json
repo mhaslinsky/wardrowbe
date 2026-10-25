@@ -299,5 +299,15 @@
     "bulkResult": "已重绘：{generated}。失败：{failed}。",
     "bulkFailed": "打开失败的物品以检查照片。",
     "bulkError": "重绘已停止，请先检查物品再重试。"
+  },
+  "photoViewer": {
+    "open": "打开照片",
+    "lightbox": "照片查看器",
+    "gallery": "照片库",
+    "carousel": "轮播",
+    "slide": "幻灯片",
+    "slideCount": "第{index}张，共{total}张",
+    "actualSize": "实际大小",
+    "fit": "适应屏幕"
   }
 }

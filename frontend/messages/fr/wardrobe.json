@@ -299,5 +299,15 @@
     "bulkResult": "Redessinées : {generated}. Échecs : {failed}.",
     "bulkFailed": "Ouvrez les articles en échec pour vérifier leurs photos.",
     "bulkError": "Création arrêtée ; vérifiez les articles avant de réessayer."
+  },
+  "photoViewer": {
+    "open": "Ouvrir la photo",
+    "lightbox": "Visionneuse photo",
+    "gallery": "Galerie photo",
+    "carousel": "Carrousel",
+    "slide": "Diapositive",
+    "slideCount": "{index} sur {total}",
+    "actualSize": "Taille réelle",
+    "fit": "Adapter à l’écran"
   }
 }

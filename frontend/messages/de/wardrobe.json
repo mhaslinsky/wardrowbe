@@ -299,5 +299,15 @@
     "bulkResult": "Neu gezeichnet: {generated}. Fehlgeschlagen: {failed}.",
     "bulkFailed": "Öffne fehlgeschlagene Artikel und prüfe ihre Fotos.",
     "bulkError": "Neuzeichnung gestoppt; prüfe die Artikel vor einem erneuten Versuch."
+  },
+  "photoViewer": {
+    "open": "Foto öffnen",
+    "lightbox": "Fotoansicht",
+    "gallery": "Fotogalerie",
+    "carousel": "Karussell",
+    "slide": "Folie",
+    "slideCount": "{index} von {total}",
+    "actualSize": "Originalgröße",
+    "fit": "An Bildschirm anpassen"
   }
 }

@@ -1,0 +1,48 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ItemDetailDialog } from '@/components/item-detail-dialog';
+import type { Item } from '@/lib/types';
+
+vi.mock('next/image', () => ({ default: ({ fill, ...props }: any) => <img {...props} /> }));
+vi.mock('@/components/generate-pairings-dialog', () => ({ GeneratePairingsDialog: () => null }));
+vi.mock('@/lib/hooks/use-features', () => ({ useFeatures: () => ({ data: {} }) }));
+vi.mock('@/lib/hooks/use-items', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/hooks/use-items')>();
+  return Object.fromEntries(Object.keys(original).map((key) => [key,
+    () => ({ data: undefined, isPending: false, mutateAsync: vi.fn() }),
+  ]));
+});
+afterEach(cleanup);
+const item = {
+  id: 'shirt', name: 'Shirt', type: 'shirt', status: 'ready', tags: {},
+  image_url: '/full.jpg?signature=unchanged', medium_url: '/medium.webp', thumbnail_url: '/thumb.webp',
+  additional_images: [{ id: 'extra', image_url: '/extra.webp' }],
+} as Item;
+
+it.each(['close', 'escape', 'backdrop'])('opens the gallery, cycles full sources, and closes via %s', async (method) => {
+  const onOpenChange = vi.fn();
+  render(<QueryClientProvider client={new QueryClient()}>
+    <ItemDetailDialog item={item} open onOpenChange={onOpenChange} />
+  </QueryClientProvider>);
+  const trigger = screen.getByLabelText('open', { exact: true });
+  fireEvent.click(trigger);
+  const current = () => document.querySelector('.yarl__slide_current img');
+  await waitFor(() => expect(current()).toHaveAttribute('src', item.image_url));
+  expect(current()).not.toHaveAttribute('srcset');
+  fireEvent.click(screen.getByLabelText('next', { exact: true }));
+  await waitFor(() => expect(current()).toHaveAttribute('src', '/extra.webp'));
+  const container = document.querySelector('.yarl__container')!;
+  fireEvent.keyDown(container, { key: 'ArrowRight' });
+  await waitFor(() => expect(current()).toHaveAttribute('src', item.image_url));
+  if (method === 'close') fireEvent.click(screen.getByLabelText('close', { exact: true }));
+  if (method === 'escape') fireEvent.keyDown(container, { key: 'Escape' });
+  if (method === 'backdrop') {
+    const backdrop = document.querySelector('.yarl__slide_current')!;
+    fireEvent.pointerDown(backdrop, { pointerId: 1 });
+    fireEvent.pointerUp(backdrop, { pointerId: 1 });
+  }
+  await waitFor(() => expect(document.querySelector('.yarl__root')).toBeNull());
+  expect(onOpenChange).not.toHaveBeenCalled();
+  expect(trigger).toHaveFocus();
+});

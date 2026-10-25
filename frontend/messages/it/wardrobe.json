@@ -299,5 +299,15 @@
     "bulkResult": "Ridisegnate: {generated}. Non riuscite: {failed}.",
     "bulkFailed": "Apri gli articoli non riusciti per controllare le foto.",
     "bulkError": "Elaborazione interrotta; controlla gli articoli prima di riprovare."
+  },
+  "photoViewer": {
+    "open": "Apri foto",
+    "lightbox": "Visualizzatore foto",
+    "gallery": "Galleria foto",
+    "carousel": "Carosello",
+    "slide": "Diapositiva",
+    "slideCount": "{index} di {total}",
+    "actualSize": "Dimensioni reali",
+    "fit": "Adatta allo schermo"
   }
 }
