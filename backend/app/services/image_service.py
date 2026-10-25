@@ -255,12 +255,18 @@ class ImageService:
         paths = {}
         for variant in VARIANTS:
             # The original is written back to image_path itself so that the stored path stays valid.
-            extension = ".png" if image_path.endswith(".png") else ".jpg"
+            extension = (
+                (".png" if variant is ORIGINAL else ".webp")
+                if image_path.endswith(".png")
+                else ".jpg"
+            )
             path = image_path if variant is ORIGINAL else f"{base_path}{variant.suffix}{extension}"
             if extension == ".png":
                 resized = image.copy()
                 resized.thumbnail(variant.box, Image.Resampling.LANCZOS)
                 resized.save(self.storage_path / path, "PNG")
+            elif extension == ".webp":
+                (self.storage_path / path).write_bytes(self.encode_cutout_variant(image, variant))
             else:
                 (self.storage_path / path).write_bytes(self.encode_variant(image, variant))
             paths[variant.path_field] = path
@@ -375,7 +381,7 @@ class ImageService:
             base = str(source_path.parent / Path(filename).stem)
             for variant in VARIANTS:
                 if source := paths.get(variant.path_field):
-                    target = f"{base}{variant.suffix}{source_path.suffix}"
+                    target = f"{base}{variant.suffix}{Path(source).suffix}"
                     shutil.copy2(self.get_image_path(source), self.get_image_path(target))
                     copied[variant.path_field] = target
             return copied
@@ -383,14 +389,24 @@ class ImageService:
             self.delete_images(copied)
             raise
 
+    def encode_cutout_variant(self, image: Image.Image, variant: ImageVariant) -> bytes:
+        resized = image.convert("RGBA")
+        resized.thumbnail(variant.box, Image.Resampling.LANCZOS)
+        output = BytesIO()
+        resized.save(output, "WEBP", quality=80, method=6)
+        return output.getvalue()
+
     def store_cutout(self, image: Image.Image, user_id: uuid.UUID) -> dict[str, str]:
-        """Store transparent PNG variants, removing partial writes on failure."""
+        """Store a PNG original and WebP previews, removing partial writes on failure."""
         relative = str(Path(str(user_id)) / self._generate_filename(".png"))
         try:
             return self._save_all_sizes(image, relative)
         except BaseException:
             base = relative.rsplit(".", 1)[0]
             self.delete_images(
-                {variant.path_field: f"{base}{variant.suffix}.png" for variant in VARIANTS}
+                {
+                    variant.path_field: f"{base}{variant.suffix}{'.png' if variant is ORIGINAL else '.webp'}"
+                    for variant in VARIANTS
+                }
             )
             raise
