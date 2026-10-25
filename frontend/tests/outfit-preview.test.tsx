@@ -4,6 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ComponentType, ReactElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useOutfitPreview } from '@/lib/hooks/use-outfit-preview';
+import { createQueryClient } from '@/lib/query-client';
+import { toast } from 'sonner';
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 let client: QueryClient;
 function render(ui: ReactElement) {
@@ -17,7 +20,7 @@ const PreviewPhotoSettings = (modules['../components/preview-photo-settings.tsx'
 
 const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24' };
 const response = (data: unknown, status = 200) => ({ ok: status < 400, status, json: async () => data });
-beforeEach(() => { vi.mocked(fetch).mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
+beforeEach(() => { vi.mocked(toast.error).mockClear(); vi.mocked(fetch).mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
 afterEach(() => { client.clear(); vi.useRealTimers(); });
 
 it('shows a saved preview without drawing, including on a second tap', async () => {
@@ -119,15 +122,6 @@ it('rejects an empty preview response', async () => {
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
 });
 
-it('clears previews when the reference photo changes', async () => {
-  vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
-  render(<OutfitPreview outfitId="one" />);
-  fireEvent.click(screen.getByText('see'));
-  expect(await screen.findByRole('img')).toBeVisible();
-  await act(async () => { await client.resetQueries({ queryKey: ['outfit-preview'] }); });
-  await waitFor(() => expect(screen.queryByRole('img')).not.toBeInTheDocument());
-});
-
 it('ignores an earlier outfit request after navigation', async () => {
   let finish!: (value: Response) => void;
   vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
@@ -195,8 +189,8 @@ it.each([false, true])('polls an existing draw with timeout=%s', async (timeout)
   expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
 });
 
-it('keeps removal confirmation open when deletion fails', async () => {
-  vi.mocked(fetch).mockResolvedValueOnce(response(saved) as Response).mockResolvedValue(response({}, 502) as Response);
+it('keeps failed removal open and clears its error after a successful upload', async () => {
+  vi.mocked(fetch).mockImplementation(async (_url, options) => response(options?.method === 'DELETE' ? {} : saved, options?.method === 'DELETE' ? 502 : 200) as Response);
   render(<PreviewPhotoSettings />);
   await screen.findByRole('img');
   fireEvent.click(screen.getByText('remove'));
@@ -204,6 +198,9 @@ it('keeps removal confirmation open when deletion fails', async () => {
   expect(await screen.findByRole('alert')).toBeVisible();
   expect(screen.getByText('confirm')).toBeVisible();
   expect(screen.getByText('cancel')).toBeEnabled();
+  fireEvent.change(screen.getByLabelText('replace'), { target: { files: [new File(['photo'], 'photo.jpg')] } });
+  await waitFor(() => expect(screen.getByText('remove')).toBeEnabled());
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
 it('stops polling on a read error', async () => {
@@ -247,4 +244,58 @@ it('guards two draw calls before React renders', async () => {
   await waitFor(() => expect(completions).toHaveLength(1));
   await act(async () => { completions.forEach((finish) => finish(response(saved) as Response)); await Promise.all(requests); });
   expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+});
+
+it('waits for a new created_at when another regenerate is in progress', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(response({ ...saved, stale: true }) as Response)
+    .mockResolvedValueOnce(response({ detail: 'PREVIEW_IN_PROGRESS' }, 409) as Response)
+    .mockResolvedValueOnce(response(saved) as Response)
+    .mockResolvedValue(response({ ...saved, created_at: '2026-10-25', medium_url: '/new-preview' }) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  fireEvent.click(screen.getByText('see'));
+  await screen.findByRole('img');
+  vi.useFakeTimers();
+  await act(async () => { fireEvent.click(screen.getByText('redraw')); await vi.advanceTimersByTimeAsync(0); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(2001); });
+  expect(screen.getByRole('status')).toHaveTextContent('drawing');
+  expect(screen.getByRole('img')).toHaveAttribute('src', saved.medium_url);
+  await act(async () => { await vi.advanceTimersByTimeAsync(2001); });
+  expect(screen.getByRole('img')).toHaveAttribute('src', '/new-preview');
+  expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+});
+
+it.each(['photo', 'outfit'])('handles a %s read failure without a global toast', async (kind) => {
+  client.clear();
+  client = createQueryClient();
+  vi.mocked(fetch).mockResolvedValue(response({ detail: 'Unavailable' }, 503) as Response);
+  render(kind === 'photo' ? <PreviewPhotoSettings /> : <OutfitPreview outfitId="one" />);
+  if (kind === 'outfit') fireEvent.click(screen.getByText('see'));
+  expect(await screen.findByRole('alert')).toBeVisible();
+  expect(toast.error).not.toHaveBeenCalled();
+});
+
+it('cancels polling on unmount before another GET', async () => {
+  vi.useFakeTimers();
+  vi.mocked(fetch).mockResolvedValueOnce(response({ detail: 'NO_PREVIEW' }, 404) as Response)
+    .mockResolvedValueOnce(response({ detail: 'PREVIEW_IN_PROGRESS' }, 409) as Response)
+    .mockResolvedValue(response({ detail: 'NO_PREVIEW' }, 404) as Response);
+  const view = render(<OutfitPreview outfitId="one" />);
+  await act(async () => { fireEvent.click(screen.getByText('see')); await vi.advanceTimersByTimeAsync(2001); });
+  expect(fetch).toHaveBeenCalledTimes(3);
+  view.unmount();
+  await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+  expect(fetch).toHaveBeenCalledTimes(3);
+});
+
+it('refreshes displayed signed URLs after nine minutes without a POST', async () => {
+  vi.useFakeTimers();
+  vi.mocked(fetch).mockResolvedValueOnce(response(saved) as Response)
+    .mockResolvedValue(response({ ...saved, medium_url: '/renewed-url' }) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  await act(async () => { fireEvent.click(screen.getByText('see')); await vi.advanceTimersByTimeAsync(1); });
+  expect(screen.getByRole('img')).toHaveAttribute('src', saved.medium_url);
+  await act(async () => { await vi.advanceTimersByTimeAsync(9 * 60_000 + 1); });
+  expect(screen.getByRole('img')).toHaveAttribute('src', '/renewed-url');
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(fetch).mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
 });

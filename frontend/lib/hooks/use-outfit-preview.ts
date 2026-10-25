@@ -29,7 +29,7 @@ export function usePreviewPhoto() {
   useSetTokenIfAvailable();
   const client = useQueryClient();
   const query = useQuery({
-    queryKey: queryKeys.previewPhoto, retry: false, gcTime: 0,
+    queryKey: queryKeys.previewPhoto, retry: false, gcTime: 0, meta: { toastsOwnErrors: true },
     enabled: status !== 'loading',
     queryFn: async () => {
       try { return checkedPhoto(await api.get<PreviewPhoto>('/users/me/preview-photo')); }
@@ -71,6 +71,7 @@ export function usePreviewPhoto() {
   return { photo: query.data, loading: query.isPending, pending: upload.isPending || remove.isPending,
     error: query.isError || upload.isError || remove.isError,
     save: async (file?: File) => {
+      upload.reset(); remove.reset();
       try { if (file) await upload.mutateAsync(file); else await remove.mutateAsync(); return true; }
       catch { return false; }
     } };
@@ -98,12 +99,19 @@ export function useOutfitPreview(outfitId: string) {
       throw error;
     }
   };
-  const query = useQuery({ queryKey: key, queryFn: ({ signal }) => read(signal), enabled: false, retry: false, gcTime: 0 });
+  const query = useQuery({
+    queryKey: key, queryFn: ({ signal }) => read(signal),
+    enabled: (current) => Boolean(current.state.data),
+    staleTime: 9 * 60_000, refetchInterval: 9 * 60_000,
+    refetchIntervalInBackground: true, retry: false, gcTime: 0,
+    meta: { toastsOwnErrors: true },
+  });
   const mutation = useMutation({
     meta: { toastsOwnErrors: true },
     mutationFn: async ({ regenerate, signal }: { regenerate: boolean; signal: AbortSignal }) => {
+      const previousCreatedAt = client.getQueryData<OutfitPreview>(key)?.created_at;
       if (!regenerate) {
-        const saved = await client.fetchQuery({ queryKey: key, queryFn: ({ signal: querySignal }) => read(querySignal), staleTime: 0, retry: false });
+        const saved = await client.fetchQuery({ queryKey: key, queryFn: ({ signal: querySignal }) => read(querySignal), staleTime: 0, retry: false, meta: { toastsOwnErrors: true } });
         if (saved) return saved;
       }
       if (signal.aborted) throw new Error('Preview cancelled');
@@ -115,7 +123,7 @@ export function useOutfitPreview(outfitId: string) {
       while (Date.now() < deadline) {
         await pausePoll(signal);
         const saved = await read(signal);
-        if (saved) return saved;
+        if (saved && (!regenerate || (typeof saved.created_at === 'string' && saved.created_at !== previousCreatedAt))) return saved;
       }
       throw new Error('Preview timed out');
     },
