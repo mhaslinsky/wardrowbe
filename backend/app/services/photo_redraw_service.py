@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
-from app.models.item import ClothingItem, ItemImage, ItemStatus
+from app.models.item import ClothingItem, ItemStatus
 from app.services.background_removal import get_provider
 from app.services.image_service import ImageService
 from app.services.mask_cleanup import clean_cutout
@@ -166,27 +166,6 @@ def prepare_photo_edit(item) -> dict[str, str]:
     set_active_photo(item, paths, "custom")
     item.photo_redraw = {**item.photo_redraw, "live": paths}
     return paths if created else {}
-
-
-async def delete_unreferenced_photos(db, service, paths, item_id):
-    for path in dict.fromkeys(paths):
-        await lock_photo(db, item_id, missing_ok=True)
-        owned = set()
-        rows = await db.execute(
-            select(
-                *(getattr(ClothingItem, field) for field in PHOTO_FIELDS),
-                ClothingItem.original_image_path,
-                ClothingItem.photo_redraw,
-            )
-        )
-        for row in rows.all():
-            owned.update(retained_paths(row).values())
-        images = await db.execute(select(*(getattr(ItemImage, field) for field in PHOTO_FIELDS)))
-        for row in images.all():
-            owned.update(row)
-        if path not in owned:
-            service.get_image_path(path).unlink(missing_ok=True)
-        await db.rollback()
 
 
 @asynccontextmanager

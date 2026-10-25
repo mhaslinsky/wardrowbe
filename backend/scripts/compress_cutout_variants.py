@@ -16,7 +16,7 @@ from app.models.item import ClothingItem, ItemImage
 from app.services.image_service import VARIANTS, ImageService
 from app.services.photo_redraw_service import (
     PHOTO_FIELDS,
-    delete_unreferenced_photos,
+    live_paths,
     lock_photo,
     retained_paths,
 )
@@ -35,8 +35,9 @@ def plan_variants(item, service):
     missing_history = 0
     photo = item.photo_redraw or {}
     required = {getattr(item, field) for field in (*PHOTO_FIELDS, "original_image_path")}
-    for name in ("original", "redrawn", "live"):
+    for name in ("original", "redrawn"):
         required.update(photo.get(name, {}).values())
+    required.update(live_paths(item).values())
     for source in retained_paths(item).values():
         if not service.get_image_path(source).exists():
             if source in required:
@@ -84,7 +85,6 @@ async def compress_item(db, item_id, service, dry_run=True):
     if dry_run or not planned:
         await db.rollback()
         return summary
-    created = {}
     try:
         images = list(
             (
@@ -97,7 +97,6 @@ async def compress_item(db, item_id, service, dry_run=True):
         )
         for target, payload in planned.values():
             if not service.get_image_path(target).exists():
-                created[target] = target
                 service.get_image_path(target).write_bytes(payload)
         replacements = {source: target for source, (target, _) in planned.items()}
         for field in (*PHOTO_FIELDS, "original_image_path"):
@@ -111,11 +110,7 @@ async def compress_item(db, item_id, service, dry_run=True):
         await db.commit()
     except BaseException:
         await db.rollback()
-        await delete_unreferenced_photos(db, service, created, item_id)
-        await db.rollback()
         raise
-    await delete_unreferenced_photos(db, service, planned, item_id)
-    await db.rollback()
     return summary
 
 
@@ -140,6 +135,13 @@ async def compress_items(db, item_ids, service, dry_run):
         totals["items"] += bool(result["variants"])
         for field in result:
             totals[field] += result[field]
+    png_previews = [
+        path
+        for path in service.storage_path.rglob("*.png")
+        if path.is_file() and path.name.endswith(("_medium.png", "_thumb.png"))
+    ]
+    totals["retained_png_files"] = len(png_previews)
+    totals["retained_png_bytes"] = sum(path.stat().st_size for path in png_previews)
     return totals
 
 
