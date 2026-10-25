@@ -1,6 +1,10 @@
+import re
+from pathlib import Path
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.database import DbSession
@@ -142,3 +146,72 @@ async def complete_onboarding(
     await db.commit()
 
     return OnboardingCompleteResponse(onboarding_completed=True)
+
+
+@router.get("/preview-photo")
+async def get_preview_photo(
+    db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
+):
+    from app.services.preview_service import PreviewService, urls
+
+    return urls((await PreviewService(db).reference(current_user.id)).paths)
+
+
+@router.put("/preview-photo")
+async def put_preview_photo(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    image: UploadFile,
+):
+    from app.services.image_service import ALLOWED_EXTENSIONS, ImageService
+    from app.services.preview_service import PreviewService
+
+    data = await image.read(20 * 1024 * 1024 + 1)
+    if Path(
+        image.filename or ""
+    ).suffix.lower() not in ALLOWED_EXTENSIONS or not ImageService().validate_image(
+        data, image.content_type
+    ):
+        raise HTTPException(400, "Invalid image")
+    try:
+        return await PreviewService(db).replace_reference(current_user.id, data, image.filename)
+    except (ValueError, OSError) as error:
+        await db.rollback()
+        raise HTTPException(400, "Invalid image") from error
+
+
+@router.delete("/preview-photo", status_code=204)
+async def delete_preview_photo(
+    db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
+):
+    from app.services.preview_service import PreviewService
+
+    await PreviewService(db).clear(current_user.id)
+    await db.commit()
+
+
+@router.get("/preview-photo/files/{user_id}/previews/{filename}")
+async def get_preview_file(user_id: UUID, filename: str, expires: str, sig: str, db: DbSession):
+    from sqlalchemy import select
+
+    from app.models.preview import OutfitPreview, PreviewPhoto
+    from app.services.image_service import ImageService
+    from app.utils.signed_urls import verify_signature
+
+    path = f"{user_id}/previews/{filename}"
+    if not re.fullmatch(r"[a-f0-9]{32}(?:_medium)?\.jpg", filename) or not verify_signature(
+        path, expires, sig
+    ):
+        raise HTTPException(401, "Access denied")
+    records = [
+        await db.get(PreviewPhoto, user_id),
+        *(await db.scalars(select(OutfitPreview).where(OutfitPreview.user_id == user_id))).all(),
+    ]
+    if not any(record is not None and path in record.paths.values() for record in records):
+        raise HTTPException(404, "Image not found")
+    target = ImageService().get_image_path(path)
+    if not target.is_file():
+        raise HTTPException(404, "Image not found")
+    return FileResponse(
+        target, media_type="image/jpeg", headers={"Cache-Control": "private, no-store"}
+    )

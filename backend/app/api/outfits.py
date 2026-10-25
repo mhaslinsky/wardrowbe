@@ -768,9 +768,10 @@ async def bulk_delete_outfits(
     for outfit_id in outfit_ids:
         try:
             result = await db.execute(
-                select(Outfit).where(
-                    and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id)
-                )
+                select(Outfit)
+                .where(and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
             outfit = result.scalar_one_or_none()
             if not outfit:
@@ -922,7 +923,12 @@ async def delete_outfit(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> None:
-    query = select(Outfit).where(and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id))
+    query = (
+        select(Outfit)
+        .where(and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id))
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
 
     result = await db.execute(query)
     outfit = result.scalar_one_or_none()
@@ -1546,3 +1552,24 @@ async def delete_family_rating(
 
     await db.delete(rating)
     await db.flush()
+
+
+@router.get("/{outfit_id}/preview")
+async def get_outfit_preview(
+    outfit_id: UUID, db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
+):
+    from app.services.preview_service import PreviewService
+
+    return await PreviewService(db).saved(outfit_id, current_user.id)
+
+
+@router.post("/{outfit_id}/preview")
+async def create_outfit_preview(
+    outfit_id: UUID,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    regenerate: bool = False,
+):
+    from app.services.preview_service import PreviewService
+
+    return await PreviewService(db).generate(outfit_id, current_user.id, regenerate)

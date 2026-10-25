@@ -237,6 +237,7 @@ class TripService:
                     select(Outfit)
                     .where(Outfit.id.in_(outfit_ids), Outfit.user_id == user_id)
                     .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
             )
             for outfit in outfits:
