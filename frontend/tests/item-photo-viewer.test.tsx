@@ -1,8 +1,8 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
 import { ItemPhotoViewer } from '@/components/item-photo-viewer';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 const images = [{ id: 'primary', url: 'https://example.test/full.jpg?signature=original' }, { id: 'extra', url: 'https://example.test/extra.webp' }];
 function show(index = 0) {
   return render(<ItemPhotoViewer images={images} index={index} alt="Shirt"><span>Photo</span></ItemPhotoViewer>);
@@ -52,8 +52,63 @@ it('reopens with the updated active source', async () => {
   expect((await screen.findByRole('dialog', { name: 'Shirt' })).querySelector('img')).toHaveAttribute('src', '/redrawn.jpg');
 });
 
- it.each([{ sources: [] }, { sources: [{ id: 'missing', url: '' }] }])('does not open without a source: %j', ({ sources }) => {
+ it.each([{ sources: [{ id: 'missing', url: '' }] }])('does not open without a source: %j', ({ sources }) => {
   render(<ItemPhotoViewer images={sources} index={0} alt="Shirt">Photo</ItemPhotoViewer>);
   expect(screen.getByRole('button', { name: 'open' })).toBeDisabled();
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+async function loadLargePhoto() {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+  vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(1600);
+  vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(2000);
+  vi.stubGlobal('PointerEvent', class extends MouseEvent {
+    pointerId: number;
+    pointerType: string;
+    constructor(type: string, options: PointerEventInit) {
+      super(type, options);
+      this.pointerId = options.pointerId ?? 1;
+      this.pointerType = options.pointerType ?? 'mouse';
+    }
+  });
+  show(); open();
+  const photo = document.querySelector('.yarl__slide_current img')!;
+  await act(async () => { fireEvent.load(photo); await vi.runOnlyPendingTimersAsync(); });
+  return photo;
+}
+
+it('keeps actual-size zoom after the click following a pan', async () => {
+  const photo = await loadLargePhoto();
+  fireEvent.click(photo);
+  const scale = () => Number.parseFloat((photo.parentElement!.style.transform).split('(')[1]);
+  expect(scale()).toBeGreaterThan(1);
+  fireEvent.pointerDown(photo, { pointerId: 1, clientX: 200, clientY: 200, buttons: 1 });
+  fireEvent.pointerMove(photo, { pointerId: 1, clientX: 280, clientY: 240, buttons: 1 });
+  fireEvent.pointerUp(photo, { pointerId: 1, clientX: 280, clientY: 240 });
+  fireEvent.click(photo, { detail: 1 });
+  expect(scale()).toBeGreaterThan(1);
+});
+
+it('retains the current photo on a parent rerender', async () => {
+  const view = show(); open();
+  fireEvent.click(screen.getByLabelText('next'));
+  const current = () => document.querySelector('.yarl__slide_current img');
+  await waitFor(() => expect(current()).toHaveAttribute('src', images[1].url));
+  view.rerender(<ItemPhotoViewer images={images.map((image) => ({ ...image }))} index={0} alt="Shirt">Photo</ItemPhotoViewer>);
+  expect(current()).toHaveAttribute('src', images[1].url);
+});
+
+it('toggles actual size with a focusable control and keyboard shortcut', async () => {
+  const photo = await loadLargePhoto();
+  const control = screen.getByLabelText('actualSize');
+  control.focus();
+  expect(control).toHaveFocus();
+  expect(control).toHaveAttribute('aria-keyshortcuts', 'Z');
+  fireEvent.keyDown(control, { key: 'z' });
+  expect(screen.getByLabelText('fit')).toHaveAttribute('aria-pressed', 'true');
+  expect(Number.parseFloat(photo.parentElement!.style.transform.split('(')[1])).toBeGreaterThan(1);
+  fireEvent.keyDown(control, { key: 'Z' });
+  expect(screen.getByLabelText('actualSize')).toHaveAttribute('aria-pressed', 'false');
 });

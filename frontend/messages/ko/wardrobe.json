@@ -302,8 +302,12 @@
   },
   "photoViewer": {
     "open": "사진 열기",
-    "close": "닫기",
-    "previous": "이전",
-    "next": "다음"
+    "lightbox": "사진 뷰어",
+    "gallery": "사진 갤러리",
+    "carousel": "캐러셀",
+    "slide": "슬라이드",
+    "slideCount": "{total}개 중 {index}번째",
+    "actualSize": "실제 크기",
+    "fit": "화면에 맞추기"
   }
 }

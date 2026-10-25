@@ -302,8 +302,12 @@
   },
   "photoViewer": {
     "open": "Ouvrir la photo",
-    "close": "Fermer",
-    "previous": "Précédente",
-    "next": "Suivante"
+    "lightbox": "Visionneuse photo",
+    "gallery": "Galerie photo",
+    "carousel": "Carrousel",
+    "slide": "Diapositive",
+    "slideCount": "{index} sur {total}",
+    "actualSize": "Taille réelle",
+    "fit": "Adapter à l’écran"
   }
 }

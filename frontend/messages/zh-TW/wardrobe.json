@@ -302,8 +302,12 @@
   },
   "photoViewer": {
     "open": "開啟照片",
-    "close": "關閉",
-    "previous": "上一張",
-    "next": "下一張"
+    "lightbox": "照片檢視器",
+    "gallery": "照片圖庫",
+    "carousel": "輪播",
+    "slide": "投影片",
+    "slideCount": "第{index}張，共{total}張",
+    "actualSize": "實際大小",
+    "fit": "符合螢幕"
   }
 }

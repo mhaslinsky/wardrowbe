@@ -302,8 +302,12 @@
   },
   "photoViewer": {
     "open": "写真を開く",
-    "close": "閉じる",
-    "previous": "前へ",
-    "next": "次へ"
+    "lightbox": "写真ビューアー",
+    "gallery": "フォトギャラリー",
+    "carousel": "カルーセル",
+    "slide": "スライド",
+    "slideCount": "{total}枚中{index}枚目",
+    "actualSize": "実際のサイズ",
+    "fit": "画面に合わせる"
   }
 }

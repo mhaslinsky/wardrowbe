@@ -302,8 +302,12 @@
   },
   "photoViewer": {
     "open": "Foto öffnen",
-    "close": "Schließen",
-    "previous": "Zurück",
-    "next": "Weiter"
+    "lightbox": "Fotoansicht",
+    "gallery": "Fotogalerie",
+    "carousel": "Karussell",
+    "slide": "Folie",
+    "slideCount": "{index} von {total}",
+    "actualSize": "Originalgröße",
+    "fit": "An Bildschirm anpassen"
   }
 }
