@@ -23,6 +23,7 @@ from app.services.photo_redraw_service import (
     response_parts,
 )
 from app.services.preview_face import face_reference, reference_hash
+from app.utils.garment_vocabulary import ITEM_ROLE
 from app.utils.prompts import load_prompt
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.signed_urls import sign_image_url
@@ -83,6 +84,15 @@ def garment_size(notes: str | None) -> str | None:
         return None
     match = re.search(r"(?:^|[|\n])[ \t]*Size:[ \t]*([^|\n]*)", notes, re.IGNORECASE)
     return match.group(1).strip()[:100] or None if match else None
+
+
+def requests_tucking(style_notes: str | None) -> bool:
+    for clause in re.split(r"[.!?;\n]|\bbut\b", (style_notes or "").lower()):
+        if re.search(r"\btuck(?:ed|ing)?\b", clause) and not re.search(
+            r"\b(?:not|never|no|avoid|without|untucked)\b|don['’]t", clause
+        ):
+            return True
+    return False
 
 
 def snapshot(outfit):
@@ -296,10 +306,21 @@ class PreviewService:
                 return result
             if not photo_redraw_enabled():
                 raise HTTPException(503, "Preview is disabled")
+            hide_belt = any(
+                ITEM_ROLE.get(record["type"]) == "base_top" for record in records
+            ) and not requests_tucking(outfit.style_notes)
+            if hide_belt:
+                visible = [
+                    (image, record)
+                    for image, record in zip(images, records, strict=True)
+                    if record["type"] != "belt"
+                ]
+                images = [image for image, _ in visible]
+                records = [record for _, record in visible]
             if (
                 not images
                 or any(image is None for image in images)
-                or any(not link.item.image_path for link in outfit.items)
+                or any(not record["image_path"] for record in records)
             ):
                 raise HTTPException(422, "Outfit photos required")
             await rate_limit_by_user(user_id, "outfit_preview", max_requests=5, window_seconds=60)
