@@ -137,7 +137,7 @@ def test_migration_head_checker_accepts_single_head():
         [sys.executable, str(script)], capture_output=True, text=True, check=False
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.startswith("OK: Single migration head: ")
+    assert result.stdout.strip() == "OK: Single migration head: e190a1b2c3d4"
 
 
 def test_preference_delimiters_are_ordered_and_unique():
