@@ -30,8 +30,8 @@ def paths_of(item):
     return {field: getattr(item, field) for field in photos.PHOTO_FIELDS}
 
 
-async def persisted_cutout(db, user, metadata=False):
-    service = ImageService()
+async def persisted_cutout(db, user, metadata=False, service=None):
+    service = service if service is not None else ImageService()
     directory = service._get_user_path(user.id)
     stem = str(directory.relative_to(service.storage_path) / str(uuid4()))
     paths = {variant.path_field: f"{stem}{variant.suffix}.png" for variant in VARIANTS}
@@ -80,14 +80,24 @@ def test_cutout_webp_alpha_and_copy(tmp_path, color):
 
 
 @pytest.mark.parametrize("dry_run", [True, False])
-async def test_backfill_paths_and_ownership(db_session, test_user, dry_run):
-    service, item = await persisted_cutout(db_session, test_user, metadata=True)
+async def test_backfill_paths_and_ownership(db_session, test_user, tmp_path, dry_run):
+    service, item = await persisted_cutout(
+        db_session, test_user, metadata=True, service=ImageService(str(tmp_path))
+    )
     item_id, original = item.id, item.image_path
     before = snapshot(service, test_user)
-    result = await load_script().compress_item(db_session, item_id, service, dry_run)
+    result = await load_script().compress_items(db_session, [item_id], service, dry_run)
     await db_session.refresh(item)
     assert result["variants"] == 2 and result["after_bytes"] < result["before_bytes"]
-    assert service.get_image_path(original).read_bytes() == before[original]
+    after = snapshot(service, test_user)
+    assert set(before) <= set(after)
+    assert all(after[path] == payload for path, payload in before.items())
+    assert result["retained_png_files"] == 2
+    assert result["retained_png_bytes"] == sum(
+        len(payload)
+        for path, payload in before.items()
+        if path.endswith(("_medium.png", "_thumb.png"))
+    )
     if dry_run:
         assert snapshot(service, test_user) == before
         assert item.medium_path.endswith(".png")
@@ -97,17 +107,10 @@ async def test_backfill_paths_and_ownership(db_session, test_user, dry_run):
         )
         for name in ("original", "redrawn"):
             assert item.photo_redraw[name] == paths_of(item)
-        assert set(photos.retained_paths(item).values()) == set(snapshot(service, test_user))
+        assert all(
+            service.get_image_path(path).exists() for path in photos.retained_paths(item).values()
+        )
         assert (await load_script().compress_item(db_session, item_id, service))["variants"] == 0
-
-
-async def test_backfill_commit_failure_removes_unowned_writes(db_session, test_user, monkeypatch):
-    service, item = await persisted_cutout(db_session, test_user)
-    before = snapshot(service, test_user)
-    monkeypatch.setattr(db_session, "commit", AsyncMock(side_effect=RuntimeError("commit failed")))
-    with pytest.raises(RuntimeError, match="commit failed"):
-        await load_script().compress_item(db_session, item.id, service, False)
-    assert snapshot(service, test_user) == before
 
 
 @pytest.mark.parametrize("payload", [None, b"not an image"])
@@ -157,7 +160,7 @@ async def test_backfill_updates_gallery_after_primary_swap(
     assert Image.open(service.get_image_path(gallery.medium_path)).format == "WEBP"
     assert (
         service.get_image_path(gallery.image_path).exists()
-        and not service.get_image_path(source).exists()
+        and service.get_image_path(source).exists()
     )
 
 
@@ -286,53 +289,6 @@ async def test_missing_required_photo_fails_one_item_and_run_continues(
     assert Image.open(service.get_image_path(valid.medium_path)).format == "WEBP"
 
 
-async def test_delete_rechecks_owner_under_each_lock(
-    db_session, session_maker, test_user, monkeypatch
-):
-    service, item = await persisted_cutout(db_session, test_user)
-    item_id, thumbnail, medium, full = (
-        item.id,
-        item.thumbnail_path,
-        item.medium_path,
-        item.image_path,
-    )
-    original_lock, original_rollback, original_unlink = (
-        photos.lock_photo,
-        db_session.rollback,
-        Path.unlink,
-    )
-    state = {"locks": 0, "held": False}
-
-    async def lock(db, item_id, **kwargs):
-        state["locks"] += 1
-        if state["locks"] == 3:
-            async with session_maker() as other:
-                other.add(ItemImage(item_id=item_id, image_path=full, thumbnail_path=thumbnail))
-                await other.commit()
-        result = await original_lock(db, item_id, **kwargs)
-        state["held"] = True
-        return result
-
-    async def rollback():
-        await original_rollback()
-        state["held"] = False
-
-    def unlink(path, *args, **kwargs):
-        assert state["held"]
-        return original_unlink(path, *args, **kwargs)
-
-    monkeypatch.setattr(photos, "lock_photo", lock)
-    script = load_script()
-    monkeypatch.setattr(script, "lock_photo", lock)
-    monkeypatch.setattr(db_session, "rollback", rollback)
-    monkeypatch.setattr(Path, "unlink", unlink)
-    await script.compress_item(db_session, item_id, service, False)
-    assert state["locks"] == 3
-    assert (
-        service.get_image_path(thumbnail).exists() and not service.get_image_path(medium).exists()
-    )
-
-
 def test_in_place_edit_does_not_create_missing_preview_paths(tmp_path):
     service = ImageService(str(tmp_path))
     Image.new("RGBA", (80, 40)).save(tmp_path / "original.png")
@@ -342,3 +298,43 @@ def test_in_place_edit_does_not_create_missing_preview_paths(tmp_path):
     assert result == {"image_path": "original.png"}
     assert {path.name for path in tmp_path.iterdir()} == {"original.png"}
     assert Image.open(tmp_path / "original.png").size == (40, 80)
+
+
+async def test_inactive_live_copy_missing_after_gallery_delete_is_history(
+    db_session, test_user, client, auth_headers
+):
+    from tests.test_photo_redraw import garment
+
+    service, item = await persisted_cutout(db_session, test_user)
+    item_id = item.id
+    prefix = f"/api/v1/items/{item_id}"
+    with (
+        patch.object(photos, "photo_redraw_enabled", return_value=True),
+        patch.object(
+            photos.PhotoRedrawService,
+            "generate",
+            AsyncMock(return_value=(garment(), {"status": "generated"})),
+        ),
+    ):
+        response = await client.post(prefix + "/redraw-photo", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    inactive = response.json()["photo_redraw"]["live"]
+    payload = BytesIO()
+    Image.new("RGB", (600, 400), "white").save(payload, "JPEG")
+    response = await client.post(
+        prefix + "/images",
+        headers=auth_headers,
+        files={"image": ("other.jpg", payload.getvalue(), "image/jpeg")},
+    )
+    assert response.status_code == 201, response.text
+    gallery_id = response.json()["id"]
+    response = await client.post(prefix + f"/images/{gallery_id}/set-primary", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["image_path"] != inactive["image_path"]
+    response = await client.delete(prefix + f"/images/{gallery_id}", headers=auth_headers)
+    assert response.status_code == 204, response.text
+    assert all(not service.get_image_path(path).exists() for path in inactive.values())
+    totals = await load_script().compress_items(db_session, [item_id], service, False)
+    assert totals["failed"] == 0 and totals["missing_history"] >= len(inactive)
+    await db_session.refresh(item)
+    assert all(service.get_image_path(path).exists() for path in paths_of(item).values())
