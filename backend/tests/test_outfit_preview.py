@@ -5,6 +5,7 @@ import threading
 from datetime import date
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
@@ -671,12 +672,20 @@ async def upload_angle(client, headers, angle, color):
 
 
 async def test_angles_front_only_and_migrated_reference(
-    client, auth_headers, preview_setup, db_session, provider
+    client, auth_headers, preview_setup, db_session, provider, monkeypatch
 ):
+    signing_clock = SimpleNamespace(time=lambda: 1000)
+    monkeypatch.setattr("app.utils.signed_urls.time", signing_clock)
     photo = await upload(client, auth_headers)
+    signing_clock.time = lambda: 1001
     response = (await client.get(PHOTO, headers=auth_headers)).json()
     assert set(response["photos"]) == {"front"}
-    assert response["photos"]["front"]["image_url"] == photo["image_url"]
+    uploaded_url = urlsplit(photo["image_url"])
+    fetched_url = urlsplit(response["photos"]["front"]["image_url"])
+    assert parse_qs(uploaded_url.query)["expires"] == ["1600"]
+    assert parse_qs(fetched_url.query)["expires"] == ["1601"]
+    assert fetched_url.path == uploaded_url.path
+    assert (await client.get(response["photos"]["front"]["image_url"])).status_code == 200
     async with migration_downgrade(db_session, "e187a1b2c3d4"):
         paths = await db_session.scalar(text("SELECT paths FROM preview_photos"))
         assert "image_path" in paths and "front" not in paths
