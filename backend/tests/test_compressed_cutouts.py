@@ -116,3 +116,72 @@ def test_missing_source_fails_without_writing(tmp_path):
     with pytest.raises(FileNotFoundError):
         script.plan_variants(item, service)
     assert set(tmp_path.iterdir()) == before
+
+
+@pytest.mark.parametrize("metadata", [None, {}])
+async def test_empty_metadata_and_no_previews_are_unchanged(tmp_path, monkeypatch, metadata):
+    script = load_script()
+    service = ImageService(str(tmp_path))
+    item = SimpleNamespace(
+        image_path="original.png",
+        medium_path=None,
+        thumbnail_path=None,
+        original_image_path=None,
+        photo_redraw=metadata,
+    )
+    Image.new("RGBA", (20, 20)).save(service.get_image_path(item.image_path))
+    monkeypatch.setattr(script, "lock_photo", AsyncMock(return_value=item))
+    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    assert await script.compress_item(db, uuid4(), service, False) == {
+        "variants": 0,
+        "before_bytes": 0,
+        "after_bytes": 0,
+    }
+    db.commit.assert_not_called()
+    assert item.photo_redraw == metadata
+    assert {path.name for path in tmp_path.iterdir()} == {"original.png"}
+
+
+def test_malformed_preview_fails_without_writes(tmp_path):
+    script = load_script()
+    service = ImageService(str(tmp_path))
+    item = legacy_item(service)
+    service.get_image_path(item.medium_path).write_bytes(b"not an image")
+    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+    with pytest.raises(OSError):
+        script.plan_variants(item, service)
+    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
+
+
+async def test_backfill_database_commit_and_photo_switching(
+    tmp_path, db_session, test_user, monkeypatch
+):
+    from app.models.item import ClothingItem
+    from app.services import photo_redraw_service
+
+    script = load_script()
+    service = ImageService(str(tmp_path))
+    legacy = legacy_item(service)
+    item = ClothingItem(user_id=test_user.id, type="shirt", **vars(legacy))
+    item.photo_redraw = {**item.photo_redraw, "selected": "redrawn"}
+    db_session.add(item)
+    await db_session.commit()
+    item_id = item.id
+    original_bytes = service.get_image_path(item.image_path).read_bytes()
+    await script.compress_item(db_session, item_id, service, False)
+    await db_session.refresh(item)
+    assert item.photo_redraw["redrawn"]["medium_path"].endswith(".webp")
+    assert not service.get_image_path("photo_medium.png").exists()
+    assert service.get_image_path(item.image_path).read_bytes() == original_bytes
+    monkeypatch.setattr(photo_redraw_service, "ImageService", lambda: service)
+    for choice in ("original", "redrawn"):
+        photo_redraw_service.select_photo(item, choice)
+        await db_session.commit()
+        await db_session.refresh(item)
+        assert item.photo_redraw["selected"] == choice
+        for field in ("medium_path", "thumbnail_path"):
+            path = service.get_image_path(getattr(item, field))
+            assert path.suffix == ".webp"
+            assert Image.open(path).format == "WEBP"
+    owned = set(retained_paths(item).values())
+    assert owned == {path.name for path in tmp_path.iterdir()}
