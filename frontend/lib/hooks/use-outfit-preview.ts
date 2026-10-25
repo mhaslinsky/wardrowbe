@@ -110,7 +110,7 @@ export function useOutfitPreview(outfitId: string) {
   const read = async (signal?: AbortSignal) => {
     try { return checkedPhoto(await api.get<OutfitPreview>(`/outfits/${outfitId}/preview`, { signal })); }
     catch (error) {
-      if (error instanceof ApiError && error.status === 404 && previewErrorCode(error) === 'NO_PREVIEW') return null;
+      if (error instanceof ApiError && error.status === 404 && ['NO_PREVIEW', 'NO_PREVIEW_PHOTO'].includes(previewErrorCode(error) ?? '')) return null;
       throw error;
     }
   };

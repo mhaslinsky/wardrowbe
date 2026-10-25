@@ -62,6 +62,7 @@ it.each(['NO_PREVIEW', 'NO_PREVIEW_PHOTO'])('keeps the button after a missing pr
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('button', { name: 'see' })).toBeEnabled();
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(vi.mocked(fetch).mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
 });
 
