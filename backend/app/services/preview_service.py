@@ -21,7 +21,7 @@ from app.services.photo_redraw_service import (
     photo_redraw_enabled,
     response_parts,
 )
-from app.services.preview_face import face_reference
+from app.services.preview_face import face_reference, reference_hash
 from app.utils.prompts import load_prompt
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.signed_urls import sign_image_url
@@ -29,6 +29,21 @@ from app.utils.signed_urls import sign_image_url
 logger = logging.getLogger(__name__)
 ANGLES = ("front", "quarter", "side")
 FACE_REFERENCE_TIMEOUT = 3.0
+# Matches the measurements used by RecommendationService._format_preferences_for_prompt.
+MEASUREMENT_FIELDS = frozenset(
+    (
+        "height",
+        "weight",
+        "chest",
+        "waist",
+        "hips",
+        "inseam",
+        "shirt_size",
+        "pants_size",
+        "dress_size",
+        "shoe_size",
+    )
+)
 
 
 def reference_urls(
@@ -202,22 +217,25 @@ class PreviewService:
         }
 
     async def person_inputs(
-        self, user_id: UUID, paths: dict[str, dict[str, str]]
+        self, user_id: UUID, paths: dict[str, dict[str, str]], *, include_face: bool = True
     ) -> tuple[dict[str, object] | None, bytes | None, str | None]:
         """Read stored profile measurements and attempt a face crop within the deadline."""
         user = await self.db.get(User, user_id, populate_existing=True)
         measurements = {
             field: value
             for field, value in (user.body_measurements or {}).items()
-            if value is not None and value != ""
+            if field in MEASUREMENT_FIELDS and value is not None and value != ""
         }
+        face_hash = await asyncio.to_thread(reference_hash, paths)
+        if not include_face:
+            return measurements or None, None, face_hash
         try:
-            crop, face_hash = await asyncio.wait_for(
+            crop, _ = await asyncio.wait_for(
                 asyncio.to_thread(face_reference, paths), timeout=FACE_REFERENCE_TIMEOUT
             )
         except TimeoutError:
             logger.warning("Preview face crop timed out")
-            crop, face_hash = None, None
+            crop = None
         return measurements or None, crop, face_hash
 
     async def saved(self, outfit_id, user_id):
@@ -228,7 +246,7 @@ class PreviewService:
         key, _, _ = await asyncio.to_thread(snapshot, outfit)
         reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
         paths = reference.paths if reference else {}
-        measurements, _, face_hash = await self.person_inputs(user_id, paths)
+        measurements, _, face_hash = await self.person_inputs(user_id, paths, include_face=False)
         key = reference_key(key, paths, measurements, face_hash)
         return self.response(record, key)
 
@@ -304,7 +322,8 @@ class PreviewService:
                 load_prompt("outfit_preview")
                 .replace("{reference_count}", str(len(reference_images)))
                 .replace(
-                    "{face_note}", load_prompt("outfit_preview_face") if face is not None else ""
+                    "{face_note}",
+                    "\n" + load_prompt("outfit_preview_face") if face is not None else "",
                 )
                 + "\n<present_slots>\n"
                 + slots
@@ -341,7 +360,7 @@ class PreviewService:
             current_reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
             current_paths = current_reference.paths if current_reference else {}
             current_measurements, _, current_face_hash = await self.person_inputs(
-                user_id, current_paths
+                user_id, current_paths, include_face=False
             )
             current_key = reference_key(
                 current_key, current_paths, current_measurements, current_face_hash
@@ -350,7 +369,9 @@ class PreviewService:
             record.paths, record.cache_key = paths, key
             record.created_at, record.usage = datetime.now(UTC), provider.usage
             record.claim_id, record.started_at = None, None
-            result = self.response(record, current_key)
+            result = self.response(record, key)
+            if current_key != key:
+                result["stale"] = True
             await self.db.commit()
         except BaseException as error:
             if pending_store is not None:
