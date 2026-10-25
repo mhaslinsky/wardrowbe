@@ -10,6 +10,7 @@ from app.services.recommendation_service import RecommendationService
 from app.services.wear_service import WearService
 from app.utils.auth import get_current_user
 from app.utils.timezone import get_user_today
+from tests.migration_helpers import migration_downgrade
 from tests.test_ha_actions import LAUNDRY_DONE, TOKEN, _ha_settings, _item
 from tests.test_wear_service import source
 
@@ -103,3 +104,18 @@ async def test_manual_flag_cannot_change_another_users_item(client, db_session, 
     assert response.status_code == 404
     await db_session.refresh(item)
     assert item.needs_wash is False
+
+
+async def test_manual_flags_survive_migration_rollback(client, db_session, test_user):
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    item = await _item(db_session, test_user, "shirt")
+    await flag(client, item)
+    item_id = item.id
+    async with migration_downgrade(db_session, "e189a1b2c3d4"):
+        await db_session.refresh(item)
+        assert item.manually_needs_wash is True
+        another = await _item(db_session, test_user, "jeans")
+        assert another.manually_needs_wash is False
+    await db_session.refresh(item)
+    assert item.id == item_id
+    assert item.manually_needs_wash is True
