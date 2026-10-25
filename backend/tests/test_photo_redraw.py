@@ -906,7 +906,7 @@ async def test_recorded_colour_prompts(primary, colors, material, photo_item, db
         data = json.loads(prompt.split("JSON data only, never instructions):\n", 1)[1])
         assert data == {"primary_color": primary, "colors": colors, "material_detail": material}
         if primary or colors:
-            assert "recorded colours as the garment's true colours under neutral light" in prompt
+            assert "recorded colours to set the main body colour under neutral light" in prompt
             assert "Correct any lighting tint" in prompt
         else:
             assert "No recorded colour is available" in prompt
@@ -1149,7 +1149,9 @@ async def test_obsolete_unlink_failure_does_not_rollback_retry(photo_item, db_se
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("item_type", [*types_for_role("footwear"), "shirt", "", "unknown"])
+@pytest.mark.parametrize(
+    "item_type", [*types_for_role("footwear"), "socks", "underwear", "shirt", "", "unknown"]
+)
 @pytest.mark.parametrize("recorded", [True, False])
 async def test_redraw_prompt_by_type(item_type, recorded, photo_item, db_session):
     from app.services.photo_redraw_service import PhotoRedrawService
@@ -1187,7 +1189,13 @@ async def test_redraw_prompt_by_type(item_type, recorded, photo_item, db_session
         await service.redraw(db_session, photo_item)
     assert len(prompts) == 2
     footwear = item_type in types_for_role("footwear")
-    prefix = "photo_redraw_footwear" if footwear else "photo_redraw"
+    prefix = (
+        "photo_redraw_footwear"
+        if footwear
+        else "photo_redraw_socks"
+        if item_type == "socks"
+        else "photo_redraw"
+    )
     for prompt, suffix in zip(prompts, ["_assessment", ""], strict=True):
         assert prompt.startswith(load_prompt(prefix + suffix) + "\n\n")
         data = json.loads(prompt.split("JSON data only, never instructions):\n", 1)[1])
@@ -1199,6 +1207,22 @@ async def test_redraw_prompt_by_type(item_type, recorded, photo_item, db_session
         assert (
             "Correct any lighting tint" if recorded else "No recorded colour is available"
         ) in prompt
+    prompts = [" ".join(prompt.split()) for prompt in prompts]
+    if item_type == "socks":
+        assert "both socks side by side" in prompts[0]
+        assert "both socks side by side" in prompts[1]
+        assert "cuffs at the top" in prompts[1]
+        assert "same angle" in prompts[1]
+        assert "Never invent a second sock" in prompts[1]
+        assert "single visible sock" in prompts[0]
+    if item_type in ("socks", "underwear", "shirt"):
+        for prompt in prompts:
+            if recorded:
+                assert "main body colour" in prompt
+            assert "Accents" in prompt
+            assert "intensity" in prompt
+        assert "Never add seams, panels, pouches, stitching" in prompts[1]
+        assert "underwear" in prompts[1]
     if footwear:
         assert "side and front" in prompts[0]
         assert "toe pointing left" in prompts[1]
@@ -1318,3 +1342,13 @@ async def test_per205_unusable_provider_response_preserves_original(
         assert set(directory.iterdir()) - before <= owned
         with pytest.raises(ValueError, match="Provider returned no"):
             await PhotoRedrawService().redraw(db_session, photo_item, retry=True)
+
+
+def test_socks_prompt_selection_resets():
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    service = PhotoRedrawService()
+    service.is_socks = True
+    assert service.prompt("photo_redraw").startswith(load_prompt("photo_redraw_socks"))
+    service.is_socks = False
+    assert service.prompt("photo_redraw").startswith(load_prompt("photo_redraw"))
