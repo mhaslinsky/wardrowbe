@@ -1924,6 +1924,7 @@ async def restore_item_original(
             detail="Failed to restore original image",
         ) from None
 
+    item = await photos.lock_photo(db, item)
     if backup_path not in photos.retained_paths(item).values():
         try:
             image_service.delete_images({"backup": backup_path})
@@ -2236,7 +2237,12 @@ async def choose_item_photo(
     try:
         await db.commit()
     except BaseException:
-        ImageService().delete_images(paths)
+        await db.rollback()
+        current = await photos.lock_photo(db, item_id, missing_ok=True)
+        owned = set(photos.retained_paths(current).values()) if current is not None else set()
+        ImageService().delete_images(
+            {field: path for field, path in paths.items() if path not in owned}
+        )
         raise
     if paths:
         ImageService().delete_images(old_live)
