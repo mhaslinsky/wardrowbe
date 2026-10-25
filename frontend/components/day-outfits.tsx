@@ -1,5 +1,6 @@
 'use client';
 
+import { OutfitPreview } from '@/components/outfit-preview';
 import { useState, useEffect, useRef } from 'react';
 import { CalendarCheck } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -123,7 +124,7 @@ function WornOutfits({ outfits, date, choices, disabled, onNotice }: { outfits: 
     <h3 className="font-semibold">{t('worn')}</h3>
     <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))]">
       {outfits.map((outfit) => <Card key={outfit.id}><CardContent className="p-3 space-y-3">
-        <OutfitCard outfit={outfit} hideWashWarnings />
+        <OutfitPreview key={outfit.id} outfitId={outfit.id}><OutfitCard outfit={outfit} hideWashWarnings /></OutfitPreview>
         <UndoWearActions outfit={outfit} date={date} choices={choices} disabled={disabled} onNotice={onNotice} />
       </CardContent></Card>)}
     </div>
@@ -183,7 +184,7 @@ export function DayOutfits({ date: controlledDate, onDateChange }: { date?: stri
       {query.data?.pages[0]?.total === 0 && <p>{t('empty')}</p>}
       <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))]">
         {outfits.map((outfit) => <Card key={outfit.id}><CardContent className="p-3 space-y-3">
-          <OutfitCard outfit={outfit} />
+          <OutfitPreview key={outfit.id} outfitId={outfit.id}><OutfitCard outfit={outfit} /></OutfitPreview>
           <WearActions outfit={outfit} date={date} disabled={!ready} dismissAction={
             !outfit.feedback?.worn_at && ['pending', 'sent', 'viewed'].includes(outfit.status)
               ? <Button size="sm" className="px-2 text-xs" variant="ghost" disabled={reject.isPending} onClick={() => reject.mutate(outfit.id)}>{t('dismiss')}</Button> : null

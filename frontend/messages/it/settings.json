@@ -150,5 +150,16 @@
     "description": "Una regola per riga, fino a 20 regole.",
     "label": "Regole",
     "limit": "Massimo 20 regole di 300 caratteri ciascuna."
+  },
+  "previewPhoto": {
+    "title": "Foto per anteprima",
+    "guidance": "Figura intera, di fronte, vestiti aderenti, luce uniforme.",
+    "upload": "Carica foto",
+    "replace": "Sostituisci foto",
+    "remove": "Rimuovi",
+    "confirm": "Rimuovere foto e anteprime salvate?",
+    "cancel": "Annulla",
+    "loading": "Caricamento…",
+    "failed": "Aggiornamento foto non riuscito"
   }
 }

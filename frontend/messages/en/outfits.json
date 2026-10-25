@@ -211,5 +211,13 @@
     "learningStale": "Suggestions may lag",
     "replaceFailed": "Day reopened. Replacement failed",
     "replaceFailedStale": "Could not replace; suggestions may lag"
+  },
+  "preview": {
+    "see": "See it on me",
+    "redraw": "Redraw",
+    "changed": "Outfit changed",
+    "addPhoto": "Add a preview photo in Settings",
+    "drawing": "Drawing preview…",
+    "failed": "Preview failed"
   }
 }

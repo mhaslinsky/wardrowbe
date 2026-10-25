@@ -1,5 +1,6 @@
 'use client';
 
+import { PreviewPhotoSettings } from '@/components/preview-photo-settings';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { Loader2, Save, RotateCcw, Check, Plus, Trash2, ChevronUp, ChevronDown, Server, MapPin, Navigation, Ruler } from 'lucide-react';
@@ -572,6 +573,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6">
+        <PreviewPhotoSettings />
         {/* Account Section */}
         <Card>
           <CardHeader>

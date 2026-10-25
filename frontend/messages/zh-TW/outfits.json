@@ -211,5 +211,13 @@
     "learningStale": "推薦可能延遲更新",
     "replaceFailed": "當天紀錄已復原。替換失敗",
     "replaceFailedStale": "替換失敗，推薦可能延遲更新"
+  },
+  "preview": {
+    "see": "查看上身效果",
+    "redraw": "重新產生",
+    "changed": "穿搭已變更",
+    "addPhoto": "在設定中新增預覽照片",
+    "drawing": "正在產生預覽…",
+    "failed": "預覽失敗"
   }
 }

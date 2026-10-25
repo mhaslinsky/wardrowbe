@@ -150,5 +150,16 @@
     "description": "Eine Regel pro Zeile, bis zu 20 Regeln.",
     "label": "Regeln",
     "limit": "Bis zu 20 Regeln mit je 300 Zeichen."
+  },
+  "previewPhoto": {
+    "title": "Vorschaufoto",
+    "guidance": "Ganzkörper, zur Kamera, eng anliegende Kleidung, gleichmäßiges Licht.",
+    "upload": "Foto hochladen",
+    "replace": "Foto ersetzen",
+    "remove": "Entfernen",
+    "confirm": "Foto und gespeicherte Vorschauen entfernen?",
+    "cancel": "Abbrechen",
+    "loading": "Laden…",
+    "failed": "Fotoaktualisierung fehlgeschlagen"
   }
 }
