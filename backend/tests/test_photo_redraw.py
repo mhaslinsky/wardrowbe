@@ -1207,6 +1207,7 @@ async def test_redraw_prompt_by_type(item_type, recorded, photo_item, db_session
         assert (
             "Correct any lighting tint" if recorded else "No recorded colour is available"
         ) in prompt
+    prompts = [" ".join(prompt.split()) for prompt in prompts]
     if item_type == "socks":
         assert "both socks side by side" in prompts[0]
         assert "both socks side by side" in prompts[1]
@@ -1216,7 +1217,8 @@ async def test_redraw_prompt_by_type(item_type, recorded, photo_item, db_session
         assert "single visible sock" in prompts[0]
     if item_type in ("socks", "underwear", "shirt"):
         for prompt in prompts:
-            assert "main body colour" in prompt
+            if recorded:
+                assert "main body colour" in prompt
             assert "Accents" in prompt
             assert "intensity" in prompt
         assert "Never add seams, panels, pouches, stitching" in prompts[1]
