@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from PIL import Image, ImageDraw
+from sqlalchemy import inspect
 
 from app.models.item import ClothingItem, ItemImage, ItemStatus
 from app.services import photo_redraw_service as photos
@@ -50,7 +51,8 @@ async def persisted_cutout(db, user, metadata=False):
     return service, item
 
 
-def snapshot(service, user_id):
+def snapshot(service, user):
+    user_id = inspect(user).identity[0]
     return {
         str(path.relative_to(service.storage_path)): path.read_bytes()
         for path in (service.storage_path / str(user_id)).iterdir()
@@ -81,13 +83,13 @@ def test_cutout_webp_alpha_and_copy(tmp_path, color):
 async def test_backfill_paths_and_ownership(db_session, test_user, dry_run):
     service, item = await persisted_cutout(db_session, test_user, metadata=True)
     item_id, original = item.id, item.image_path
-    before = snapshot(service, test_user.id)
+    before = snapshot(service, test_user)
     result = await load_script().compress_item(db_session, item_id, service, dry_run)
     await db_session.refresh(item)
     assert result["variants"] == 2 and result["after_bytes"] < result["before_bytes"]
     assert service.get_image_path(original).read_bytes() == before[original]
     if dry_run:
-        assert snapshot(service, test_user.id) == before
+        assert snapshot(service, test_user) == before
         assert item.medium_path.endswith(".png")
     else:
         assert item.medium_path == str(
@@ -95,17 +97,17 @@ async def test_backfill_paths_and_ownership(db_session, test_user, dry_run):
         )
         for name in ("original", "redrawn"):
             assert item.photo_redraw[name] == paths_of(item)
-        assert set(photos.retained_paths(item).values()) == set(snapshot(service, test_user.id))
+        assert set(photos.retained_paths(item).values()) == set(snapshot(service, test_user))
         assert (await load_script().compress_item(db_session, item_id, service))["variants"] == 0
 
 
 async def test_backfill_commit_failure_removes_unowned_writes(db_session, test_user, monkeypatch):
     service, item = await persisted_cutout(db_session, test_user)
-    before = snapshot(service, test_user.id)
+    before = snapshot(service, test_user)
     monkeypatch.setattr(db_session, "commit", AsyncMock(side_effect=RuntimeError("commit failed")))
     with pytest.raises(RuntimeError, match="commit failed"):
         await load_script().compress_item(db_session, item.id, service, False)
-    assert snapshot(service, test_user.id) == before
+    assert snapshot(service, test_user) == before
 
 
 @pytest.mark.parametrize("payload", [None, b"not an image"])
@@ -115,10 +117,10 @@ async def test_missing_or_malformed_active_source_fails_without_writes(
     service, item = await persisted_cutout(db_session, test_user)
     path = service.get_image_path(item.medium_path)
     path.unlink() if payload is None else path.write_bytes(payload)
-    before = snapshot(service, test_user.id)
+    before = snapshot(service, test_user)
     with pytest.raises(OSError):
         await load_script().compress_item(db_session, item.id, service, False)
-    assert snapshot(service, test_user.id) == before
+    assert snapshot(service, test_user) == before
 
 
 @pytest.mark.parametrize("started_at", [None, "2000-01-01T00:00:00+00:00"])
@@ -126,12 +128,12 @@ async def test_backfill_skips_generating_even_when_stale(db_session, test_user, 
     service, item = await persisted_cutout(db_session, test_user, metadata=True)
     item.photo_redraw = {**item.photo_redraw, "status": "generating", "started_at": started_at}
     await db_session.commit()
-    before = snapshot(service, test_user.id)
+    before = snapshot(service, test_user)
     result = await load_script().compress_item(db_session, item.id, service, False)
     await db_session.refresh(item)
     assert result["skipped"] == 1 and result["variants"] == 0
     assert item.photo_redraw["status"] == "generating"
-    assert snapshot(service, test_user.id) == before
+    assert snapshot(service, test_user) == before
 
 
 async def test_backfill_updates_gallery_after_primary_swap(
@@ -240,7 +242,7 @@ async def test_failed_rotate_keeps_every_committed_path(
     await db_session.refresh(item)
     owned = set(photos.retained_paths(item).values())
     assert all(service.get_image_path(path).exists() for path in owned)
-    assert set(snapshot(service, test_user.id)) == owned
+    assert set(snapshot(service, test_user)) == owned
 
 
 async def test_switch_history_missing_files_are_counted(

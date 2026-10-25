@@ -134,12 +134,12 @@ class TestRotateItemImageJob:
         seen: dict = {}
         original = ImageService.rotate_image
 
-        def _rotate(self, image_path, direction="cw"):
+        def _rotate(self, image_path, direction="cw", variant_paths=None):
             # Reads the same ORM object the job mutated (shared identity map on
             # db_session), proving the started-at write is committed before the
             # thread-offloaded rotation, not after.
             seen["ai_started_at"] = item.ai_started_at
-            return original(self, image_path, direction)
+            return original(self, image_path, direction, variant_paths)
 
         get_db, close_db = _job_on(db_session)
         with get_db, close_db, patch.object(ImageService, "rotate_image", _rotate):
