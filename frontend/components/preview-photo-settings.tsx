@@ -5,36 +5,46 @@ import { ACCEPTED_IMAGE_INPUT } from '@/lib/image-types';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { usePreviewPhoto } from '@/lib/hooks/use-outfit-preview';
+import { previewAngles, type PreviewAngle, usePreviewPhoto } from '@/lib/hooks/use-outfit-preview';
 
 export function PreviewPhotoSettings() {
   const t = useTranslations('settings.previewPhoto');
   const common = useTranslations('common');
-  const { photo, loading, pending, error, save } = usePreviewPhoto();
-  const [confirm, setConfirm] = useState(false);
+  const { photos, loading, pending, error, save } = usePreviewPhoto();
+  const [confirm, setConfirm] = useState<PreviewAngle | null>(null);
   return <Card id="preview-photo">
     <CardHeader><CardTitle>{t('title')}</CardTitle><CardDescription>{t('guidance')}</CardDescription></CardHeader>
     <CardContent className="space-y-3">
-      {photo && <a href={photo.image_url} target="_blank" rel="noopener noreferrer">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={photo.medium_url || photo.image_url} alt={t('title')} className="max-h-64 rounded-lg object-contain" />
-      </a>}
-      <label className="block space-y-2 text-sm font-medium">
-        <span>{photo ? t('replace') : t('upload')}</span>
-        <input type="file" accept={ACCEPTED_IMAGE_INPUT} disabled={loading || pending} className="block w-full text-sm" onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = '';
-          if (file) { setConfirm(false); void save(file); }
-        }} />
-      </label>
-      {photo && !confirm && <Button variant="outline" disabled={pending} onClick={() => setConfirm(true)}>{common('remove')}</Button>}
-      {confirm && <div className="space-y-2">
-        <p>{t('confirm')}</p>
-        <div className="flex gap-2">
-          <Button variant="destructive" disabled={pending} onClick={async () => { if (await save()) setConfirm(false); }}>{common('remove')}</Button>
-          <Button variant="outline" disabled={pending} onClick={() => setConfirm(false)}>{common('cancel')}</Button>
-        </div>
-      </div>}
+      <div className="grid gap-6 sm:grid-cols-3">
+        {previewAngles.map((angle) => {
+          const photo = photos?.[angle];
+          return <fieldset key={angle} className="min-w-0 space-y-3">
+            <legend className="font-medium">{t(angle)}</legend>
+            {photo && <a href={photo.image_url} target="_blank" rel="noopener noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photo.medium_url || photo.image_url} alt={t(angle === 'front' ? 'title' : angle)} className="max-h-64 rounded-lg object-contain" />
+            </a>}
+            <label className="block space-y-2 text-sm font-medium">
+              <span>{angle === 'front' ? (photo ? t('replace') : t('upload')) : `${t(angle)}: ${photo ? t('replace') : t('upload')}`}</span>
+              <input type="file" accept={ACCEPTED_IMAGE_INPUT} disabled={loading || pending}
+                aria-label={angle === 'front' ? undefined : `${t(angle)}: ${photo ? t('replace') : t('upload')}`}
+                className="block w-full text-sm" onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (file) { setConfirm(null); void save(file, angle); }
+                }} />
+            </label>
+            {photo && confirm !== angle && <Button variant="outline" disabled={pending} onClick={() => setConfirm(angle)}>{common('remove')}</Button>}
+            {confirm === angle && <div className="space-y-2">
+              <p>{t(angle === 'front' ? 'confirm' : 'confirmAngle')}</p>
+              <div className="flex gap-2">
+                <Button variant="destructive" disabled={pending} onClick={async () => { if (await save(undefined, angle)) setConfirm(null); }}>{common('remove')}</Button>
+                <Button variant="outline" disabled={pending} onClick={() => setConfirm(null)}>{common('cancel')}</Button>
+              </div>
+            </div>}
+          </fieldset>;
+        })}
+      </div>
       {(loading || pending) && <p role="status">{common('loading')}</p>}
       {error && <p role="alert" className="text-destructive">{t('failed')}</p>}
     </CardContent>

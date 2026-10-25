@@ -299,3 +299,48 @@ it('refreshes displayed signed URLs after nine minutes without a POST', async ()
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(vi.mocked(fetch).mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
 });
+
+it('shows three angle slots with independent upload and removal', async () => {
+  const photos: Record<string, typeof saved> = { front: saved };
+  vi.mocked(fetch).mockImplementation(async (url, options) => {
+    const angle = new URL(String(url), 'https://test.local').searchParams.get('angle') ?? 'front';
+    if (options?.method === 'PUT') photos[angle] = { ...saved, image_url: `/${angle}`, medium_url: `/${angle}-medium` };
+    if (options?.method === 'DELETE') { delete photos[angle]; return response(null, 204) as Response; }
+    return response({ ...photos.front, photos: { ...photos } }) as Response;
+  });
+  render(<PreviewPhotoSettings />);
+  await screen.findByRole('img', { name: 'title' });
+  expect(screen.getAllByRole('group')).toHaveLength(3);
+  for (const angle of ['quarter', 'side']) {
+    const input = screen.getByLabelText(`${angle}: upload`);
+    fireEvent.change(input, { target: { files: [new File(['photo'], `${angle}.jpg`)] } });
+    expect(await screen.findByRole('img', { name: angle })).toHaveAttribute('src', `/${angle}-medium`);
+    await waitFor(() => expect(input).toBeEnabled());
+    expect(input).toHaveValue('');
+    expect(fetch).toHaveBeenCalledWith(`/api/v1/users/me/preview-photo?angle=${angle}`, expect.objectContaining({ method: 'PUT' }));
+  }
+  const { within } = await import('@testing-library/react');
+  const side = within(screen.getByRole('group', { name: 'side' }));
+  fireEvent.click(side.getByText('remove'));
+  expect(side.getByText('confirmAngle')).toBeVisible();
+  fireEvent.click(side.getByText('remove'));
+  await waitFor(() => expect(screen.queryByRole('img', { name: 'side' })).not.toBeInTheDocument());
+  expect(screen.getByRole('img', { name: 'quarter' })).toBeVisible();
+  expect(screen.getByRole('img', { name: 'title' })).toBeVisible();
+  expect(fetch).toHaveBeenCalledWith('/api/v1/users/me/preview-photo?angle=side', expect.objectContaining({ method: 'DELETE' }));
+});
+
+it('shows optional photos without a front photo', async () => {
+  vi.mocked(fetch).mockResolvedValue(response({ photos: { side: saved } }) as Response);
+  render(<PreviewPhotoSettings />);
+  expect(await screen.findByRole('img', { name: 'side' })).toBeVisible();
+  expect(screen.getByLabelText('upload')).toBeEnabled();
+  expect(screen.queryByRole('img', { name: 'title' })).not.toBeInTheDocument();
+});
+
+it.each([{}, { photos: {} }, { photos: { side: {} } }, { photos: { back: saved } }])('rejects malformed photo collections %j', async (data) => {
+  vi.mocked(fetch).mockResolvedValue(response(data) as Response);
+  render(<PreviewPhotoSettings />);
+  expect(await screen.findByRole('alert')).toBeVisible();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});

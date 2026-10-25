@@ -157,6 +157,10 @@
     "upload": "Upload photo",
     "replace": "Replace photo",
     "confirm": "Remove photo and saved previews?",
-    "failed": "Photo update failed"
+    "failed": "Photo update failed",
+    "front": "Front",
+    "quarter": "Quarter turn",
+    "side": "Side",
+    "confirmAngle": "Remove photo?"
   }
 }

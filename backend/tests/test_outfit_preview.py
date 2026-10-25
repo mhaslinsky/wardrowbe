@@ -624,7 +624,8 @@ async def test_r1_delete_refreshes_cached_relationship(
     assert not ImageService().get_image_path(path).exists()
 
 
-async def test_r2_cancelled_reference_storage(preview_setup, session_maker, monkeypatch):
+@pytest.mark.parametrize("angle", ["front", "quarter", "side"])
+async def test_r2_cancelled_reference_storage(preview_setup, session_maker, monkeypatch, angle):
     from app.services import preview_service
 
     entered, stored, release = asyncio.Event(), asyncio.Event(), threading.Event()
@@ -641,7 +642,7 @@ async def test_r2_cancelled_reference_storage(preview_setup, session_maker, monk
     async with session_maker() as session:
         task = asyncio.create_task(
             preview_service.PreviewService(session).replace_reference(
-                preview_setup["user"], _jpeg_bytes(), "ref.jpg"
+                preview_setup["user"], _jpeg_bytes(), "ref.jpg", angle
             )
         )
         await entered.wait()
@@ -726,9 +727,7 @@ async def test_angles_optional_changes_stale_once(
     assert provider.await_count == 4
 
 
-async def test_angles_front_delete_clears_previews(
-    client, auth_headers, preview_setup, provider
-):
+async def test_angles_front_delete_clears_previews(client, auth_headers, preview_setup, provider):
     await upload(client, auth_headers)
     await upload_angle(client, auth_headers, "side", "blue")
     saved = (await client.post(preview_setup["url"], headers=auth_headers)).json()
@@ -780,3 +779,48 @@ async def test_angles_invalid_rejected(angle, client, auth_headers):
     assert response.status_code == 422
     assert (await client.delete(PHOTO + "?angle=" + angle, headers=auth_headers)).status_code == 422
     assert (await client.get(PHOTO, headers=auth_headers)).status_code == 404
+
+
+@pytest.mark.parametrize("action", ["add", "replace", "remove"])
+async def test_angles_changed_during_draw_saves_stale(
+    action, client, auth_headers, preview_setup, provider_gate, session_maker
+):
+    await upload(client, auth_headers)
+    if action != "add":
+        await upload_angle(client, auth_headers, "side", "blue")
+    entered, release = provider_gate
+    async with session_maker() as session:
+        task = asyncio.create_task(
+            PreviewService(session).generate(preview_setup["outfit"], preview_setup["user"], False)
+        )
+        try:
+            await entered.wait()
+            if action == "remove":
+                assert (
+                    await client.delete(PHOTO + "?angle=side", headers=auth_headers)
+                ).status_code == 204
+            else:
+                await upload_angle(client, auth_headers, "side", "green")
+        finally:
+            release.set()
+            result = await task
+        assert result["stale"] is True
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).json()["stale"] is True
+
+
+@pytest.mark.parametrize("angle", ["front", "quarter", "side"])
+async def test_angles_failed_reference_commit_restores_files(
+    angle, client, auth_headers, preview_setup, db_session
+):
+    for stored_angle in ["front", "quarter", "side"]:
+        await upload_angle(client, auth_headers, stored_angle, "blue")
+    files = set(preview_setup["folder"].glob("*.jpg"))
+    with patch.object(db_session, "commit", side_effect=RuntimeError("commit failed")):
+        with pytest.raises(RuntimeError, match="commit failed"):
+            await PreviewService(db_session).replace_reference(
+                preview_setup["user"], _jpeg_bytes(), "ref.jpg", angle
+            )
+    assert set(preview_setup["folder"].glob("*.jpg")) == files
+    photos = (await client.get(PHOTO, headers=auth_headers)).json()["photos"]
+    assert set(photos) == {"front", "quarter", "side"}
+    assert (await client.get(photos[angle]["image_url"])).status_code == 200

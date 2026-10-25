@@ -26,6 +26,18 @@ from app.utils.rate_limit import rate_limit_by_user
 from app.utils.signed_urls import sign_image_url
 
 logger = logging.getLogger(__name__)
+ANGLES = ("front", "quarter", "side")
+
+
+def reference_urls(paths):
+    return {
+        **urls(paths.get("front", {})),
+        "photos": {angle: urls(paths[angle]) for angle in ANGLES if angle in paths},
+    }
+
+
+def reference_key(key, paths):
+    return hashlib.sha256(json.dumps([key, paths], sort_keys=True).encode()).hexdigest()
 
 
 def urls(paths):
@@ -100,37 +112,52 @@ class PreviewService:
         if found is None:
             raise HTTPException(404, "User not found")
 
-    async def reference(self, user_id):
+    async def reference(self, user_id, require_front=True):
         record = await self.db.scalar(
             select(PreviewPhoto)
             .where(PreviewPhoto.user_id == user_id)
             .execution_options(populate_existing=True)
         )
-        if record is None:
+        if record is None or (require_front and "front" not in record.paths):
             raise HTTPException(404, "NO_PREVIEW_PHOTO")
         return record
 
-    async def clear(self, user_id):
+    async def clear(self, user_id, angle="front"):
         await self.lock_user(user_id)
-        records = list(
-            (
-                await self.db.scalars(select(OutfitPreview).where(OutfitPreview.user_id == user_id))
-            ).all()
-        )
-        reference = await self.db.get(PreviewPhoto, user_id)
-        if reference is not None:
-            records.append(reference)
-        for record in records:
-            await self.db.delete(record)
+        if angle == "front":
+            records = list(
+                (
+                    await self.db.scalars(
+                        select(OutfitPreview).where(OutfitPreview.user_id == user_id)
+                    )
+                ).all()
+            )
+            for record in records:
+                await self.db.delete(record)
+        reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
+        if reference is not None and angle in reference.paths:
+            removed = reference.paths[angle]
+            reference.paths = {key: value for key, value in reference.paths.items() if key != angle}
+            self.db.sync_session.info.setdefault("preview_cleanup", {}).update(
+                {path: path for path in removed.values()}
+            )
+            if not reference.paths:
+                await self.db.delete(reference)
         await self.db.flush()
 
-    async def replace_reference(self, user_id, data, filename):
-        await self.clear(user_id)
+    async def replace_reference(self, user_id, data, filename, angle="front"):
+        await self.clear(user_id, angle)
         pending = asyncio.create_task(asyncio.to_thread(store_photo, user_id, data, filename))
         paths = {}
         try:
             paths = await asyncio.shield(pending)
-            self.db.add(PreviewPhoto(user_id=user_id, paths=paths))
+            reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
+            if reference is None:
+                reference = PreviewPhoto(user_id=user_id, paths={angle: paths})
+                self.db.add(reference)
+            else:
+                reference.paths = {**reference.paths, angle: paths}
+            result = reference_urls(reference.paths)
             await self.db.commit()
         except BaseException:
             await self.db.rollback()
@@ -140,7 +167,7 @@ class PreviewService:
                 logger.warning("Reference storage failed")
             delete_preview_files(paths)
             raise
-        return urls(paths)
+        return result
 
     async def outfit(self, outfit_id, user_id):
         outfit = await self.db.scalar(
@@ -166,6 +193,8 @@ class PreviewService:
         if record is None or not record.paths:
             raise HTTPException(404, "NO_PREVIEW")
         key, _, _ = await asyncio.to_thread(snapshot, outfit)
+        reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
+        key = reference_key(key, reference.paths if reference else {})
         return self.response(record, key)
 
     async def generate(self, outfit_id, user_id, regenerate):
@@ -194,6 +223,7 @@ class PreviewService:
             except HTTPException as error:
                 raise HTTPException(409, "NO_PREVIEW_PHOTO") from error
             key, images, records = await asyncio.to_thread(snapshot, outfit)
+            key = reference_key(key, reference.paths)
             if record and record.paths and record.cache_key == key and not regenerate:
                 result = self.response(record, key)
                 await self.db.commit()
@@ -207,7 +237,12 @@ class PreviewService:
             ):
                 raise HTTPException(422, "Outfit photos required")
             await rate_limit_by_user(user_id, "outfit_preview", max_requests=5, window_seconds=60)
-            images.insert(0, await asyncio.to_thread(jpeg, reference.paths["image_path"], 1600))
+            reference_images = [
+                await asyncio.to_thread(jpeg, reference.paths[angle]["image_path"], 1600)
+                for angle in ANGLES
+                if angle in reference.paths
+            ]
+            images = reference_images + images
             if record is None:
                 record = OutfitPreview(outfit_id=outfit_id, user_id=user_id)
                 self.db.add(record)
@@ -225,7 +260,9 @@ class PreviewService:
                 .replace(">", "\\u003e")
             )
             prompt = (
-                load_prompt("outfit_preview")
+                load_prompt("outfit_preview").replace(
+                    "{reference_count}", str(len(reference_images))
+                )
                 + "\n<present_slots>\n"
                 + slots
                 + "\n</present_slots>\n<garment_data>\n"
@@ -252,6 +289,10 @@ class PreviewService:
             if record is None or record.claim_id != claim_id:
                 raise HTTPException(409, "Preview changed")
             current_key, _, _ = await asyncio.to_thread(snapshot, outfit)
+            current_reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
+            current_key = reference_key(
+                current_key, current_reference.paths if current_reference else {}
+            )
             old_paths = record.paths
             record.paths, record.cache_key = paths, key
             record.created_at, record.usage = datetime.now(UTC), provider.usage

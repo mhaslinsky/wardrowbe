@@ -157,6 +157,10 @@
     "upload": "Carica foto",
     "replace": "Sostituisci foto",
     "confirm": "Rimuovere foto e anteprime salvate?",
-    "failed": "Aggiornamento foto non riuscito"
+    "failed": "Aggiornamento foto non riuscito",
+    "front": "Frontale",
+    "quarter": "Tre quarti",
+    "side": "Profilo",
+    "confirmAngle": "Rimuovere la foto?"
   }
 }
