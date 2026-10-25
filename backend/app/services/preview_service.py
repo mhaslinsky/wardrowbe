@@ -21,6 +21,7 @@ from app.services.photo_redraw_service import (
     photo_redraw_enabled,
     response_parts,
 )
+from app.services.preview_face import face_reference
 from app.utils.prompts import load_prompt
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.signed_urls import sign_image_url
@@ -39,9 +40,13 @@ def reference_urls(
     }
 
 
-def reference_key(key: str, paths: dict[str, dict[str, str]]) -> str:
+def reference_key(
+    key: str, paths: dict[str, dict[str, str]], measurements=None, face_hash=None
+) -> str:
     """Hash outfit inputs with all reference paths for cache invalidation."""
-    return hashlib.sha256(json.dumps([key, paths], sort_keys=True).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps([key, paths, measurements, face_hash], sort_keys=True).encode()
+    ).hexdigest()
 
 
 def urls(paths):
@@ -69,6 +74,7 @@ def snapshot(outfit):
                 "colors": item.colors,
                 "primary_color": item.primary_color,
                 "layer": link.layer_type,
+                "fit": (item.tags or {}).get("fit"),
                 "content_hash": hashlib.sha256(image).hexdigest() if image else None,
             }
         )
@@ -191,6 +197,19 @@ class PreviewService:
             "stale": record.cache_key != key,
         }
 
+    async def person_inputs(self, user_id, paths):
+        user = await self.db.get(User, user_id, populate_existing=True)
+        measurements = {
+            field: value
+            for field, value in (user.body_measurements or {}).items()
+            if field
+            in ("height", "weight", "chest", "waist", "hips", "inseam", "shirt_size", "pants_size")
+            and value is not None
+            and value != ""
+        }
+        crop, face_hash = await asyncio.to_thread(face_reference, paths)
+        return measurements or None, crop, face_hash
+
     async def saved(self, outfit_id, user_id):
         outfit = await self.outfit(outfit_id, user_id)
         record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
@@ -198,7 +217,9 @@ class PreviewService:
             raise HTTPException(404, "NO_PREVIEW")
         key, _, _ = await asyncio.to_thread(snapshot, outfit)
         reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
-        key = reference_key(key, reference.paths if reference else {})
+        paths = reference.paths if reference else {}
+        measurements, _, face_hash = await self.person_inputs(user_id, paths)
+        key = reference_key(key, paths, measurements, face_hash)
         return self.response(record, key)
 
     async def generate(self, outfit_id, user_id, regenerate):
@@ -227,7 +248,8 @@ class PreviewService:
             except HTTPException as error:
                 raise HTTPException(409, "NO_PREVIEW_PHOTO") from error
             key, images, records = await asyncio.to_thread(snapshot, outfit)
-            key = reference_key(key, reference.paths)
+            measurements, face, face_hash = await self.person_inputs(user_id, reference.paths)
+            key = reference_key(key, reference.paths, measurements, face_hash)
             if record and record.paths and record.cache_key == key and not regenerate:
                 result = self.response(record, key)
                 await self.db.commit()
@@ -246,6 +268,8 @@ class PreviewService:
                 for angle in ANGLES
                 if angle in reference.paths
             ]
+            if face is not None:
+                reference_images.insert(1, face)
             images = reference_images + images
             if record is None:
                 record = OutfitPreview(outfit_id=outfit_id, user_id=user_id)
@@ -254,7 +278,10 @@ class PreviewService:
             record.claim_id, record.started_at = claim_id, datetime.now(UTC)
             await self.db.commit()
             garments = [
-                {field: record[field] for field in ("type", "colors", "primary_color", "layer")}
+                {
+                    field: record[field]
+                    for field in ("type", "colors", "primary_color", "layer", "fit")
+                }
                 for record in records
             ]
             data = json.dumps(garments).replace("<", "\\u003c").replace(">", "\\u003e")
@@ -273,6 +300,18 @@ class PreviewService:
                 + data
                 + "\n</garment_data>"
             )
+            if face is not None:
+                prompt = prompt.replace(
+                    "images show the same person from different angles, front first.",
+                    "images show the same person: front photo, face close-up, then any other angles.",
+                )
+                prompt += "\nReference image 2 is a close-up of the same person's face, immediately after the front photo. Other full-body angles follow it. Preserve their face shape and features."
+            if measurements:
+                prompt += (
+                    "\n<body_measurements>\n"
+                    + json.dumps(measurements).replace("<", "\\u003c").replace(">", "\\u003e")
+                    + "\n</body_measurements>"
+                )
             provider = PhotoRedrawService()
             payload = await provider.request(images, prompt, "IMAGE", mime_type="image/jpeg")
             inline = next(
@@ -294,8 +333,12 @@ class PreviewService:
                 raise HTTPException(409, "Preview changed")
             current_key, _, _ = await asyncio.to_thread(snapshot, outfit)
             current_reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
+            current_paths = current_reference.paths if current_reference else {}
+            current_measurements, _, current_face_hash = await self.person_inputs(
+                user_id, current_paths
+            )
             current_key = reference_key(
-                current_key, current_reference.paths if current_reference else {}
+                current_key, current_paths, current_measurements, current_face_hash
             )
             old_paths = record.paths
             record.paths, record.cache_key = paths, key

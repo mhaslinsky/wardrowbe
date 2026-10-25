@@ -461,7 +461,9 @@ async def test_r1_jpeg_threads_and_prompt_fence(
     images, prompt, _ = provider.call_args.args
     assert provider.call_args.kwargs == {"mime_type": "image/jpeg"}
     garments = json.loads(prompt.split("<garment_data>\n", 1)[1].split("\n</garment_data>", 1)[0])
-    assert all(set(garment) == {"type", "colors", "primary_color", "layer"} for garment in garments)
+    assert all(
+        set(garment) == {"type", "colors", "primary_color", "layer", "fit"} for garment in garments
+    )
     assert all(data.startswith(b"\xff\xd8") for data in images)
     assert max(Image.open(BytesIO(images[0])).size) == 1600
     assert prompt.count("<garment_data>") == 2
@@ -824,3 +826,139 @@ async def test_angles_failed_reference_commit_restores_files(
     photos = (await client.get(PHOTO, headers=auth_headers)).json()["photos"]
     assert set(photos) == {"front", "quarter", "side"}
     assert (await client.get(photos[angle]["image_url"])).status_code == 200
+
+
+@pytest.fixture(autouse=True)
+def no_live_person_mask(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.services import preview_face
+
+    preview_face.crop_face.cache_clear()
+    monkeypatch.setattr(
+        preview_face,
+        "get_provider",
+        lambda: SimpleNamespace(remove=lambda image: Image.new("RGBA", image.size)),
+    )
+    yield
+    preview_face.crop_face.cache_clear()
+
+
+async def test_person_request_fit_measurements_and_face_order(
+    client, auth_headers, preview_setup, provider, db_session, monkeypatch
+):
+    from app.services import preview_service
+
+    user = await db_session.get(User, preview_setup["user"])
+    user.body_measurements = {"height": 180, "shirt_size": "XL"}
+    item = await db_session.get(ClothingItem, preview_setup["items"][0])
+    item.tags = {"fit": "relaxed"}
+    await db_session.commit()
+    for angle, color in [("front", "red"), ("quarter", "green"), ("side", "blue")]:
+        await upload_angle(client, auth_headers, angle, color)
+    monkeypatch.setattr(preview_service, "face_reference", lambda paths: (b"face-crop", "hash"))
+    response = await client.post(preview_setup["url"], headers=auth_headers)
+    assert response.status_code == 200, response.text
+    images, prompt, _ = provider.call_args.args
+    assert len(images) == 6 and images[1] == b"face-crop"
+    for image, channel in zip([images[0], images[2], images[3]], [0, 1, 2], strict=True):
+        pixel = Image.open(BytesIO(image)).getpixel((0, 0))
+        assert pixel[channel] > 100 and pixel[channel] == max(pixel)
+    garments = json.loads(prompt.split("<garment_data>\n")[1].split("\n</garment_data>")[0])
+    assert next(record for record in garments if record["type"] == "shirt")["fit"] == "relaxed"
+    assert (
+        json.loads(prompt.split("<body_measurements>\n")[1].split("\n</body_measurements>")[0])
+        == user.body_measurements
+    )
+    assert "Reference image 2 is a close-up" in prompt
+    assert "Never slim or idealize" in prompt
+    assert "Never make it tighter, shorter or cropped" in prompt
+    assert "first 4 images" in prompt
+
+
+@pytest.mark.parametrize("measurements", [None, {}, {"height": None, "shirt_size": ""}])
+async def test_person_missing_inputs_keep_image_order(
+    measurements, client, auth_headers, preview_setup, provider, db_session
+):
+    user = await db_session.get(User, preview_setup["user"])
+    user.body_measurements = measurements
+    await db_session.commit()
+    await upload(client, auth_headers)
+    response = await client.post(preview_setup["url"], headers=auth_headers)
+    assert response.status_code == 200, response.text
+    images, prompt, _ = provider.call_args.args
+    assert len(images) == 3
+    assert "<body_measurements>\n" not in prompt
+    assert "Reference image 2 is a close-up" not in prompt
+    garments = json.loads(prompt.split("<garment_data>\n")[1].split("\n</garment_data>")[0])
+    assert all(record["fit"] is None for record in garments)
+
+
+@pytest.mark.parametrize("edit", ["fit", "measurements", "reset", "face"])
+async def test_person_edits_make_preview_stale(
+    edit, client, auth_headers, preview_setup, provider, db_session, monkeypatch
+):
+    from app.services import preview_service
+
+    user = await db_session.get(User, preview_setup["user"])
+    user.body_measurements = {"height": 180}
+    await db_session.commit()
+    await upload(client, auth_headers)
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).json()["stale"] is False
+    if edit == "fit":
+        item = await db_session.get(ClothingItem, preview_setup["items"][0])
+        item.tags = {"fit": "relaxed"}
+    elif edit == "face":
+        monkeypatch.setattr(preview_service, "face_reference", lambda paths: (b"new-crop", "new"))
+    else:
+        user.body_measurements = {} if edit == "reset" else {"height": 181}
+    await db_session.commit()
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).json()["stale"] is True
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).json()["stale"] is False
+    assert provider.await_count == 2
+
+
+@pytest.mark.parametrize("failure", ["empty", "opaque", "malformed", "exception"])
+def test_face_crop_unavailable(failure, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.services.preview_face import crop_face
+
+    def remove(image):
+        if failure == "exception":
+            raise ValueError("private data")
+        return Image.new("RGBA", image.size, (0, 0, 0, 255 if failure == "opaque" else 0))
+
+    monkeypatch.setattr(
+        "app.services.preview_face.get_provider", lambda: SimpleNamespace(remove=remove)
+    )
+    assert crop_face(b"invalid" if failure == "malformed" else _jpeg_bytes(), ".jpg") is None
+
+
+def test_face_crop_uses_original_pixels_and_mask_cache(monkeypatch):
+    from types import SimpleNamespace
+
+    from PIL import ImageDraw
+
+    from app.services.preview_face import crop_face
+
+    calls = []
+
+    def remove(image):
+        calls.append(image.size)
+        mask = Image.new("RGBA", image.size)
+        draw = ImageDraw.Draw(mask)
+        draw.rectangle((200, 40, 330, 180), fill=(0, 0, 0, 255))
+        draw.rectangle((150, 180, 380, 760), fill=(0, 0, 0, 255))
+        return mask
+
+    monkeypatch.setattr(
+        "app.services.preview_face.get_provider", lambda: SimpleNamespace(remove=remove)
+    )
+    data = _jpeg_bytes(size=(1800, 2400))
+    crop = crop_face(data, ".jpg")
+    assert crop is not None
+    image = Image.open(BytesIO(crop))
+    assert image.height > 480 and image.width > 480
+    assert crop_face(data, ".jpg") == crop
+    assert calls == [(600, 800)]
