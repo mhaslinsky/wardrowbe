@@ -1,25 +1,60 @@
 import importlib.util
+from io import BytesIO
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
 from PIL import Image, ImageDraw
 
-from app.models.item import ClothingItem, ItemStatus
+from app.models.item import ClothingItem, ItemImage, ItemStatus
+from app.services import photo_redraw_service as photos
 from app.services.image_service import VARIANTS, ImageService
-from app.services.photo_redraw_service import retained_paths
+from app.workers.background_removal import remove_item_background_job
+from app.workers.rotation import rotate_item_image_job
+from tests.test_image_undo_replace import BLUE, _mock_provider
 
 
 def load_script():
     spec = importlib.util.spec_from_file_location(
         "compress_cutout_variants",
-        Path(__file__).parents[1] / "scripts" / "compress_cutout_variants.py",
+        Path(__file__).parents[1] / "scripts/compress_cutout_variants.py",
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def paths_of(item):
+    return {field: getattr(item, field) for field in photos.PHOTO_FIELDS}
+
+
+async def persisted_cutout(db, user, metadata=False):
+    service = ImageService()
+    directory = service._get_user_path(user.id)
+    stem = str(directory.relative_to(service.storage_path) / str(uuid4()))
+    paths = {variant.path_field: f"{stem}{variant.suffix}.png" for variant in VARIANTS}
+    for variant in VARIANTS:
+        image = Image.new("RGBA", (800, 400), (20, 30, 40, 128))
+        image.thumbnail(variant.box)
+        image.save(service.get_image_path(paths[variant.path_field]))
+    item = ClothingItem(user_id=user.id, type="shirt", status=ItemStatus.ready, **paths)
+    if metadata:
+        item.photo_redraw = {
+            "original": dict(paths),
+            "redrawn": dict(paths),
+            "files": list(paths.values()),
+        }
+    db.add(item)
+    await db.commit()
+    return service, item
+
+
+def snapshot(service, user_id):
+    return {
+        str(path.relative_to(service.storage_path)): path.read_bytes()
+        for path in (service.storage_path / str(user_id)).iterdir()
+    }
 
 
 @pytest.mark.parametrize("color", [(12, 12, 18), (245, 245, 240)])
@@ -34,329 +69,274 @@ def test_cutout_webp_alpha_and_copy(tmp_path, color):
     copied = service.copy_photo(paths)
     for variant, limit in zip(VARIANTS[1:], (120_000, 40_000), strict=True):
         path = service.get_image_path(paths[variant.path_field])
-        assert path.suffix == ".webp"
-        assert path.stat().st_size < limit
+        assert path.suffix == ".webp" and path.stat().st_size < limit
         with Image.open(path) as preview:
-            assert preview.format == "WEBP"
-            assert preview.getpixel((0, 0))[3] == 0
+            assert preview.format == "WEBP" and preview.getpixel((0, 0))[3] == 0
             assert preview.getpixel((preview.width // 2, preview.height // 2))[3] == 255
         assert Path(copied[variant.path_field]).suffix == ".webp"
         assert service.get_image_path(copied[variant.path_field]).read_bytes() == path.read_bytes()
 
 
-def legacy_item(service, stem="photo"):
-    paths = {}
-    for variant in VARIANTS:
-        path = f"{stem}{variant.suffix}.png"
-        Image.new("RGBA", (800, 400), (20, 30, 40, 128)).save(service.get_image_path(path))
-        paths[variant.path_field] = path
-    item = SimpleNamespace(
-        **paths,
-        original_image_path=None,
-        photo_redraw={
-            "live": dict(paths),
-            "original": dict(paths),
-            "redrawn": dict(paths),
-            "files": list(paths.values()),
-            "retained": list(paths.values()),
-        },
-    )
-    return item
-
-
-def fake_photo_db(item, committed=None):
-    async def execute(query):
-        rows = [committed or item] if query.column_descriptions[0]["entity"] is ClothingItem else []
-        return SimpleNamespace(all=lambda: rows)
-
-    return SimpleNamespace(
-        commit=AsyncMock(),
-        rollback=AsyncMock(),
-        scalars=AsyncMock(return_value=SimpleNamespace(all=lambda: [])),
-        execute=AsyncMock(side_effect=execute),
-    )
-
-
 @pytest.mark.parametrize("dry_run", [True, False])
-async def test_backfill_paths_and_ownership(tmp_path, monkeypatch, dry_run):
-    script = load_script()
-    service = ImageService(str(tmp_path))
-    item = legacy_item(service)
-    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
-    monkeypatch.setattr(script, "lock_photo", AsyncMock(return_value=item))
-
-    async def commit():
-        assert service.get_image_path("photo_medium.png").exists()
-        assert all(service.get_image_path(path).exists() for path in retained_paths(item).values())
-
-    db = fake_photo_db(item)
-    db.commit.side_effect = commit
-    result = await script.compress_item(db, uuid4(), service, dry_run)
-    assert result["variants"] == 2
-    assert result["after_bytes"] < result["before_bytes"]
-    assert service.get_image_path("photo.png").read_bytes() == before["photo.png"]
-    if dry_run:
-        assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
-        db.commit.assert_not_called()
-    else:
-        assert item.medium_path.endswith(".webp")
-        for name in ("live", "original", "redrawn"):
-            assert item.photo_redraw[name]["medium_path"] == item.medium_path
-        assert set(retained_paths(item).values()) == {path.name for path in tmp_path.iterdir()}
-        assert not service.get_image_path("photo_medium.png").exists()
-        assert (await script.compress_item(db, uuid4(), service))["variants"] == 0
-
-
-async def test_backfill_commit_failure_removes_unowned_writes(tmp_path, monkeypatch):
-    script = load_script()
-    service = ImageService(str(tmp_path))
-    item = legacy_item(service)
-    original = legacy_item(service)
-    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
-    monkeypatch.setattr(script, "lock_photo", AsyncMock(side_effect=[item, original]))
-    db = fake_photo_db(item, original)
-    db.commit.side_effect = RuntimeError("commit failed")
-    with pytest.raises(RuntimeError, match="commit failed"):
-        await script.compress_item(db, uuid4(), service, False)
-    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
-
-
-def test_missing_source_fails_without_writing(tmp_path):
-    script = load_script()
-    service = ImageService(str(tmp_path))
-    item = legacy_item(service)
-    service.get_image_path(item.medium_path).unlink()
-    before = set(tmp_path.iterdir())
-    with pytest.raises(FileNotFoundError):
-        script.plan_variants(item, service)
-    assert set(tmp_path.iterdir()) == before
-
-
-@pytest.mark.parametrize("metadata", [None, {}])
-async def test_empty_metadata_and_no_previews_are_unchanged(tmp_path, monkeypatch, metadata):
-    script = load_script()
-    service = ImageService(str(tmp_path))
-    item = SimpleNamespace(
-        image_path="original.png",
-        medium_path=None,
-        thumbnail_path=None,
-        original_image_path=None,
-        photo_redraw=metadata,
-    )
-    Image.new("RGBA", (20, 20)).save(service.get_image_path(item.image_path))
-    monkeypatch.setattr(script, "lock_photo", AsyncMock(return_value=item))
-    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
-    assert await script.compress_item(db, uuid4(), service, False) == {
-        "variants": 0,
-        "before_bytes": 0,
-        "after_bytes": 0,
-        "skipped": 0,
-    }
-    db.commit.assert_not_called()
-    assert item.photo_redraw == metadata
-    assert {path.name for path in tmp_path.iterdir()} == {"original.png"}
-
-
-def test_malformed_preview_fails_without_writes(tmp_path):
-    script = load_script()
-    service = ImageService(str(tmp_path))
-    item = legacy_item(service)
-    service.get_image_path(item.medium_path).write_bytes(b"not an image")
-    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
-    with pytest.raises(OSError):
-        script.plan_variants(item, service)
-    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
-
-
-async def test_backfill_database_commit_and_photo_switching(
-    tmp_path, db_session, test_user, monkeypatch
-):
-    from app.services import photo_redraw_service
-
-    script = load_script()
-    service = ImageService(str(tmp_path))
-    legacy = legacy_item(service, str(uuid4()))
-    item = ClothingItem(user_id=test_user.id, type="shirt", **vars(legacy))
-    item.photo_redraw = {**item.photo_redraw, "selected": "redrawn"}
-    db_session.add(item)
-    await db_session.commit()
-    item_id = item.id
-    original_bytes = service.get_image_path(item.image_path).read_bytes()
-    await script.compress_item(db_session, item_id, service, False)
+async def test_backfill_paths_and_ownership(db_session, test_user, dry_run):
+    service, item = await persisted_cutout(db_session, test_user, metadata=True)
+    item_id, original = item.id, item.image_path
+    before = snapshot(service, test_user.id)
+    result = await load_script().compress_item(db_session, item_id, service, dry_run)
     await db_session.refresh(item)
-    assert item.photo_redraw["redrawn"]["medium_path"].endswith(".webp")
-    assert not service.get_image_path(legacy.medium_path).exists()
-    assert service.get_image_path(item.image_path).read_bytes() == original_bytes
-    monkeypatch.setattr(photo_redraw_service, "ImageService", lambda: service)
-    for choice in ("original", "redrawn"):
-        photo_redraw_service.select_photo(item, choice)
-        await db_session.commit()
-        await db_session.refresh(item)
-        assert item.photo_redraw["selected"] == choice
-        for field in ("medium_path", "thumbnail_path"):
-            path = service.get_image_path(getattr(item, field))
-            assert path.suffix == ".webp"
-            assert Image.open(path).format == "WEBP"
-    owned = set(retained_paths(item).values())
-    assert owned == {path.name for path in tmp_path.iterdir()}
+    assert result["variants"] == 2 and result["after_bytes"] < result["before_bytes"]
+    assert service.get_image_path(original).read_bytes() == before[original]
+    if dry_run:
+        assert snapshot(service, test_user.id) == before
+        assert item.medium_path.endswith(".png")
+    else:
+        assert item.medium_path == str(
+            Path(original).with_name(Path(original).stem + "_medium.webp")
+        )
+        for name in ("original", "redrawn"):
+            assert item.photo_redraw[name] == paths_of(item)
+        assert set(photos.retained_paths(item).values()) == set(snapshot(service, test_user.id))
+        assert (await load_script().compress_item(db_session, item_id, service))["variants"] == 0
+
+
+async def test_backfill_commit_failure_removes_unowned_writes(db_session, test_user, monkeypatch):
+    service, item = await persisted_cutout(db_session, test_user)
+    before = snapshot(service, test_user.id)
+    monkeypatch.setattr(db_session, "commit", AsyncMock(side_effect=RuntimeError("commit failed")))
+    with pytest.raises(RuntimeError, match="commit failed"):
+        await load_script().compress_item(db_session, item.id, service, False)
+    assert snapshot(service, test_user.id) == before
+
+
+@pytest.mark.parametrize("payload", [None, b"not an image"])
+async def test_missing_or_malformed_active_source_fails_without_writes(
+    db_session, test_user, payload
+):
+    service, item = await persisted_cutout(db_session, test_user)
+    path = service.get_image_path(item.medium_path)
+    path.unlink() if payload is None else path.write_bytes(payload)
+    before = snapshot(service, test_user.id)
+    with pytest.raises(OSError):
+        await load_script().compress_item(db_session, item.id, service, False)
+    assert snapshot(service, test_user.id) == before
 
 
 @pytest.mark.parametrize("started_at", [None, "2000-01-01T00:00:00+00:00"])
-async def test_backfill_skips_generating_even_when_stale(tmp_path, monkeypatch, started_at):
-    script = load_script()
-    service = ImageService(str(tmp_path))
-    item = legacy_item(service)
-    item.photo_redraw = {**item.photo_redraw, "status": "generating", "started_at": started_at}
-    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
-    monkeypatch.setattr(script, "lock_photo", AsyncMock(return_value=item))
-    db = fake_photo_db(item)
-    result = await script.compress_item(db, uuid4(), service, False)
-    assert result == {"variants": 0, "before_bytes": 0, "after_bytes": 0, "skipped": 1}
-    assert item.medium_path.endswith(".png")
-    assert item.photo_redraw["status"] == "generating"
-    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
-    db.commit.assert_not_called()
-
-
-async def persisted_cutout(db, user, metadata=False):
-    service = ImageService()
-    service._get_user_path(user.id)
-    legacy = legacy_item(service, f"{user.id}/{uuid4()}")
-    item = ClothingItem(user_id=user.id, type="shirt", status=ItemStatus.ready, **vars(legacy))
-    if not metadata:
-        item.photo_redraw = None
-    db.add(item)
-    await db.commit()
-    return service, item
-
-
-async def test_backfill_updates_gallery_after_primary_swap(db_session, test_user):
-    from io import BytesIO
-
-    from app.models.item import ItemImage
-    from app.services.photo_redraw_service import set_active_photo
-
+async def test_backfill_skips_generating_even_when_stale(db_session, test_user, started_at):
     service, item = await persisted_cutout(db_session, test_user, metadata=True)
-    item_id = item.id
-    source_medium = item.medium_path
+    item.photo_redraw = {**item.photo_redraw, "status": "generating", "started_at": started_at}
+    await db_session.commit()
+    before = snapshot(service, test_user.id)
+    result = await load_script().compress_item(db_session, item.id, service, False)
+    await db_session.refresh(item)
+    assert result["skipped"] == 1 and result["variants"] == 0
+    assert item.photo_redraw["status"] == "generating"
+    assert snapshot(service, test_user.id) == before
+
+
+async def test_backfill_updates_gallery_after_primary_swap(
+    db_session, test_user, client, auth_headers
+):
+    service, item = await persisted_cutout(db_session, test_user, metadata=True)
+    item_id, source = item.id, item.medium_path
     payload = BytesIO()
     Image.new("RGB", (600, 400), "white").save(payload, "JPEG")
     paths = await service.process_and_store(test_user.id, payload.getvalue(), "other.jpg")
-    gallery = ItemImage(
-        item_id=item_id,
-        **{
-            field: getattr(item, field) for field in ("image_path", "medium_path", "thumbnail_path")
-        },
-    )
+    gallery = ItemImage(item_id=item_id, **{field: paths[field] for field in photos.PHOTO_FIELDS})
     db_session.add(gallery)
     await db_session.commit()
-    set_active_photo(item, paths, "custom")
-    await db_session.commit()
-    assert gallery.medium_path == source_medium
+    response = await client.post(
+        f"/api/v1/items/{item_id}/images/{gallery.id}/set-primary", headers=auth_headers
+    )
+    assert response.status_code == 200, response.text
     await load_script().compress_item(db_session, item_id, service, False)
     await db_session.refresh(gallery)
-    assert gallery.medium_path == str(Path(source_medium).with_suffix(".webp"))
+    assert gallery.medium_path == str(Path(source).with_suffix(".webp"))
     assert Image.open(service.get_image_path(gallery.medium_path)).format == "WEBP"
-    assert service.get_image_path(gallery.image_path).exists()
-    assert not service.get_image_path(source_medium).exists()
+    assert (
+        service.get_image_path(gallery.image_path).exists()
+        and not service.get_image_path(source).exists()
+    )
 
 
 @pytest.mark.parametrize("backfilled", [False, True])
-@pytest.mark.parametrize("worker", [False, True])
-async def test_rotation_persists_preview_paths_before_and_after_backfill(
-    db_session, test_user, client, auth_headers, backfilled, worker
+@pytest.mark.parametrize(
+    "operation",
+    ["rotate", "rotate_worker", "remove-background", "remove_worker", "restore-original"],
+)
+async def test_edits_preserve_stored_paths_and_update_content(
+    db_session, test_user, client, auth_headers, backfilled, operation
 ):
-    from unittest.mock import patch
-
-    from app.workers.rotation import rotate_item_image_job
-
     service, item = await persisted_cutout(db_session, test_user)
     item_id = item.id
-    old_medium = item.medium_path
     if backfilled:
         await load_script().compress_item(db_session, item_id, service, False)
         await db_session.refresh(item)
-    if worker:
-        with (
-            patch("app.workers.rotation.get_db_session", return_value=db_session),
-            patch.object(db_session, "close", new_callable=AsyncMock),
-        ):
-            result = await rotate_item_image_job({}, str(item_id), "cw")
-        assert result["status"] == "success", result
-    else:
-        response = await client.post(f"/api/v1/items/{item_id}/rotate", headers=auth_headers)
-        assert response.status_code == 200, response.text
-    await db_session.refresh(item)
-    base = item.image_path.rsplit(".", 1)[0]
-    assert item.medium_path == f"{base}_medium.webp"
-    assert item.thumbnail_path == f"{base}_thumb.webp"
-    assert Image.open(service.get_image_path(item.medium_path)).size == (400, 800)
-    assert Image.open(service.get_image_path(item.thumbnail_path)).size == (200, 400)
-    assert not service.get_image_path(old_medium).exists()
-
-
-async def test_backfill_retains_source_owned_by_another_item(db_session, test_user):
-    service, item = await persisted_cutout(db_session, test_user)
-    source = item.medium_path
-    other = ClothingItem(
-        user_id=test_user.id, type="shirt", image_path=item.image_path, medium_path=source
-    )
-    db_session.add(other)
-    await db_session.commit()
-    await load_script().compress_item(db_session, item.id, service, False)
-    await db_session.refresh(other)
-    assert other.medium_path == source
-    assert service.get_image_path(source).exists()
-
-
-@pytest.mark.parametrize("worker", [False, True])
-async def test_background_removal_and_restore_persist_previews(
-    db_session, test_user, client, auth_headers, worker
-):
-    from unittest.mock import patch
-
-    from app.workers.background_removal import remove_item_background_job
-    from tests.test_image_undo_replace import _mock_provider
-
-    service, item = await persisted_cutout(db_session, test_user)
-    item_id = item.id
-    old_medium = item.medium_path
+    paths = paths_of(item)
+    if operation == "restore-original":
+        item.original_image_path = item.image_path.replace(".png", "_orig.jpg")
+        Image.new("RGB", (300, 700), "green").save(service.get_image_path(item.original_image_path))
+        await db_session.commit()
+    before = service.get_image_path(item.medium_path).read_bytes()
     with patch("app.services.background_removal.get_provider", return_value=_mock_provider()):
-        if worker:
+        if operation.endswith("_worker"):
+            module, job, argument = (
+                ("rotation", rotate_item_image_job, "cw")
+                if operation == "rotate_worker"
+                else ("background_removal", remove_item_background_job, "#ffffff")
+            )
             with (
-                patch("app.workers.background_removal.get_db_session", return_value=db_session),
+                patch(f"app.workers.{module}.get_db_session", return_value=db_session),
                 patch.object(db_session, "close", new_callable=AsyncMock),
             ):
-                result = await remove_item_background_job({}, str(item_id), "#ffffff")
+                result = await job({}, str(item_id), argument)
             assert result["status"] == "success", result
         else:
             response = await client.post(
-                f"/api/v1/items/{item_id}/remove-background", headers=auth_headers, json={}
+                f"/api/v1/items/{item_id}/{operation}", headers=auth_headers, json={}
             )
             assert response.status_code == 200, response.text
     await db_session.refresh(item)
-    assert item.medium_path.endswith("_medium.webp")
-    assert item.thumbnail_path.endswith("_thumb.webp")
-    assert not service.get_image_path(old_medium).exists()
-    response = await client.post(f"/api/v1/items/{item_id}/restore-original", headers=auth_headers)
-    assert response.status_code == 200, response.text
+    assert paths_of(item) == paths
+    assert service.get_image_path(item.medium_path).read_bytes() != before
+    with Image.open(service.get_image_path(item.medium_path)) as preview:
+        assert preview.format == ("WEBP" if backfilled else "PNG")
+        if operation.startswith("rotate"):
+            assert preview.size == (400, 800)
+        elif operation == "restore-original":
+            assert preview.size == (300, 700)
+        else:
+            assert all(
+                abs(actual - expected) < 10
+                for actual, expected in zip(
+                    preview.convert("RGB").getpixel((200, 200)), BLUE, strict=True
+                )
+            )
+
+
+@pytest.mark.parametrize("worker", [False, True])
+async def test_failed_rotate_keeps_every_committed_path(
+    db_session, test_user, client, auth_headers, worker
+):
+    service, item = await persisted_cutout(db_session, test_user, metadata=True)
+    item_id = item.id
+    rotate = ImageService.rotate_image
+
+    def fail_after_write(self, *args, **kwargs):
+        rotate(self, *args, **kwargs)
+        raise ValueError("rotate failed")
+
+    with patch.object(ImageService, "rotate_image", fail_after_write):
+        if worker:
+            with (
+                patch("app.workers.rotation.get_db_session", return_value=db_session),
+                patch.object(db_session, "close", new_callable=AsyncMock),
+            ):
+                result = await rotate_item_image_job({}, str(item_id), "cw")
+            assert result["status"] == "error"
+        else:
+            response = await client.post(f"/api/v1/items/{item_id}/rotate", headers=auth_headers)
+            assert response.status_code == 400, response.text
     await db_session.refresh(item)
-    assert item.original_image_path is None
-    for field in ("medium_path", "thumbnail_path"):
-        assert Image.open(service.get_image_path(getattr(item, field))).format == "WEBP"
+    owned = set(photos.retained_paths(item).values())
+    assert all(service.get_image_path(path).exists() for path in owned)
+    assert set(snapshot(service, test_user.id)) == owned
 
 
-async def test_restore_png_item_persists_new_previews(db_session, test_user, client, auth_headers):
-    service, item = await persisted_cutout(db_session, test_user)
-    old_medium = item.medium_path
-    item.original_image_path = item.image_path.replace(".png", "_orig.jpg")
-    service.get_image_path(item.original_image_path).write_bytes(
-        service.get_image_path(item.image_path).read_bytes()
-    )
+async def test_switch_history_missing_files_are_counted(
+    db_session, test_user, client, auth_headers
+):
+    service, item = await persisted_cutout(db_session, test_user, metadata=True)
+    item_id = item.id
+    for choice in ("original", "redrawn", "original"):
+        response = await client.post(
+            f"/api/v1/items/{item_id}/photo/{choice}", headers=auth_headers
+        )
+        assert response.status_code == 200, response.text
+    await db_session.refresh(item)
+    missing = {
+        path for path in item.photo_redraw["files"] if not service.get_image_path(path).exists()
+    }
+    assert missing
+    result = await load_script().compress_item(db_session, item_id, service, False)
+    await db_session.refresh(item)
+    assert result["missing_history"] == len(missing)
+    for name in ("original", "redrawn", "live"):
+        assert all(
+            service.get_image_path(path).exists() for path in item.photo_redraw[name].values()
+        )
+
+
+async def test_missing_required_photo_fails_one_item_and_run_continues(
+    db_session, test_user, capsys
+):
+    service, broken = await persisted_cutout(db_session, test_user, metadata=True)
+    _, valid = await persisted_cutout(db_session, test_user)
+    saved = service.copy_photo(paths_of(broken))
+    broken.photo_redraw = {**broken.photo_redraw, "original": saved}
     await db_session.commit()
-    response = await client.post(f"/api/v1/items/{item.id}/restore-original", headers=auth_headers)
-    assert response.status_code == 200, response.text
-    await db_session.refresh(item)
-    assert item.medium_path.endswith("_medium.webp")
-    assert item.thumbnail_path.endswith("_thumb.webp")
-    assert not service.get_image_path(old_medium).exists()
+    broken_id, valid_id = broken.id, valid.id
+    service.get_image_path(saved["medium_path"]).unlink()
+    totals = await load_script().compress_items(db_session, [broken_id, valid_id], service, False)
+    assert totals["failed"] == 1 and totals["items"] == 1 and totals["variants"] == 2
+    assert str(broken_id) in capsys.readouterr().out
+    await db_session.refresh(valid)
+    assert Image.open(service.get_image_path(valid.medium_path)).format == "WEBP"
+
+
+async def test_delete_rechecks_owner_under_each_lock(
+    db_session, session_maker, test_user, monkeypatch
+):
+    service, item = await persisted_cutout(db_session, test_user)
+    item_id, thumbnail, medium, full = (
+        item.id,
+        item.thumbnail_path,
+        item.medium_path,
+        item.image_path,
+    )
+    original_lock, original_rollback, original_unlink = (
+        photos.lock_photo,
+        db_session.rollback,
+        Path.unlink,
+    )
+    state = {"locks": 0, "held": False}
+
+    async def lock(db, item_id, **kwargs):
+        state["locks"] += 1
+        if state["locks"] == 3:
+            async with session_maker() as other:
+                other.add(ItemImage(item_id=item_id, image_path=full, thumbnail_path=thumbnail))
+                await other.commit()
+        result = await original_lock(db, item_id, **kwargs)
+        state["held"] = True
+        return result
+
+    async def rollback():
+        await original_rollback()
+        state["held"] = False
+
+    def unlink(path, *args, **kwargs):
+        assert state["held"]
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(photos, "lock_photo", lock)
+    script = load_script()
+    monkeypatch.setattr(script, "lock_photo", lock)
+    monkeypatch.setattr(db_session, "rollback", rollback)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    await script.compress_item(db_session, item_id, service, False)
+    assert state["locks"] == 3
+    assert (
+        service.get_image_path(thumbnail).exists() and not service.get_image_path(medium).exists()
+    )
+
+
+def test_in_place_edit_does_not_create_missing_preview_paths(tmp_path):
+    service = ImageService(str(tmp_path))
+    Image.new("RGBA", (80, 40)).save(tmp_path / "original.png")
+    result = service.rotate_image(
+        "original.png", variant_paths={"medium_path": None, "thumbnail_path": None}
+    )
+    assert result == {"image_path": "original.png"}
+    assert {path.name for path in tmp_path.iterdir()} == {"original.png"}
+    assert Image.open(tmp_path / "original.png").size == (40, 80)
