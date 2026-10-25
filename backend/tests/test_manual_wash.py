@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 
 from app.main import app
 from app.models.item import ItemHistory
+from app.models.user import User
 from app.services.recommendation_service import RecommendationService
 from app.services.wear_service import WearService
 from app.utils.auth import get_current_user
@@ -31,6 +32,8 @@ async def test_flag_without_wear_and_wash_zero_wears(client, db_session, test_us
     washed = await client.post(f"/api/v1/items/{item.id}/wash", json={})
     assert washed.status_code == 200, washed.text
     assert washed.json()["needs_wash"] is False
+    await db_session.refresh(item)
+    assert item.manually_needs_wash is False
     again = await client.post(f"/api/v1/items/{item.id}/wash", json={})
     assert again.status_code == 400
 
@@ -66,6 +69,7 @@ async def test_manual_flag_survives_wear_and_undo(
     assert undone.status_code == 200, undone.text
     await db_session.refresh(item)
     assert item.needs_wash is (not keep_wash)
+    assert item.manually_needs_wash is (not keep_wash)
     assert item.wears_since_wash == item.wear_count == 0
 
 
@@ -84,3 +88,13 @@ async def test_manual_flag_invalid_item(client, test_user, item_id):
     identifier = str(uuid4()) if item_id == "missing" else "bad-id"
     response = await client.post(f"/api/v1/items/{identifier}/in-the-wash")
     assert response.status_code == (404 if item_id == "missing" else 422)
+
+
+async def test_manual_flag_cannot_change_another_users_item(client, db_session, test_user):
+    item = await _item(db_session, test_user, "shirt")
+    other_user = User(id=uuid4(), email="other-manual-wash@example.test")
+    app.dependency_overrides[get_current_user] = lambda: other_user
+    response = await client.post(f"/api/v1/items/{item.id}/in-the-wash")
+    assert response.status_code == 404
+    await db_session.refresh(item)
+    assert item.needs_wash is False

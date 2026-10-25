@@ -1504,6 +1504,27 @@ async def get_item_wear_stats(
     return await item_service.get_wear_stats(item, get_user_today(current_user))
 
 
+@router.post("/{item_id}/in-the-wash", response_model=ItemResponse)
+async def put_item_in_the_wash(
+    item_id: UUID,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ItemResponse:
+    item = await db.scalar(
+        select(ClothingItem)
+        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    item.manually_needs_wash = True
+    item.needs_wash = True
+    await db.flush()
+    await db.refresh(item)
+    return ItemResponse.model_validate(item)
+
+
 @router.post("/{item_id}/wash", response_model=ItemResponse)
 async def log_item_wash(
     item_id: UUID,
@@ -1512,7 +1533,12 @@ async def log_item_wash(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> ItemResponse:
     item_service = ItemService(db)
-    item = await item_service.get_by_id(item_id, current_user.id)
+    item = await db.scalar(
+        select(ClothingItem)
+        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
 
     if not item:
         raise HTTPException(
@@ -1520,7 +1546,7 @@ async def log_item_wash(
             detail="Item not found",
         )
 
-    if item.wears_since_wash == 0:
+    if item.wears_since_wash == 0 and not item.needs_wash:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Item is already clean (0 wears since last wash)",
