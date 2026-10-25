@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -77,6 +78,13 @@ def urls(paths):
     }
 
 
+def garment_size(notes: str | None) -> str | None:
+    if not notes:
+        return None
+    match = re.search(r"(?:^|[|\n])[ \t]*Size:[ \t]*([^|\n]*)", notes, re.IGNORECASE)
+    return match.group(1).strip()[:100] or None if match else None
+
+
 def snapshot(outfit):
     service, records, images = ImageService(), [], []
     for link in sorted(outfit.items, key=lambda link: str(link.item_id)):
@@ -84,6 +92,7 @@ def snapshot(outfit):
         path = item.medium_path or item.image_path
         image = jpeg(path, 800) if path and service.get_image_path(path).is_file() else None
         images.append(image)
+        size = garment_size(item.notes)
         records.append(
             {
                 "id": str(link.item_id),
@@ -94,10 +103,13 @@ def snapshot(outfit):
                 "primary_color": item.primary_color,
                 "layer": link.layer_type,
                 "fit": (item.tags or {}).get("fit"),
+                **({"size": size} if size else {}),
                 "content_hash": hashlib.sha256(image).hexdigest() if image else None,
             }
         )
-    key = hashlib.sha256(json.dumps(records, sort_keys=True).encode()).hexdigest()
+    key = hashlib.sha256(
+        json.dumps([records, outfit.style_notes or None], sort_keys=True).encode()
+    ).hexdigest()
     return key, images, records
 
 
@@ -308,7 +320,8 @@ class PreviewService:
             garments = [
                 {
                     field: record[field]
-                    for field in ("type", "colors", "primary_color", "layer", "fit")
+                    for field in ("type", "colors", "primary_color", "layer", "fit", "size")
+                    if field in record
                 }
                 for record in records
             ]
@@ -331,6 +344,12 @@ class PreviewService:
                 + data
                 + "\n</garment_data>"
             )
+            if outfit.style_notes:
+                prompt += (
+                    "\n<style_notes>\n"
+                    + json.dumps(outfit.style_notes).replace("<", "\\u003c").replace(">", "\\u003e")
+                    + "\n</style_notes>"
+                )
             if measurements:
                 prompt += (
                     "\n<body_measurements>\n"
