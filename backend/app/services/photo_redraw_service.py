@@ -264,12 +264,14 @@ class PhotoRedrawService:
         self.recorded_colors = {}
         self.is_footwear = False
 
-    async def request(self, image: bytes | list[bytes], prompt: str, modality: str) -> dict:
+    async def request(
+        self, image: bytes | list[bytes], prompt: str, modality: str, mime_type: str = "image/png"
+    ) -> dict:
         """Make one Gemini call without automatically retrying a possible charge."""
         settings = get_settings()
         images = image if isinstance(image, list) else [image]
         parts = [
-            {"inlineData": {"mimeType": "image/png", "data": base64.b64encode(data).decode()}}
+            {"inlineData": {"mimeType": mime_type, "data": base64.b64encode(data).decode()}}
             for data in images
         ]
         body = {

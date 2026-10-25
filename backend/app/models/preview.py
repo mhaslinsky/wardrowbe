@@ -27,10 +27,12 @@ class OutfitPreview(Base):
         ForeignKey("outfits.id", ondelete="CASCADE"), primary_key=True
     )
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    cache_key: Mapped[str] = mapped_column(Text)
-    paths: Mapped[dict] = mapped_column(JSONB)
+    cache_key: Mapped[str] = mapped_column(Text, default="")
+    paths: Mapped[dict] = mapped_column(JSONB, default=dict)
+    claim_id: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    usage: Mapped[dict] = mapped_column(JSONB)
+    usage: Mapped[dict] = mapped_column(JSONB, default=dict)
 
 
 User.preview_photo = relationship(PreviewPhoto, cascade="all, delete-orphan", uselist=False)
@@ -48,15 +50,22 @@ def collect_deleted_preview_files(session, _context, _instances):
             paths.update({path: path for path in record.paths.values()})
 
 
-@event.listens_for(Session, "after_commit")
-def remove_preview_files(session):
+def delete_preview_files(paths, strict=False):
     from app.services.image_service import ImageService
 
-    paths = session.info.pop("preview_cleanup", {})
-    try:
-        ImageService().delete_images(paths)
-    except OSError:
-        logging.getLogger(__name__).exception("Preview file cleanup failed")
+    service = ImageService()
+    for path in paths.values():
+        try:
+            service.delete_images({path: path})
+        except OSError:
+            logging.getLogger(__name__).warning("Preview file cleanup failed: %s", path)
+            if strict:
+                raise
+
+
+@event.listens_for(Session, "after_commit")
+def remove_preview_files(session):
+    delete_preview_files(session.info.pop("preview_cleanup", {}))
 
 
 @event.listens_for(Session, "after_rollback")

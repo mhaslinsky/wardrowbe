@@ -25,6 +25,8 @@ def upgrade():
         sa.Column("cache_key", sa.Text(), nullable=False),
         sa.Column("paths", JSONB(), nullable=False),
         sa.Column("usage", JSONB(), nullable=False),
+        sa.Column("claim_id", sa.Text(), nullable=True),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
@@ -33,5 +35,11 @@ def upgrade():
 
 
 def downgrade():
+    from app.models.preview import delete_preview_files
+
+    connection = op.get_bind()
+    for table in ("outfit_previews", "preview_photos"):
+        for paths in connection.execute(sa.text(f"SELECT paths FROM {table}")).scalars():
+            delete_preview_files(paths, strict=True)
     op.drop_table("outfit_previews")
     op.drop_table("preview_photos")
