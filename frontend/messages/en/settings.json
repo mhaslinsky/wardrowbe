@@ -150,5 +150,13 @@
     "description": "One rule per line, up to 20 rules.",
     "label": "Rules",
     "limit": "Use up to 20 rules of 300 characters each."
+  },
+  "previewPhoto": {
+    "title": "Preview photo",
+    "guidance": "Full-length, facing the camera, fitted clothes, even light.",
+    "upload": "Upload photo",
+    "replace": "Replace photo",
+    "confirm": "Remove photo and saved previews?",
+    "failed": "Photo update failed"
   }
 }

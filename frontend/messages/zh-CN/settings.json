@@ -150,5 +150,13 @@
     "description": "每行一条，最多20条。",
     "label": "规则",
     "limit": "最多20条规则，每条不超过300个字符。"
+  },
+  "previewPhoto": {
+    "title": "预览照片",
+    "guidance": "全身、正对镜头、合身衣物、均匀光线。",
+    "upload": "上传照片",
+    "replace": "更换照片",
+    "confirm": "删除照片及已保存的预览？",
+    "failed": "照片更新失败"
   }
 }

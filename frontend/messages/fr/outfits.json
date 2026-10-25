@@ -211,5 +211,13 @@
     "learningStale": "Suggestions parfois retardées",
     "replaceFailed": "Jour rouvert. Remplacement échoué",
     "replaceFailedStale": "Remplacement échoué ; suggestions parfois retardées"
+  },
+  "preview": {
+    "see": "Voir sur moi",
+    "redraw": "Redessiner",
+    "changed": "Tenue modifiée",
+    "addPhoto": "Ajoutez une photo dans les paramètres",
+    "drawing": "Création de l’aperçu…",
+    "failed": "Échec de l’aperçu"
   }
 }

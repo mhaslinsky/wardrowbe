@@ -58,3 +58,5 @@ it.each([null, '2026-10-05'])('opens note feedback for outfit dated %s', (schedu
   fireEvent.click(screen.getByText('Add note', { selector: 'button' }))
   expect(screen.getByTestId('note-dialog')).toHaveTextContent('o1:true')
 })
+
+vi.mock('@/components/outfit-preview', () => ({ OutfitPreview: ({ children }: { children: React.ReactNode }) => children }))

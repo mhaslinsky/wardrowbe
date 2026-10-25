@@ -51,3 +51,5 @@ describe('standing rules settings', () => {
     }
   })
 })
+
+vi.mock('@/components/preview-photo-settings', () => ({ PreviewPhotoSettings: () => null }))

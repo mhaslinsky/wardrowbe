@@ -211,5 +211,13 @@
     "learningStale": "推荐可能延迟更新",
     "replaceFailed": "当天记录已撤销。替换失败",
     "replaceFailedStale": "替换失败，推荐可能延迟更新"
+  },
+  "preview": {
+    "see": "查看上身效果",
+    "redraw": "重新生成",
+    "changed": "穿搭已更改",
+    "addPhoto": "在设置中添加预览照片",
+    "drawing": "正在生成预览…",
+    "failed": "预览失败"
   }
 }

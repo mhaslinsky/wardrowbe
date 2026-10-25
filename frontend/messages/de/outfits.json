@@ -211,5 +211,13 @@
     "learningStale": "Vorschläge können verzögert sein",
     "replaceFailed": "Tag wieder offen. Ersetzen fehlgeschlagen",
     "replaceFailedStale": "Ersetzen fehlgeschlagen; Vorschläge können verzögert sein"
+  },
+  "preview": {
+    "see": "An mir ansehen",
+    "redraw": "Neu zeichnen",
+    "changed": "Outfit geändert",
+    "addPhoto": "Vorschaufoto in Einstellungen hinzufügen",
+    "drawing": "Vorschau wird erstellt…",
+    "failed": "Vorschau fehlgeschlagen"
   }
 }

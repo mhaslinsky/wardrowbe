@@ -211,5 +211,13 @@
     "learningStale": "提案の反映が遅れる場合があります",
     "replaceFailed": "記録を取り消しました。変更できませんでした",
     "replaceFailedStale": "変更できず、提案の反映が遅れる場合があります"
+  },
+  "preview": {
+    "see": "着用イメージを見る",
+    "redraw": "再生成",
+    "changed": "コーデが変更されました",
+    "addPhoto": "設定でプレビュー写真を追加",
+    "drawing": "プレビューを生成中…",
+    "failed": "生成に失敗しました"
   }
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import { OutfitPreview } from '@/components/outfit-preview';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -169,6 +171,7 @@ export default function OutfitDetailPage() {
           <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
             {t('detail.items', { count: outfit.items.length })}
           </h2>
+          <OutfitPreview key={outfit.id} outfitId={outfit.id} detail>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
             {outfit.items.map((item) => (
               <Link
@@ -200,6 +203,7 @@ export default function OutfitDetailPage() {
               </Link>
             ))}
           </div>
+          </OutfitPreview>
         </CardContent>
       </Card>
 

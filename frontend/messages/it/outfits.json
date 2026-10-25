@@ -211,5 +211,13 @@
     "learningStale": "Suggerimenti in ritardo",
     "replaceFailed": "Giorno riaperto. Sostituzione fallita",
     "replaceFailedStale": "Sostituzione fallita; suggerimenti in ritardo"
+  },
+  "preview": {
+    "see": "Vedi su di me",
+    "redraw": "Ridisegna",
+    "changed": "Outfit modificato",
+    "addPhoto": "Aggiungi una foto nelle impostazioni",
+    "drawing": "Creazione anteprima…",
+    "failed": "Anteprima non riuscita"
   }
 }
