@@ -13,7 +13,7 @@ vi.mock('@/lib/hooks/use-items', async (importOriginal) => {
     () => ({ data: undefined, isPending: false, mutateAsync: vi.fn() }),
   ]));
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const item = {
   id: 'shirt', name: 'Shirt', type: 'shirt', status: 'ready', tags: {},
   image_url: '/full.jpg?signature=unchanged', medium_url: '/medium.webp', thumbnail_url: '/thumb.webp',
@@ -46,3 +46,31 @@ it.each(['close', 'escape', 'backdrop'])('opens the gallery, cycles full sources
   expect(onOpenChange).not.toHaveBeenCalled();
   expect(trigger).toHaveFocus();
 });
+
+it.each([['redrawn', 'original'], ['original', 'redrawn']] as const)(
+  'shows a %s item with a labelled %s comparison without writes', async (selected, alternate) => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const comparisonItem = { ...item, photo_redraw: { selected },
+      photo_choices: { original: '/original.jpg', redrawn: '/redrawn.jpg' } } as Item;
+    render(<QueryClientProvider client={new QueryClient()}>
+      <ItemDetailDialog item={comparisonItem} open onOpenChange={vi.fn()} />
+    </QueryClientProvider>);
+    fireEvent.click(screen.getByRole('button', { name: `photoViewer.${alternate}`, exact: true }));
+    fireEvent.click(screen.getByLabelText('open', { exact: true }));
+    await waitFor(() => expect(document.querySelector('.yarl__slide_current img'))
+      .toHaveAttribute('src', comparisonItem.photo_choices![alternate]));
+    expect(screen.getByTestId('photo-version-label')).toHaveTextContent(alternate);
+    expect(request).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('next', { exact: true }));
+    await waitFor(() => expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', '/extra.webp'));
+  });
+
+it.each([undefined, {}, { original: '/original.jpg' }, { redrawn: '/redrawn.jpg' }])(
+  'keeps single-version and missing choices unchanged: %j', (choices) => {
+    render(<QueryClientProvider client={new QueryClient()}>
+      <ItemDetailDialog item={{ ...item, additional_images: [], photo_choices: choices } as Item} open onOpenChange={vi.fn()} />
+    </QueryClientProvider>);
+    expect(screen.queryByRole('button', { name: 'photoViewer.original', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'photoViewer.redrawn', exact: true })).toBeNull();
+  });

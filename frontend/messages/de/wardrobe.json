@@ -304,6 +304,8 @@
     "bulkError": "Neuzeichnung gestoppt; prüfe die Artikel vor einem erneuten Versuch."
   },
   "photoViewer": {
+    "original": "Original",
+    "redrawn": "Neu gezeichnet",
     "open": "Foto öffnen",
     "lightbox": "Fotoansicht",
     "gallery": "Fotogalerie",

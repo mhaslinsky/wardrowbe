@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import 'yet-another-react-lightbox/styles.css';
 
 interface ItemPhotoViewerProps {
-  images: { url: string; id: string }[];
+  images: { url: string; id: string; label?: string }[];
   index: number;
   alt: string;
   children: ReactNode;
@@ -84,6 +84,11 @@ export function ItemPhotoViewer({ images, index, alt, children }: ItemPhotoViewe
             }}
             onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus(); }}>
             <Dialog.Title className="sr-only">{alt}</Dialog.Title>
+            {images[currentIndex]?.label && (
+              <div data-testid="photo-version-label" className="absolute bottom-4 inset-x-0 z-[70] text-center text-white pointer-events-none">
+                <span className="rounded bg-black/70 px-3 py-1">{images[currentIndex].label}</span>
+              </div>
+            )}
             {portal && (
               <Lightbox
                 open={open} close={() => setOpen(false)}

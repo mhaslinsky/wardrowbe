@@ -324,6 +324,13 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
 
   // Use signed URL from backend for better quality in detail view
   const imageUrl = garmentImageUrl(item, 'detail') || item.image_path;
+  const alternateChoice = item.photo_redraw?.selected === 'redrawn' ? 'original' : 'redrawn';
+  const alternateUrl = item.photo_choices?.original && item.photo_choices?.redrawn
+    ? item.photo_choices[alternateChoice] : undefined;
+  const comparisonImages = alternateUrl ? [{
+    url: alternateUrl, id: alternateChoice, label: tw(`photoViewer.${alternateChoice}`),
+  }] : [];
+
   const colorInfo = clothingColors.find((c) => c.value === item.primary_color);
   const typeInfo = clothingTypes.find((type) => type.value === item.type);
   const unrecognizedType = item.type === 'unknown' ? item.ai_unrecognized_type : null;
@@ -524,6 +531,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                 {(() => {
                   const allImages = [
                     { url: `${imageUrl}&v=${imageKey}`, id: 'primary' },
+                    ...comparisonImages,
                     ...(item.additional_images || []).map((img) => ({ url: img.image_url, id: img.id })),
                   ];
                   const currentImage = allImages[activeImageIndex] || allImages[0];
@@ -583,7 +591,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                 )}
               </div>
               {/* Thumbnail strip */}
-              {(item.additional_images?.length > 0 || isEditing) && (
+              {(comparisonImages.length > 0 || item.additional_images?.length > 0 || isEditing) && (
                 <div className="flex gap-1.5 overflow-x-auto">
                   <button
                     className={`relative w-12 h-12 rounded border-2 overflow-hidden flex-shrink-0 ${activeImageIndex === 0 ? 'border-primary' : 'border-transparent'}`}
@@ -591,11 +599,19 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                   >
                     <Image src={imageUrl} alt={t('view.primaryImage')} fill className="object-cover" sizes="48px" />
                   </button>
+                  {comparisonImages.map((image) => (
+                    <button key={image.id} aria-label={image.label}
+                      className={`relative w-20 h-16 rounded border-2 overflow-hidden flex-shrink-0 ${activeImageIndex === 1 ? 'border-primary' : 'border-transparent'}`}
+                      onClick={() => setActiveImageIndex(1)}>
+                      <Image src={image.url} alt="" fill className="object-cover" sizes="80px" />
+                      <span className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-xs">{image.label}</span>
+                    </button>
+                  ))}
                   {(item.additional_images || []).map((img, idx) => (
                     <div key={img.id} className="relative flex-shrink-0">
                       <button
-                        className={`relative w-12 h-12 rounded border-2 overflow-hidden ${activeImageIndex === idx + 1 ? 'border-primary' : 'border-transparent'}`}
-                        onClick={() => setActiveImageIndex(idx + 1)}
+                        className={`relative w-12 h-12 rounded border-2 overflow-hidden ${activeImageIndex === idx + 1 + comparisonImages.length ? 'border-primary' : 'border-transparent'}`}
+                        onClick={() => setActiveImageIndex(idx + 1 + comparisonImages.length)}
                       >
                         <Image src={img.thumbnail_url || img.image_url} alt="" fill className="object-cover" sizes="48px" />
                       </button>
@@ -616,7 +632,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                             title={t('titles.deleteImage')}
                             onClick={() => {
                               deleteImage.mutate({ itemId: item.id, imageId: img.id });
-                              if (activeImageIndex > idx) setActiveImageIndex((i) => i - 1);
+                              if (activeImageIndex > idx + comparisonImages.length) setActiveImageIndex((currentIndex) => currentIndex - 1);
                             }}
                           >
                             <X className="h-2.5 w-2.5" />
