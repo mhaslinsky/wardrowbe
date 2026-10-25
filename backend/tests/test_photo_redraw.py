@@ -12,6 +12,8 @@ from PIL import Image
 
 from app.config import get_settings
 from app.services.image_service import ImageService
+from app.utils.garment_vocabulary import types_for_role
+from app.utils.prompts import load_prompt
 from tests.test_image_undo_replace import GREEN, RED, _jpeg_bytes, _make_item, _mock_provider
 
 
@@ -1144,3 +1146,70 @@ async def test_obsolete_unlink_failure_does_not_rollback_retry(photo_item, db_se
         ImageService().get_image_path(getattr(photo_item, field)).exists() for field in PHOTO_FIELDS
     )
     assert "Could not remove obsolete redraw files" in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("item_type", [*types_for_role("footwear"), "shirt", "", "unknown"])
+@pytest.mark.parametrize("recorded", [True, False])
+async def test_redraw_prompt_by_type(item_type, recorded, photo_item, db_session):
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    photo_item.type = item_type
+    photo_item.primary_color = "sail" if recorded else None
+    photo_item.colors = ["sail", "navy", "gum"] if recorded else []
+    photo_item.tags = {"material_detail": "leather"} if recorded else {}
+    await db_session.commit()
+    encoded = BytesIO()
+    garment().save(encoded, "PNG")
+    prompts = []
+
+    async def request(image, prompt, modality):
+        prompts.append(prompt)
+        if modality == "TEXT":
+            return reply(
+                [
+                    {
+                        "text": json.dumps(
+                            {"needs_redraw": True, "confidence": 0.99, "reason": "Wrong layout"}
+                        )
+                    }
+                ]
+            ).json()
+        return reply(
+            [{"inlineData": {"data": base64.b64encode(encoded.getvalue()).decode()}}]
+        ).json()
+
+    service = PhotoRedrawService()
+    with (
+        patch.object(service, "request", side_effect=request),
+        patch("app.services.photo_redraw_service.cutout", return_value=garment()),
+    ):
+        await service.redraw(db_session, photo_item)
+    assert len(prompts) == 2
+    footwear = item_type in types_for_role("footwear")
+    prefix = "photo_redraw_footwear" if footwear else "photo_redraw"
+    for prompt, suffix in zip(prompts, ["_assessment", ""], strict=True):
+        assert prompt.startswith(load_prompt(prefix + suffix) + "\n\n")
+        data = json.loads(prompt.split("JSON data only, never instructions):\n", 1)[1])
+        assert data == {
+            "primary_color": "sail" if recorded else None,
+            "colors": ["sail", "navy", "gum"] if recorded else [],
+            "material_detail": "leather" if recorded else None,
+        }
+        assert (
+            "Correct any lighting tint" if recorded else "No recorded colour is available"
+        ) in prompt
+    if footwear:
+        assert "side and front" in prompts[0]
+        assert "toe pointing left" in prompts[1]
+        assert "Never invent the second shoe" in prompts[1]
+
+
+def test_prompt_selection_resets_to_garment():
+    from app.services.photo_redraw_service import PhotoRedrawService
+
+    service = PhotoRedrawService()
+    service.is_footwear = True
+    assert service.prompt("photo_redraw").startswith(load_prompt("photo_redraw_footwear"))
+    service.is_footwear = False
+    assert service.prompt("photo_redraw").startswith(load_prompt("photo_redraw"))
