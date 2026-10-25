@@ -131,7 +131,7 @@ describe('manual wash', () => {
     render(<ItemDetailDialog item={{ ...item, needs_wash: false }} open onOpenChange={() => {}} />, {
       wrapper: wrapperFor('en'),
     })
-    expect(screen.queryByRole('button', { name: 'Mark washed' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark Washed' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Put in the wash' }))
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/items/i1/in-the-wash'))
     expect(api.post).toHaveBeenCalledTimes(1)
@@ -143,7 +143,7 @@ describe('manual wash', () => {
       wrapper: wrapperFor('en'),
     })
     expect(screen.queryByRole('button', { name: 'Put in the wash' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Mark washed' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Washed' }))
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/items/i1/wash', {
       washed_at: undefined, method: undefined, notes: undefined,
     }))
