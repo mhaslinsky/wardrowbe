@@ -116,7 +116,7 @@ export function useOutfitPreview(outfitId: string) {
   };
   const query = useQuery({
     queryKey: key, queryFn: ({ signal }) => read(signal),
-    enabled: (current) => Boolean(current.state.data),
+    enabled: Boolean(outfitId),
     staleTime: 9 * 60_000, refetchInterval: 9 * 60_000,
     refetchIntervalInBackground: true, retry: false, gcTime: 0,
     meta: { toastsOwnErrors: true },
@@ -155,6 +155,6 @@ export function useOutfitPreview(outfitId: string) {
     catch { return false; }
     finally { clearTimeout(timeout); controller.signal.removeEventListener('abort', cancelRead); if (active.current === controller) active.current = null; }
   };
-  return { preview: query.data, pending: mutation.isPending, error: mutation.isError && previewErrorCode(mutation.error) !== 'NO_PREVIEW_PHOTO',
+  return { preview: query.data, pending: mutation.isPending, error: (query.isError || mutation.isError) && previewErrorCode(mutation.error) !== 'NO_PREVIEW_PHOTO',
     missingPhoto: previewErrorCode(mutation.error) === 'NO_PREVIEW_PHOTO', draw };
 }
