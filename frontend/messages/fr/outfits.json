@@ -218,6 +218,9 @@
     "changed": "Tenue modifiée",
     "addPhoto": "Ajoutez une photo dans les paramètres",
     "drawing": "Création de l’aperçu…",
-    "failed": "Échec de l’aperçu"
+    "failed": "Échec de l’aperçu",
+    "changeNote": "Que faut-il changer ?",
+    "delete": "Supprimer",
+    "deleteConfirm": "Supprimer l’aperçu ?"
   }
 }

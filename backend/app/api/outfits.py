@@ -1563,13 +1563,29 @@ async def get_outfit_preview(
     return await PreviewService(db).saved(outfit_id, current_user.id)
 
 
+class PreviewDrawRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
+@router.delete("/{outfit_id}/preview", status_code=204)
+async def delete_outfit_preview(
+    outfit_id: UUID, db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
+):
+    from app.services.preview_service import PreviewService
+
+    await PreviewService(db).delete(outfit_id, current_user.id)
+
+
 @router.post("/{outfit_id}/preview")
 async def create_outfit_preview(
     outfit_id: UUID,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
     regenerate: bool = False,
+    body: PreviewDrawRequest | None = None,
 ):
     from app.services.preview_service import PreviewService
 
-    return await PreviewService(db).generate(outfit_id, current_user.id, regenerate)
+    return await PreviewService(db).generate(
+        outfit_id, current_user.id, regenerate, body.note if body else None
+    )

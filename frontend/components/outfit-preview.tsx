@@ -1,6 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
@@ -12,7 +14,10 @@ export function OutfitPreview(props: { outfitId: string; children?: ReactNode; d
 
 function PreviewContent({ outfitId, children, detail }: { outfitId: string; children?: ReactNode; detail?: boolean }) {
   const t = useTranslations('outfits.preview');
-  const { preview, pending, error, missingPhoto, draw } = useOutfitPreview(outfitId);
+  const { preview, pending, error, missingPhoto, draw, remove } = useOutfitPreview(outfitId);
+  const [action, setAction] = useState<'redraw' | 'delete' | null>(null);
+  const [note, setNote] = useState('');
+  const tc = useTranslations('common');
   return <div className={children && preview ? (detail ? "grid items-start gap-4 sm:grid-cols-2" : "grid grid-cols-2 gap-3 items-start") : "space-y-3"}>
     {children}
     <div className="space-y-2 min-w-0">
@@ -25,11 +30,30 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={preview.medium_url || preview.image_url} alt={t('see')} className="max-h-96 w-full rounded-lg object-contain bg-muted" />
       </a>
-      {preview.stale && <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span>{t('changed')}</span>
-        <Button size="sm" variant="outline" disabled={pending} onClick={() => draw(true)}>{t('redraw')}</Button>
-      </div>}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        {preview.stale && <span>{t('changed')}</span>}
+        <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setAction('redraw'); }}>{t('redraw')}</Button>
+        <Button size="sm" variant="outline" disabled={pending} onClick={() => setAction('delete')}>{t('delete')}</Button>
+      </div>
     </>}
     </div>
+    <Dialog open={action !== null} onOpenChange={(open) => { if (!open) setAction(null); }}>
+      <DialogContent aria-describedby={undefined} className="max-w-sm">
+        <DialogTitle>{t(action === 'delete' ? 'deleteConfirm' : 'redraw')}</DialogTitle>
+        {action === 'redraw' && <label className="space-y-2">
+          <span>{t('changeNote')}</span>
+          <Textarea aria-label={t('changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
+        </label>}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setAction(null)}>{tc('cancel')}</Button>
+          <Button disabled={pending} onClick={() => {
+            const selected = action;
+            setAction(null);
+            if (selected === 'delete') void remove();
+            else void draw(true, note);
+          }}>{t(action === 'delete' ? 'delete' : 'redraw')}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>;
 }

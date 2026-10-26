@@ -218,6 +218,9 @@
     "changed": "코디가 변경됨",
     "addPhoto": "설정에서 미리보기 사진 추가",
     "drawing": "미리보기 생성 중…",
-    "failed": "미리보기 실패"
+    "failed": "미리보기 실패",
+    "changeNote": "무엇을 바꿀까요?",
+    "delete": "삭제",
+    "deleteConfirm": "미리보기를 삭제할까요?"
   }
 }

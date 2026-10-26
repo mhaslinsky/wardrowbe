@@ -218,6 +218,9 @@
     "changed": "コーデが変更されました",
     "addPhoto": "設定でプレビュー写真を追加",
     "drawing": "プレビューを生成中…",
-    "failed": "生成に失敗しました"
+    "failed": "生成に失敗しました",
+    "changeNote": "何を変えますか？",
+    "delete": "削除",
+    "deleteConfirm": "プレビューを削除しますか？"
   }
 }

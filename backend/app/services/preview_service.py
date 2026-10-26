@@ -14,7 +14,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.orm import selectinload
 
 from app.models.outfit import Outfit, OutfitItem
-from app.models.preview import OutfitPreview, PreviewPhoto, delete_preview_files
+from app.models.preview import OutfitPreview, PreviewFeedback, PreviewPhoto, delete_preview_files
 from app.models.user import User
 from app.services.image_service import ImageService, ImageVariant
 from app.services.photo_redraw_service import (
@@ -272,7 +272,25 @@ class PreviewService:
         key = reference_key(key, paths, measurements, face_hash)
         return self.response(record, key)
 
-    async def generate(self, outfit_id, user_id, regenerate):
+    async def delete(self, outfit_id, user_id):
+        await self.outfit(outfit_id, user_id)
+        await self.lock_user(user_id)
+        await self.db.execute(select(Outfit.id).where(Outfit.id == outfit_id).with_for_update())
+        record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
+        if (
+            record
+            and record.claim_id
+            and record.started_at
+            and record.started_at > datetime.now(UTC) - timedelta(minutes=15)
+        ):
+            raise HTTPException(409, "PREVIEW_IN_PROGRESS")
+        if record is None or not record.paths:
+            raise HTTPException(404, "NO_PREVIEW")
+        await self.db.delete(record)
+        await self.db.commit()
+
+    async def generate(self, outfit_id, user_id, regenerate, note=None):
+        note = note.strip() if note else None
         paths, pending_store, claim_id = {}, None, None
         try:
             await self.outfit(outfit_id, user_id)
@@ -377,6 +395,12 @@ class PreviewService:
                     + json.dumps(measurements).replace("<", "\\u003c").replace(">", "\\u003e")
                     + "\n</body_measurements>"
                 )
+            if note:
+                prompt += (
+                    "\n<change_request>\n"
+                    + json.dumps(note).replace("<", "\\u003c").replace(">", "\\u003e")
+                    + "\n</change_request>"
+                )
             provider = PhotoRedrawService()
             payload = await provider.request(images, prompt, "IMAGE", mime_type="image/jpeg")
             inline = next(
@@ -409,6 +433,10 @@ class PreviewService:
             record.paths, record.cache_key = paths, key
             record.created_at, record.usage = datetime.now(UTC), provider.usage
             record.claim_id, record.started_at = None, None
+            if regenerate and note:
+                self.db.add(
+                    PreviewFeedback(user_id=user_id, outfit_id=outfit_id, kind="fix", note=note)
+                )
             result = self.response(record, key)
             if current_key != key:
                 result["stale"] = True

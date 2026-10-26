@@ -218,6 +218,9 @@
     "changed": "穿搭已變更",
     "addPhoto": "在設定中新增預覽照片",
     "drawing": "正在產生預覽…",
-    "failed": "預覽失敗"
+    "failed": "預覽失敗",
+    "changeNote": "想修改什麼？",
+    "delete": "刪除",
+    "deleteConfirm": "刪除預覽？"
   }
 }
