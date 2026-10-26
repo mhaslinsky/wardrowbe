@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { OccasionChips } from '@/components/shared/occasion-chips';
 import { api, getErrorMessage } from '@/lib/api';
+import { ITEM_ROLE } from '@/lib/studio/canonical-order';
 import { mergeAiAssist } from '@/lib/studio/ai-assist-merge';
 import { computeWarnings } from '@/lib/studio/warnings';
 import type { StudioItem } from '@/lib/studio/editor-state';
@@ -51,7 +52,8 @@ export function DetailsPanel({
   const warnings = computeWarnings(items, t);
 
   const handleAiAssist = async () => {
-    if (items.length === 0 || !occasion) {
+    const outfitItems = items.filter((item) => ITEM_ROLE[item.type.trim().toLowerCase()] !== 'underwear');
+    if (outfitItems.length === 0 || !occasion) {
       toast.error(t('aiAssistError'));
       return;
     }
@@ -59,7 +61,7 @@ export function DetailsPanel({
     try {
       const result = await api.post<Outfit>('/outfits/suggest', {
         occasion,
-        include_items: items.map((i) => i.id),
+        include_items: outfitItems.map((item) => item.id),
       });
 
       const aiStudioItems = result.items.map(toStudioItem);

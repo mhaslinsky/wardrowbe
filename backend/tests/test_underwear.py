@@ -133,7 +133,7 @@ def test_inspiration_never_matches_underwear_even_when_provider_selects_it():
     assert slots[0].no_match and slots[0].item_id is None
 
 
-def test_preview_excludes_underwear_before_reading_images_and_hashing():
+def test_preview_includes_underwear_images_records_and_cache_inputs():
     underwear = garment("underwear")
     shirt = garment("shirt")
     links = [
@@ -143,15 +143,23 @@ def test_preview_excludes_underwear_before_reading_images_and_hashing():
     outfit = SimpleNamespace(items=links, style_notes=None)
     with patch("app.services.preview_service.ImageService") as images:
         images.return_value.get_image_path.return_value.is_file.return_value = True
-        with patch("app.services.preview_service.jpeg", return_value=b"shirt") as encode:
+        with patch(
+            "app.services.preview_service.jpeg", side_effect=lambda path, size: path.encode()
+        ) as encode:
             key, photos, records = snapshot(outfit)
-            encode.assert_called_once_with("shirt.jpg", 800)
-            assert photos == [b"shirt"]
-            assert [record["type"] for record in records] == ["shirt"]
+            ordered = sorted(links, key=lambda link: str(link.item_id))
+            assert [entry.args for entry in encode.call_args_list] == [
+                (link.item.image_path, 800) for link in ordered
+            ]
+            assert photos == [link.item.image_path.encode() for link in ordered]
+            assert [record["type"] for record in records] == [link.item.type for link in ordered]
             outfit.items = [links[1]]
-            assert snapshot(outfit)[0] == key
+            assert snapshot(outfit)[0] != key
             outfit.items = [links[0]]
-            assert snapshot(outfit)[1:] == ([], [])
+            underwear_key, underwear_photos, underwear_records = snapshot(outfit)
+            assert underwear_key != key
+            assert underwear_photos == [b"underwear.jpg"]
+            assert [record["type"] for record in underwear_records] == ["underwear"]
 
 
 async def test_trip_uses_candidates_without_underwear(db_session, test_user):

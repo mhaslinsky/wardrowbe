@@ -24,7 +24,7 @@ from app.services.photo_redraw_service import (
     response_parts,
 )
 from app.services.preview_face import face_reference, reference_hash
-from app.utils.garment_vocabulary import ITEM_ROLE, is_outfit_type
+from app.utils.garment_vocabulary import ITEM_ROLE
 from app.utils.prompts import load_prompt
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.signed_urls import sign_image_url
@@ -122,8 +122,6 @@ def snapshot(outfit):
     service, records, images = ImageService(), [], []
     for link in sorted(outfit.items, key=lambda link: str(link.item_id)):
         item = link.item
-        if not is_outfit_type(item.type):
-            continue
         path = item.medium_path or item.image_path
         image = jpeg(path, 800) if path and service.get_image_path(path).is_file() else None
         images.append(image)
@@ -514,6 +512,11 @@ class PreviewService:
                 + data
                 + "\n</garment_data>"
             )
+            if any(
+                ITEM_ROLE.get((garment["type"] or "").strip().lower()) == "underwear"
+                for garment in garments
+            ):
+                prompt += "\n" + load_prompt("outfit_preview_underwear")
             if preferences["lines"]:
                 prompt += (
                     "\n<preview_preferences>\n"
