@@ -3,7 +3,7 @@ from collections.abc import Iterator, Mapping
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Text, event, func
+from sqlalchemy import DateTime, ForeignKey, Text, event, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
@@ -42,11 +42,14 @@ class PreviewFeedback(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     outfit_id: Mapped[UUID | None] = mapped_column(ForeignKey("outfits.id", ondelete="SET NULL"))
+    preview_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paths: Mapped[dict] = mapped_column(JSONB, default=dict)
     kind: Mapped[str] = mapped_column(Text)
     note: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+User.preview_feedback = relationship(PreviewFeedback, cascade="all, delete-orphan")
 User.preview_photo = relationship(PreviewPhoto, cascade="all, delete-orphan", uselist=False)
 User.outfit_previews = relationship(OutfitPreview, cascade="all, delete-orphan", overlaps="preview")
 Outfit.preview = relationship(
@@ -57,9 +60,24 @@ Outfit.preview = relationship(
 @event.listens_for(Session, "before_flush")
 def collect_deleted_preview_files(session, _context, _instances):
     paths = session.info.setdefault("preview_cleanup", {})
+    deleted_feedback = {record for record in session.deleted if isinstance(record, PreviewFeedback)}
+    retained = {
+        path
+        for feedback in session.scalars(
+            select(PreviewFeedback).where(PreviewFeedback.kind == "like")
+        )
+        if feedback not in deleted_feedback
+        for path in preview_file_paths(feedback.paths or {})
+    }
     for record in session.deleted:
-        if isinstance(record, (PreviewPhoto, OutfitPreview)):
-            paths.update({path: path for path in preview_file_paths(record.paths)})
+        if isinstance(record, (PreviewPhoto, OutfitPreview, PreviewFeedback)):
+            paths.update(
+                {
+                    path: path
+                    for path in preview_file_paths(record.paths or {})
+                    if path not in retained
+                }
+            )
 
 
 def preview_file_paths(paths: Mapping[str, str | dict[str, str]]) -> Iterator[str]:

@@ -213,6 +213,9 @@
     "replaceFailedStale": "Remplacement échoué ; suggestions parfois retardées"
   },
   "preview": {
+    "like": "J’aime",
+    "liked": "Aimé",
+    "likeNote": "Qu’a-t-il réussi ?",
     "see": "Voir sur moi",
     "redraw": "Redessiner",
     "changed": "Tenue modifiée",

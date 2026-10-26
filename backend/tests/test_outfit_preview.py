@@ -1486,3 +1486,94 @@ async def test_feedback_foreign_key_lifecycle(
             {"id": preview_setup["user"]},
         )
     ).all()
+
+
+@pytest.mark.parametrize("note", ["", "Great sleeves"])
+async def test_like_preview_replaces_note_and_retains_image(
+    note, client, auth_headers, preview_setup, provider, db_session
+):
+    url = preview_setup["url"]
+    await upload(client, auth_headers)
+    first = await client.post(url, headers=auth_headers)
+    assert first.status_code == 200
+    result = await client.post(
+        url + "/feedback", headers=auth_headers, json={"kind": "like", "note": note}
+    )
+    assert result.status_code == 200, result.text
+    assert result.json()["liked"] is True
+    assert result.json()["like_note"] == note
+    record = await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True)
+    paths = [ImageService().get_image_path(path) for path in record.paths.values()]
+    replacement = await client.post(
+        url + "/feedback", headers=auth_headers, json={"kind": "like", "note": "Better fit"}
+    )
+    assert replacement.status_code == 200
+    rows = (
+        await db_session.execute(
+            text(
+                "SELECT note, preview_created_at FROM preview_feedback WHERE outfit_id = :id AND kind = 'like'"
+            ),
+            {"id": preview_setup["outfit"]},
+        )
+    ).all()
+    assert rows == [("Better fit", record.created_at)]
+    assert (await client.get(url, headers=auth_headers)).json()["liked"] is True
+    redraw = await client.post(url + "?regenerate=true", headers=auth_headers)
+    assert redraw.status_code == 200
+    assert redraw.json()["created_at"] != first.json()["created_at"]
+    assert redraw.json()["liked"] is False
+    assert all(path.is_file() for path in paths)
+    assert (
+        await client.post(url + "/feedback", headers=auth_headers, json={"kind": "like"})
+    ).status_code == 200
+    current = await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True)
+    paths += [ImageService().get_image_path(path) for path in current.paths.values()]
+    assert (await client.delete(url, headers=auth_headers)).status_code == 204
+    assert all(path.is_file() for path in paths)
+    await db_session.delete(await db_session.get(User, preview_setup["user"]))
+    await db_session.commit()
+    assert all(not path.exists() for path in paths)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"kind": "like", "note": "x" * 501},
+        {"kind": "like", "note": None},
+        {"kind": "like", "note": []},
+        {"kind": "wrong"},
+        {},
+    ],
+)
+async def test_like_preview_validation(body, client, auth_headers, preview_setup):
+    result = await client.post(preview_setup["url"] + "/feedback", headers=auth_headers, json=body)
+    assert result.status_code == 422
+
+
+async def test_like_preview_missing_and_other_user(client, auth_headers, preview_setup, db_session):
+    result = await client.post(
+        preview_setup["url"] + "/feedback", headers=auth_headers, json={"kind": "like"}
+    )
+    assert result.status_code == 404
+    other_id = uuid4()
+    db_session.add(User(id=other_id, email=f"{other_id}@test.invalid", display_name="Other"))
+    await db_session.flush()
+    outfit = Outfit(user_id=other_id, occasion="casual")
+    db_session.add(outfit)
+    await db_session.flush()
+    db_session.add(
+        OutfitPreview(
+            outfit_id=outfit.id, user_id=other_id, paths={"image_path": "other/preview.jpg"}
+        )
+    )
+    await db_session.commit()
+    url = f"/api/v1/outfits/{outfit.id}/preview"
+    assert (
+        await client.post(url + "/feedback", headers=auth_headers, json={"kind": "like"})
+    ).status_code == 404
+    assert (await client.get(url, headers=auth_headers)).status_code == 404
+    assert not (
+        await db_session.execute(
+            text("SELECT id FROM preview_feedback WHERE user_id = :id"), {"id": other_id}
+        )
+    ).all()

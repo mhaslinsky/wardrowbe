@@ -213,6 +213,9 @@
     "replaceFailedStale": "Could not replace; suggestions may lag"
   },
   "preview": {
+    "like": "Like",
+    "liked": "Liked",
+    "likeNote": "What did it get right?",
     "see": "See it on me",
     "redraw": "Redraw",
     "changed": "Outfit changed",

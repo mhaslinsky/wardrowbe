@@ -213,6 +213,9 @@
     "replaceFailedStale": "変更できず、提案の反映が遅れる場合があります"
   },
   "preview": {
+    "like": "いいね",
+    "liked": "いいね済み",
+    "likeNote": "どこが良かったですか？",
     "see": "着用イメージを見る",
     "redraw": "再生成",
     "changed": "コーデが変更されました",

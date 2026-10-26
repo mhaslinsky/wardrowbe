@@ -213,6 +213,9 @@
     "replaceFailedStale": "Sostituzione fallita; suggerimenti in ritardo"
   },
   "preview": {
+    "like": "Mi piace",
+    "liked": "Ti piace",
+    "likeNote": "Cosa è riuscito bene?",
     "see": "Vedi su di me",
     "redraw": "Ridisegna",
     "changed": "Outfit modificato",
