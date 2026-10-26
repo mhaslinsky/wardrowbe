@@ -3,7 +3,7 @@ from collections.abc import Iterator, Mapping
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Text, event, func, select
+from sqlalchemy import DateTime, ForeignKey, Text, event, func, inspect, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
@@ -49,7 +49,6 @@ class PreviewFeedback(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-User.preview_feedback = relationship(PreviewFeedback, cascade="all, delete-orphan")
 User.preview_photo = relationship(PreviewPhoto, cascade="all, delete-orphan", uselist=False)
 User.outfit_previews = relationship(OutfitPreview, cascade="all, delete-orphan", overlaps="preview")
 Outfit.preview = relationship(
@@ -57,18 +56,41 @@ Outfit.preview = relationship(
 )
 
 
+def feedback_table_exists(session):
+    # Older migration revisions have no preview_feedback table.
+    return inspect(session.connection()).has_table("preview_feedback")
+
+
 @event.listens_for(Session, "before_flush")
 def collect_deleted_preview_files(session, _context, _instances):
     paths = session.info.setdefault("preview_cleanup", {})
+    deleted_users = [record for record in session.deleted if isinstance(record, User)]
     deleted_feedback = {record for record in session.deleted if isinstance(record, PreviewFeedback)}
-    retained = {
-        path
-        for feedback in session.scalars(
-            select(PreviewFeedback).where(PreviewFeedback.kind == "like")
-        )
-        if feedback not in deleted_feedback
-        for path in preview_file_paths(feedback.paths or {})
-    }
+    retained = set()
+    if deleted_feedback:
+        owners = {record.user_id for record in deleted_feedback}
+        retained = {
+            path
+            for feedback in session.scalars(
+                select(PreviewFeedback).where(
+                    PreviewFeedback.kind == "like", PreviewFeedback.user_id.in_(owners)
+                )
+            )
+            if feedback not in deleted_feedback
+            for path in preview_file_paths(feedback.paths or {})
+        }
+    if deleted_users and feedback_table_exists(session):
+        for user in deleted_users:
+            saved_paths = session.scalars(
+                text(
+                    "SELECT to_jsonb(feedback)->'paths' FROM preview_feedback AS feedback "
+                    "WHERE user_id = :user_id"
+                ),
+                {"user_id": user.id},
+            )
+            for stored in saved_paths:
+                if stored is not None:
+                    paths.update({path: path for path in preview_file_paths(stored)})
     for record in session.deleted:
         if isinstance(record, (PreviewPhoto, OutfitPreview, PreviewFeedback)):
             paths.update(

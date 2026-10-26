@@ -1,5 +1,6 @@
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "e192a1b2c3d4"
 down_revision = "e191a1b2c3d4"
@@ -10,7 +11,7 @@ depends_on = None
 def upgrade():
     op.add_column("preview_feedback", sa.Column("preview_created_at", sa.DateTime(timezone=True)))
     op.add_column(
-        "preview_feedback", sa.Column("paths", sa.JSON(), server_default="{}", nullable=False)
+        "preview_feedback", sa.Column("paths", JSONB(), server_default="{}", nullable=False)
     )
     op.create_index(
         "uq_preview_like",

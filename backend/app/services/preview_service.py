@@ -173,6 +173,16 @@ class PreviewService:
             raise HTTPException(404, "NO_PREVIEW_PHOTO")
         return record
 
+    async def discard_preview(self, record):
+        saved_paths = await self.db.scalars(
+            select(PreviewFeedback.paths).where(
+                PreviewFeedback.user_id == record.user_id, PreviewFeedback.kind == "like"
+            )
+        )
+        retained = {path for paths in saved_paths for path in paths.values()}
+        record.paths = {name: path for name, path in record.paths.items() if path not in retained}
+        await self.db.delete(record)
+
     async def clear(self, user_id, angle="front"):
         await self.lock_user(user_id)
         if angle == "front":
@@ -184,7 +194,7 @@ class PreviewService:
                 ).all()
             )
             for record in records:
-                await self.db.delete(record)
+                await self.discard_preview(record)
         reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
         if reference is not None and angle in reference.paths:
             removed = reference.paths[angle]
@@ -324,7 +334,7 @@ class PreviewService:
             raise HTTPException(409, "PREVIEW_IN_PROGRESS")
         if record is None or not record.paths:
             raise HTTPException(404, "NO_PREVIEW")
-        await self.db.delete(record)
+        await self.discard_preview(record)
         await self.db.commit()
 
     async def generate(self, outfit_id, user_id, regenerate, note=None):

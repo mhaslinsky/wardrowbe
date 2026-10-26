@@ -15,7 +15,7 @@ import pytest
 import pytest_asyncio
 from fastapi import HTTPException
 from PIL import Image
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from app.config import get_settings
 from app.models import ClothingItem, Outfit, OutfitItem, Trip, User
@@ -1540,6 +1540,12 @@ async def test_like_preview_replaces_note_and_retains_image(
     await db_session.delete(await db_session.get(User, preview_setup["user"]))
     await db_session.commit()
     assert all(not path.exists() for path in paths)
+    assert not (
+        await db_session.execute(
+            text("SELECT id FROM preview_feedback WHERE user_id = :id"),
+            {"id": preview_setup["user"]},
+        )
+    ).all()
 
 
 @pytest.mark.parametrize(
@@ -1584,3 +1590,23 @@ async def test_like_preview_missing_and_other_user(client, auth_headers, preview
             text("SELECT id FROM preview_feedback WHERE user_id = :id"), {"id": other_id}
         )
     ).all()
+
+
+async def test_ordinary_flush_does_not_query_preview_feedback(db_session, preview_setup):
+    statements = []
+    connection = await db_session.connection()
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(connection.sync_connection, "before_cursor_execute", capture)
+    try:
+        db_session.add(Outfit(user_id=preview_setup["user"], occasion="casual"))
+        await db_session.flush()
+        item = await db_session.get(ClothingItem, preview_setup["items"][0])
+        item.notes = "Updated fit"
+        await db_session.flush()
+    finally:
+        event.remove(connection.sync_connection, "before_cursor_execute", capture)
+    assert statements
+    assert not [statement for statement in statements if "preview_feedback" in statement.lower()]
