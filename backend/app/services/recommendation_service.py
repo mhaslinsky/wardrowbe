@@ -190,7 +190,11 @@ class RecommendationService:
             )
             .execution_options(populate_existing=True)
         )
-        return list(result.scalars().all())
+        return [
+            outfit
+            for outfit in result.scalars().all()
+            if all(is_outfit_type(link.item.type) for link in outfit.items)
+        ]
 
     async def top_up_day(
         self,
@@ -1070,9 +1074,9 @@ class RecommendationService:
                         )
                     )
                 )
-                forced_items = [
-                    item for item in result.scalars().all() if is_outfit_type(item.type)
-                ]
+                forced_items = list(result.scalars().all())
+                if any(not is_outfit_type(item.type) for item in forced_items):
+                    raise ValueError("Underwear can't be part of an outfit")
                 candidates.extend(forced_items)
                 logger.info(f"Force-included {len(forced_items)} items in recommendation")
 

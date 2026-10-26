@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +11,7 @@ import pytest
 from app.api.trips import TripRequest
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import OutfitSource
+from app.services.ai_service import TextGenerationResult
 from app.services.inspiration_service import match_slots, parse_analysis
 from app.services.item_scorer import score_items
 from app.services.learning_service import slot_composition
@@ -161,22 +163,14 @@ async def test_trip_uses_candidates_without_underwear(db_session, test_user):
     underwear_id = wardrobe[2].id
     weather = _weather()
 
-    async def generate(service, **kwargs):
-        candidates = await service.get_candidate_items(
-            test_user, weather, "casual", None, kwargs["exclude_items"]
+    test_user.preferences = None
+
+    async def provider(self, prompt, **kwargs):
+        assert "underwear" not in prompt.lower()
+        numbers = [int(number) for number in re.findall(r"^\[(\d+)\]", prompt, re.M)]
+        return TextGenerationResult(
+            content=json.dumps({"items": numbers}), model="stub", endpoint="stub"
         )
-        assert underwear_id not in {item.id for item in candidates}
-        return [
-            await service._materialize_outfit(
-                {"items": [1, 2]},
-                test_user,
-                weather,
-                "casual",
-                OutfitSource.on_demand,
-                {1: wardrobe[0].id, 2: wardrobe[1].id},
-                scheduled_date=kwargs["scheduled_date"],
-            )
-        ]
 
     request = TripRequest(
         destination="Paris",
@@ -190,7 +184,7 @@ async def test_trip_uses_candidates_without_underwear(db_session, test_user):
             AsyncMock(return_value=[(weather, "forecast")]),
         ),
         patch("app.services.trip_service.get_user_today", return_value=date(2026, 10, 26)),
-        patch.object(RecommendationService, "generate_recommendations", generate),
+        patch("app.services.ai_service.AIService.generate_text", provider),
     ):
         trip = await TripService(db_session).plan(test_user, request)
     assert str(underwear_id) not in {entry["item_id"] for entry in trip.packing}
@@ -231,7 +225,7 @@ async def test_forced_underwear_is_rejected_before_provider_call(db_session, tes
         patch.object(service, "get_candidate_items", AsyncMock(return_value=[])),
         patch("app.services.recommendation_service.AIService") as provider,
     ):
-        with pytest.raises(ValueError, match="selected items"):
+        with pytest.raises(ValueError, match="Underwear can.t be part of an outfit"):
             await service.generate_recommendations(
                 test_user,
                 "casual",

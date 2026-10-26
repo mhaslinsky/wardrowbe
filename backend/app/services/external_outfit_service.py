@@ -6,12 +6,14 @@ Authored rows are regular outfits with source='external'; no separate table.
 from datetime import date
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
 from app.services.pairing_service import PAIRING_OCCASION
 from app.services.studio_service import load_full_outfit, validate_item_ownership
+from app.utils.garment_vocabulary import is_outfit_type
 from app.utils.timezone import get_user_today
 
 
@@ -38,7 +40,9 @@ class ExternalOutfitService:
         palette: list[str] | None,
         notes: str | None,
     ) -> Outfit:
-        await validate_item_ownership(self.db, user.id, ordered_item_ids)
+        items = await validate_item_ownership(self.db, user.id, ordered_item_ids)
+        if any(not is_outfit_type(item.type) for item in items):
+            raise HTTPException(422, "Underwear can't be part of an outfit")
 
         outfit = Outfit(
             user_id=user.id,
