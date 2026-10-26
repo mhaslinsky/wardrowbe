@@ -87,24 +87,6 @@ def garment_size(notes: str | None) -> str | None:
     return match.group(1).strip()[:100] or None if match else None
 
 
-def tuck_instruction(notes: str | None) -> bool | None:
-    decision = None
-    for clause in re.split(r"[.!?;,\n]|\b(?:but|and)\b", (notes or "").lower()):
-        if re.search(
-            r"\b(?:jacket|coat|blazer|overshirt|cardigan|vest)s?\b", clause
-        ) and not re.search(r"\b(?:shirt|top)s?\b", clause):
-            continue
-        for match in re.finditer(r"\b(?:un)?tuck(?:ed|ing)?\b", clause):
-            negated = bool(
-                re.search(
-                    r"\b(?:not|never|no|avoid|without|dont|cannot|don['’]t|doesn['’]t|won['’]t|can['’]t|shouldn['’]t)\b",
-                    clause[: match.start()],
-                )
-            )
-            decision = match.group().startswith("tuck") != negated
-    return decision
-
-
 def legacy_requests_tucking(style_notes: str | None) -> bool:
     for clause in re.split(r"[.!?;\n]|\bbut\b", (style_notes or "").lower()):
         if re.search(r"\btuck(?:ed|ing)?\b", clause) and not re.search(
@@ -114,11 +96,14 @@ def legacy_requests_tucking(style_notes: str | None) -> bool:
     return False
 
 
+def mentions_tuck(text: str | None) -> bool:
+    return re.search(r"\b(?:un)?tuck", text or "", re.IGNORECASE) is not None
+
+
 def resolve_tucking(note, style_notes, setting):
     for source in (note, style_notes):
-        decision = tuck_instruction(source)
-        if decision is not None:
-            return decision
+        if mentions_tuck(source):
+            return legacy_requests_tucking(source)
     return setting == "tucked"
 
 

@@ -1884,39 +1884,43 @@ async def test_stale_reasons_photo_redraw(
     [
         (None, None, "outfit", False),
         (None, None, "tucked", True),
-        (None, "Never tuck", "tucked", False),
-        (None, "French tuck", "untucked", True),
+        (None, "Wear loafers", "untucked", False),
+        (None, "Wear loafers", "tucked", True),
+        ("Wear loafers", "Tuck the shirt", "untucked", True),
         ("Don't tuck", "Tuck the shirt", "tucked", False),
         ("Tuck the shirt", "Leave untucked", "untucked", True),
-        ("Tuck; never tuck", None, "outfit", False),
-        ("Never tuck; tuck", None, "outfit", True),
+        (None, "Leave untucked", "tucked", False),
+        (None, "French tuck", "untucked", True),
         (None, "Do not roll sleeves; tuck the shirt", "outfit", True),
-        ("Never untuck", None, "untucked", True),
-        ("Don't leave it untucked", None, "untucked", True),
-        ("Avoid untucking", None, "outfit", True),
-        ("Tucked, not untucked", None, "outfit", True),
-        ("Tuck it in, not too baggy", None, "outfit", True),
-        ("No belt, tuck the shirt", None, "outfit", True),
-        ("Tuck the shirt without creasing it", None, "outfit", True),
-        ("The shirt should not be tucked", None, "outfit", False),
-        ("The shirt must not be tucked in", None, "outfit", False),
-        ("I don't want it tucked", None, "outfit", False),
-        ("Do not want the shirt tucked in", None, "outfit", False),
-        ("Don't ever tuck it", None, "outfit", False),
-        ("Won't tuck the shirt", None, "outfit", False),
-        ("I prefer not to tuck", None, "outfit", False),
-        ("No need to tuck", None, "outfit", False),
-        ("Not a French tuck", None, "outfit", False),
-        ("dont tuck", None, "outfit", False),
-        ("doesn't tuck the shirt", None, "outfit", False),
-        ("The shirt must not be untucked", None, "outfit", True),
-        ("Tuck in the shirt but leave the jacket untucked", None, "outfit", True),
+        ("Never untuck", None, "tucked", False),
+        ("Tuck; never tuck", None, "outfit", True),
     ],
 )
 def test_preview_tuck_precedence(note, style, setting, expected):
     from app.services.preview_service import resolve_tucking
 
     assert resolve_tucking(note, style, setting) is expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Tuck the shirt",
+        "Leave untucked",
+        "Don't tuck",
+        "Tuck in the shirt but leave the jacket untucked",
+        "French tuck",
+        "isn't tucked",
+        "wouldn't tuck",
+        "keep the shirt and jacket untucked",
+        "tuck the polo under the blazer",
+    ],
+)
+def test_r3_free_text_uses_base_parser(text):
+    from app.services.preview_service import legacy_requests_tucking, resolve_tucking
+
+    assert resolve_tucking(None, text, "outfit") == legacy_requests_tucking(text)
+    assert resolve_tucking(text, "Tuck the shirt", "tucked") == legacy_requests_tucking(text)
 
 
 def test_preview_hash_empty_and_revision_independent():
@@ -2068,11 +2072,13 @@ async def test_preview_preferences_change_during_draw(
     [
         ("Tuck it in", "Never tuck", "untucked", True),
         ("Don't tuck", "Tuck the shirt", "tucked", False),
-        ("Tuck; never tuck", "Tuck the shirt", "tucked", False),
-        ("Never untuck", "Leave untucked", "untucked", True),
-        (None, "Tuck the shirt; never tuck it", "outfit", False),
+        ("Tuck; never tuck", "Tuck the shirt", "tucked", True),
+        ("Never untuck", "Leave untucked", "untucked", False),
+        (None, "Tuck the shirt; never tuck it", "outfit", True),
         (None, "Tuck in the shirt but leave the jacket untucked", "outfit", True),
         ("Tuck it in", None, "outfit", True),
+        ("Don't tuck", "Tuck the shirt", "outfit", False),
+        (None, None, "untucked", False),
     ],
 )
 async def test_r1_tuck_request_contract(
@@ -2127,7 +2133,17 @@ async def test_r1_tuck_request_contract(
     ) == preferences_hash(prefs)
 
 
-@pytest.mark.parametrize("style", ["Tuck the shirt", "Leave the shirt untucked"])
+@pytest.mark.parametrize(
+    "style",
+    [
+        "Tuck the shirt",
+        "Leave the shirt untucked",
+        None,
+        "Tuck it in, not too baggy",
+        "Never untuck",
+        "Tuck the shirt; never tuck it",
+    ],
+)
 async def test_r2_empty_preferences_preserve_base_prompt(
     style, client, auth_headers, preview_setup, provider, db_session
 ):
@@ -2157,7 +2173,8 @@ async def test_r2_empty_preferences_preserve_base_prompt(
         + json.dumps(garments)
         + "\n</garment_data>"
     )
-    base_prompt += "\n<style_notes>\n" + json.dumps(style) + "\n</style_notes>"
+    if style:
+        base_prompt += "\n<style_notes>\n" + json.dumps(style) + "\n</style_notes>"
     await upload(client, auth_headers)
     result = await client.post(preview_setup["url"], headers=auth_headers)
     assert result.status_code == 200, result.text
