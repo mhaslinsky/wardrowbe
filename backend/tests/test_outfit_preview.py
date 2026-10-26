@@ -146,7 +146,14 @@ async def test_cache_regenerate_stale_and_prompt(
     await upload(client, auth_headers)
     first = await client.post(url, headers=auth_headers)
     assert first.status_code == 200, first.text
-    assert set(first.json()) == {"image_url", "medium_url", "created_at", "stale"}
+    assert set(first.json()) == {
+        "image_url",
+        "medium_url",
+        "created_at",
+        "stale",
+        "liked",
+        "like_note",
+    }
     assert first.json()["stale"] is False
     images, prompt, modality = provider.call_args.args
     assert len(images) == 3 and modality == "IMAGE"
