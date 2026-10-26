@@ -8,7 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.database import DbSession
 from app.models.user import User
 from app.schemas.outfit import stored_occasion_or_default
-from app.schemas.preference import PreferenceResponse, PreferenceUpdate, StyleProfile
+from app.schemas.preference import (
+    PreferenceResponse,
+    PreferenceUpdate,
+    PreviewPreferenceReset,
+    StyleProfile,
+)
 from app.services.preference_service import PreferenceService
 from app.utils.auth import get_current_user
 from app.utils.preference_defaults import (
@@ -27,8 +32,9 @@ from app.utils.scales import (
 router = APIRouter(prefix="/users/me/preferences", tags=["Preferences"])
 
 
-def _build_preference_response(preferences) -> PreferenceResponse:
+def _build_preference_response(preferences, preview_preferences) -> PreferenceResponse:
     return PreferenceResponse(
+        preview_preferences=preview_preferences,
         standing_rules=preferences.standing_rules if preferences.standing_rules is not None else [],
         color_favorites=preferences.color_favorites
         if preferences.color_favorites is not None
@@ -73,7 +79,9 @@ async def get_preferences(
 ) -> PreferenceResponse:
     service = PreferenceService(db)
     preferences = await service.get_or_create_preferences(current_user.id)
-    return _build_preference_response(preferences)
+    return _build_preference_response(
+        preferences, await service.preview_preferences(current_user.id)
+    )
 
 
 @router.patch("", response_model=PreferenceResponse)
@@ -84,17 +92,22 @@ async def update_preferences(
 ) -> PreferenceResponse:
     service = PreferenceService(db)
     preferences = await service.update_preferences(current_user.id, data)
-    return _build_preference_response(preferences)
+    return _build_preference_response(
+        preferences, await service.preview_preferences(current_user.id)
+    )
 
 
 @router.post("/reset", response_model=PreferenceResponse)
 async def reset_preferences(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
+    data: PreviewPreferenceReset | None = None,
 ) -> PreferenceResponse:
     service = PreferenceService(db)
-    preferences = await service.reset_preferences(current_user.id)
-    return _build_preference_response(preferences)
+    preferences = await service.reset_preferences(current_user.id, data.rev if data else None)
+    return _build_preference_response(
+        preferences, await service.preview_preferences(current_user.id)
+    )
 
 
 @router.post("/excluded-items/{item_id}", response_model=dict)

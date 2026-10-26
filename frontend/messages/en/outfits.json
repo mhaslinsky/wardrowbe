@@ -228,6 +228,7 @@
     "deleteConfirm": "Delete preview?",
     "redrawConflict": "Another redraw is running. Try again in a moment.",
     "clothesChanged": "Clothes changed",
-    "personChanged": "Your photos or measurements changed"
+    "personChanged": "Your photos or measurements changed",
+    "preferencesChanged": "Made with older preferences"
   }
 }

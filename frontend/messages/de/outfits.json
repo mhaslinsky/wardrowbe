@@ -228,6 +228,7 @@
     "deleteConfirm": "Vorschau löschen?",
     "redrawConflict": "Eine Vorschau wird bereits erstellt. Bitte gleich erneut versuchen.",
     "clothesChanged": "Kleidung geändert",
-    "personChanged": "Deine Fotos oder Maße wurden geändert"
+    "personChanged": "Deine Fotos oder Maße wurden geändert",
+    "preferencesChanged": "Mit älteren Einstellungen erstellt"
   }
 }

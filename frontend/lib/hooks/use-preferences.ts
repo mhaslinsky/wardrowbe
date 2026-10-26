@@ -27,8 +27,10 @@ export function useUpdatePreferences() {
       applySessionToken(session);
       return api.patch<Preferences>('/users/me/preferences', data);
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      queryClient.setQueryData(queryKeys.preferences, saved);
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences });
+      queryClient.invalidateQueries({ queryKey: queryKeys.outfitPreviews });
     },
   });
 }
@@ -38,12 +40,14 @@ export function useResetPreferences() {
   const { data: session } = useSession();
 
   return useMutation({
-    mutationFn: () => {
+    mutationFn: (rev: string) => {
       applySessionToken(session);
-      return api.post<Preferences>('/users/me/preferences/reset');
+      return api.post<Preferences>('/users/me/preferences/reset', { rev });
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      queryClient.setQueryData(queryKeys.preferences, saved);
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences });
+      queryClient.invalidateQueries({ queryKey: queryKeys.outfitPreviews });
     },
   });
 }

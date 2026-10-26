@@ -163,6 +163,14 @@
     "side": "侧面",
     "confirmAngle": "删除照片？",
     "uploadAngle": "{angle}：上传照片",
-    "replaceAngle": "{angle}：更换照片"
+    "replaceAngle": "{angle}：更换照片",
+    "shirts": "衬衫",
+    "outfit": "按穿搭决定",
+    "untucked": "衣摆放外面",
+    "tucked": "衣摆塞进去",
+    "preferences": "预览偏好",
+    "limits": "最多10行，每行120字。请用上方的衬衫选项设置衣摆。",
+    "savePreferences": "保存预览偏好",
+    "saveConflict": "保存失败，草稿已保留。"
   }
 }

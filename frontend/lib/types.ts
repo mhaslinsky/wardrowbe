@@ -162,6 +162,7 @@ export interface AIEndpoint {
 }
 
 export interface Preferences {
+  preview_preferences: { lines: string[]; tuck: 'untucked' | 'tucked' | 'outfit'; rev: string };
   standing_rules: string[];
   color_favorites: string[];
   color_avoid: string[];

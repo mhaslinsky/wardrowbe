@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field
 
@@ -37,6 +37,20 @@ StandingRules = Annotated[
     Field(max_length=20),
     AfterValidator(trim_standing_rules),
 ]
+
+
+class PreviewPreferences(BaseModel):
+    lines: Annotated[
+        list[Annotated[str, Field(strict=True, max_length=120)]],
+        Field(max_length=10),
+        AfterValidator(trim_standing_rules),
+    ] = Field(default_factory=list)
+    tuck: Literal["untucked", "tucked", "outfit"] = "outfit"
+    rev: str = Field(min_length=1, max_length=64)
+
+
+class PreviewPreferenceReset(BaseModel):
+    rev: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class AIEndpoint(BaseModel):
@@ -152,6 +166,8 @@ class PreferenceCreate(PreferenceBase):
 
 
 class PreferenceUpdate(BaseModel):
+    preview_preferences: PreviewPreferences | None = None
+
     standing_rules: StandingRules = Field(default_factory=list)
 
     color_favorites: ColorList | None = None
@@ -172,5 +188,7 @@ class PreferenceUpdate(BaseModel):
 
 
 class PreferenceResponse(PreferenceBase):
+    preview_preferences: PreviewPreferences
+
     class Config:
         from_attributes = True

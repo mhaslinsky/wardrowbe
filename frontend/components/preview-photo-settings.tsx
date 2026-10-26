@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ACCEPTED_IMAGE_INPUT } from '@/lib/image-types';
 import { useTranslations } from 'next-intl';
+import { usePreferences, useUpdatePreferences } from '@/lib/hooks/use-preferences';
+import type { Preferences } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { previewAngles, type PreviewAngle, usePreviewPhoto } from '@/lib/hooks/use-outfit-preview';
@@ -15,6 +17,7 @@ export function PreviewPhotoSettings() {
   return <Card id="preview-photo">
     <CardHeader><CardTitle>{t('title')}</CardTitle><CardDescription>{t('guidance')}</CardDescription></CardHeader>
     <CardContent className="space-y-3">
+      <PreviewPreferencesEditor />
       <div className="grid gap-6 sm:grid-cols-3">
         {previewAngles.map((angle) => {
           const photo = photos?.[angle];
@@ -50,4 +53,48 @@ export function PreviewPhotoSettings() {
       {error && <p role="alert" className="text-destructive">{t('failed')}</p>}
     </CardContent>
   </Card>;
+}
+
+
+function PreviewPreferencesEditor() {
+  const t = useTranslations('settings.previewPhoto');
+  const { data } = usePreferences();
+  const update = useUpdatePreferences();
+  const [draft, setDraft] = useState<Preferences['preview_preferences'] | null>(null);
+  const [text, setText] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (data?.preview_preferences && !dirty) {
+      setDraft(data.preview_preferences);
+      setText(data.preview_preferences.lines.join('\n'));
+    }
+  }, [data, dirty]);
+  if (!draft) return null;
+  return <fieldset className="space-y-3" disabled={update.isPending}>
+    <label className="block space-y-2">
+      <span className="block">{t('shirts')}</span>
+      <select className="block rounded border p-2" aria-label={t('shirts')} value={draft.tuck} onChange={(event) => {
+        setDraft({ ...draft, tuck: event.target.value as typeof draft.tuck }); setDirty(true);
+      }}>
+        {(['outfit', 'untucked', 'tucked'] as const).map((value) => <option key={value} value={value}>{t(value)}</option>)}
+      </select>
+    </label>
+    <label className="block space-y-2">
+      <span>{t('preferences')}</span>
+      <textarea aria-label={t('preferences')} className="block w-full rounded border p-2" rows={4} value={text}
+        onChange={(event) => { setText(event.target.value); setDirty(true); }} />
+    </label>
+    <p className="text-sm">{t('limits')}</p>
+    <Button disabled={!dirty} onClick={async () => {
+      const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+      if (lines.length > 10 || lines.some((line) => line.length > 120)) { setError(true); return; }
+      try {
+        const saved = await update.mutateAsync({ preview_preferences: { ...draft, lines } });
+        setDraft(saved.preview_preferences); setText(saved.preview_preferences.lines.join('\n'));
+        setDirty(false); setError(false);
+      } catch { setError(true); }
+    }}>{t('savePreferences')}</Button>
+    {error && <p role="alert">{t('saveConflict')}</p>}
+  </fieldset>;
 }

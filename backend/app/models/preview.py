@@ -30,6 +30,7 @@ class OutfitPreview(Base):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     cache_key: Mapped[str] = mapped_column(Text, default="")
     clothes_key: Mapped[str | None] = mapped_column(Text, deferred=True)
+    preferences_key: Mapped[str | None] = mapped_column(Text, deferred=True)
     person_key: Mapped[str | None] = mapped_column(Text, deferred=True)
     paths: Mapped[dict] = mapped_column(JSONB, default=dict)
     claim_id: Mapped[str | None] = mapped_column(Text)

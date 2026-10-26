@@ -163,6 +163,14 @@
     "side": "De profil",
     "confirmAngle": "Supprimer la photo ?",
     "uploadAngle": "{angle} : Importer une photo",
-    "replaceAngle": "{angle} : Remplacer la photo"
+    "replaceAngle": "{angle} : Remplacer la photo",
+    "shirts": "Chemises",
+    "outfit": "Selon la tenue",
+    "untucked": "Non rentrée",
+    "tucked": "Rentrée",
+    "preferences": "Préférences des aperçus",
+    "limits": "10 lignes maximum, 120 caractères chacune. Choisissez le rentré avec l’option Chemises ci-dessus.",
+    "savePreferences": "Enregistrer les préférences",
+    "saveConflict": "Échec de l’enregistrement. Brouillon conservé."
   }
 }

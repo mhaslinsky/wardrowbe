@@ -163,6 +163,14 @@
     "side": "Side",
     "confirmAngle": "Remove photo?",
     "uploadAngle": "{angle}: Upload photo",
-    "replaceAngle": "{angle}: Replace photo"
+    "replaceAngle": "{angle}: Replace photo",
+    "shirts": "Shirts",
+    "outfit": "Let each outfit decide",
+    "untucked": "Untucked",
+    "tucked": "Tucked",
+    "preferences": "Preview preferences",
+    "limits": "Up to 10 lines, 120 characters each. Set tucking with the Shirts option above.",
+    "savePreferences": "Save preview preferences",
+    "saveConflict": "Save failed. Your draft is kept."
   }
 }

@@ -228,6 +228,7 @@
     "deleteConfirm": "Supprimer l’aperçu ?",
     "redrawConflict": "Un autre aperçu est en cours. Réessayez dans un instant.",
     "clothesChanged": "Vêtements modifiés",
-    "personChanged": "Vos photos ou mensurations ont changé"
+    "personChanged": "Vos photos ou mensurations ont changé",
+    "preferencesChanged": "Créé avec d’anciennes préférences"
   }
 }

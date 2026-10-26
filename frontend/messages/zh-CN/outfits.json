@@ -228,6 +228,7 @@
     "deleteConfirm": "删除预览？",
     "redrawConflict": "另一个预览正在生成，请稍后重试。",
     "clothesChanged": "服装已更改",
-    "personChanged": "你的照片或身体尺寸已更改"
+    "personChanged": "你的照片或身体尺寸已更改",
+    "preferencesChanged": "使用旧偏好生成"
   }
 }

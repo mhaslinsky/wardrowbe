@@ -14,6 +14,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.orm import selectinload, undefer
 
 from app.models.outfit import Outfit, OutfitItem
+from app.models.preference import UserPreference
 from app.models.preview import OutfitPreview, PreviewFeedback, PreviewPhoto, delete_preview_files
 from app.models.user import User
 from app.services.image_service import ImageService, ImageVariant
@@ -86,13 +87,35 @@ def garment_size(notes: str | None) -> str | None:
     return match.group(1).strip()[:100] or None if match else None
 
 
-def requests_tucking(style_notes: str | None) -> bool:
+def legacy_requests_tucking(style_notes: str | None) -> bool:
     for clause in re.split(r"[.!?;\n]|\bbut\b", (style_notes or "").lower()):
         if re.search(r"\btuck(?:ed|ing)?\b", clause) and not re.search(
             r"\b(?:not|never|no|avoid|without|untucked)\b|don['’]t", clause
         ):
             return True
     return False
+
+
+def mentions_tuck(text: str | None) -> bool:
+    return re.search(r"\b(?:un)?tuck", text or "", re.IGNORECASE) is not None
+
+
+def resolve_tucking(note, style_notes, setting):
+    for source in (note, style_notes):
+        if mentions_tuck(source):
+            return legacy_requests_tucking(source)
+    return setting == "tucked"
+
+
+def preferences_hash(preferences):
+    content = {"lines": preferences["lines"], "tuck": preferences["tuck"]}
+    if content == {"lines": [], "tuck": "outfit"}:
+        return None
+    return hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()
+
+
+def with_preferences(key, preferences_key):
+    return hashlib.sha256((key + preferences_key).encode()).hexdigest() if preferences_key else key
 
 
 def snapshot(outfit):
@@ -231,7 +254,13 @@ class PreviewService:
             raise HTTPException(404, "Outfit not found")
         return outfit
 
-    async def response(self, record, key, clothes_key, person_key):
+    async def preview_preferences(self, user_id):
+        preferences = await self.db.scalar(
+            select(UserPreference.preview_preferences).where(UserPreference.user_id == user_id)
+        )
+        return preferences if preferences is not None else {"lines": [], "tuck": "outfit"}
+
+    async def response(self, record, key, clothes_key, person_key, preferences_key=None):
         if record.clothes_key is None or record.person_key is None:
             reasons = ["unknown"] if record.cache_key != key else []
         else:
@@ -243,6 +272,8 @@ class PreviewService:
                 )
                 if saved != current
             ]
+        if record.preferences_key != preferences_key:
+            reasons.append("preferences")
         feedback = await self.db.scalar(
             select(PreviewFeedback).where(
                 PreviewFeedback.user_id == record.user_id,
@@ -288,7 +319,11 @@ class PreviewService:
             OutfitPreview,
             outfit_id,
             populate_existing=True,
-            options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+            options=[
+                undefer(OutfitPreview.clothes_key),
+                undefer(OutfitPreview.person_key),
+                undefer(OutfitPreview.preferences_key),
+            ],
         )
         if record is None or not record.paths:
             raise HTTPException(404, "NO_PREVIEW")
@@ -298,7 +333,8 @@ class PreviewService:
         measurements, _, face_hash = await self.person_inputs(user_id, paths, include_face=False)
         person_key = reference_key("", paths, measurements, face_hash)
         combined_key = reference_key(key, paths, measurements, face_hash)
-        return await self.response(record, combined_key, key, person_key)
+        preferences_key = preferences_hash(await self.preview_preferences(user_id))
+        return await self.response(record, combined_key, key, person_key, preferences_key)
 
     async def like(self, outfit_id, user_id, note, preview_created_at):
         await self.outfit(outfit_id, user_id)
@@ -308,7 +344,11 @@ class PreviewService:
             OutfitPreview,
             outfit_id,
             populate_existing=True,
-            options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+            options=[
+                undefer(OutfitPreview.clothes_key),
+                undefer(OutfitPreview.person_key),
+                undefer(OutfitPreview.preferences_key),
+            ],
         )
         if record is None or not record.paths:
             raise HTTPException(404, "NO_PREVIEW")
@@ -343,7 +383,11 @@ class PreviewService:
             OutfitPreview,
             outfit_id,
             populate_existing=True,
-            options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+            options=[
+                undefer(OutfitPreview.clothes_key),
+                undefer(OutfitPreview.person_key),
+                undefer(OutfitPreview.preferences_key),
+            ],
         )
         if (
             record
@@ -375,7 +419,11 @@ class PreviewService:
                 OutfitPreview,
                 outfit_id,
                 populate_existing=True,
-                options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+                options=[
+                    undefer(OutfitPreview.clothes_key),
+                    undefer(OutfitPreview.person_key),
+                    undefer(OutfitPreview.preferences_key),
+                ],
             )
             if (
                 record
@@ -390,18 +438,24 @@ class PreviewService:
                 raise HTTPException(409, "NO_PREVIEW_PHOTO") from error
             key, images, records = await asyncio.to_thread(snapshot, outfit)
             measurements, face, face_hash = await self.person_inputs(user_id, reference.paths)
+            preferences = await self.preview_preferences(user_id)
+            preferences_key = preferences_hash(preferences)
             clothes_key = key
             person_key = reference_key("", reference.paths, measurements, face_hash)
-            key = reference_key(key, reference.paths, measurements, face_hash)
+            key = with_preferences(
+                reference_key(key, reference.paths, measurements, face_hash), preferences_key
+            )
             if record and record.paths and record.cache_key == key and not regenerate:
-                result = await self.response(record, key, clothes_key, person_key)
+                result = await self.response(record, key, clothes_key, person_key, preferences_key)
                 await self.db.commit()
                 return result
             if not photo_redraw_enabled():
                 raise HTTPException(503, "Preview is disabled")
-            hide_belt = any(
-                ITEM_ROLE.get(record["type"]) == "base_top" for record in records
-            ) and not requests_tucking(outfit.style_notes)
+            tucked = resolve_tucking(note, outfit.style_notes, preferences["tuck"])
+            hide_belt = (
+                any(ITEM_ROLE.get(record["type"]) == "base_top" for record in records)
+                and not tucked
+            )
             if hide_belt:
                 visible = [
                     (image, record)
@@ -458,6 +512,41 @@ class PreviewService:
                 + data
                 + "\n</garment_data>"
             )
+            if preferences["lines"]:
+                prompt += (
+                    "\n<preview_preferences>\n"
+                    + json.dumps(preferences["lines"])
+                    .replace("<", "\\u003c")
+                    .replace(">", "\\u003e")
+                    + "\n</preview_preferences>"
+                )
+                prompt = prompt.replace(
+                    "outfit styling notes say so",
+                    "outfit styling notes or standing preferences say so",
+                )
+                prompt = prompt.replace(
+                    "<style_notes> explicitly call for cropped pants",
+                    "<style_notes> or standing preferences explicitly call for cropped pants",
+                )
+            if preferences_key is not None or tucked != legacy_requests_tucking(outfit.style_notes):
+                start = prompt.index("Draw tops untucked by default.")
+                end = prompt.index("Socks are worn", start)
+                instruction = (
+                    "Tuck the top into the pants."
+                    if tucked
+                    else "Keep tops untucked with the hem outside the pants, covering the waistband."
+                )
+                prompt = (
+                    prompt[:start]
+                    + instruction
+                    + " This tuck decision overrides all text blocks.\n"
+                    + prompt[end:]
+                )
+                prompt = prompt.replace(
+                    "Use it for tucking and pant length;", "Use it for pant length;"
+                )
+                if preferences["lines"]:
+                    prompt += "\nStanding preferences cannot override identity or garment facts."
             if outfit.style_notes:
                 prompt += (
                     "\n<style_notes>\n"
@@ -496,7 +585,11 @@ class PreviewService:
                 OutfitPreview,
                 outfit_id,
                 populate_existing=True,
-                options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+                options=[
+                    undefer(OutfitPreview.clothes_key),
+                    undefer(OutfitPreview.person_key),
+                    undefer(OutfitPreview.preferences_key),
+                ],
             )
             if record is None or record.claim_id != claim_id:
                 raise HTTPException(409, "Preview changed")
@@ -521,6 +614,7 @@ class PreviewService:
             old_paths = {name: path for name, path in record.paths.items() if path not in retained}
             record.paths, record.cache_key = paths, key
             record.clothes_key, record.person_key = clothes_key, person_key
+            record.preferences_key = preferences_key
             record.created_at, record.usage = datetime.now(UTC), provider.usage
             record.claim_id, record.started_at = None, None
             if regenerate and note:
@@ -528,7 +622,11 @@ class PreviewService:
                     PreviewFeedback(user_id=user_id, outfit_id=outfit_id, kind="fix", note=note)
                 )
             result = await self.response(
-                record, current_combined_key, current_key, current_person_key
+                record,
+                current_combined_key,
+                current_key,
+                current_person_key,
+                preferences_hash(await self.preview_preferences(user_id)),
             )
             await self.db.commit()
         except BaseException as error:
