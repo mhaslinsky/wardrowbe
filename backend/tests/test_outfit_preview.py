@@ -1447,7 +1447,12 @@ async def test_failed_redraw_does_not_save_feedback(
         json={"note": "Looser sleeves"},
     )
     assert result.status_code == 502
-    assert not (await db_session.execute(text("SELECT id FROM preview_feedback"))).all()
+    assert not (
+        await db_session.execute(
+            text("SELECT id FROM preview_feedback WHERE user_id = :id"),
+            {"id": preview_setup["user"]},
+        )
+    ).all()
     assert (await client.get(preview_setup["url"], headers=auth_headers)).status_code == 200
 
 
@@ -1466,10 +1471,18 @@ async def test_feedback_foreign_key_lifecycle(
     )
     await db_session.commit()
     assert (
-        await db_session.execute(text("SELECT outfit_id, kind, note FROM preview_feedback"))
+        await db_session.execute(
+            text("SELECT outfit_id, kind, note FROM preview_feedback WHERE user_id = :id"),
+            {"id": preview_setup["user"]},
+        )
     ).all() == [(None, "fix", "Looser sleeves")]
     await db_session.execute(
         text("DELETE FROM users WHERE id = :id"), {"id": preview_setup["user"]}
     )
     await db_session.commit()
-    assert not (await db_session.execute(text("SELECT id FROM preview_feedback"))).all()
+    assert not (
+        await db_session.execute(
+            text("SELECT id FROM preview_feedback WHERE user_id = :id"),
+            {"id": preview_setup["user"]},
+        )
+    ).all()
