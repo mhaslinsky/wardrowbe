@@ -213,6 +213,10 @@
     "replaceFailedStale": "Ersetzen fehlgeschlagen; Vorschläge können verzögert sein"
   },
   "preview": {
+    "likeChanged": "Die Vorschau wurde geändert. Lade sie neu, um sie zu liken.",
+    "like": "Gefällt mir",
+    "liked": "Gefällt dir",
+    "likeNote": "Was ist gut gelungen?",
     "see": "An mir ansehen",
     "redraw": "Neu zeichnen",
     "changed": "Outfit geändert",

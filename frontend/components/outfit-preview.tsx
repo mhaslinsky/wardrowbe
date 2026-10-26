@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { ThumbsUp } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
@@ -14,8 +15,8 @@ export function OutfitPreview(props: { outfitId: string; children?: ReactNode; d
 
 function PreviewContent({ outfitId, children, detail }: { outfitId: string; children?: ReactNode; detail?: boolean }) {
   const t = useTranslations('outfits.preview');
-  const { preview, pending, error, conflict, missingPhoto, draw, remove } = useOutfitPreview(outfitId);
-  const [action, setAction] = useState<'redraw' | 'delete' | null>(null);
+  const { preview, pending, error, conflict, missingPhoto, likeConflict, draw, remove, like } = useOutfitPreview(outfitId);
+  const [action, setAction] = useState<'redraw' | 'delete' | 'like' | null>(null);
   const [note, setNote] = useState('');
   const tc = useTranslations('common');
   return <div className={children && preview ? (detail ? "grid items-start gap-4 sm:grid-cols-2" : "grid grid-cols-2 gap-3 items-start") : "space-y-3"}>
@@ -33,17 +34,19 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {preview.stale && <span>{t('changed')}</span>}
         <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setAction('redraw'); }}>{t('redraw')}</Button>
+        <Button size="sm" variant={preview.liked ? 'default' : 'outline'} aria-pressed={Boolean(preview.liked)} disabled={pending} onClick={() => { setNote(preview.like_note ?? ''); setAction('like'); }}><ThumbsUp className="mr-1 h-4 w-4" />{t(preview.liked ? 'liked' : 'like')}</Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => setAction('delete')}>{t('delete')}</Button>
       </div>
     </>}
     </div>
     <Dialog open={action !== null} onOpenChange={(open) => { if (!open) setAction(null); }}>
       <DialogContent aria-describedby={undefined} className="max-w-sm">
-        <DialogTitle>{t(action === 'delete' ? 'deleteConfirm' : 'redraw')}</DialogTitle>
-        {action === 'redraw' && <label className="space-y-2">
-          <span>{t('changeNote')}</span>
-          <Textarea aria-label={t('changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
+        <DialogTitle>{t(action === 'delete' ? 'deleteConfirm' : action === 'like' ? 'like' : 'redraw')}</DialogTitle>
+        {(action === 'redraw' || action === 'like') && <label className="space-y-2">
+          <span>{t(action === 'like' ? 'likeNote' : 'changeNote')}</span>
+          <Textarea aria-label={t(action === 'like' ? 'likeNote' : 'changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
         </label>}
+        {action === 'like' && likeConflict && <p role="alert" className="text-sm text-destructive">{t('likeChanged')}</p>}
         {action === 'redraw' && conflict && <p role="alert" className="text-sm text-destructive">{t('redrawConflict')}</p>}
         {action === 'redraw' && error && <p role="alert" className="text-sm text-destructive">{t('failed')}</p>}
         <div className="flex justify-end gap-2">
@@ -52,11 +55,13 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
             const selected = action;
             setAction(null);
             if (selected === 'delete') void remove();
-            else {
+            else if (selected === 'like') {
+              if (preview && !await like(note, preview.created_at)) setAction('like');
+            } else {
               const success = await draw(true, note);
               if (!success && note.trim()) setAction('redraw');
             }
-          }}>{t(action === 'delete' ? 'delete' : 'redraw')}</Button>
+          }}>{t(action === 'delete' ? 'delete' : action === 'like' ? 'like' : 'redraw')}</Button>
         </div>
       </DialogContent>
     </Dialog>

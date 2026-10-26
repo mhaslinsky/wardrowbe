@@ -11,7 +11,7 @@ export type PreviewAngle = 'front' | 'quarter' | 'side';
 export const previewAngles: PreviewAngle[] = ['front', 'quarter', 'side'];
 type PreviewPhotos = Partial<Record<PreviewAngle, PreviewPhoto>>;
 export interface PreviewPhoto { image_url: string; medium_url: string }
-export interface OutfitPreview extends PreviewPhoto { created_at: string; stale: boolean }
+export interface OutfitPreview extends PreviewPhoto { created_at: string; stale: boolean; liked?: boolean; like_note?: string }
 
 export function previewErrorCode(error: unknown): string | undefined {
   if (!error || !(error instanceof ApiError) || !error.data || typeof error.data !== 'object') return;
@@ -145,6 +145,17 @@ export function useOutfitPreview(outfitId: string) {
     },
     onSuccess: (preview, { signal }) => { if (!signal.aborted) client.setQueryData(key, preview); },
   });
+  const feedback = useMutation({
+    meta: { toastsOwnErrors: true },
+    mutationFn: ({ note, previewCreatedAt }: { note: string; previewCreatedAt: string }) => api.post<OutfitPreview>(`/outfits/${outfitId}/preview/feedback`, { kind: 'like', note, preview_created_at: previewCreatedAt }),
+    onSuccess: async () => { await client.invalidateQueries({ queryKey: key }); },
+  });
+  const like = async (note: string, previewCreatedAt: string) => {
+    if (active.current || removal.isPending || feedback.isPending) return false;
+    feedback.reset();
+    try { await feedback.mutateAsync({ note, previewCreatedAt }); return true; }
+    catch { return false; }
+  };
   const removal = useMutation({
     meta: { toastsOwnErrors: true },
     mutationFn: async () => { await api.delete(`/outfits/${outfitId}/preview`); },
@@ -171,7 +182,8 @@ export function useOutfitPreview(outfitId: string) {
     catch { return false; }
     finally { clearTimeout(timeout); controller.signal.removeEventListener('abort', cancelRead); if (active.current === controller) active.current = null; }
   };
-  return { preview: query.data, pending: mutation.isPending || removal.isPending, error: (query.isError || mutation.isError || removal.isError) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
+  return { preview: query.data, pending: mutation.isPending || removal.isPending || feedback.isPending, error: (query.isError || mutation.isError || removal.isError || (feedback.isError && !(feedback.error instanceof ApiError && feedback.error.status === 409))) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
     conflict: mutation.isError && previewErrorCode(mutation.error) === 'PREVIEW_IN_PROGRESS',
-    missingPhoto: previewErrorCode(mutation.error) === 'NO_PREVIEW_PHOTO', draw, remove };
+    likeConflict: feedback.isError && previewErrorCode(feedback.error) === 'PREVIEW_CHANGED',
+    missingPhoto: previewErrorCode(mutation.error) === 'NO_PREVIEW_PHOTO', draw, remove, like };
 }

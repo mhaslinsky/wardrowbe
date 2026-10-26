@@ -231,11 +231,21 @@ class PreviewService:
             raise HTTPException(404, "Outfit not found")
         return outfit
 
-    def response(self, record, key):
+    async def response(self, record, key):
+        feedback = await self.db.scalar(
+            select(PreviewFeedback).where(
+                PreviewFeedback.user_id == record.user_id,
+                PreviewFeedback.outfit_id == record.outfit_id,
+                PreviewFeedback.kind == "like",
+                PreviewFeedback.preview_created_at == record.created_at,
+            )
+        )
         return {
             **urls(record.paths),
             "created_at": record.created_at,
             "stale": record.cache_key != key,
+            "liked": feedback is not None,
+            "like_note": feedback.note if feedback else "",
         }
 
     async def person_inputs(
@@ -270,7 +280,37 @@ class PreviewService:
         paths = reference.paths if reference else {}
         measurements, _, face_hash = await self.person_inputs(user_id, paths, include_face=False)
         key = reference_key(key, paths, measurements, face_hash)
-        return self.response(record, key)
+        return await self.response(record, key)
+
+    async def like(self, outfit_id, user_id, note, preview_created_at):
+        await self.outfit(outfit_id, user_id)
+        await self.lock_user(user_id)
+        await self.db.execute(select(Outfit.id).where(Outfit.id == outfit_id).with_for_update())
+        record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
+        if record is None or not record.paths:
+            raise HTTPException(404, "NO_PREVIEW")
+        if record.created_at != preview_created_at:
+            raise HTTPException(409, "PREVIEW_CHANGED")
+        feedback = await self.db.scalar(
+            select(PreviewFeedback).where(
+                PreviewFeedback.user_id == user_id,
+                PreviewFeedback.outfit_id == outfit_id,
+                PreviewFeedback.kind == "like",
+                PreviewFeedback.preview_created_at == record.created_at,
+            )
+        )
+        if feedback is None:
+            feedback = PreviewFeedback(
+                user_id=user_id,
+                outfit_id=outfit_id,
+                kind="like",
+                preview_created_at=record.created_at,
+                paths=dict(record.paths),
+            )
+            self.db.add(feedback)
+        feedback.note = note.strip()
+        await self.db.commit()
+        return await self.saved(outfit_id, user_id)
 
     async def delete(self, outfit_id, user_id):
         await self.outfit(outfit_id, user_id)
@@ -319,7 +359,7 @@ class PreviewService:
             measurements, face, face_hash = await self.person_inputs(user_id, reference.paths)
             key = reference_key(key, reference.paths, measurements, face_hash)
             if record and record.paths and record.cache_key == key and not regenerate:
-                result = self.response(record, key)
+                result = await self.response(record, key)
                 await self.db.commit()
                 return result
             if not photo_redraw_enabled():
@@ -429,7 +469,13 @@ class PreviewService:
             current_key = reference_key(
                 current_key, current_paths, current_measurements, current_face_hash
             )
-            old_paths = record.paths
+            retained_paths = await self.db.scalars(
+                select(PreviewFeedback.paths).where(
+                    PreviewFeedback.user_id == user_id, PreviewFeedback.kind == "like"
+                )
+            )
+            retained = {path for saved_paths in retained_paths for path in saved_paths.values()}
+            old_paths = {name: path for name, path in record.paths.items() if path not in retained}
             record.paths, record.cache_key = paths, key
             record.created_at, record.usage = datetime.now(UTC), provider.usage
             record.claim_id, record.started_at = None, None
@@ -437,7 +483,7 @@ class PreviewService:
                 self.db.add(
                     PreviewFeedback(user_id=user_id, outfit_id=outfit_id, kind="fix", note=note)
                 )
-            result = self.response(record, key)
+            result = await self.response(record, key)
             if current_key != key:
                 result["stale"] = True
             await self.db.commit()

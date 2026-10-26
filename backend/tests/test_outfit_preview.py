@@ -15,11 +15,11 @@ import pytest
 import pytest_asyncio
 from fastapi import HTTPException
 from PIL import Image
-from sqlalchemy import text
+from sqlalchemy import event, inspect, select, text
 
 from app.config import get_settings
 from app.models import ClothingItem, Outfit, OutfitItem, Trip, User
-from app.models.preview import OutfitPreview, PreviewPhoto
+from app.models.preview import OutfitPreview, PreviewFeedback, PreviewPhoto
 from app.services.image_service import ImageService
 from app.services.photo_redraw_service import PhotoRedrawService
 from app.services.preview_service import PreviewService
@@ -146,7 +146,14 @@ async def test_cache_regenerate_stale_and_prompt(
     await upload(client, auth_headers)
     first = await client.post(url, headers=auth_headers)
     assert first.status_code == 200, first.text
-    assert set(first.json()) == {"image_url", "medium_url", "created_at", "stale"}
+    assert set(first.json()) == {
+        "image_url",
+        "medium_url",
+        "created_at",
+        "stale",
+        "liked",
+        "like_note",
+    }
     assert first.json()["stale"] is False
     images, prompt, modality = provider.call_args.args
     assert len(images) == 3 and modality == "IMAGE"
@@ -1486,3 +1493,291 @@ async def test_feedback_foreign_key_lifecycle(
             {"id": preview_setup["user"]},
         )
     ).all()
+
+
+@pytest.mark.parametrize("note", ["", "Great sleeves"])
+async def test_like_preview_replaces_note_and_retains_image(
+    note, client, auth_headers, preview_setup, provider, db_session
+):
+    url = preview_setup["url"]
+    await upload(client, auth_headers)
+    first = await client.post(url, headers=auth_headers)
+    assert first.status_code == 200
+    result = await client.post(
+        url + "/feedback",
+        headers=auth_headers,
+        json={"kind": "like", "note": note, "preview_created_at": first.json()["created_at"]},
+    )
+    assert result.status_code == 200, result.text
+    assert result.json()["liked"] is True
+    assert result.json()["like_note"] == note
+    record = await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True)
+    paths = [ImageService().get_image_path(path) for path in record.paths.values()]
+    replacement = await client.post(
+        url + "/feedback",
+        headers=auth_headers,
+        json={
+            "kind": "like",
+            "note": "Better fit",
+            "preview_created_at": first.json()["created_at"],
+        },
+    )
+    assert replacement.status_code == 200
+    rows = (
+        await db_session.execute(
+            text(
+                "SELECT note, preview_created_at FROM preview_feedback WHERE outfit_id = :id AND kind = 'like'"
+            ),
+            {"id": preview_setup["outfit"]},
+        )
+    ).all()
+    assert rows == [("Better fit", record.created_at)]
+    assert (await client.get(url, headers=auth_headers)).json()["liked"] is True
+    redraw = await client.post(url + "?regenerate=true", headers=auth_headers)
+    assert redraw.status_code == 200
+    assert redraw.json()["created_at"] != first.json()["created_at"]
+    assert redraw.json()["liked"] is False
+    assert all(path.is_file() for path in paths)
+    assert (
+        await client.post(
+            url + "/feedback",
+            headers=auth_headers,
+            json={"kind": "like", "preview_created_at": redraw.json()["created_at"]},
+        )
+    ).status_code == 200
+    current = await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True)
+    paths += [ImageService().get_image_path(path) for path in current.paths.values()]
+    assert (await client.delete(url, headers=auth_headers)).status_code == 204
+    assert all(path.is_file() for path in paths)
+    await db_session.delete(await db_session.get(User, preview_setup["user"]))
+    await db_session.commit()
+    assert all(not path.exists() for path in paths)
+    assert not (
+        await db_session.execute(
+            text("SELECT id FROM preview_feedback WHERE user_id = :id"),
+            {"id": preview_setup["user"]},
+        )
+    ).all()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"kind": "like", "note": "x" * 501},
+        {"kind": "like", "note": None},
+        {"kind": "like", "note": []},
+        {"kind": "wrong"},
+        {},
+    ],
+)
+async def test_like_preview_validation(body, client, auth_headers, preview_setup):
+    result = await client.post(
+        preview_setup["url"] + "/feedback",
+        headers=auth_headers,
+        json={"preview_created_at": "2000-01-01T00:00:00Z", **body},
+    )
+    assert result.status_code == 422
+
+
+async def test_like_preview_missing_and_other_user(client, auth_headers, preview_setup, db_session):
+    result = await client.post(
+        preview_setup["url"] + "/feedback",
+        headers=auth_headers,
+        json={"kind": "like", "preview_created_at": "2000-01-01T00:00:00Z"},
+    )
+    assert result.status_code == 404
+    other_id = uuid4()
+    db_session.add(User(id=other_id, email=f"{other_id}@test.invalid", display_name="Other"))
+    await db_session.flush()
+    outfit = Outfit(user_id=other_id, occasion="casual")
+    db_session.add(outfit)
+    await db_session.flush()
+    db_session.add(
+        OutfitPreview(
+            outfit_id=outfit.id, user_id=other_id, paths={"image_path": "other/preview.jpg"}
+        )
+    )
+    await db_session.commit()
+    url = f"/api/v1/outfits/{outfit.id}/preview"
+    assert (
+        await client.post(
+            url + "/feedback",
+            headers=auth_headers,
+            json={"kind": "like", "preview_created_at": "2000-01-01T00:00:00Z"},
+        )
+    ).status_code == 404
+    assert (await client.get(url, headers=auth_headers)).status_code == 404
+    assert not (
+        await db_session.execute(
+            text("SELECT id FROM preview_feedback WHERE user_id = :id"), {"id": other_id}
+        )
+    ).all()
+
+
+async def test_ordinary_flush_does_not_query_preview_feedback(db_session, preview_setup):
+    statements = []
+    connection = await db_session.connection()
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement)
+
+    event.listen(connection.sync_connection, "before_cursor_execute", capture)
+    try:
+        ordinary = Outfit(user_id=preview_setup["user"], occasion="casual")
+        db_session.add(ordinary)
+        await db_session.flush()
+        item = await db_session.get(ClothingItem, preview_setup["items"][0])
+        item.notes = "Updated fit"
+        await db_session.flush()
+        await db_session.delete(ordinary)
+        await db_session.flush()
+    finally:
+        event.remove(connection.sync_connection, "before_cursor_execute", capture)
+    assert statements
+    assert not [statement for statement in statements if "preview_feedback" in statement.lower()]
+
+
+@pytest_asyncio.fixture
+async def liked_preview(client, auth_headers, preview_setup, provider, db_session):
+    await upload(client, auth_headers)
+    saved = await client.post(preview_setup["url"], headers=auth_headers)
+    assert saved.status_code == 200
+    result = await client.post(
+        preview_setup["url"] + "/feedback",
+        headers=auth_headers,
+        json={"kind": "like", "note": "Good fit", "preview_created_at": saved.json()["created_at"]},
+    )
+    assert result.status_code == 200
+    record = await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True)
+    return {
+        **preview_setup,
+        "created_at": saved.json()["created_at"],
+        "files": [ImageService().get_image_path(path) for path in record.paths.values()],
+    }
+
+
+@pytest.mark.parametrize("action", ["single", "bulk", "trip"])
+async def test_r1_outfit_deletion_keeps_liked_files(
+    action, liked_preview, client, auth_headers, db_session
+):
+    saved = liked_preview
+    if action == "single":
+        result = await client.delete(saved["url"].removesuffix("/preview"), headers=auth_headers)
+        assert result.status_code == 204
+    elif action == "bulk":
+        result = await client.post(
+            "/api/v1/outfits/bulk/delete",
+            headers=auth_headers,
+            json={"outfit_ids": [str(saved["outfit"])]},
+        )
+        assert result.status_code == 200 and result.json()["deleted"] == 1
+    else:
+        trip = Trip(
+            user_id=saved["user"],
+            destination="Paris",
+            start_date=date(2030, 10, 24),
+            end_date=date(2030, 10, 25),
+            occasions=["casual"],
+            packing=[],
+            days=[{"outfit_id": str(saved["outfit"])}],
+        )
+        db_session.add(trip)
+        await db_session.commit()
+        assert (
+            await client.delete(f"/api/v1/trips/{trip.id}", headers=auth_headers)
+        ).status_code == 204
+    assert await db_session.get(OutfitPreview, saved["outfit"], populate_existing=True) is None
+    assert all(path.is_file() for path in saved["files"])
+    assert (
+        await db_session.execute(
+            text("SELECT outfit_id FROM preview_feedback WHERE user_id = :id"),
+            {"id": saved["user"]},
+        )
+    ).all() == [(None,)]
+    await db_session.delete(await db_session.get(User, saved["user"]))
+    await db_session.commit()
+    assert all(not path.exists() for path in saved["files"])
+    assert not (
+        await db_session.execute(
+            text("SELECT id FROM preview_feedback WHERE user_id = :id"), {"id": saved["user"]}
+        )
+    ).all()
+
+
+async def test_r1_feedback_deletion_keeps_current_preview_files(
+    liked_preview, db_session, client, auth_headers
+):
+    feedback = await db_session.scalar(
+        select(PreviewFeedback).where(PreviewFeedback.user_id == liked_preview["user"])
+    )
+    await db_session.delete(feedback)
+    await db_session.commit()
+    assert all(path.is_file() for path in liked_preview["files"])
+    result = await client.get(liked_preview["url"], headers=auth_headers)
+    assert result.status_code == 200 and result.json()["liked"] is False
+    assert (await client.delete(liked_preview["url"], headers=auth_headers)).status_code == 204
+    assert all(not path.exists() for path in liked_preview["files"])
+
+
+@pytest.mark.parametrize("redraw", [False, True])
+async def test_r1_downgrade_removes_only_like_only_files(
+    redraw, liked_preview, client, auth_headers, db_session
+):
+    old_files = liked_preview["files"]
+    if redraw:
+        result = await client.post(liked_preview["url"] + "?regenerate=true", headers=auth_headers)
+        assert result.status_code == 200
+    current = await db_session.get(OutfitPreview, liked_preview["outfit"], populate_existing=True)
+    current_files = [ImageService().get_image_path(path) for path in current.paths.values()]
+    async with migration_downgrade(db_session, "e191a1b2c3d4"):
+        assert all(path.is_file() for path in current_files)
+        assert all(path.exists() is not redraw for path in old_files)
+    assert all(path.is_file() for path in current_files)
+
+
+async def test_r1_stale_tab_cannot_like_new_preview(
+    liked_preview, client, auth_headers, provider, db_session
+):
+    original = liked_preview["created_at"]
+    result = await client.post(liked_preview["url"] + "?regenerate=true", headers=auth_headers)
+    assert result.status_code == 200 and result.json()["created_at"] != original
+    stale = await client.post(
+        liked_preview["url"] + "/feedback",
+        headers=auth_headers,
+        json={"kind": "like", "note": "Old sleeves", "preview_created_at": original},
+    )
+    assert stale.status_code == 409 and stale.json()["detail"] == "PREVIEW_CHANGED"
+    assert (await client.get(liked_preview["url"], headers=auth_headers)).json()["liked"] is False
+    assert (
+        await db_session.execute(
+            text("SELECT note FROM preview_feedback WHERE user_id = :id"),
+            {"id": liked_preview["user"]},
+        )
+    ).all() == [("Good fit",)]
+
+
+async def test_r1_feedback_model_matches_migration(db_session):
+    metadata = PreviewFeedback.__table__
+    index = next((index for index in metadata.indexes if index.name == "uq_preview_like"), None)
+    assert index is not None and index.unique
+    assert [column.name for column in index.columns] == [
+        "user_id",
+        "outfit_id",
+        "preview_created_at",
+    ]
+    assert str(index.dialect_options["postgresql"]["where"]) == "kind = 'like'"
+    assert metadata.c.paths.server_default is not None
+    assert metadata.c.paths.type.__class__.__name__ == "JSONB"
+    connection = await db_session.connection()
+    actual = await connection.run_sync(lambda sync: inspect(sync).get_indexes("preview_feedback"))
+    assert any(record["name"] == index.name and record["unique"] for record in actual)
+
+
+@pytest.mark.parametrize("timestamp", [None, "", "not-a-date", {}])
+async def test_r1_like_timestamp_validation(timestamp, liked_preview, client, auth_headers):
+    result = await client.post(
+        liked_preview["url"] + "/feedback",
+        headers=auth_headers,
+        json={"kind": "like", "preview_created_at": timestamp},
+    )
+    assert result.status_code == 422

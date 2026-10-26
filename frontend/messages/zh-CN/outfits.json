@@ -213,6 +213,10 @@
     "replaceFailedStale": "替换失败，推荐可能延迟更新"
   },
   "preview": {
+    "likeChanged": "预览已更改。请刷新后再点赞。",
+    "like": "喜欢",
+    "liked": "已喜欢",
+    "likeNote": "哪些地方做得好？",
     "see": "查看上身效果",
     "redraw": "重新生成",
     "changed": "穿搭已更改",

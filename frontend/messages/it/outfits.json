@@ -213,6 +213,10 @@
     "replaceFailedStale": "Sostituzione fallita; suggerimenti in ritardo"
   },
   "preview": {
+    "likeChanged": "L’anteprima è cambiata. Ricarica per mettere Mi piace.",
+    "like": "Mi piace",
+    "liked": "Ti piace",
+    "likeNote": "Cosa è riuscito bene?",
     "see": "Vedi su di me",
     "redraw": "Ridisegna",
     "changed": "Outfit modificato",

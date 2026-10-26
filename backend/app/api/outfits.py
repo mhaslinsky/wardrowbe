@@ -1,6 +1,6 @@
 import logging
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -1565,6 +1565,26 @@ async def get_outfit_preview(
 
 class PreviewDrawRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
+
+
+class PreviewLikeRequest(BaseModel):
+    preview_created_at: datetime
+    kind: Literal["like"]
+    note: str = Field(default="", max_length=500)
+
+
+@router.post("/{outfit_id}/preview/feedback")
+async def like_outfit_preview(
+    outfit_id: UUID,
+    body: PreviewLikeRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    from app.services.preview_service import PreviewService
+
+    return await PreviewService(db).like(
+        outfit_id, current_user.id, body.note, body.preview_created_at
+    )
 
 
 @router.delete("/{outfit_id}/preview", status_code=204)
