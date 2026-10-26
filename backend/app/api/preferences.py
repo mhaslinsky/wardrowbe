@@ -99,12 +99,12 @@ async def update_preferences(
 
 @router.post("/reset", response_model=PreferenceResponse)
 async def reset_preferences(
-    data: PreviewPreferenceReset,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
+    data: PreviewPreferenceReset | None = None,
 ) -> PreferenceResponse:
     service = PreferenceService(db)
-    preferences = await service.reset_preferences(current_user.id, data.rev)
+    preferences = await service.reset_preferences(current_user.id, data.rev if data else None)
     return _build_preference_response(
         preferences, await service.preview_preferences(current_user.id)
     )

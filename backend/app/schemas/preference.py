@@ -50,7 +50,7 @@ class PreviewPreferences(BaseModel):
 
 
 class PreviewPreferenceReset(BaseModel):
-    rev: str = Field(min_length=1, max_length=64)
+    rev: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class AIEndpoint(BaseModel):

@@ -140,16 +140,24 @@ class PreferenceService:
             await self.db.rollback()
             raise HTTPException(409, "Preferences changed")
 
-    async def reset_preferences(self, user_id: uuid.UUID, rev: str) -> UserPreference:
+    async def reset_preferences(self, user_id: uuid.UUID, rev: str | None = None) -> UserPreference:
         from app.schemas.preference import PreferenceCreate
 
-        await self.replace_preview_preferences(user_id, {"lines": [], "tuck": "outfit", "rev": rev})
-        defaults = PreferenceCreate().model_dump()
-        await self.db.execute(
-            update(UserPreference)
-            .where(UserPreference.user_id == user_id)
-            .values(**defaults, excluded_item_ids=[], excluded_combinations=[])
+        await self.get_or_create_preferences(user_id)
+        statement = update(UserPreference).where(UserPreference.user_id == user_id)
+        if rev is not None:
+            statement = statement.where(UserPreference.preview_preferences["rev"].astext == rev)
+        result = await self.db.execute(
+            statement.values(
+                **PreferenceCreate().model_dump(),
+                excluded_item_ids=[],
+                excluded_combinations=[],
+                preview_preferences={"lines": [], "tuck": "outfit", "rev": uuid.uuid4().hex},
+            )
         )
+        if result.rowcount != 1:
+            await self.db.rollback()
+            raise HTTPException(409, "Preferences changed")
         await self.db.commit()
         return await self.get_preferences(user_id)
 

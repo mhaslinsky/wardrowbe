@@ -293,3 +293,28 @@ async def test_preview_concurrent_saves_and_user_isolation(
         finally:
             await session.delete(other)
             await session.commit()
+
+
+@pytest.mark.parametrize("body", [None, {}])
+async def test_preview_tokenless_reset(client, test_user, auth_headers, body):
+    url = "/api/v1/users/me/preferences"
+    initial = (await client.get(url, headers=auth_headers)).json()["preview_preferences"]
+    saved = await client.patch(
+        url,
+        headers=auth_headers,
+        json={
+            "standing_rules": ["No ties"],
+            "preview_preferences": {**initial, "lines": ["Roomy fit"], "tuck": "tucked"},
+        },
+    )
+    assert saved.status_code == 200
+    reset = await client.post(
+        url + "/reset", headers=auth_headers, **({"json": body} if body is not None else {})
+    )
+    assert reset.status_code == 200
+    current = reset.json()["preview_preferences"]
+    assert current["lines"] == [] and current["tuck"] == "outfit"
+    assert current["rev"] not in (initial["rev"], saved.json()["preview_preferences"]["rev"])
+    assert reset.json()["standing_rules"] == []
+    stale = await client.patch(url, headers=auth_headers, json={"preview_preferences": initial})
+    assert stale.status_code == 409
