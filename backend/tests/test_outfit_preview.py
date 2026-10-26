@@ -2243,6 +2243,11 @@ async def test_underwear_preview_inputs_and_visible_cut(
     )
     assert "briefs, trunks, and boxer briefs reaching mid-thigh" in prompt
     assert "Preserve the selected underwear's cut and full length" in prompt
+    assert (
+        "Keep the waistband height (rise) and leg-opening cut exactly as shown in the garment photo; "
+        "briefs and trunks sit low on the hips with the leg openings shown; "
+        "never raise the rise or add coverage." in prompt
+    )
     first.type = "shirt"
     second.type = "shirt"
     await db_session.commit()
