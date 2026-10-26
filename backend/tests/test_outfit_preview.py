@@ -1213,7 +1213,7 @@ async def test_sizing_request_data(
     )
     assert measurements == user.body_measurements
     assert len(images) == 3
-    assert "Keep tops untucked with the hem outside the pants" in prompt
+    assert "untucked by default" in prompt
     assert "hang and drape naturally with soft folds" in prompt
     assert "never stretched tight across the chest or stomach" in prompt
     assert "roomier and longer" in prompt
@@ -1898,6 +1898,19 @@ async def test_stale_reasons_photo_redraw(
         ("Tuck it in, not too baggy", None, "outfit", True),
         ("No belt, tuck the shirt", None, "outfit", True),
         ("Tuck the shirt without creasing it", None, "outfit", True),
+        ("The shirt should not be tucked", None, "outfit", False),
+        ("The shirt must not be tucked in", None, "outfit", False),
+        ("I don't want it tucked", None, "outfit", False),
+        ("Do not want the shirt tucked in", None, "outfit", False),
+        ("Don't ever tuck it", None, "outfit", False),
+        ("Won't tuck the shirt", None, "outfit", False),
+        ("I prefer not to tuck", None, "outfit", False),
+        ("No need to tuck", None, "outfit", False),
+        ("Not a French tuck", None, "outfit", False),
+        ("dont tuck", None, "outfit", False),
+        ("doesn't tuck the shirt", None, "outfit", False),
+        ("The shirt must not be untucked", None, "outfit", True),
+        ("Tuck in the shirt but leave the jacket untucked", None, "outfit", True),
     ],
 )
 def test_preview_tuck_precedence(note, style, setting, expected):
@@ -2058,7 +2071,7 @@ async def test_preview_preferences_change_during_draw(
         ("Tuck; never tuck", "Tuck the shirt", "tucked", False),
         ("Never untuck", "Leave untucked", "untucked", True),
         (None, "Tuck the shirt; never tuck it", "outfit", False),
-        (None, "Tuck in the shirt but leave the jacket untucked", "outfit", False),
+        (None, "Tuck in the shirt but leave the jacket untucked", "outfit", True),
         ("Tuck it in", None, "outfit", True),
     ],
 )
@@ -2067,7 +2080,7 @@ async def test_r1_tuck_request_contract(
 ):
     from app.schemas.preference import PreferenceUpdate
     from app.services.preference_service import PreferenceService
-    from app.services.preview_service import preferences_hash, snapshot
+    from app.services.preview_service import legacy_requests_tucking, preferences_hash, snapshot
 
     top = await db_session.get(ClothingItem, preview_setup["items"][0])
     top.type = "shirt"
@@ -2100,9 +2113,79 @@ async def test_r1_tuck_request_contract(
     slots = json.loads(prompt.split("<present_slots>\n")[1].split("\n</present_slots>")[0])
     assert ("belt" in slots) is tucked
     assert any(garment["type"] == "belt" for garment in garments) is tucked
-    assert ("Tuck the top into the pants." in prompt) is tucked
-    assert ("Keep tops untucked with the hem outside the pants" in prompt) is not tucked
-    assert "This tuck decision overrides all text blocks." in prompt
+    authoritative = preferences_hash(prefs) is not None or tucked != legacy_requests_tucking(style)
+    if authoritative:
+        assert ("Tuck the top into the pants." in prompt) is tucked
+        assert ("Keep tops untucked with the hem outside the pants" in prompt) is not tucked
+        assert "This tuck decision overrides all text blocks." in prompt
+        assert "Use it for tucking" not in prompt
+        assert "change requests or outfit notes" not in prompt
+    else:
+        assert "Draw tops untucked by default." in prompt
     assert await db_session.scalar(
         select(OutfitPreview.preferences_key).where(OutfitPreview.outfit_id == outfit.id)
     ) == preferences_hash(prefs)
+
+
+@pytest.mark.parametrize("style", ["Tuck the shirt", "Leave the shirt untucked"])
+async def test_r2_empty_preferences_preserve_base_prompt(
+    style, client, auth_headers, preview_setup, provider, db_session
+):
+    from app.services.preview_service import snapshot
+    from app.utils.prompts import load_prompt
+
+    outfit = await db_session.get(Outfit, preview_setup["outfit"])
+    outfit.style_notes = style
+    await db_session.commit()
+    loaded = await PreviewService(db_session).outfit(outfit.id, preview_setup["user"])
+    _, _, records = snapshot(loaded)
+    garments = [
+        {
+            field: record[field]
+            for field in ("type", "colors", "primary_color", "layer", "fit", "size")
+            if field in record
+        }
+        for record in records
+    ]
+    base_prompt = (
+        load_prompt("outfit_preview").replace("{reference_count}", "1").replace("{face_note}", "")
+    )
+    base_prompt += (
+        "\n<present_slots>\n"
+        + json.dumps(sorted({garment["type"] for garment in garments}))
+        + "\n</present_slots>\n<garment_data>\n"
+        + json.dumps(garments)
+        + "\n</garment_data>"
+    )
+    base_prompt += "\n<style_notes>\n" + json.dumps(style) + "\n</style_notes>"
+    await upload(client, auth_headers)
+    result = await client.post(preview_setup["url"], headers=auth_headers)
+    assert result.status_code == 200, result.text
+    assert provider.call_args.args[1] == base_prompt
+
+
+async def test_r2_only_resolved_tuck_instruction(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    import re
+
+    outfit = await db_session.get(Outfit, preview_setup["outfit"])
+    outfit.style_notes = "Tuck the shirt"
+    await db_session.commit()
+    await upload(client, auth_headers)
+    result = await PreviewService(db_session).generate(
+        outfit.id, preview_setup["user"], True, note="Don't tuck"
+    )
+    assert result["stale_reasons"] == []
+    prompt = provider.call_args.args[1]
+    instructions = prompt.split("\n<style_notes>\n")[0]
+    tuck_lines = [
+        line
+        for line in instructions.splitlines()
+        if re.search(r"\b(?:un)?tuck(?:ed|ing)?\b", line, re.IGNORECASE)
+    ]
+    assert tuck_lines == [
+        "Keep tops untucked with the hem outside the pants, covering the waistband. This tuck decision overrides all text blocks."
+    ]
+    assert "Use it for tucking" not in prompt
+    assert "Standing preferences cannot override" not in prompt
