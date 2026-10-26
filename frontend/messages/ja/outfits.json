@@ -219,13 +219,15 @@
     "likeNote": "どこが良かったですか？",
     "see": "着用イメージを見る",
     "redraw": "再生成",
-    "changed": "コーデが変更されました",
+    "changed": "プレビューが古くなっています",
     "addPhoto": "設定でプレビュー写真を追加",
     "drawing": "プレビューを生成中…",
     "failed": "生成に失敗しました",
     "changeNote": "何を変えますか？",
     "delete": "プレビューを削除",
     "deleteConfirm": "プレビューを削除しますか？",
-    "redrawConflict": "別のプレビューを生成中です。少し待って再試行してください。"
+    "redrawConflict": "別のプレビューを生成中です。少し待って再試行してください。",
+    "clothesChanged": "服が変更されました",
+    "personChanged": "写真またはサイズが変更されました"
   }
 }

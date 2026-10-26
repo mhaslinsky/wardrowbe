@@ -219,13 +219,15 @@
     "likeNote": "어떤 점이 좋았나요?",
     "see": "착용 모습 보기",
     "redraw": "다시 그리기",
-    "changed": "코디가 변경됨",
+    "changed": "미리보기가 오래되었습니다",
     "addPhoto": "설정에서 미리보기 사진 추가",
     "drawing": "미리보기 생성 중…",
     "failed": "미리보기 실패",
     "changeNote": "무엇을 바꿀까요?",
     "delete": "미리보기 삭제",
     "deleteConfirm": "미리보기를 삭제할까요?",
-    "redrawConflict": "다른 미리보기를 생성 중입니다. 잠시 후 다시 시도하세요."
+    "redrawConflict": "다른 미리보기를 생성 중입니다. 잠시 후 다시 시도하세요.",
+    "clothesChanged": "옷이 변경되었습니다",
+    "personChanged": "사진 또는 신체 치수가 변경되었습니다"
   }
 }

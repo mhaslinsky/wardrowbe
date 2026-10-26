@@ -32,7 +32,7 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
         <img src={preview.medium_url || preview.image_url} alt={t('see')} className="max-h-96 w-full rounded-lg object-contain bg-muted" />
       </a>
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        {preview.stale && <span>{t('changed')}</span>}
+        {preview.stale && (preview.stale_reasons?.length ? preview.stale_reasons : ['unknown'] as const).map((reason) => <span key={reason}>{t(reason === 'clothes' ? 'clothesChanged' : reason === 'person' ? 'personChanged' : 'changed')}</span>)}
         <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setAction('redraw'); }}>{t('redraw')}</Button>
         <Button size="sm" variant={preview.liked ? 'default' : 'outline'} aria-pressed={Boolean(preview.liked)} disabled={pending} onClick={() => { setNote(preview.like_note ?? ''); setAction('like'); }}><ThumbsUp className="mr-1 h-4 w-4" />{t(preview.liked ? 'liked' : 'like')}</Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => setAction('delete')}>{t('delete')}</Button>

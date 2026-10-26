@@ -219,13 +219,15 @@
     "likeNote": "哪些地方做得好？",
     "see": "查看上身效果",
     "redraw": "重新產生",
-    "changed": "穿搭已變更",
+    "changed": "預覽已過期",
     "addPhoto": "在設定中新增預覽照片",
     "drawing": "正在產生預覽…",
     "failed": "預覽失敗",
     "changeNote": "想修改什麼？",
     "delete": "刪除預覽",
     "deleteConfirm": "刪除預覽？",
-    "redrawConflict": "另一個預覽正在產生，請稍後重試。"
+    "redrawConflict": "另一個預覽正在產生，請稍後重試。",
+    "clothesChanged": "服裝已變更",
+    "personChanged": "你的照片或身體尺寸已變更"
   }
 }

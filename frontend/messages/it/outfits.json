@@ -219,13 +219,15 @@
     "likeNote": "Cosa è riuscito bene?",
     "see": "Vedi su di me",
     "redraw": "Ridisegna",
-    "changed": "Outfit modificato",
+    "changed": "L’anteprima non è aggiornata",
     "addPhoto": "Aggiungi una foto nelle impostazioni",
     "drawing": "Creazione anteprima…",
     "failed": "Anteprima non riuscita",
     "changeNote": "Cosa vuoi cambiare?",
     "delete": "Elimina anteprima",
     "deleteConfirm": "Eliminare l’anteprima?",
-    "redrawConflict": "Un’altra anteprima è in corso. Riprova tra poco."
+    "redrawConflict": "Un’altra anteprima è in corso. Riprova tra poco.",
+    "clothesChanged": "Vestiti modificati",
+    "personChanged": "Le tue foto o misure sono cambiate"
   }
 }

@@ -219,13 +219,15 @@
     "likeNote": "What did it get right?",
     "see": "See it on me",
     "redraw": "Redraw",
-    "changed": "Outfit changed",
+    "changed": "Preview is out of date",
     "addPhoto": "Add a preview photo in Settings",
     "drawing": "Drawing preview…",
     "failed": "Preview failed",
     "changeNote": "What should change?",
     "delete": "Delete preview",
     "deleteConfirm": "Delete preview?",
-    "redrawConflict": "Another redraw is running. Try again in a moment."
+    "redrawConflict": "Another redraw is running. Try again in a moment.",
+    "clothesChanged": "Clothes changed",
+    "personChanged": "Your photos or measurements changed"
   }
 }

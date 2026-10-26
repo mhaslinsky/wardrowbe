@@ -528,3 +528,31 @@ it.each(['PREVIEW_CHANGED', 'PREVIEW_IN_PROGRESS', undefined])('keeps like 409 o
   expect(await screen.findByRole('textbox', { name: 'likeNote' })).toBeVisible();
   expect(screen.queryByText('failed')).not.toBeInTheDocument();
 });
+
+it.each([
+  [['clothes'], ['clothesChanged']],
+  [['person'], ['personChanged']],
+  [['clothes', 'person'], ['clothesChanged', 'personChanged']],
+  [['unknown'], ['changed']],
+  [[], []],
+])('shows stale reasons %j', async (reasons, labels) => {
+  vi.mocked(fetch).mockResolvedValue(response({ ...saved, stale: reasons.length > 0, stale_reasons: reasons }) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  await screen.findByRole('img');
+  for (const label of ['clothesChanged', 'personChanged', 'changed']) {
+    expect(Boolean(screen.queryByText(label))).toBe(labels.includes(label));
+  }
+});
+
+const outfitCatalogs = import.meta.glob('../messages/*/outfits.json', { eager: true, import: 'default' });
+it.each(Object.entries(outfitCatalogs))('has stale labels in %s', (_path, catalog) => {
+  const preview = (catalog as { preview: Record<string, string> }).preview;
+  for (const key of ['clothesChanged', 'personChanged', 'changed']) {
+    expect(preview[key]).toBeTruthy();
+  }
+  if (_path.includes('/en/')) {
+    expect(preview.clothesChanged).toBe('Clothes changed');
+    expect(preview.personChanged).toBe('Your photos or measurements changed');
+    expect(preview.changed).toBe('Preview is out of date');
+  }
+});
