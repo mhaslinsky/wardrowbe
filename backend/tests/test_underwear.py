@@ -49,8 +49,11 @@ def test_underwear_vocabulary_and_tights_are_distinct():
 
 def test_tagging_prompt_keeps_athletic_underwear_out_of_tights():
     prompt = (Path(__file__).parents[1] / "app/prompts/clothing_analysis.txt").read_text()
-    assert "underwear → boxer-briefs, briefs, boxers, trunks, compression, long-underwear" in prompt
-    assert "including athletic and compression underwear, as underwear, never tights" in prompt
+    assert "Classify as underwear only garments made as undergarments:" in prompt
+    assert "This rule takes precedence over the length rules below." in prompt
+    assert (
+        "Pantyhose and sheer, opaque or thermal tights stay tights; leggings stay pants" in prompt
+    )
 
 
 def test_underwear_has_no_outfit_slot_or_learning_signal():
