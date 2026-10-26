@@ -11,7 +11,7 @@ export type PreviewAngle = 'front' | 'quarter' | 'side';
 export const previewAngles: PreviewAngle[] = ['front', 'quarter', 'side'];
 type PreviewPhotos = Partial<Record<PreviewAngle, PreviewPhoto>>;
 export interface PreviewPhoto { image_url: string; medium_url: string }
-export interface OutfitPreview extends PreviewPhoto { created_at: string; stale: boolean; stale_reasons?: ('clothes' | 'person' | 'unknown')[]; liked?: boolean; like_note?: string }
+export interface OutfitPreview extends PreviewPhoto { created_at: string; stale: boolean; stale_reasons?: ('clothes' | 'person' | 'preferences' | 'unknown')[]; liked?: boolean; like_note?: string }
 
 export function previewErrorCode(error: unknown): string | undefined {
   if (!error || !(error instanceof ApiError) || !error.data || typeof error.data !== 'object') return;

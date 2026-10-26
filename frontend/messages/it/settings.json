@@ -163,6 +163,14 @@
     "side": "Profilo",
     "confirmAngle": "Rimuovere la foto?",
     "uploadAngle": "{angle}: Carica foto",
-    "replaceAngle": "{angle}: Sostituisci foto"
+    "replaceAngle": "{angle}: Sostituisci foto",
+    "shirts": "Camicie",
+    "outfit": "Decide ogni outfit",
+    "untucked": "Fuori dai pantaloni",
+    "tucked": "Dentro i pantaloni",
+    "preferences": "Preferenze anteprima",
+    "limits": "Massimo 10 righe di 120 caratteri. Imposta le camicie separatamente.",
+    "savePreferences": "Salva preferenze anteprima",
+    "saveConflict": "Salvataggio non riuscito. Bozza conservata."
   }
 }

@@ -1,6 +1,7 @@
 import uuid
 
-from sqlalchemy import select
+from fastapi import HTTPException
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -65,6 +66,11 @@ class PreferenceService:
         preferences = await self.get_or_create_preferences(user_id)
 
         update_data = data.model_dump(exclude_unset=True)
+        preview = update_data.pop("preview_preferences", None)
+        if "preview_preferences" in data.model_fields_set:
+            if preview is None:
+                raise HTTPException(422, "Preview preferences required")
+            await self.replace_preview_preferences(user_id, preview)
         update_data = self._strip_color_overlaps(update_data, preferences)
 
         for field, value in update_data.items():
@@ -115,13 +121,37 @@ class PreferenceService:
 
         return update_data
 
-    async def reset_preferences(self, user_id: uuid.UUID) -> UserPreference:
-        preferences = await self.get_preferences(user_id)
-        if preferences:
-            await self.db.delete(preferences)
-            await self.db.commit()
+    async def preview_preferences(self, user_id):
+        await self.get_or_create_preferences(user_id)
+        return await self.db.scalar(
+            select(UserPreference.preview_preferences).where(UserPreference.user_id == user_id)
+        )
 
-        return await self.get_or_create_preferences(user_id)
+    async def replace_preview_preferences(self, user_id, preview):
+        result = await self.db.execute(
+            update(UserPreference)
+            .where(
+                UserPreference.user_id == user_id,
+                UserPreference.preview_preferences["rev"].astext == preview["rev"],
+            )
+            .values(preview_preferences={**preview, "rev": uuid.uuid4().hex})
+        )
+        if result.rowcount != 1:
+            await self.db.rollback()
+            raise HTTPException(409, "Preferences changed")
+
+    async def reset_preferences(self, user_id: uuid.UUID, rev: str) -> UserPreference:
+        from app.schemas.preference import PreferenceCreate
+
+        await self.replace_preview_preferences(user_id, {"lines": [], "tuck": "outfit", "rev": rev})
+        defaults = PreferenceCreate().model_dump()
+        await self.db.execute(
+            update(UserPreference)
+            .where(UserPreference.user_id == user_id)
+            .values(**defaults, excluded_item_ids=[], excluded_combinations=[])
+        )
+        await self.db.commit()
+        return await self.get_preferences(user_id)
 
     async def add_excluded_item(self, user_id: uuid.UUID, item_id: uuid.UUID) -> UserPreference:
         preferences = await self.get_or_create_preferences(user_id)

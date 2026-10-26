@@ -179,7 +179,10 @@ class TestPreferenceDefaults:
         response = await client.get("/api/v1/users/me/preferences", headers=auth_headers)
 
         assert response.status_code == 200
-        assert response.json() == DEFAULT_PREFERENCES_RESPONSE
+        assert response.json().pop("preview_preferences")["rev"]
+        assert {
+            key: value for key, value in response.json().items() if key != "preview_preferences"
+        } == DEFAULT_PREFERENCES_RESPONSE
 
     @pytest.mark.asyncio
     async def test_row_with_only_column_defaults_gets_defaults(
@@ -191,10 +194,60 @@ class TestPreferenceDefaults:
         response = await client.get("/api/v1/users/me/preferences", headers=auth_headers)
 
         assert response.status_code == 200
-        assert response.json() == DEFAULT_PREFERENCES_RESPONSE
+        assert response.json().pop("preview_preferences")["rev"]
+        assert {
+            key: value for key, value in response.json().items() if key != "preview_preferences"
+        } == DEFAULT_PREFERENCES_RESPONSE
 
     def test_null_columns_fall_back_to_defaults(self):
         fields = DEFAULT_PREFERENCES_RESPONSE.keys()
-        response = _build_preference_response(SimpleNamespace(**dict.fromkeys(fields)))
+        response = _build_preference_response(
+            SimpleNamespace(**dict.fromkeys(fields)), {"lines": [], "tuck": "outfit", "rev": "test"}
+        )
 
-        assert response.model_dump() == DEFAULT_PREFERENCES_RESPONSE
+        assert response.model_dump(exclude={"preview_preferences"}) == DEFAULT_PREFERENCES_RESPONSE
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, {"lines": [1]}, {"lines": ["x" * 121]}, {"lines": ["x"] * 11}, {"tuck": "invalid"}],
+)
+async def test_preview_preferences_reject_malformed(client, test_user, auth_headers, value):
+    response = await client.patch(
+        "/api/v1/users/me/preferences", headers=auth_headers, json={"preview_preferences": value}
+    )
+    assert response.status_code == 422
+
+
+async def test_preview_revision_save_reset_conflicts(client, test_user, auth_headers):
+    url = "/api/v1/users/me/preferences"
+    original = (await client.get(url, headers=auth_headers)).json()["preview_preferences"]
+    assert original["lines"] == [] and original["tuck"] == "outfit"
+    saved = await client.patch(
+        url,
+        headers=auth_headers,
+        json={"preview_preferences": {**original, "lines": ["  loose fit  ", " "]}},
+    )
+    assert saved.status_code == 200
+    current = saved.json()["preview_preferences"]
+    assert current["lines"] == ["loose fit"]
+    assert current["rev"] != original["rev"]
+    stale = await client.patch(url, headers=auth_headers, json={"preview_preferences": original})
+    assert stale.status_code == 409
+    stale_reset = await client.post(
+        url + "/reset", headers=auth_headers, json={"rev": original["rev"]}
+    )
+    assert stale_reset.status_code == 409
+    reset = await client.post(url + "/reset", headers=auth_headers, json={"rev": current["rev"]})
+    assert reset.status_code == 200
+    defaults = reset.json()["preview_preferences"]
+    assert defaults["lines"] == [] and defaults["tuck"] == "outfit"
+    assert defaults["rev"] not in (original["rev"], current["rev"])
+    assert (
+        await client.post(url + "/reset", headers=auth_headers, json={"rev": current["rev"]})
+    ).status_code == 409
+    unrelated = await client.patch(
+        url, headers=auth_headers, json={"temperature_unit": "fahrenheit"}
+    )
+    assert unrelated.status_code == 200
+    assert unrelated.json()["preview_preferences"] == defaults

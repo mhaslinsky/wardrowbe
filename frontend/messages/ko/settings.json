@@ -163,6 +163,14 @@
     "side": "측면",
     "confirmAngle": "사진을 삭제할까요?",
     "uploadAngle": "{angle}: 사진 업로드",
-    "replaceAngle": "{angle}: 사진 교체"
+    "replaceAngle": "{angle}: 사진 교체",
+    "shirts": "셔츠",
+    "outfit": "코디에 따라 결정",
+    "untucked": "밑단 빼기",
+    "tucked": "밑단 넣기",
+    "preferences": "미리보기 설정",
+    "limits": "최대 10줄, 줄당 120자. 밑단은 셔츠 설정에서 선택하세요.",
+    "savePreferences": "미리보기 설정 저장",
+    "saveConflict": "저장 실패. 초안이 유지됩니다."
   }
 }

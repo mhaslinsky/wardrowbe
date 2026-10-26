@@ -522,7 +522,9 @@ export default function SettingsPage() {
         toast.error(t('standingRules.limit'));
         return;
       }
-      await updatePreferences.mutateAsync({ ...formData, standing_rules: rules });
+      const settings = { ...formData };
+      delete settings.preview_preferences;
+      await updatePreferences.mutateAsync({ ...settings, standing_rules: rules });
       setHasChanges(false);
     } catch (error) {
       console.error('Failed to save preferences:', error);
@@ -532,7 +534,7 @@ export default function SettingsPage() {
   const handleReset = async () => {
     if (confirm(t('confirmReset'))) {
       try {
-        await resetPreferences.mutateAsync();
+        await resetPreferences.mutateAsync(formData.preview_preferences!.rev);
       } catch (error) {
         console.error('Failed to reset preferences:', error);
       }

@@ -163,6 +163,14 @@
     "side": "側面",
     "confirmAngle": "写真を削除しますか？",
     "uploadAngle": "{angle}：写真をアップロード",
-    "replaceAngle": "{angle}：写真を変更"
+    "replaceAngle": "{angle}：写真を変更",
+    "shirts": "シャツ",
+    "outfit": "コーデごとに決める",
+    "untucked": "裾を出す",
+    "tucked": "裾を入れる",
+    "preferences": "プレビュー設定",
+    "limits": "最大10行、各120文字。裾はシャツ設定で指定。",
+    "savePreferences": "プレビュー設定を保存",
+    "saveConflict": "保存できませんでした。下書きは保持されています。"
   }
 }

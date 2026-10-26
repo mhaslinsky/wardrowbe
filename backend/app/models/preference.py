@@ -34,6 +34,13 @@ class UserPreference(Base):
         primary_key=True,
     )
 
+    preview_preferences: Mapped[dict] = mapped_column(
+        JSONB,
+        deferred=True,
+        nullable=False,
+        default=lambda: {"lines": [], "tuck": "outfit", "rev": uuid.uuid4().hex},
+    )
+
     # Color preferences
     color_favorites: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     color_avoid: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)

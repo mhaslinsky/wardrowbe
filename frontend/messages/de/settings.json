@@ -163,6 +163,14 @@
     "side": "Seitenansicht",
     "confirmAngle": "Foto entfernen?",
     "uploadAngle": "{angle}: Foto hochladen",
-    "replaceAngle": "{angle}: Foto ersetzen"
+    "replaceAngle": "{angle}: Foto ersetzen",
+    "shirts": "Hemden",
+    "outfit": "Pro Outfit entscheiden",
+    "untucked": "Nicht eingesteckt",
+    "tucked": "Eingesteckt",
+    "preferences": "Vorschaueinstellungen",
+    "limits": "Bis zu 10 Zeilen mit je 120 Zeichen. Hemdoption separat wählen.",
+    "savePreferences": "Vorschaueinstellungen speichern",
+    "saveConflict": "Speichern fehlgeschlagen. Entwurf bleibt erhalten."
   }
 }
