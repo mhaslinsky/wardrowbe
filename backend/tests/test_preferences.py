@@ -220,9 +220,9 @@ async def test_preview_preferences_reject_malformed(client, test_user, auth_head
     response = await client.patch(url, headers=auth_headers, json={"preview_preferences": value})
     assert response.status_code == 422
     if value is not None:
-        errors = response.json()["detail"]
-        assert all(error["loc"][-1] != "rev" for error in errors)
-        assert any("lines" in error["loc"] or "tuck" in error["loc"] for error in errors)
+        errors = response.json()["errors"]
+        assert all(not error["field"].endswith("rev") for error in errors)
+        assert any("lines" in error["field"] or "tuck" in error["field"] for error in errors)
 
 
 async def test_preview_revision_save_reset_conflicts(client, test_user, auth_headers):
