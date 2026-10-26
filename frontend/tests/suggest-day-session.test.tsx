@@ -111,9 +111,9 @@ it.each(['startOver', 'options.generateNew', 'dismissOutfit'])('never changes a 
 it('resets notices and the swap dialog when switching options', async () => {
   render(<SuggestPage />, { wrapper })
   await generate()
-  fireEvent.click(button('swap'))
-  expect(screen.getByRole('dialog')).toBeVisible()
-  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+  vi.mocked(api.post).mockRejectedValueOnce(new Error('Wear request failed'))
+  await click('wore')
+  expect(screen.getByRole('status')).toHaveTextContent('failed')
   const options = screen.getAllByText('options.optionNumber', { selector: 'button span' }).map((label) => {
     const control = label.closest('button')!
     expect(control).toHaveAccessibleName('options.optionNumber')
@@ -122,9 +122,12 @@ it('resets notices and the swap dialog when switching options', async () => {
     expect(control.closest('[aria-hidden="true"]')).toBeNull()
     return control
   })
+  fireEvent.click(button('swap'))
+  expect(screen.getByRole('dialog')).toBeVisible()
+  // Select the saved control while the dialog is open to exercise the option remount.
   fireEvent.click(options[1])
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  expect(screen.queryByText('logged')).not.toBeInTheDocument()
+  expect.soft(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByText('failed')).not.toBeInTheDocument()
 })
 
 it('does not enable generation or result wear before profile loading completes', async () => {
