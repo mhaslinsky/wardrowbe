@@ -159,3 +159,19 @@ it('keeps the active comparison when an extra photo is deleted', async () => {
   await interact(() => { fireEvent.click(screen.getByLabelText('open', { exact: true })); });
   expect(document.querySelector('.yarl__slide_current img')).toHaveAttribute('src', '/redrawn.jpg');
 });
+
+
+it('hides outfit generation for underwear and restores actions for other types', () => {
+  const client = new QueryClient();
+  const view = (type: string) => <QueryClientProvider client={client}>
+    <ItemDetailDialog item={{ ...item, type }} open onOpenChange={vi.fn()} />
+  </QueryClientProvider>;
+  const { rerender } = render(view('underwear'));
+  for (const type of ['underwear', 'shirt', 'socks', 'underwear']) {
+    rerender(view(type));
+    for (const title of ['titles.suggestOutfit', 'titles.findMatchingOutfits']) {
+      if (type === 'underwear') expect(screen.queryByTitle(title)).not.toBeInTheDocument();
+      else expect(screen.getByTitle(title)).toBeInTheDocument();
+    }
+  }
+});

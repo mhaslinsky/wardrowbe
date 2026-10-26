@@ -20,7 +20,7 @@ SUBTYPE (optional): A more specific name within the type. Examples:
 - underwear → boxer-briefs, briefs, boxers, trunks, compression, long-underwear
 - tie → necktie, bow-tie, bolo
 Classify underwear, including athletic and compression underwear, as underwear, never tights.
-Legwear worn as a base layer under other clothes, at any length, is underwear (including long underwear); legwear worn visibly is pants, shorts or tights.
+Classify as underwear only garments made as undergarments: briefs, boxers, boxer briefs, trunks, compression shorts made as underwear, and long johns or thermal base-layer bottoms. This rule takes precedence over the length rules below. Pantyhose and sheer, opaque or thermal tights stay tights; leggings stay pants; athletic shorts worn on their own stay shorts.
 
 Treat pantyhose and sheer stockings that reach the thigh or waist as tights. Otherwise, legwear that reaches the waist and covers the feet is tights, even when it is thick, ribbed or knitted; waist-high legwear that stops at the ankle is pants (leggings); and legwear that stops below the waist, including knee-high and over-the-knee socks, is socks. Use null if the type is specific enough (e.g. jeans, hoodie, blazer).
 
