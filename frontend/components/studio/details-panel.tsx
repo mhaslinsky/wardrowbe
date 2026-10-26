@@ -52,7 +52,7 @@ export function DetailsPanel({
   const warnings = computeWarnings(items, t);
 
   const handleAiAssist = async () => {
-    const outfitItems = items.filter((item) => ITEM_ROLE[item.type] !== 'underwear');
+    const outfitItems = items.filter((item) => ITEM_ROLE[item.type.trim().toLowerCase()] !== 'underwear');
     if (outfitItems.length === 0 || !occasion) {
       toast.error(t('aiAssistError'));
       return;

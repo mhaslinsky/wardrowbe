@@ -512,7 +512,10 @@ class PreviewService:
                 + data
                 + "\n</garment_data>"
             )
-            if any(ITEM_ROLE.get(garment["type"]) == "underwear" for garment in garments):
+            if any(
+                ITEM_ROLE.get((garment["type"] or "").strip().lower()) == "underwear"
+                for garment in garments
+            ):
                 prompt += "\n" + load_prompt("outfit_preview_underwear")
             if preferences["lines"]:
                 prompt += (

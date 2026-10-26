@@ -23,8 +23,8 @@ function panel(items: StudioItem[], occasion: string | null = 'casual') {
   return onAiMerge;
 }
 
-it('sends outfit garments and keeps canvas underwear after AI assist', async () => {
-  const underwear = item('underwear', 'underwear');
+it.each(['underwear', 'UNDERWEAR', ' Underwear '])('filters %s and keeps it on the canvas after AI assist', async (type) => {
+  const underwear = item('underwear', type);
   const shirt = item('shirt', 'shirt');
   const shorts = item('shorts', 'shorts');
   vi.mocked(api.post).mockResolvedValue({ items: [shirt, shorts] });
@@ -38,8 +38,8 @@ it('sends outfit garments and keeps canvas underwear after AI assist', async () 
   expect(onAiMerge.mock.calls[0][0]).toHaveLength(3);
 });
 
-it('shows the existing add-items error without a request for underwear alone', () => {
-  panel([item('underwear', 'underwear')]);
+it.each(['underwear', 'UNDERWEAR', ' Underwear '])('shows the add-items error without a request for %s alone', (type) => {
+  panel([item('underwear', type)]);
   fireEvent.click(screen.getByRole('button', { name: 'letAiFinish' }));
   expect(toast.error).toHaveBeenCalledWith('aiAssistError');
   expect(api.post).not.toHaveBeenCalled();

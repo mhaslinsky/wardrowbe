@@ -2214,27 +2214,31 @@ async def test_r2_only_resolved_tuck_instruction(
     assert "Standing preferences cannot override" not in prompt
 
 
+@pytest.mark.parametrize("underwear_type", ["underwear", "UNDERWEAR", " Underwear "])
 @pytest.mark.parametrize("bottom", ["underwear", "shorts", "pants"])
 async def test_underwear_preview_inputs_and_visible_cut(
-    bottom, client, auth_headers, preview_setup, provider, db_session
+    underwear_type, bottom, client, auth_headers, preview_setup, provider, db_session
 ):
     from app.services.preview_service import snapshot
 
     first = await db_session.get(ClothingItem, preview_setup["items"][0])
     second = await db_session.get(ClothingItem, preview_setup["items"][1])
-    first.type = "underwear"
+    first.type = underwear_type
     second.type = bottom
     await db_session.commit()
     loaded = await PreviewService(db_session).outfit(preview_setup["outfit"], preview_setup["user"])
     original_key, images, records = snapshot(loaded)
     assert len(images) == len(records) == 2
-    assert records[0]["type"] == "underwear" or records[1]["type"] == "underwear"
+    assert underwear_type in {record["type"] for record in records}
     await upload(client, auth_headers)
     result = await client.post(preview_setup["url"], headers=auth_headers)
     assert result.status_code == 200, result.text
     sent, prompt, _ = provider.call_args.args
     assert sent[1:] == images
-    assert '"underwear"' in prompt.split("<present_slots>\n")[1].split("\n</present_slots>")[0]
+    assert (
+        json.dumps(underwear_type)
+        in prompt.split("<present_slots>\n")[1].split("\n</present_slots>")[0]
+    )
     assert "If trousers or shorts are present" in prompt
     assert "never over trousers or shorts" in prompt
     assert (
@@ -2256,32 +2260,35 @@ async def test_underwear_preview_inputs_and_visible_cut(
     assert reset_key != original_key
 
 
-async def test_without_underwear_preserves_snapshot_bytes(preview_setup, db_session):
-    import hashlib
-
+def test_without_underwear_preserves_snapshot_bytes():
     from app.services.preview_service import snapshot
 
-    loaded = await PreviewService(db_session).outfit(preview_setup["outfit"], preview_setup["user"])
-    key, images, records = snapshot(loaded)
-    expected_records = []
-    for link, image in zip(
-        sorted(loaded.items, key=lambda link: str(link.item_id)), images, strict=True
-    ):
-        expected_records.append(
-            {
-                "id": str(link.item_id),
-                "image_path": link.item.image_path,
-                "medium_path": link.item.medium_path,
-                "type": link.item.type,
-                "colors": link.item.colors,
-                "primary_color": link.item.primary_color,
-                "layer": link.layer_type,
-                "fit": (link.item.tags or {}).get("fit"),
-                "content_hash": hashlib.sha256(image).hexdigest(),
-            }
-        )
-    assert records == expected_records
-    assert (
-        key
-        == hashlib.sha256(json.dumps([expected_records, None], sort_keys=True).encode()).hexdigest()
+    item = SimpleNamespace(
+        type="shirt",
+        image_path="fixture/shirt.jpg",
+        medium_path="fixture/shirt-medium.jpg",
+        notes=None,
+        tags={"fit": "regular"},
+        colors=["blue"],
+        primary_color="blue",
     )
+    outfit = SimpleNamespace(
+        items=[
+            SimpleNamespace(
+                item_id="00000000-0000-0000-0000-000000000238",
+                item=item,
+                layer_type="base",
+            )
+        ],
+        style_notes=None,
+    )
+    with (
+        patch("app.services.preview_service.ImageService") as service,
+        patch("app.services.preview_service.jpeg", return_value=b"fixed-shirt-image") as encode,
+    ):
+        service.return_value.get_image_path.return_value.is_file.return_value = True
+        key, images, records = snapshot(outfit)
+    assert key == "8ed16c714f994fcc2954f168f35189a245087d9292afea3bceb967ee9992d548"
+    encode.assert_called_once_with("fixture/shirt-medium.jpg", 800)
+    assert images == [b"fixed-shirt-image"]
+    assert records[0]["type"] == "shirt"
