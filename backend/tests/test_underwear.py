@@ -223,6 +223,7 @@ async def test_forced_underwear_is_rejected_before_provider_call(db_session, tes
     )
     db_session.add(underwear)
     await db_session.commit()
+    test_user.preferences = None
     service = RecommendationService(db_session)
     with (
         patch.object(service, "_get_today_rejected_item_ids", AsyncMock(return_value=[])),
@@ -237,4 +238,4 @@ async def test_forced_underwear_is_rejected_before_provider_call(db_session, tes
                 weather_override=_weather(),
                 include_items=[underwear.id],
             )
-        provider.return_value.generate_outfit.assert_not_called()
+        assert provider.return_value.mock_calls == []
