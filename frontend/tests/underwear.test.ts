@@ -18,8 +18,11 @@ describe('underwear', () => {
     const labels = JSON.parse(readFileSync(
       resolve(__dirname, '..', 'messages', locale, 'constants.json'), 'utf8'
     ));
-    expect(labels.types.underwear).toBe('Underwear');
-    expect(labels.roles.underwear).toBe('Underwear');
+    for (const label of [labels.types.underwear, labels.roles.underwear,
+      ...CLOTHING_SUBTYPES.underwear.map((subtype) => labels.subtypes[subtype])]) {
+      expect(typeof label).toBe('string');
+      expect(label.trim().length).toBeGreaterThan(0);
+    }
   });
 
   it('has a canonical role without occupying outfit slots', () => {
