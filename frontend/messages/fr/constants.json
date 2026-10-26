@@ -104,6 +104,7 @@
     "footwear": "Chaussures",
     "full_body": "Une pièce",
     "legwear": "Vêtements pour les jambes",
+    "underwear": "Underwear",
     "mid_layer": "Couche intermédiaire",
     "neckwear": "Accessoire de cou",
     "outer_layer": "Couche extérieure",
@@ -134,6 +135,12 @@
     "vintage": "Vintage"
   },
   "subtypes": {
+    "boxer-briefs": "Boxer briefs",
+    "briefs": "Briefs",
+    "boxers": "Boxers",
+    "trunks": "Trunks",
+    "compression": "Compression",
+    "long-underwear": "Long underwear",
     "a-line": "Trapèze",
     "anorak": "Anorak",
     "ankle": "Cheville",
@@ -241,6 +248,7 @@
     "tank-top": "Débardeur",
     "tie": "Cravate",
     "tights": "Collants",
+    "underwear": "Underwear",
     "top": "Haut",
     "vest": "Gilet sans manches"
   },

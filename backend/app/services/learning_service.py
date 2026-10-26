@@ -47,7 +47,7 @@ def slot_composition(item_types: Iterable[str | None]) -> dict[str, str]:
     for item_type in item_types:
         normalized = (item_type or "").lower()
         role = ITEM_ROLE.get(normalized)
-        if role and role != "accessory":
+        if role and role not in {"accessory", "underwear"}:
             composition[_COMPOSITION_KEYS.get(role, role)] = normalized
     return composition
 

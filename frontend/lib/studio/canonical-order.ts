@@ -12,7 +12,7 @@ const ROLE_SLOTS: Record<string, readonly string[]> = {
 
 export function slotsForType(type: string): readonly string[] {
   const role = ITEM_ROLE[type];
-  if (!role || role === 'accessory') return [];
+  if (!role || role === 'accessory' || role === 'underwear') return [];
   return ROLE_SLOTS[role] ?? [role];
 }
 

@@ -88,6 +88,10 @@ def canonical_colors(names: list[str]) -> list[str]:
     return list(dict.fromkeys(c for c in map(canonical_color, names) if c))
 
 
+def is_outfit_type(item_type: str | None) -> bool:
+    return ITEM_ROLE.get((item_type or "").strip().lower()) != "underwear"
+
+
 def types_for_role(role: str) -> list[str]:
     # Derived from the vocabulary rather than restated, so an outfit prompt cannot drift from the
     # taxonomy the tagger validates against. For example, base_top is everything a separates top

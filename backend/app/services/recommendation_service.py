@@ -48,7 +48,7 @@ from app.utils.clothing import (
     remove_legwear,
     repair_top_layers,
 )
-from app.utils.garment_vocabulary import render_outfit_prompt
+from app.utils.garment_vocabulary import is_outfit_type, render_outfit_prompt
 from app.utils.preference_defaults import (
     DEFAULT_LAYERING_PREFERENCE,
     DEFAULT_TEMPERATURE_SENSITIVITY,
@@ -315,7 +315,7 @@ class RecommendationService:
             return []
 
         items = [i for i in items if not i.needs_wash]
-        items = [i for i in items if i.type and i.type != "unknown"]
+        items = [i for i in items if i.type and i.type != "unknown" and is_outfit_type(i.type)]
 
         if exclude_items:
             exclude_set = set(exclude_items)
@@ -894,6 +894,10 @@ class RecommendationService:
         ).all()
         item_type_map = {row.id: (row.type or "").lower() for row in items_result}
         item_subtype_map = {row.id: (row.subtype or "").lower() for row in items_result}
+        valid_ids = [item_id for item_id in valid_ids if is_outfit_type(item_type_map.get(item_id))]
+        ranked_ids = [
+            item_id for item_id in ranked_ids if is_outfit_type(item_type_map.get(item_id))
+        ]
         valid_ids = prefer_ranked_layers(valid_ids, ranked_ids, item_type_map, mandatory_item_ids)
         valid_ids = deduplicate_by_body_slot(
             valid_ids, item_type_map, mandatory_item_ids=mandatory_item_ids
@@ -1066,7 +1070,9 @@ class RecommendationService:
                         )
                     )
                 )
-                forced_items = list(result.scalars().all())
+                forced_items = [
+                    item for item in result.scalars().all() if is_outfit_type(item.type)
+                ]
                 candidates.extend(forced_items)
                 logger.info(f"Force-included {len(forced_items)} items in recommendation")
 

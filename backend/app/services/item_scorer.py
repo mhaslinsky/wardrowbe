@@ -7,7 +7,7 @@ from app.models.item import ClothingItem
 from app.models.preference import UserPreference
 from app.services.weather_service import WeatherData
 from app.utils.clothing import ITEM_ROLE
-from app.utils.garment_vocabulary import FORMALITY, OCCASION_FORMALITY
+from app.utils.garment_vocabulary import FORMALITY, OCCASION_FORMALITY, is_outfit_type
 from app.utils.preference_defaults import DEFAULT_PREFER_UNDERUSED_ITEMS
 from app.utils.scales import (
     DEFAULT_AVOID_REPEAT_DAYS,
@@ -435,6 +435,7 @@ def score_items(
     recently_worn_dates: dict[UUID, date],
     mandatory_item_ids: set[UUID] | None = None,
 ) -> list[ScoredItem]:
+    items = [item for item in items if is_outfit_type(item.type)]
     if len(items) < MIN_ITEMS_FOR_SCORING:
         scored = [ScoredItem(item=item) for item in items]
         return _sort_mandatory_first(scored, mandatory_item_ids)

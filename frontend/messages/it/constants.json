@@ -104,6 +104,7 @@
     "footwear": "Calzature",
     "full_body": "Capo intero",
     "legwear": "Indumenti per le gambe",
+    "underwear": "Underwear",
     "mid_layer": "Strato intermedio",
     "neckwear": "Collo",
     "outer_layer": "Strato esterno",
@@ -134,6 +135,12 @@
     "vintage": "Vintage"
   },
   "subtypes": {
+    "boxer-briefs": "Boxer briefs",
+    "briefs": "Briefs",
+    "boxers": "Boxers",
+    "trunks": "Trunks",
+    "compression": "Compression",
+    "long-underwear": "Long underwear",
     "a-line": "Svasato",
     "anorak": "Anorak",
     "ankle": "Alla caviglia",
@@ -241,6 +248,7 @@
     "tank-top": "Canotta",
     "tie": "Cravatta",
     "tights": "Collant",
+    "underwear": "Underwear",
     "top": "Top",
     "vest": "Gilet"
   },
