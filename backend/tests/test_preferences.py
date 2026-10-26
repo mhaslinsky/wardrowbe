@@ -251,3 +251,45 @@ async def test_preview_revision_save_reset_conflicts(client, test_user, auth_hea
     )
     assert unrelated.status_code == 200
     assert unrelated.json()["preview_preferences"] == defaults
+
+
+async def test_preview_concurrent_saves_and_user_isolation(
+    client, test_user, auth_headers, session_maker
+):
+    import asyncio
+    from uuid import uuid4
+
+    from fastapi import HTTPException
+
+    from app.schemas.preference import PreferenceUpdate
+    from app.services.preference_service import PreferenceService
+
+    original = (await client.get("/api/v1/users/me/preferences", headers=auth_headers)).json()[
+        "preview_preferences"
+    ]
+
+    async def save(setting):
+        async with session_maker() as session:
+            try:
+                result = await PreferenceService(session).update_preferences(
+                    test_user.id,
+                    PreferenceUpdate(preview_preferences={**original, "tuck": setting}),
+                )
+                return result.user_id
+            except HTTPException as error:
+                return error.status_code
+
+    results = await asyncio.gather(save("tucked"), save("untucked"))
+    assert results.count(test_user.id) == 1 and results.count(409) == 1
+    async with session_maker() as session:
+        other = User(id=uuid4(), email=f"{uuid4()}@test.invalid", display_name="Other")
+        session.add(other)
+        await session.commit()
+        try:
+            service = PreferenceService(session)
+            isolated = await service.preview_preferences(other.id)
+            assert isolated["lines"] == [] and isolated["tuck"] == "outfit"
+            assert isolated["rev"] != original["rev"]
+        finally:
+            await session.delete(other)
+            await session.commit()

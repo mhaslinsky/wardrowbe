@@ -1962,3 +1962,82 @@ async def test_preview_preferences_provider_and_staleness(
     assert changed.status_code == 200
     stale = await client.get(preview_setup["url"], headers=auth_headers)
     assert stale.json()["stale_reasons"] == ["preferences"]
+
+
+async def test_preview_preferences_noop_and_legacy(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    url = "/api/v1/users/me/preferences"
+    await upload(client, auth_headers)
+    first = await client.post(preview_setup["url"], headers=auth_headers)
+    assert first.status_code == 200
+    assert "<preview_preferences>" not in provider.call_args.args[1]
+    await db_session.execute(
+        text(
+            "UPDATE outfit_previews SET clothes_key = NULL, person_key = NULL WHERE outfit_id = :id"
+        ),
+        {"id": preview_setup["outfit"]},
+    )
+    await db_session.commit()
+    original = (await client.get(url, headers=auth_headers)).json()["preview_preferences"]
+    saved = await client.patch(
+        url,
+        headers=auth_headers,
+        json={"preview_preferences": {**original, "lines": ["Roomy fit"]}},
+    )
+    assert saved.status_code == 200
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).json()[
+        "stale_reasons"
+    ] == ["preferences"]
+    drawn = await client.post(preview_setup["url"], headers=auth_headers)
+    assert drawn.status_code == 200
+    noop = await client.patch(
+        url, headers=auth_headers, json={"preview_preferences": saved.json()["preview_preferences"]}
+    )
+    assert noop.status_code == 200
+    assert noop.json()["preview_preferences"]["rev"] != saved.json()["preview_preferences"]["rev"]
+    cached = await client.post(preview_setup["url"], headers=auth_headers)
+    assert cached.json()["created_at"] == drawn.json()["created_at"]
+    assert cached.json()["stale_reasons"] == []
+    assert provider.await_count == 2
+
+
+@pytest.mark.parametrize("reset", [False, True])
+async def test_preview_preferences_change_during_draw(
+    reset, client, auth_headers, preview_setup, provider_gate, session_maker
+):
+    url = "/api/v1/users/me/preferences"
+    original = (await client.get(url, headers=auth_headers)).json()["preview_preferences"]
+    saved = await client.patch(
+        url,
+        headers=auth_headers,
+        json={"preview_preferences": {**original, "lines": ["Roomy fit"]}},
+    )
+    assert saved.status_code == 200
+    await upload(client, auth_headers)
+    entered, release = provider_gate
+    async with session_maker() as session:
+        task = asyncio.create_task(
+            PreviewService(session).generate(preview_setup["outfit"], preview_setup["user"], False)
+        )
+        try:
+            await entered.wait()
+            current = saved.json()["preview_preferences"]
+            if reset:
+                changed = await client.post(
+                    url + "/reset", headers=auth_headers, json={"rev": current["rev"]}
+                )
+            else:
+                changed = await client.patch(
+                    url,
+                    headers=auth_headers,
+                    json={"preview_preferences": {**current, "tuck": "tucked"}},
+                )
+            assert changed.status_code == 200
+        finally:
+            release.set()
+            result = await task
+    assert result["stale_reasons"] == ["preferences"]
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).json()[
+        "stale_reasons"
+    ] == result["stale_reasons"]

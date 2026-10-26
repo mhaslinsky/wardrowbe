@@ -123,7 +123,7 @@ it('uploads, replaces, confirms removal and resets the file input', async () => 
   fireEvent.change(input, { target: { files: [file] } });
   expect(await screen.findByRole('img')).toBeVisible();
   expect(input).toHaveValue('');
-  expect((vi.mocked(fetch).mock.calls[1][1]?.body as FormData).get('image')).toEqual(file);
+  expect((vi.mocked(fetch).mock.calls.find(([, options]) => options?.body instanceof FormData)?.[1]?.body as FormData).get('image')).toEqual(file);
   fireEvent.change(frontInput('replaceAngle'), { target: { files: [file] } });
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(2));
   await waitFor(() => expect(screen.getByText('remove')).toBeEnabled());
@@ -577,4 +577,31 @@ it.each([
   expect(reasonContainer.nextElementSibling).toBe(actions);
   expect(within(actions).getAllByRole('button')).toHaveLength(3);
   expect(actions).not.toHaveClass('flex-wrap');
+});
+
+it('labels previews made with older preferences', async () => {
+  vi.mocked(fetch).mockResolvedValue(response({ ...saved, stale: true, stale_reasons: ['preferences'] }) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  expect(await screen.findByText('preferencesChanged')).toBeVisible();
+});
+
+it('keeps the preview draft and original revision after a refetch and conflict', async () => {
+  const initial = { lines: [], tuck: 'outfit', rev: 'original' };
+  client.setQueryData(['preferences'], { preview_preferences: initial });
+  vi.mocked(fetch).mockImplementation(async (url, options) => {
+    if (options?.method === 'PATCH') return response({ detail: 'Preferences changed' }, 409) as Response;
+    if (String(url).endsWith('/preferences')) return response({ preview_preferences: initial }) as Response;
+    return response({ detail: 'NO_PREVIEW_PHOTO' }, 404) as Response;
+  });
+  render(<PreviewPhotoSettings />);
+  const editor = await screen.findByLabelText('preferences');
+  fireEvent.change(editor, { target: { value: '  Loose fit  ' } });
+  await act(async () => {
+    client.setQueryData(['preferences'], { preview_preferences: { ...initial, rev: 'newer' } });
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'savePreferences' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('saveConflict');
+  expect(editor).toHaveValue('  Loose fit  ');
+  const patch = vi.mocked(fetch).mock.calls.find(([, options]) => options?.method === 'PATCH');
+  expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ preview_preferences: { ...initial, lines: ['Loose fit'] } });
 });
