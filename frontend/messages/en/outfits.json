@@ -124,7 +124,19 @@
     "noItems": "No items found",
     "noMatch": "No items match your search",
     "search": "Search wardrobe...",
-    "showingAll": "Showing all {count, plural, one {# item} other {# items}}"
+    "showingAll": "Showing all {count, plural, one {# item} other {# items}}",
+    "slots": {
+      "label": "Slots",
+      "all": "All",
+      "tops": "Tops",
+      "layers": "Layers",
+      "jackets": "Jackets",
+      "bottoms": "Bottoms",
+      "underwear": "Underwear",
+      "socks": "Socks",
+      "shoes": "Shoes",
+      "accessories": "Accessories"
+    }
   },
   "lineage": {
     "fromLookbook": "From your {name} lookbook entry",

@@ -124,7 +124,19 @@
     "noItems": "找不到單品",
     "noMatch": "沒有符合搜尋的單品",
     "search": "搜尋衣櫥...",
-    "showingAll": "顯示全部 {count, plural, one {# 件單品} other {# 件單品}}"
+    "showingAll": "顯示全部 {count, plural, one {# 件單品} other {# 件單品}}",
+    "slots": {
+      "label": "類別",
+      "all": "全部",
+      "tops": "上身",
+      "layers": "疊穿",
+      "jackets": "外套",
+      "bottoms": "下身",
+      "underwear": "內衣",
+      "socks": "襪子",
+      "shoes": "鞋履",
+      "accessories": "配件"
+    }
   },
   "lineage": {
     "fromLookbook": "來自你的造型冊項目 {name}",

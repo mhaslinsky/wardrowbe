@@ -124,7 +124,19 @@
     "noItems": "Keine Stücke gefunden",
     "noMatch": "Keine Stücke passen zu deiner Suche",
     "search": "Kleiderschrank durchsuchen...",
-    "showingAll": "Alle {count, plural, one {# Stück} other {# Stücke}} angezeigt"
+    "showingAll": "Alle {count, plural, one {# Stück} other {# Stücke}} angezeigt",
+    "slots": {
+      "label": "Bereiche",
+      "all": "Alle",
+      "tops": "Oberteile",
+      "layers": "Zwischenschichten",
+      "jackets": "Jacken",
+      "bottoms": "Unterteile",
+      "underwear": "Unterwäsche",
+      "socks": "Socken",
+      "shoes": "Schuhe",
+      "accessories": "Accessoires"
+    }
   },
   "lineage": {
     "fromLookbook": "Aus deinem Lookbook-Eintrag „{name}“",

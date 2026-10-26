@@ -124,7 +124,19 @@
     "noItems": "アイテムが見つかりません",
     "noMatch": "検索に一致するアイテムがありません",
     "search": "ワードローブを検索...",
-    "showingAll": "{count, plural, one {# 件のアイテム} other {# 件のアイテム}}をすべて表示中"
+    "showingAll": "{count, plural, one {# 件のアイテム} other {# 件のアイテム}}をすべて表示中",
+    "slots": {
+      "label": "カテゴリー",
+      "all": "すべて",
+      "tops": "トップス",
+      "layers": "重ね着",
+      "jackets": "ジャケット",
+      "bottoms": "ボトムス",
+      "underwear": "下着",
+      "socks": "靴下",
+      "shoes": "靴",
+      "accessories": "小物"
+    }
   },
   "lineage": {
     "fromLookbook": "ルックブックの「{name}」から作成",

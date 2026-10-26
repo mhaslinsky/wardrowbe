@@ -124,7 +124,19 @@
     "noItems": "Aucun article trouvé",
     "noMatch": "Aucun article ne correspond à votre recherche",
     "search": "Rechercher dans la garde-robe...",
-    "showingAll": "{count, plural, one {# article affiché} other {Tous les # articles affichés}}"
+    "showingAll": "{count, plural, one {# article affiché} other {Tous les # articles affichés}}",
+    "slots": {
+      "label": "Catégories",
+      "all": "Tout",
+      "tops": "Hauts",
+      "layers": "Couches",
+      "jackets": "Vestes",
+      "bottoms": "Bas",
+      "underwear": "Sous-vêtements",
+      "socks": "Chaussettes",
+      "shoes": "Chaussures",
+      "accessories": "Accessoires"
+    }
   },
   "lineage": {
     "fromLookbook": "De votre entrée de lookbook {name}",

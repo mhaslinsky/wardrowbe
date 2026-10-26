@@ -332,7 +332,7 @@ export default function StudioEditorPage() {
   const cancelHref = isEditMode && editId ? `/dashboard/outfits/${editId}` : '/dashboard/outfits';
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-[calc(100dvh-12rem)] lg:h-[calc(100dvh-7rem)]">
       <div className="sticky top-0 z-10 bg-background border-b px-4 py-3 flex items-center justify-between">
         <Button variant="ghost" size="sm" asChild>
           <Link href={cancelHref}>
@@ -399,8 +399,8 @@ export default function StudioEditorPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-6xl mx-auto space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col">
+        <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col gap-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <h2 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
@@ -430,7 +430,7 @@ export default function StudioEditorPage() {
             </div>
           </div>
 
-          <div>
+          <div className="flex flex-1 min-h-min lg:min-h-64 flex-col">
             <h2 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
               {t('new.tabs.yourWardrobe')}
             </h2>
@@ -439,7 +439,8 @@ export default function StudioEditorPage() {
               onToggle={handleToggle}
               hideNeedsWash={true}
               emptyMessage={t('new.tabs.emptyWardrobe')}
-              heightClass="h-[280px]"
+              heightClass="flex-1 min-h-[calc(100dvh-8rem)] lg:min-h-0 basis-0"
+              slotFilters
             />
           </div>
         </div>
