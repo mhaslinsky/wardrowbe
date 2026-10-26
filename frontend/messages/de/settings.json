@@ -169,7 +169,7 @@
     "untucked": "Nicht eingesteckt",
     "tucked": "Eingesteckt",
     "preferences": "Vorschaueinstellungen",
-    "limits": "Bis zu 10 Zeilen mit je 120 Zeichen. Hemdoption separat wählen.",
+    "limits": "Bis zu 10 Zeilen mit je 120 Zeichen. Das Einstecken mit der Hemdoption oben festlegen.",
     "savePreferences": "Vorschaueinstellungen speichern",
     "saveConflict": "Speichern fehlgeschlagen. Entwurf bleibt erhalten."
   }

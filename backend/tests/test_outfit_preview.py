@@ -1213,7 +1213,7 @@ async def test_sizing_request_data(
     )
     assert measurements == user.body_measurements
     assert len(images) == 3
-    assert "untucked by default" in prompt
+    assert "Keep tops untucked with the hem outside the pants" in prompt
     assert "hang and drape naturally with soft folds" in prompt
     assert "never stretched tight across the chest or stomach" in prompt
     assert "roomier and longer" in prompt
@@ -1891,6 +1891,13 @@ async def test_stale_reasons_photo_redraw(
         ("Tuck; never tuck", None, "outfit", False),
         ("Never tuck; tuck", None, "outfit", True),
         (None, "Do not roll sleeves; tuck the shirt", "outfit", True),
+        ("Never untuck", None, "untucked", True),
+        ("Don't leave it untucked", None, "untucked", True),
+        ("Avoid untucking", None, "outfit", True),
+        ("Tucked, not untucked", None, "outfit", True),
+        ("Tuck it in, not too baggy", None, "outfit", True),
+        ("No belt, tuck the shirt", None, "outfit", True),
+        ("Tuck the shirt without creasing it", None, "outfit", True),
     ],
 )
 def test_preview_tuck_precedence(note, style, setting, expected):
@@ -2041,3 +2048,61 @@ async def test_preview_preferences_change_during_draw(
     assert (await client.get(preview_setup["url"], headers=auth_headers)).json()[
         "stale_reasons"
     ] == result["stale_reasons"]
+
+
+@pytest.mark.parametrize(
+    "note,style,setting,tucked",
+    [
+        ("Tuck it in", "Never tuck", "untucked", True),
+        ("Don't tuck", "Tuck the shirt", "tucked", False),
+        ("Tuck; never tuck", "Tuck the shirt", "tucked", False),
+        ("Never untuck", "Leave untucked", "untucked", True),
+        (None, "Tuck the shirt; never tuck it", "outfit", False),
+        (None, "Tuck in the shirt but leave the jacket untucked", "outfit", False),
+        ("Tuck it in", None, "outfit", True),
+    ],
+)
+async def test_r1_tuck_request_contract(
+    note, style, setting, tucked, client, auth_headers, preview_setup, provider, db_session
+):
+    from app.schemas.preference import PreferenceUpdate
+    from app.services.preference_service import PreferenceService
+    from app.services.preview_service import preferences_hash, snapshot
+
+    top = await db_session.get(ClothingItem, preview_setup["items"][0])
+    top.type = "shirt"
+    belt = await db_session.get(ClothingItem, preview_setup["items"][1])
+    belt.type = "belt"
+    outfit = await db_session.get(Outfit, preview_setup["outfit"])
+    outfit.style_notes = style
+    await db_session.commit()
+    service = PreferenceService(db_session)
+    prefs = await service.preview_preferences(preview_setup["user"])
+    await service.update_preferences(
+        preview_setup["user"], PreferenceUpdate(preview_preferences={**prefs, "tuck": setting})
+    )
+    prefs = await service.preview_preferences(preview_setup["user"])
+    loaded = await PreviewService(db_session).outfit(outfit.id, preview_setup["user"])
+    _, images, records = snapshot(loaded)
+    expected = [
+        image
+        for image, record in zip(images, records, strict=True)
+        if tucked or record["type"] != "belt"
+    ]
+    await upload(client, auth_headers)
+    result = await PreviewService(db_session).generate(
+        outfit.id, preview_setup["user"], True, note=note
+    )
+    assert result["stale_reasons"] == []
+    sent, prompt, _ = provider.call_args.args
+    assert sent[1:] == expected
+    garments = json.loads(prompt.split("<garment_data>\n")[1].split("\n</garment_data>")[0])
+    slots = json.loads(prompt.split("<present_slots>\n")[1].split("\n</present_slots>")[0])
+    assert ("belt" in slots) is tucked
+    assert any(garment["type"] == "belt" for garment in garments) is tucked
+    assert ("Tuck the top into the pants." in prompt) is tucked
+    assert ("Keep tops untucked with the hem outside the pants" in prompt) is not tucked
+    assert "This tuck decision overrides all text blocks." in prompt
+    assert await db_session.scalar(
+        select(OutfitPreview.preferences_key).where(OutfitPreview.outfit_id == outfit.id)
+    ) == preferences_hash(prefs)

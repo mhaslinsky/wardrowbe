@@ -605,3 +605,28 @@ it('keeps the preview draft and original revision after a refetch and conflict',
   const patch = vi.mocked(fetch).mock.calls.find(([, options]) => options?.method === 'PATCH');
   expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ preview_preferences: { ...initial, lines: ['Loose fit'] } });
 });
+
+it('keeps the saved revision for an immediate second edit while refetch is pending', async () => {
+  const initial = { lines: [], tuck: 'outfit', rev: 'original' };
+  const savedPreferences = { preview_preferences: { ...initial, lines: ['Roomy sleeves'], rev: 'saved' } };
+  let patches = 0;
+  const pending = new Promise<Response>(() => {});
+  client.setQueryData(['preferences'], { preview_preferences: initial });
+  vi.mocked(fetch).mockImplementation(async (url, options) => {
+    if (options?.method === 'PATCH') { patches++; return response(savedPreferences) as Response; }
+    if (String(url).endsWith('/preferences')) return patches ? pending : response({ preview_preferences: initial }) as Response;
+    return response({ detail: 'NO_PREVIEW_PHOTO' }, 404) as Response;
+  });
+  render(<PreviewPhotoSettings />);
+  const editor = await screen.findByLabelText('preferences');
+  fireEvent.change(editor, { target: { value: 'Roomy sleeves' } });
+  fireEvent.click(screen.getByRole('button', { name: 'savePreferences' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'savePreferences' })).toBeDisabled());
+  expect(editor).toHaveValue('Roomy sleeves');
+  expect(client.getQueryData(['preferences'])).toEqual(savedPreferences);
+  fireEvent.change(editor, { target: { value: 'Long sleeves' } });
+  fireEvent.click(screen.getByRole('button', { name: 'savePreferences' }));
+  await waitFor(() => expect(patches).toBe(2));
+  const requests = vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'PATCH');
+  expect(JSON.parse(String(requests[1][1]?.body)).preview_preferences).toEqual({ ...initial, lines: ['Long sleeves'], rev: 'saved' });
+});

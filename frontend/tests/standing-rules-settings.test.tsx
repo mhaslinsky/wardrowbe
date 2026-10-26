@@ -53,3 +53,16 @@ describe('standing rules settings', () => {
 })
 
 vi.mock('@/components/preview-photo-settings', () => ({ PreviewPhotoSettings: () => null }))
+
+it('keeps the main Settings draft when preview preferences refresh', async () => {
+  const original = state.preferences;
+  try {
+    const { rerender } = render(<SettingsPage />);
+    const editor = screen.getByLabelText('standingRules.label');
+    fireEvent.change(editor, { target: { value: 'Keep this unsaved rule' } });
+    state.preferences = { ...original, standing_rules: [...original.standing_rules] };
+    rerender(<SettingsPage />);
+    expect(editor).toHaveValue('Keep this unsaved rule');
+    expect(screen.getAllByText('save', { selector: 'button' })[0]).toBeEnabled();
+  } finally { state.preferences = original; }
+});

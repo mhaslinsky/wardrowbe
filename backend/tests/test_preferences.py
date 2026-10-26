@@ -213,10 +213,16 @@ class TestPreferenceDefaults:
     [None, {"lines": [1]}, {"lines": ["x" * 121]}, {"lines": ["x"] * 11}, {"tuck": "invalid"}],
 )
 async def test_preview_preferences_reject_malformed(client, test_user, auth_headers, value):
-    response = await client.patch(
-        "/api/v1/users/me/preferences", headers=auth_headers, json={"preview_preferences": value}
-    )
+    url = "/api/v1/users/me/preferences"
+    rev = (await client.get(url, headers=auth_headers)).json()["preview_preferences"]["rev"]
+    if value is not None:
+        value = {**value, "rev": rev}
+    response = await client.patch(url, headers=auth_headers, json={"preview_preferences": value})
     assert response.status_code == 422
+    if value is not None:
+        errors = response.json()["detail"]
+        assert all(error["loc"][-1] != "rev" for error in errors)
+        assert any("lines" in error["loc"] or "tuck" in error["loc"] for error in errors)
 
 
 async def test_preview_revision_save_reset_conflicts(client, test_user, auth_headers):
@@ -350,3 +356,17 @@ async def test_preview_migration_backfills_existing_rows(db_session, test_user_w
     finally:
         await db_session.delete(other)
         await db_session.commit()
+
+
+async def test_r1_preview_save_preserves_standing_rules(client, test_user, auth_headers):
+    url = "/api/v1/users/me/preferences"
+    rules = ["No polos under overshirts"]
+    saved = await client.patch(url, headers=auth_headers, json={"standing_rules": rules})
+    assert saved.status_code == 200
+    prefs = saved.json()["preview_preferences"]
+    response = await client.patch(
+        url, headers=auth_headers, json={"preview_preferences": {**prefs, "tuck": "tucked"}}
+    )
+    assert response.status_code == 200
+    assert response.json()["standing_rules"] == rules
+    assert (await client.get(url, headers=auth_headers)).json()["standing_rules"] == rules

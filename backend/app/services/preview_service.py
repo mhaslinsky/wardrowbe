@@ -89,16 +89,20 @@ def garment_size(notes: str | None) -> str | None:
 
 def tuck_instruction(notes: str | None) -> bool | None:
     decision = None
-    for clause in re.split(r"[.!?;\n]|\bbut\b", (notes or "").lower()):
-        if re.search(r"\buntuck(?:ed|ing)?\b", clause):
-            decision = False
-        elif re.search(r"\btuck(?:ed|ing)?\b", clause):
-            decision = not bool(re.search(r"\b(?:not|never|no|avoid|without)\b|don['’]t", clause))
+    previous_end = 0
+    normalized = (notes or "").lower()
+    for match in re.finditer(r"\b(?:un)?tuck(?:ed|ing)?\b", normalized):
+        prefix = normalized[previous_end : match.start()]
+        negated = bool(
+            re.search(
+                r"(?:\b(?:not|never|no|avoid|without)|\bdon['’]t)\s+"
+                r"(?:(?:leave|keep|wear|it|them|the|this|that|shirt|top|shirts|tops|fully|partially|french)\s+)*$",
+                prefix,
+            )
+        )
+        decision = match.group().startswith("tuck") != negated
+        previous_end = match.end()
     return decision
-
-
-def requests_tucking(style_notes: str | None) -> bool:
-    return tuck_instruction(style_notes) is True
 
 
 def resolve_tucking(note, style_notes, setting):
@@ -530,7 +534,11 @@ class PreviewService:
                     "<style_notes> explicitly call for cropped pants",
                     "<style_notes> or standing preferences explicitly call for cropped pants",
                 )
-            if preferences_key or tuck_instruction(note) is not None:
+            if (
+                preferences_key
+                or tuck_instruction(note) is not None
+                or tuck_instruction(outfit.style_notes) is not None
+            ):
                 start = prompt.index("Draw tops untucked by default.")
                 end = prompt.index("Socks are worn", start)
                 instruction = (

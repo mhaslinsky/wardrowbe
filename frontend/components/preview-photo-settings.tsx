@@ -73,8 +73,8 @@ function PreviewPreferencesEditor() {
   if (!draft) return null;
   return <fieldset className="space-y-3" disabled={update.isPending}>
     <label className="block space-y-2">
-      <span>{t('shirts')}</span>
-      <select aria-label={t('shirts')} value={draft.tuck} onChange={(event) => {
+      <span className="block">{t('shirts')}</span>
+      <select className="block rounded border p-2" aria-label={t('shirts')} value={draft.tuck} onChange={(event) => {
         setDraft({ ...draft, tuck: event.target.value as typeof draft.tuck }); setDirty(true);
       }}>
         {(['outfit', 'untucked', 'tucked'] as const).map((value) => <option key={value} value={value}>{t(value)}</option>)}

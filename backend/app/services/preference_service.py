@@ -65,7 +65,7 @@ class PreferenceService:
     ) -> UserPreference:
         preferences = await self.get_or_create_preferences(user_id)
 
-        update_data = data.model_dump(exclude_unset=True)
+        update_data = data.model_dump(include=data.model_fields_set, exclude_unset=True)
         preview = update_data.pop("preview_preferences", None)
         if "preview_preferences" in data.model_fields_set:
             if preview is None:

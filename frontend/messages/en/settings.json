@@ -169,7 +169,7 @@
     "untucked": "Untucked",
     "tucked": "Tucked",
     "preferences": "Preview preferences",
-    "limits": "Up to 10 lines, 120 characters each. Use Shirts for tucking.",
+    "limits": "Up to 10 lines, 120 characters each. Set tucking with the Shirts option above.",
     "savePreferences": "Save preview preferences",
     "saveConflict": "Save failed. Your draft is kept."
   }

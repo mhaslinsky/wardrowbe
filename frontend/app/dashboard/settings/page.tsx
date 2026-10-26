@@ -187,6 +187,8 @@ export default function SettingsPage() {
   const occasions = useOccasionOptions([formData.default_occasion, preferences?.default_occasion]);
   const [standingRulesText, setStandingRulesText] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
+  const hasChangesRef = useRef(hasChanges);
+  hasChangesRef.current = hasChanges;
   const [endpointTests, setEndpointTests] = useState<Record<number, EndpointTestResult>>({});
 
   // Location and timezone state
@@ -481,6 +483,10 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (preferences) {
+      if (hasChangesRef.current) {
+        setFormData((previous) => ({ ...previous, preview_preferences: preferences.preview_preferences }));
+        return;
+      }
       setFormData(preferences);
       setStandingRulesText((preferences.standing_rules || []).join('\n'));
       setHasChanges(false);
@@ -534,7 +540,10 @@ export default function SettingsPage() {
   const handleReset = async () => {
     if (confirm(t('confirmReset'))) {
       try {
-        await resetPreferences.mutateAsync(formData.preview_preferences!.rev);
+        const saved = await resetPreferences.mutateAsync(formData.preview_preferences!.rev);
+        setFormData(saved);
+        setStandingRulesText(saved.standing_rules.join('\n'));
+        setHasChanges(false);
       } catch (error) {
         console.error('Failed to reset preferences:', error);
       }
