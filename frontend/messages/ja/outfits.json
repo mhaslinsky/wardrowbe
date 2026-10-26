@@ -220,7 +220,8 @@
     "drawing": "プレビューを生成中…",
     "failed": "生成に失敗しました",
     "changeNote": "何を変えますか？",
-    "delete": "削除",
-    "deleteConfirm": "プレビューを削除しますか？"
+    "delete": "プレビューを削除",
+    "deleteConfirm": "プレビューを削除しますか？",
+    "redrawConflict": "別のプレビューを生成中です。少し待って再試行してください。"
   }
 }

@@ -220,7 +220,8 @@
     "drawing": "正在產生預覽…",
     "failed": "預覽失敗",
     "changeNote": "想修改什麼？",
-    "delete": "刪除",
-    "deleteConfirm": "刪除預覽？"
+    "delete": "刪除預覽",
+    "deleteConfirm": "刪除預覽？",
+    "redrawConflict": "另一個預覽正在產生，請稍後重試。"
   }
 }

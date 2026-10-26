@@ -220,7 +220,8 @@
     "drawing": "Drawing preview…",
     "failed": "Preview failed",
     "changeNote": "What should change?",
-    "delete": "Delete",
-    "deleteConfirm": "Delete preview?"
+    "delete": "Delete preview",
+    "deleteConfirm": "Delete preview?",
+    "redrawConflict": "Another redraw is running. Try again in a moment."
   }
 }

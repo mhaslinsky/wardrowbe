@@ -14,7 +14,7 @@ export function OutfitPreview(props: { outfitId: string; children?: ReactNode; d
 
 function PreviewContent({ outfitId, children, detail }: { outfitId: string; children?: ReactNode; detail?: boolean }) {
   const t = useTranslations('outfits.preview');
-  const { preview, pending, error, missingPhoto, draw, remove } = useOutfitPreview(outfitId);
+  const { preview, pending, error, conflict, missingPhoto, draw, remove } = useOutfitPreview(outfitId);
   const [action, setAction] = useState<'redraw' | 'delete' | null>(null);
   const [note, setNote] = useState('');
   const tc = useTranslations('common');
@@ -44,13 +44,18 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
           <span>{t('changeNote')}</span>
           <Textarea aria-label={t('changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
         </label>}
+        {action === 'redraw' && conflict && <p role="alert" className="text-sm text-destructive">{t('redrawConflict')}</p>}
+        {action === 'redraw' && error && <p role="alert" className="text-sm text-destructive">{t('failed')}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={() => setAction(null)}>{tc('cancel')}</Button>
-          <Button disabled={pending} onClick={() => {
+          <Button disabled={pending} onClick={async () => {
             const selected = action;
             setAction(null);
             if (selected === 'delete') void remove();
-            else void draw(true, note);
+            else {
+              const success = await draw(true, note);
+              if (!success && note.trim()) setAction('redraw');
+            }
           }}>{t(action === 'delete' ? 'delete' : 'redraw')}</Button>
         </div>
       </DialogContent>

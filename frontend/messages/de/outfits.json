@@ -220,7 +220,8 @@
     "drawing": "Vorschau wird erstellt…",
     "failed": "Vorschau fehlgeschlagen",
     "changeNote": "Was soll sich ändern?",
-    "delete": "Löschen",
-    "deleteConfirm": "Vorschau löschen?"
+    "delete": "Vorschau löschen",
+    "deleteConfirm": "Vorschau löschen?",
+    "redrawConflict": "Eine Vorschau wird bereits erstellt. Bitte gleich erneut versuchen."
   }
 }

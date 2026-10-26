@@ -220,7 +220,8 @@
     "drawing": "Création de l’aperçu…",
     "failed": "Échec de l’aperçu",
     "changeNote": "Que faut-il changer ?",
-    "delete": "Supprimer",
-    "deleteConfirm": "Supprimer l’aperçu ?"
+    "delete": "Supprimer l’aperçu",
+    "deleteConfirm": "Supprimer l’aperçu ?",
+    "redrawConflict": "Un autre aperçu est en cours. Réessayez dans un instant."
   }
 }
