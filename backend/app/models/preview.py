@@ -3,7 +3,7 @@ from collections.abc import Iterator, Mapping
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Text, event, func, inspect, select, text
+from sqlalchemy import DateTime, ForeignKey, Index, Text, event, func, inspect, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
@@ -38,12 +38,22 @@ class OutfitPreview(Base):
 
 class PreviewFeedback(Base):
     __tablename__ = "preview_feedback"
+    __table_args__ = (
+        Index(
+            "uq_preview_like",
+            "user_id",
+            "outfit_id",
+            "preview_created_at",
+            unique=True,
+            postgresql_where=text("kind = 'like'"),
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     outfit_id: Mapped[UUID | None] = mapped_column(ForeignKey("outfits.id", ondelete="SET NULL"))
     preview_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    paths: Mapped[dict] = mapped_column(JSONB, default=dict)
+    paths: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
     kind: Mapped[str] = mapped_column(Text)
     note: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -65,10 +75,14 @@ def feedback_table_exists(session):
 def collect_deleted_preview_files(session, _context, _instances):
     paths = session.info.setdefault("preview_cleanup", {})
     deleted_users = [record for record in session.deleted if isinstance(record, User)]
+    deleted_user_ids = {record.id for record in deleted_users}
+    deleted_previews = {
+        record for record in session.deleted if isinstance(record, (PreviewPhoto, OutfitPreview))
+    }
     deleted_feedback = {record for record in session.deleted if isinstance(record, PreviewFeedback)}
     retained = set()
-    if deleted_feedback:
-        owners = {record.user_id for record in deleted_feedback}
+    owners = {record.user_id for record in deleted_feedback | deleted_previews} - deleted_user_ids
+    if owners:
         retained = {
             path
             for feedback in session.scalars(
@@ -79,6 +93,15 @@ def collect_deleted_preview_files(session, _context, _instances):
             if feedback not in deleted_feedback
             for path in preview_file_paths(feedback.paths or {})
         }
+    if deleted_feedback:
+        retained.update(
+            path
+            for preview in session.scalars(
+                select(OutfitPreview).where(OutfitPreview.user_id.in_(owners))
+            )
+            if preview not in deleted_previews
+            for path in preview_file_paths(preview.paths)
+        )
     if deleted_users and feedback_table_exists(session):
         for user in deleted_users:
             saved_paths = session.scalars(

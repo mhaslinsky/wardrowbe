@@ -173,16 +173,6 @@ class PreviewService:
             raise HTTPException(404, "NO_PREVIEW_PHOTO")
         return record
 
-    async def discard_preview(self, record):
-        saved_paths = await self.db.scalars(
-            select(PreviewFeedback.paths).where(
-                PreviewFeedback.user_id == record.user_id, PreviewFeedback.kind == "like"
-            )
-        )
-        retained = {path for paths in saved_paths for path in paths.values()}
-        record.paths = {name: path for name, path in record.paths.items() if path not in retained}
-        await self.db.delete(record)
-
     async def clear(self, user_id, angle="front"):
         await self.lock_user(user_id)
         if angle == "front":
@@ -194,7 +184,7 @@ class PreviewService:
                 ).all()
             )
             for record in records:
-                await self.discard_preview(record)
+                await self.db.delete(record)
         reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
         if reference is not None and angle in reference.paths:
             removed = reference.paths[angle]
@@ -292,13 +282,15 @@ class PreviewService:
         key = reference_key(key, paths, measurements, face_hash)
         return await self.response(record, key)
 
-    async def like(self, outfit_id, user_id, note):
+    async def like(self, outfit_id, user_id, note, preview_created_at):
         await self.outfit(outfit_id, user_id)
         await self.lock_user(user_id)
         await self.db.execute(select(Outfit.id).where(Outfit.id == outfit_id).with_for_update())
         record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
         if record is None or not record.paths:
             raise HTTPException(404, "NO_PREVIEW")
+        if record.created_at != preview_created_at:
+            raise HTTPException(409, "PREVIEW_CHANGED")
         feedback = await self.db.scalar(
             select(PreviewFeedback).where(
                 PreviewFeedback.user_id == user_id,
@@ -334,7 +326,7 @@ class PreviewService:
             raise HTTPException(409, "PREVIEW_IN_PROGRESS")
         if record is None or not record.paths:
             raise HTTPException(404, "NO_PREVIEW")
-        await self.discard_preview(record)
+        await self.db.delete(record)
         await self.db.commit()
 
     async def generate(self, outfit_id, user_id, regenerate, note=None):

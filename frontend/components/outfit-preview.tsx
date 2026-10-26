@@ -15,7 +15,7 @@ export function OutfitPreview(props: { outfitId: string; children?: ReactNode; d
 
 function PreviewContent({ outfitId, children, detail }: { outfitId: string; children?: ReactNode; detail?: boolean }) {
   const t = useTranslations('outfits.preview');
-  const { preview, pending, error, conflict, missingPhoto, draw, remove, like } = useOutfitPreview(outfitId);
+  const { preview, pending, error, conflict, missingPhoto, likeConflict, draw, remove, like } = useOutfitPreview(outfitId);
   const [action, setAction] = useState<'redraw' | 'delete' | 'like' | null>(null);
   const [note, setNote] = useState('');
   const tc = useTranslations('common');
@@ -46,6 +46,7 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
           <span>{t(action === 'like' ? 'likeNote' : 'changeNote')}</span>
           <Textarea aria-label={t(action === 'like' ? 'likeNote' : 'changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
         </label>}
+        {action === 'like' && likeConflict && <p role="alert" className="text-sm text-destructive">{t('likeChanged')}</p>}
         {action === 'redraw' && conflict && <p role="alert" className="text-sm text-destructive">{t('redrawConflict')}</p>}
         {action === 'redraw' && error && <p role="alert" className="text-sm text-destructive">{t('failed')}</p>}
         <div className="flex justify-end gap-2">
@@ -55,7 +56,7 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
             setAction(null);
             if (selected === 'delete') void remove();
             else if (selected === 'like') {
-              if (!await like(note)) setAction('like');
+              if (preview && !await like(note, preview.created_at)) setAction('like');
             } else {
               const success = await draw(true, note);
               if (!success && note.trim()) setAction('redraw');

@@ -147,13 +147,13 @@ export function useOutfitPreview(outfitId: string) {
   });
   const feedback = useMutation({
     meta: { toastsOwnErrors: true },
-    mutationFn: (note: string) => api.post<OutfitPreview>(`/outfits/${outfitId}/preview/feedback`, { kind: 'like', note }),
+    mutationFn: ({ note, previewCreatedAt }: { note: string; previewCreatedAt: string }) => api.post<OutfitPreview>(`/outfits/${outfitId}/preview/feedback`, { kind: 'like', note, preview_created_at: previewCreatedAt }),
     onSuccess: async () => { await client.invalidateQueries({ queryKey: key }); },
   });
-  const like = async (note: string) => {
+  const like = async (note: string, previewCreatedAt: string) => {
     if (active.current || removal.isPending || feedback.isPending) return false;
     feedback.reset();
-    try { await feedback.mutateAsync(note); return true; }
+    try { await feedback.mutateAsync({ note, previewCreatedAt }); return true; }
     catch { return false; }
   };
   const removal = useMutation({
@@ -184,5 +184,6 @@ export function useOutfitPreview(outfitId: string) {
   };
   return { preview: query.data, pending: mutation.isPending || removal.isPending || feedback.isPending, error: (query.isError || mutation.isError || removal.isError || feedback.isError) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
     conflict: mutation.isError && previewErrorCode(mutation.error) === 'PREVIEW_IN_PROGRESS',
+    likeConflict: feedback.isError && previewErrorCode(feedback.error) === 'PREVIEW_CHANGED',
     missingPhoto: previewErrorCode(mutation.error) === 'NO_PREVIEW_PHOTO', draw, remove, like };
 }

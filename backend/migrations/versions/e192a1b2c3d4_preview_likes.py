@@ -23,6 +23,23 @@ def upgrade():
 
 
 def downgrade():
+    from app.models.preview import delete_preview_files, preview_file_paths
+
+    connection = op.get_bind()
+    current_paths = {
+        path
+        for paths in connection.execute(sa.text("SELECT paths FROM outfit_previews")).scalars()
+        for path in preview_file_paths(paths)
+    }
+    orphaned = {
+        path: path
+        for paths in connection.execute(
+            sa.text("SELECT paths FROM preview_feedback WHERE kind = 'like'")
+        ).scalars()
+        for path in preview_file_paths(paths)
+        if path not in current_paths
+    }
+    delete_preview_files(orphaned, strict=True)
     op.drop_index("uq_preview_like", table_name="preview_feedback")
     op.drop_column("preview_feedback", "paths")
     op.drop_column("preview_feedback", "preview_created_at")

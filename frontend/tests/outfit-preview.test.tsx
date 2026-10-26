@@ -488,7 +488,7 @@ it.each(['', 'Great fit'])('likes a saved preview with optional note %s', async 
   vi.mocked(fetch).mockResolvedValue(response({ ...saved, liked: true, like_note: note }) as Response);
   fireEvent.click(within(dialog).getByRole('button', { name: 'like' }));
   expect(await screen.findByRole('button', { name: 'liked' })).toHaveAttribute('aria-pressed', 'true');
-  expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview/feedback', expect.objectContaining({ method: 'POST', body: JSON.stringify({ kind: 'like', note }) }));
+  expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview/feedback', expect.objectContaining({ method: 'POST', body: JSON.stringify({ kind: 'like', note, preview_created_at: saved.created_at }) }));
   fireEvent.click(screen.getByRole('button', { name: 'liked' }));
   expect(screen.getByRole('textbox', { name: 'likeNote' })).toHaveValue(note);
 });
@@ -501,4 +501,17 @@ it('keeps the like note after a failed save', async () => {
   vi.mocked(fetch).mockResolvedValue(response({ detail: 'Failed' }, 500) as Response);
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'like' }));
   expect(await screen.findByRole('textbox', { name: 'likeNote' })).toHaveValue('Good fit');
+});
+
+
+it('retains the note and reports a stale preview when liking from an older tab', async () => {
+  vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'like' }));
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Good fit' } });
+  vi.mocked(fetch).mockResolvedValue(response({ detail: 'PREVIEW_CHANGED' }, 409) as Response);
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'like' }));
+  expect(await screen.findByText('likeChanged')).toBeVisible();
+  expect(screen.getByRole('textbox')).toHaveValue('Good fit');
+  expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview/feedback', expect.objectContaining({ body: JSON.stringify({ kind: 'like', note: 'Good fit', preview_created_at: saved.created_at }) }));
 });

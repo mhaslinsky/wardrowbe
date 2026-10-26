@@ -1568,6 +1568,7 @@ class PreviewDrawRequest(BaseModel):
 
 
 class PreviewLikeRequest(BaseModel):
+    preview_created_at: datetime
     kind: Literal["like"]
     note: str = Field(default="", max_length=500)
 
@@ -1581,7 +1582,9 @@ async def like_outfit_preview(
 ):
     from app.services.preview_service import PreviewService
 
-    return await PreviewService(db).like(outfit_id, current_user.id, body.note)
+    return await PreviewService(db).like(
+        outfit_id, current_user.id, body.note, body.preview_created_at
+    )
 
 
 @router.delete("/{outfit_id}/preview", status_code=204)
