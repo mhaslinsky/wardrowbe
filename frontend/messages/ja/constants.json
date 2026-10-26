@@ -104,6 +104,7 @@
     "footwear": "フットウェア",
     "full_body": "全身",
     "legwear": "レッグウェア",
+    "underwear": "下着",
     "mid_layer": "ミッドレイヤー",
     "neckwear": "ネックウェア",
     "outer_layer": "アウター",
@@ -134,6 +135,12 @@
     "vintage": "ヴィンテージ"
   },
   "subtypes": {
+    "boxer-briefs": "ボクサーブリーフ",
+    "briefs": "ブリーフ",
+    "boxers": "トランクス",
+    "trunks": "ショートボクサー",
+    "compression": "コンプレッション下着",
+    "long-underwear": "長下着",
     "a-line": "Aライン",
     "anorak": "アノラック",
     "ankle": "アンクル",
@@ -241,6 +248,7 @@
     "tank-top": "タンクトップ",
     "tie": "ネクタイ",
     "tights": "タイツ",
+    "underwear": "下着",
     "top": "トップス",
     "vest": "ベスト"
   },

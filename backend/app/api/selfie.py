@@ -27,6 +27,7 @@ from app.services.selfie_service import candidates_for, match_selfie
 from app.services.suggestion_cache import clear_suggestions
 from app.services.wear_service import wear_http
 from app.utils.auth import get_current_user
+from app.utils.garment_vocabulary import is_outfit_type
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.uploads import UploadTooLargeError, read_upload_within_limit
 
@@ -84,7 +85,11 @@ async def recognise_outfit(
         .order_by(ClothingItem.last_worn_at.desc().nulls_last(), ClothingItem.created_at.desc())
     )
     items = candidates_for(
-        [item for item in result.scalars().all() if item.type and item.type != "unknown"]
+        [
+            item
+            for item in result.scalars().all()
+            if item.type and item.type != "unknown" and is_outfit_type(item.type)
+        ]
     )
     # Hand the connection back before waiting on the model, which can take a while.
     await db.commit()

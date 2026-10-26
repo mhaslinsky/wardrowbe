@@ -104,6 +104,7 @@
     "footwear": "신발",
     "full_body": "전신",
     "legwear": "레그웨어",
+    "underwear": "속옷",
     "mid_layer": "미드 레이어",
     "neckwear": "넥웨어",
     "outer_layer": "아우터",
@@ -134,6 +135,12 @@
     "vintage": "빈티지"
   },
   "subtypes": {
+    "boxer-briefs": "사각 브리프",
+    "briefs": "삼각팬티",
+    "boxers": "트렁크",
+    "trunks": "숏 드로즈",
+    "compression": "압박 속옷",
+    "long-underwear": "내복",
     "a-line": "A라인",
     "anorak": "아노락",
     "ankle": "앵클",
@@ -241,6 +248,7 @@
     "tank-top": "탱크톱",
     "tie": "넥타이",
     "tights": "타이츠",
+    "underwear": "속옷",
     "top": "상의",
     "vest": "조끼"
   },

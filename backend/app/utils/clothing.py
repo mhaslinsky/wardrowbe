@@ -53,7 +53,7 @@ def count_composition(type_counts: list[tuple[str | None, int]]) -> WardrobeComp
 
 def _slots_for_type(item_type: str) -> frozenset[str]:
     role = ITEM_ROLE.get(item_type)
-    if not role or role == "accessory":
+    if not role or role in {"accessory", "underwear"}:
         return frozenset()
     return ROLE_SLOTS.get(role, frozenset({role}))
 

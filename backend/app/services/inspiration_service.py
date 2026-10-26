@@ -18,7 +18,7 @@ from app.services.preference_service import PreferenceService
 from app.services.recommendation_service import RecommendationService
 from app.services.studio_service import validate_item_ownership
 from app.utils.clothing import canonical_item_order, repair_top_layers
-from app.utils.garment_vocabulary import ITEM_ROLE, TYPES
+from app.utils.garment_vocabulary import ITEM_ROLE, TYPES, is_outfit_type
 from app.utils.prompts import load_prompt
 from app.utils.signed_urls import sign_image_url
 from app.utils.timezone import get_user_today
@@ -50,7 +50,11 @@ def parse_analysis(text: str) -> InspirationAnalysis:
 def match_slots(
     analysis: InspirationAnalysis, candidates: list[ClothingItem]
 ) -> tuple[list[InspirationSlot], list[UUID]]:
-    available = {item.id: item for item in candidates if item.id in analysis.allowed_item_ids}
+    available = {
+        item.id: item
+        for item in candidates
+        if item.id in analysis.allowed_item_ids and is_outfit_type(item.type)
+    }
     selected = []
     for slot in analysis.slots:
         slot.type = slot.type.strip().lower()
@@ -150,7 +154,11 @@ class InspirationService:
             for item in candidates
         ]
         notes = await recommendations._get_recent_outfit_notes(user)
-        prompt = load_prompt("inspiration") + "\nTypes: " + json.dumps(TYPES)
+        prompt = (
+            load_prompt("inspiration")
+            + "\nTypes: "
+            + json.dumps([item_type for item_type in TYPES if is_outfit_type(item_type)])
+        )
         prompt += (
             "\n<WARDROBE>\n"
             + json.dumps(wardrobe).replace("<", "\\u003c").replace(">", "\\u003e")

@@ -104,6 +104,7 @@
     "footwear": "鞋履",
     "full_body": "連身裝",
     "legwear": "腿部服飾",
+    "underwear": "內衣",
     "mid_layer": "中間層",
     "neckwear": "頸部配件",
     "outer_layer": "外層",
@@ -134,6 +135,12 @@
     "vintage": "復古"
   },
   "subtypes": {
+    "boxer-briefs": "平口貼身內褲",
+    "briefs": "三角內褲",
+    "boxers": "寬鬆平口內褲",
+    "trunks": "短平口內褲",
+    "compression": "壓縮內衣",
+    "long-underwear": "長內衣",
     "a-line": "A字",
     "anorak": "防風連帽外套",
     "ankle": "及踝",
@@ -241,6 +248,7 @@
     "tank-top": "背心",
     "tie": "領帶",
     "tights": "連褲襪",
+    "underwear": "內衣",
     "top": "上衣",
     "vest": "馬甲"
   },

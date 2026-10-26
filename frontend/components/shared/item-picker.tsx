@@ -10,6 +10,7 @@ import { useItems } from '@/lib/hooks/use-items';
 import { cn } from '@/lib/utils';
 import { GRID_PAGE_SIZE } from '@/lib/pagination';
 import type { Item } from '@/lib/types';
+import { ITEM_ROLE } from '@/lib/generated/garment-vocabulary';
 import { useTranslations } from 'next-intl';
 import { useTypeLabel } from '@/lib/hooks/use-translated-constants';
 
@@ -62,7 +63,6 @@ export function ItemPicker({
   );
 
   const hasMore = itemsData?.has_more ?? false;
-  const totalItems = itemsData?.total ?? 0;
 
   useEffect(() => {
     if (itemsData?.items) {
@@ -80,14 +80,18 @@ export function ItemPicker({
     }
   }, [itemsData?.items, page, accVersion]);
 
-  const items =
-    accumulatedItems.length > 0 ? accumulatedItems : itemsData?.items ?? [];
+  const items = (accumulatedItems.length > 0 ? accumulatedItems : itemsData?.items ?? [])
+    .filter((item) => ITEM_ROLE[(item.type ?? '').trim().toLowerCase()] !== 'underwear');
 
   const loadMore = useCallback(() => {
     if (hasMore && !isFetching) {
       setPage((p) => p + 1);
     }
   }, [hasMore, isFetching]);
+
+  useEffect(() => {
+    if (items.length === 0 && hasMore && !isFetching) loadMore();
+  }, [items.length, hasMore, isFetching, loadMore]);
 
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
@@ -189,7 +193,7 @@ export function ItemPicker({
 
         {!isLoading && !hasMore && items.length > 0 && (
           <div className="text-center text-xs text-muted-foreground py-3">
-            {t('showingAll', { count: totalItems })}
+            {t('showingAll', { count: items.length })}
           </div>
         )}
       </div>
