@@ -22,6 +22,7 @@ interface ItemPickerProps {
   filterType?: string;
   emptyMessage?: string;
   heightClass?: string;
+  outfitTypesOnly?: boolean;
 }
 
 export function ItemPicker({
@@ -31,6 +32,7 @@ export function ItemPicker({
   filterType,
   emptyMessage,
   heightClass = 'h-[360px]',
+  outfitTypesOnly = false,
 }: ItemPickerProps) {
   const typeLabel = useTypeLabel();
   const t = useTranslations('outfits.itemPicker');
@@ -81,7 +83,9 @@ export function ItemPicker({
   }, [itemsData?.items, page, accVersion]);
 
   const items = (accumulatedItems.length > 0 ? accumulatedItems : itemsData?.items ?? [])
-    .filter((item) => ITEM_ROLE[(item.type ?? '').trim().toLowerCase()] !== 'underwear');
+    .filter(
+    (item) => !outfitTypesOnly || ITEM_ROLE[(item.type ?? '').trim().toLowerCase()] !== 'underwear'
+  );
 
   const loadMore = useCallback(() => {
     if (hasMore && !isFetching) {

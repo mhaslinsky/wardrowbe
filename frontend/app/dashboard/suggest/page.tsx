@@ -952,6 +952,7 @@ function SuggestContent() {
               }}
               filterType={filterType}
               hideNeedsWash={true}
+              outfitTypesOnly
               heightClass="h-[340px]"
             />
           </div>

@@ -11,9 +11,15 @@ vi.mock('@/lib/hooks/use-items', () => ({ useItems: () => response }));
 vi.mock('@/lib/hooks/use-translated-constants', () => ({ useTypeLabel: () => (value: string) => value }));
 
 afterEach(cleanup);
-it('hides underwear from outfit selection and preserves other items', () => {
-  render(<ItemPicker selectedIds={new Set()} onToggle={vi.fn()} />);
+it('hides underwear when limited to outfit types and preserves other items', () => {
+  render(<ItemPicker selectedIds={new Set()} onToggle={vi.fn()} outfitTypesOnly />);
   expect(screen.queryByText('Hidden underwear')).not.toBeInTheDocument();
   expect(screen.getByText('Visible shirt')).toBeInTheDocument();
   expect(screen.getByText('Visible socks')).toBeInTheDocument();
+});
+
+it('shows underwear by default, so a hand-built outfit can include it', () => {
+  render(<ItemPicker selectedIds={new Set()} onToggle={vi.fn()} />);
+  expect(screen.getByText('Hidden underwear')).toBeInTheDocument();
+  expect(screen.getByText('Visible shirt')).toBeInTheDocument();
 });
