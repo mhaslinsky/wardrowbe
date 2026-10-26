@@ -219,13 +219,15 @@
     "likeNote": "Was ist gut gelungen?",
     "see": "An mir ansehen",
     "redraw": "Neu zeichnen",
-    "changed": "Outfit geändert",
+    "changed": "Vorschau ist veraltet",
     "addPhoto": "Vorschaufoto in Einstellungen hinzufügen",
     "drawing": "Vorschau wird erstellt…",
     "failed": "Vorschau fehlgeschlagen",
     "changeNote": "Was soll sich ändern?",
     "delete": "Vorschau löschen",
     "deleteConfirm": "Vorschau löschen?",
-    "redrawConflict": "Eine Vorschau wird bereits erstellt. Bitte gleich erneut versuchen."
+    "redrawConflict": "Eine Vorschau wird bereits erstellt. Bitte gleich erneut versuchen.",
+    "clothesChanged": "Kleidung geändert",
+    "personChanged": "Deine Fotos oder Maße wurden geändert"
   }
 }

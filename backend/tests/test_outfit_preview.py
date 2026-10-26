@@ -151,6 +151,7 @@ async def test_cache_regenerate_stale_and_prompt(
         "medium_url",
         "created_at",
         "stale",
+        "stale_reasons",
         "liked",
         "like_note",
     }
@@ -1781,3 +1782,98 @@ async def test_r1_like_timestamp_validation(timestamp, liked_preview, client, au
         json={"kind": "like", "preview_created_at": timestamp},
     )
     assert result.status_code == 422
+
+
+@pytest.mark.parametrize("changes", [("clothes",), ("person",), ("clothes", "person")])
+async def test_stale_reasons_inputs_and_feedback(
+    changes, client, auth_headers, preview_setup, provider, db_session
+):
+    await upload(client, auth_headers)
+    url = preview_setup["url"]
+    fresh = (await client.post(url, headers=auth_headers)).json()
+    assert fresh["stale_reasons"] == [] and fresh["stale"] is False
+    if "clothes" in changes:
+        item = await db_session.get(ClothingItem, preview_setup["items"][0])
+        item.medium_path = item.image_path
+        item.colors = ["purple"]
+    if "person" in changes:
+        user = await db_session.get(User, preview_setup["user"])
+        user.body_measurements = {"height": 181}
+    await db_session.commit()
+    saved = (await client.get(url, headers=auth_headers)).json()
+    assert saved["stale_reasons"] == list(changes) and saved["stale"] is True
+    liked = await client.post(
+        url + "/feedback",
+        headers=auth_headers,
+        json={"kind": "like", "note": "", "preview_created_at": fresh["created_at"]},
+    )
+    assert liked.status_code == 200, liked.text
+    assert liked.json()["stale_reasons"] == list(changes)
+    redrawn = (await client.post(url, headers=auth_headers)).json()
+    assert redrawn["stale_reasons"] == [] and redrawn["stale"] is False
+    cached = (await client.post(url, headers=auth_headers)).json()
+    assert cached["stale_reasons"] == []
+    assert provider.call_count == 2
+
+
+@pytest.mark.parametrize("mismatch", [False, True])
+async def test_stale_reasons_legacy(
+    mismatch, client, auth_headers, preview_setup, provider, db_session
+):
+    await upload(client, auth_headers)
+    url = preview_setup["url"]
+    assert (await client.post(url, headers=auth_headers)).status_code == 200
+    await db_session.execute(
+        text(
+            "UPDATE outfit_previews SET clothes_key = NULL, person_key = NULL WHERE outfit_id = :id"
+        ),
+        {"id": preview_setup["outfit"]},
+    )
+    if mismatch:
+        user = await db_session.get(User, preview_setup["user"])
+        user.body_measurements = {"height": 181}
+    await db_session.commit()
+    saved = (await client.get(url, headers=auth_headers)).json()
+    assert saved["stale_reasons"] == (["unknown"] if mismatch else [])
+    assert saved["stale"] is mismatch
+    assert (await client.post(url, headers=auth_headers)).json()["stale_reasons"] == []
+
+
+@pytest.mark.parametrize("changes", [("clothes",), ("person",), ("clothes", "person")])
+async def test_stale_reasons_during_draw(
+    changes, client, auth_headers, preview_setup, provider_gate, session_maker, db_session
+):
+    await upload(client, auth_headers)
+    entered, release = provider_gate
+    async with session_maker() as session:
+        task = asyncio.create_task(
+            PreviewService(session).generate(preview_setup["outfit"], preview_setup["user"], False)
+        )
+        try:
+            await entered.wait()
+            if "clothes" in changes:
+                item = await db_session.get(ClothingItem, preview_setup["items"][0])
+                item.colors = ["purple"]
+            if "person" in changes:
+                user = await db_session.get(User, preview_setup["user"])
+                user.body_measurements = {"height": 181}
+            await db_session.commit()
+        finally:
+            release.set()
+            result = await task
+    assert result["stale_reasons"] == list(changes) and result["stale"] is True
+    saved = (await client.get(preview_setup["url"], headers=auth_headers)).json()
+    assert saved["stale_reasons"] == result["stale_reasons"]
+
+
+async def test_stale_reasons_photo_redraw(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    await upload(client, auth_headers)
+    url = preview_setup["url"]
+    assert (await client.post(url, headers=auth_headers)).status_code == 200
+    item = await db_session.get(ClothingItem, preview_setup["items"][0])
+    path = ImageService().get_image_path(item.medium_path or item.image_path)
+    path.write_bytes(_jpeg_bytes(color="purple"))
+    saved = (await client.get(url, headers=auth_headers)).json()
+    assert saved["stale_reasons"] == ["clothes"] and saved["stale"] is True

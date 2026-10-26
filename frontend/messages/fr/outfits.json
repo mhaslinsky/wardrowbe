@@ -219,13 +219,15 @@
     "likeNote": "Qu’a-t-il réussi ?",
     "see": "Voir sur moi",
     "redraw": "Redessiner",
-    "changed": "Tenue modifiée",
+    "changed": "Aperçu obsolète",
     "addPhoto": "Ajoutez une photo dans les paramètres",
     "drawing": "Création de l’aperçu…",
     "failed": "Échec de l’aperçu",
     "changeNote": "Que faut-il changer ?",
     "delete": "Supprimer l’aperçu",
     "deleteConfirm": "Supprimer l’aperçu ?",
-    "redrawConflict": "Un autre aperçu est en cours. Réessayez dans un instant."
+    "redrawConflict": "Un autre aperçu est en cours. Réessayez dans un instant.",
+    "clothesChanged": "Vêtements modifiés",
+    "personChanged": "Vos photos ou mensurations ont changé"
   }
 }

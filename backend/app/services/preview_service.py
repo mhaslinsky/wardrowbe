@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException
 from PIL import ImageOps
 from sqlalchemy import select, text, update
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, undefer
 
 from app.models.outfit import Outfit, OutfitItem
 from app.models.preview import OutfitPreview, PreviewFeedback, PreviewPhoto, delete_preview_files
@@ -231,7 +231,18 @@ class PreviewService:
             raise HTTPException(404, "Outfit not found")
         return outfit
 
-    async def response(self, record, key):
+    async def response(self, record, key, clothes_key, person_key):
+        if record.clothes_key is None or record.person_key is None:
+            reasons = ["unknown"] if record.cache_key != key else []
+        else:
+            reasons = [
+                reason
+                for reason, saved, current in (
+                    ("clothes", record.clothes_key, clothes_key),
+                    ("person", record.person_key, person_key),
+                )
+                if saved != current
+            ]
         feedback = await self.db.scalar(
             select(PreviewFeedback).where(
                 PreviewFeedback.user_id == record.user_id,
@@ -243,7 +254,8 @@ class PreviewService:
         return {
             **urls(record.paths),
             "created_at": record.created_at,
-            "stale": record.cache_key != key,
+            "stale": bool(reasons),
+            "stale_reasons": reasons,
             "liked": feedback is not None,
             "like_note": feedback.note if feedback else "",
         }
@@ -272,21 +284,32 @@ class PreviewService:
 
     async def saved(self, outfit_id, user_id):
         outfit = await self.outfit(outfit_id, user_id)
-        record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
+        record = await self.db.get(
+            OutfitPreview,
+            outfit_id,
+            populate_existing=True,
+            options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+        )
         if record is None or not record.paths:
             raise HTTPException(404, "NO_PREVIEW")
         key, _, _ = await asyncio.to_thread(snapshot, outfit)
         reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
         paths = reference.paths if reference else {}
         measurements, _, face_hash = await self.person_inputs(user_id, paths, include_face=False)
-        key = reference_key(key, paths, measurements, face_hash)
-        return await self.response(record, key)
+        person_key = reference_key("", paths, measurements, face_hash)
+        combined_key = reference_key(key, paths, measurements, face_hash)
+        return await self.response(record, combined_key, key, person_key)
 
     async def like(self, outfit_id, user_id, note, preview_created_at):
         await self.outfit(outfit_id, user_id)
         await self.lock_user(user_id)
         await self.db.execute(select(Outfit.id).where(Outfit.id == outfit_id).with_for_update())
-        record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
+        record = await self.db.get(
+            OutfitPreview,
+            outfit_id,
+            populate_existing=True,
+            options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+        )
         if record is None or not record.paths:
             raise HTTPException(404, "NO_PREVIEW")
         if record.created_at != preview_created_at:
@@ -316,7 +339,12 @@ class PreviewService:
         await self.outfit(outfit_id, user_id)
         await self.lock_user(user_id)
         await self.db.execute(select(Outfit.id).where(Outfit.id == outfit_id).with_for_update())
-        record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
+        record = await self.db.get(
+            OutfitPreview,
+            outfit_id,
+            populate_existing=True,
+            options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+        )
         if (
             record
             and record.claim_id
@@ -343,7 +371,12 @@ class PreviewService:
             await self.lock_user(user_id, key_share=True)
             await self.db.execute(select(Outfit.id).where(Outfit.id == outfit_id).with_for_update())
             outfit = await self.outfit(outfit_id, user_id)
-            record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
+            record = await self.db.get(
+                OutfitPreview,
+                outfit_id,
+                populate_existing=True,
+                options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+            )
             if (
                 record
                 and record.claim_id
@@ -357,9 +390,11 @@ class PreviewService:
                 raise HTTPException(409, "NO_PREVIEW_PHOTO") from error
             key, images, records = await asyncio.to_thread(snapshot, outfit)
             measurements, face, face_hash = await self.person_inputs(user_id, reference.paths)
+            clothes_key = key
+            person_key = reference_key("", reference.paths, measurements, face_hash)
             key = reference_key(key, reference.paths, measurements, face_hash)
             if record and record.paths and record.cache_key == key and not regenerate:
-                result = await self.response(record, key)
+                result = await self.response(record, key, clothes_key, person_key)
                 await self.db.commit()
                 return result
             if not photo_redraw_enabled():
@@ -457,7 +492,12 @@ class PreviewService:
             await self.lock_user(user_id)
             await self.db.execute(select(Outfit.id).where(Outfit.id == outfit_id).with_for_update())
             outfit = await self.outfit(outfit_id, user_id)
-            record = await self.db.get(OutfitPreview, outfit_id, populate_existing=True)
+            record = await self.db.get(
+                OutfitPreview,
+                outfit_id,
+                populate_existing=True,
+                options=[undefer(OutfitPreview.clothes_key), undefer(OutfitPreview.person_key)],
+            )
             if record is None or record.claim_id != claim_id:
                 raise HTTPException(409, "Preview changed")
             current_key, _, _ = await asyncio.to_thread(snapshot, outfit)
@@ -466,7 +506,10 @@ class PreviewService:
             current_measurements, _, current_face_hash = await self.person_inputs(
                 user_id, current_paths, include_face=False
             )
-            current_key = reference_key(
+            current_person_key = reference_key(
+                "", current_paths, current_measurements, current_face_hash
+            )
+            current_combined_key = reference_key(
                 current_key, current_paths, current_measurements, current_face_hash
             )
             retained_paths = await self.db.scalars(
@@ -477,15 +520,16 @@ class PreviewService:
             retained = {path for saved_paths in retained_paths for path in saved_paths.values()}
             old_paths = {name: path for name, path in record.paths.items() if path not in retained}
             record.paths, record.cache_key = paths, key
+            record.clothes_key, record.person_key = clothes_key, person_key
             record.created_at, record.usage = datetime.now(UTC), provider.usage
             record.claim_id, record.started_at = None, None
             if regenerate and note:
                 self.db.add(
                     PreviewFeedback(user_id=user_id, outfit_id=outfit_id, kind="fix", note=note)
                 )
-            result = await self.response(record, key)
-            if current_key != key:
-                result["stale"] = True
+            result = await self.response(
+                record, current_combined_key, current_key, current_person_key
+            )
             await self.db.commit()
         except BaseException as error:
             if pending_store is not None:
