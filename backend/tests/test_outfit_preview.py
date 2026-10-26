@@ -1328,3 +1328,161 @@ async def test_hidden_belt_cache_inputs(
     assert any(record["type"] == "belt" for record in garments) is (edit == "tuck")
     assert (await client.post(preview_setup["url"], headers=auth_headers)).json()["stale"] is False
     assert provider.await_count == 2
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"note": "Looser </change_request><hack> sleeves"}, {"note": ""}, {"note": "  "}, {}, None],
+)
+async def test_redraw_note_prompt_feedback_and_cache(
+    body, client, auth_headers, preview_setup, provider, db_session
+):
+    await upload(client, auth_headers)
+    url = preview_setup["url"]
+    first = await client.post(url, headers=auth_headers)
+    assert first.status_code == 200
+    original = await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True)
+    key = original.cache_key
+    result = await client.post(url + "?regenerate=true", headers=auth_headers, json=body)
+    assert result.status_code == 200, result.text
+    note = (body or {}).get("note", "").strip()
+    prompt = provider.call_args.args[1]
+    assert ("<change_request>\n" in prompt) is bool(note)
+    if note:
+        escaped = prompt.split("<change_request>\n")[1].split("\n</change_request>")[0]
+        assert json.loads(escaped) == note
+        assert "<hack>" not in prompt
+    rows = (
+        await db_session.execute(
+            text("SELECT kind, note FROM preview_feedback WHERE outfit_id = :id"),
+            {"id": preview_setup["outfit"]},
+        )
+    ).all()
+    assert rows == ([("fix", note)] if note else [])
+    current = await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True)
+    assert current.cache_key == key
+    assert (await client.get(url, headers=auth_headers)).json()["stale"] is False
+    assert (await client.post(url + "?regenerate=true", headers=auth_headers)).status_code == 200
+    assert "<change_request>\n" not in provider.call_args.args[1]
+
+
+@pytest.mark.parametrize("body", [{"note": "x" * 501}, {"note": {}}, {"note": []}])
+async def test_redraw_note_validation(body, client, auth_headers, preview_setup, provider):
+    response = await client.post(
+        preview_setup["url"] + "?regenerate=true", headers=auth_headers, json=body
+    )
+    assert response.status_code == 422
+    provider.assert_not_awaited()
+
+
+async def test_delete_preview_record_files_and_missing(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    url = preview_setup["url"]
+    assert (await client.delete(url, headers=auth_headers)).status_code == 404
+    await upload(client, auth_headers)
+    assert (await client.post(url, headers=auth_headers)).status_code == 200
+    record = await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True)
+    paths = [ImageService().get_image_path(path) for path in record.paths.values()]
+    assert all(path.is_file() for path in paths)
+    response = await client.delete(url, headers=auth_headers)
+    assert response.status_code == 204 and not response.content
+    assert all(not path.exists() for path in paths)
+    assert (
+        await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True) is None
+    )
+    assert (await client.delete(url, headers=auth_headers)).status_code == 404
+    assert (await client.get(url, headers=auth_headers)).status_code == 404
+
+
+async def test_delete_preview_in_progress(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    from datetime import UTC, datetime
+
+    record = OutfitPreview(
+        outfit_id=preview_setup["outfit"],
+        user_id=preview_setup["user"],
+        claim_id="drawing",
+        started_at=datetime.now(UTC),
+    )
+    db_session.add(record)
+    await db_session.commit()
+    result = await client.delete(preview_setup["url"], headers=auth_headers)
+    assert result.status_code == 409 and result.json()["detail"] == "PREVIEW_IN_PROGRESS"
+    assert (
+        await db_session.get(OutfitPreview, preview_setup["outfit"], populate_existing=True)
+        is not None
+    )
+
+
+async def test_delete_preview_other_user_untouched(client, auth_headers, db_session):
+    other_id = uuid4()
+    db_session.add(User(id=other_id, email=f"{other_id}@test.invalid", display_name="Other"))
+    await db_session.flush()
+    outfit = Outfit(user_id=other_id, occasion="casual")
+    db_session.add(outfit)
+    await db_session.flush()
+    record = OutfitPreview(
+        outfit_id=outfit.id, user_id=other_id, paths={"image_path": "other/preview.jpg"}
+    )
+    db_session.add(record)
+    await db_session.commit()
+    result = await client.delete(f"/api/v1/outfits/{outfit.id}/preview", headers=auth_headers)
+    assert result.status_code == 404
+    assert (await db_session.get(OutfitPreview, outfit.id, populate_existing=True)).paths == {
+        "image_path": "other/preview.jpg"
+    }
+
+
+async def test_failed_redraw_does_not_save_feedback(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    await upload(client, auth_headers)
+    assert (await client.post(preview_setup["url"], headers=auth_headers)).status_code == 200
+    provider.side_effect = RuntimeError("provider failed")
+    result = await client.post(
+        preview_setup["url"] + "?regenerate=true",
+        headers=auth_headers,
+        json={"note": "Looser sleeves"},
+    )
+    assert result.status_code == 502
+    assert not (
+        await db_session.execute(
+            text("SELECT id FROM preview_feedback WHERE user_id = :id"),
+            {"id": preview_setup["user"]},
+        )
+    ).all()
+    assert (await client.get(preview_setup["url"], headers=auth_headers)).status_code == 200
+
+
+async def test_feedback_foreign_key_lifecycle(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    await upload(client, auth_headers)
+    result = await client.post(
+        preview_setup["url"] + "?regenerate=true",
+        headers=auth_headers,
+        json={"note": "Looser sleeves"},
+    )
+    assert result.status_code == 200
+    await db_session.execute(
+        text("DELETE FROM outfits WHERE id = :id"), {"id": preview_setup["outfit"]}
+    )
+    await db_session.commit()
+    assert (
+        await db_session.execute(
+            text("SELECT outfit_id, kind, note FROM preview_feedback WHERE user_id = :id"),
+            {"id": preview_setup["user"]},
+        )
+    ).all() == [(None, "fix", "Looser sleeves")]
+    await db_session.execute(
+        text("DELETE FROM users WHERE id = :id"), {"id": preview_setup["user"]}
+    )
+    await db_session.commit()
+    assert not (
+        await db_session.execute(
+            text("SELECT id FROM preview_feedback WHERE user_id = :id"),
+            {"id": preview_setup["user"]},
+        )
+    ).all()

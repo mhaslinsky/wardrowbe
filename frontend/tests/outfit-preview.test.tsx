@@ -50,7 +50,7 @@ it.each([false, true])('loads a saved preview on mount with stale=%s without dra
   expect(await screen.findByRole('img')).toHaveAttribute('src', saved.medium_url);
   expect(screen.queryByRole('button', { name: 'see' })).not.toBeInTheDocument();
   expect(Boolean(screen.queryByText('changed'))).toBe(stale);
-  expect(Boolean(screen.queryByRole('button', { name: 'redraw' }))).toBe(stale);
+  expect(screen.getByRole('button', { name: 'redraw' })).toBeVisible();
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview', expect.objectContaining({ method: 'GET' }));
 });
@@ -86,6 +86,7 @@ it('redraws stale previews and preserves the old image on failure', async () => 
   render(<OutfitPreview outfitId="one" />);
   fireEvent.click(screen.getByText('see'));
   fireEvent.click(await screen.findByText('redraw'));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'redraw' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('failed');
   expect(screen.getByText('changed')).toBeVisible();
   expect(screen.getByRole('img')).toHaveAttribute('src', saved.medium_url);
@@ -287,8 +288,9 @@ it('waits for a new created_at when another regenerate is in progress', async ()
   render(<OutfitPreview outfitId="one" />);
   fireEvent.click(screen.getByText('see'));
   await screen.findByRole('img');
+  fireEvent.click(screen.getByText('redraw'));
   vi.useFakeTimers();
-  await act(async () => { fireEvent.click(screen.getByText('redraw')); await vi.advanceTimersByTimeAsync(0); });
+  await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'redraw' })); await vi.advanceTimersByTimeAsync(0); });
   await act(async () => { await vi.advanceTimersByTimeAsync(2001); });
   expect(screen.getByRole('status')).toHaveTextContent('drawing');
   expect(screen.getByRole('img')).toHaveAttribute('src', saved.medium_url);
@@ -392,4 +394,85 @@ it.each([
     expect(screen.getByLabelText(label)).toHaveAttribute('aria-label', label);
     expect(screen.getByLabelText(label)).toBeEnabled();
   }
+});
+
+
+it('sends the optional redraw note and resets it after cancel', async () => {
+  vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'redraw' }));
+  const note = screen.getByRole('textbox', { name: 'changeNote' });
+  expect(note).toHaveAttribute('maxLength', '500');
+  fireEvent.change(note, { target: { value: 'Looser sleeves' } });
+  fireEvent.click(screen.getByRole('button', { name: 'cancel' }));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'redraw' }));
+  expect(screen.getByRole('textbox')).toHaveValue('');
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Looser sleeves' } });
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'redraw' }));
+  await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/v1/outfits/one/preview?regenerate=true', expect.objectContaining({ method: 'POST', body: JSON.stringify({ note: 'Looser sleeves' }) })));
+});
+
+it('confirms deletion and returns to See it on me', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(response(saved) as Response).mockResolvedValue(response(null, 204) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'delete' }));
+  expect(screen.getByRole('dialog', { name: 'deleteConfirm' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'cancel' }));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'delete' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'delete' }));
+  expect(await screen.findByRole('button', { name: 'see' })).toBeVisible();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(fetch).toHaveBeenLastCalledWith('/api/v1/outfits/one/preview', expect.objectContaining({ method: 'DELETE' }));
+});
+
+it('keeps the saved preview when deletion fails', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(response(saved) as Response).mockResolvedValue(response({ detail: 'PREVIEW_IN_PROGRESS' }, 409) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'delete' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'delete' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('failed');
+  expect(screen.getByRole('img')).toBeVisible();
+});
+
+
+it('rejects a noted redraw conflict instead of adopting another draw', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(response(saved) as Response)
+    .mockResolvedValueOnce(response({ detail: 'PREVIEW_IN_PROGRESS' }, 409) as Response)
+    .mockResolvedValue(response({ ...saved, created_at: 'another-draw', medium_url: '/another.jpg' }) as Response);
+  const { result } = renderHook(() => useOutfitPreview('one'), { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+  await waitFor(() => expect(result.current.preview).toEqual(saved));
+  vi.useFakeTimers();
+  let outcome!: Promise<boolean>;
+  await act(async () => { outcome = result.current.draw(true, 'Looser sleeves'); await vi.advanceTimersByTimeAsync(2001); });
+  expect(await outcome).toBe(false);
+  expect(result.current.conflict).toBe(true);
+  expect(result.current.preview).toEqual(saved);
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it('restores the note dialog after a conflict and retries the same note', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(response(saved) as Response)
+    .mockResolvedValueOnce(response({ detail: 'PREVIEW_IN_PROGRESS' }, 409) as Response)
+    .mockResolvedValue(response({ ...saved, created_at: 'another-draw', medium_url: '/another.jpg' }) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'redraw' }));
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Looser sleeves' } });
+  vi.useFakeTimers();
+  await act(async () => {
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'redraw' }));
+    await vi.advanceTimersByTimeAsync(2001);
+  });
+  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(screen.getByRole('textbox')).toHaveValue('Looser sleeves');
+  expect(screen.getByRole('alert')).toHaveTextContent('redrawConflict');
+  expect(fetch).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'redraw' }));
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(fetch).toHaveBeenLastCalledWith('/api/v1/outfits/one/preview?regenerate=true', expect.objectContaining({ method: 'POST', body: JSON.stringify({ note: 'Looser sleeves' }) }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('img')).toHaveAttribute('src', '/another.jpg');
 });

@@ -218,6 +218,10 @@
     "changed": "Outfit modificato",
     "addPhoto": "Aggiungi una foto nelle impostazioni",
     "drawing": "Creazione anteprima…",
-    "failed": "Anteprima non riuscita"
+    "failed": "Anteprima non riuscita",
+    "changeNote": "Cosa vuoi cambiare?",
+    "delete": "Elimina anteprima",
+    "deleteConfirm": "Eliminare l’anteprima?",
+    "redrawConflict": "Un’altra anteprima è in corso. Riprova tra poco."
   }
 }

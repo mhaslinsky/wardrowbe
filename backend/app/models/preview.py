@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Iterator, Mapping
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Text, event, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -34,6 +34,17 @@ class OutfitPreview(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     usage: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
+class PreviewFeedback(Base):
+    __tablename__ = "preview_feedback"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    outfit_id: Mapped[UUID | None] = mapped_column(ForeignKey("outfits.id", ondelete="SET NULL"))
+    kind: Mapped[str] = mapped_column(Text)
+    note: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 User.preview_photo = relationship(PreviewPhoto, cascade="all, delete-orphan", uselist=False)

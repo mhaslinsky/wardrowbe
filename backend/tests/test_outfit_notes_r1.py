@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from alembic.script import ScriptDirectory
 from sqlalchemy import select, text
 
 from app.models.item import ClothingItem, ItemStatus
@@ -132,12 +133,16 @@ async def test_comment_timestamp_tracks_changes_and_clear(
 
 
 def test_migration_head_checker_accepts_single_head():
-    script = Path(__file__).parents[1] / "scripts" / "check_migration_heads.py"
+    backend = Path(__file__).parents[1]
+    heads = ScriptDirectory(str(backend / "migrations")).get_heads()
+    assert len(heads) == 1
+    head = heads[0]
+    script = backend / "scripts" / "check_migration_heads.py"
     result = subprocess.run(
         [sys.executable, str(script)], capture_output=True, text=True, check=False
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.strip() == "OK: Single migration head: e190a1b2c3d4"
+    assert result.stdout.strip() == f"OK: Single migration head: {head}"
 
 
 def test_preference_delimiters_are_ordered_and_unique():

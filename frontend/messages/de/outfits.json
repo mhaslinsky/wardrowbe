@@ -218,6 +218,10 @@
     "changed": "Outfit geändert",
     "addPhoto": "Vorschaufoto in Einstellungen hinzufügen",
     "drawing": "Vorschau wird erstellt…",
-    "failed": "Vorschau fehlgeschlagen"
+    "failed": "Vorschau fehlgeschlagen",
+    "changeNote": "Was soll sich ändern?",
+    "delete": "Vorschau löschen",
+    "deleteConfirm": "Vorschau löschen?",
+    "redrawConflict": "Eine Vorschau wird bereits erstellt. Bitte gleich erneut versuchen."
   }
 }

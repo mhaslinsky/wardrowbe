@@ -218,6 +218,10 @@
     "changed": "Outfit changed",
     "addPhoto": "Add a preview photo in Settings",
     "drawing": "Drawing preview…",
-    "failed": "Preview failed"
+    "failed": "Preview failed",
+    "changeNote": "What should change?",
+    "delete": "Delete preview",
+    "deleteConfirm": "Delete preview?",
+    "redrawConflict": "Another redraw is running. Try again in a moment."
   }
 }
