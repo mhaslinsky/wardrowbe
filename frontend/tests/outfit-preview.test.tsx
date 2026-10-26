@@ -556,3 +556,25 @@ it.each(Object.entries(outfitCatalogs))('has stale labels in %s', (_path, catalo
     expect(preview.changed).toBe('Preview is out of date');
   }
 });
+
+it.each([
+  [['clothes', 'person'], ['clothesChanged', 'personChanged']],
+  [['unknown'], ['changed']],
+])('places reason labels %j above a single action row', async (reasons, labels) => {
+  vi.mocked(fetch).mockResolvedValue(response({ ...saved, stale: true, stale_reasons: reasons }) as Response);
+  render(<OutfitPreview outfitId="one" />);
+  await screen.findByRole('img');
+  const reasonElements = labels.map(label => screen.getByText(label));
+  const reasonContainer = reasonElements[0].parentElement!;
+  const redraw = screen.getByRole('button', { name: 'redraw' });
+  const actions = redraw.parentElement!;
+  expect(reasonContainer).not.toBe(actions);
+  expect(reasonContainer.children).toHaveLength(labels.length);
+  for (const element of reasonElements) {
+    expect(element.parentElement).toBe(reasonContainer);
+    expect(element.tagName).toBe('P');
+  }
+  expect(reasonContainer.nextElementSibling).toBe(actions);
+  expect(within(actions).getAllByRole('button')).toHaveLength(3);
+  expect(actions).not.toHaveClass('flex-wrap');
+});
