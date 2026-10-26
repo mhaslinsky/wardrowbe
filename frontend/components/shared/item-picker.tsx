@@ -61,14 +61,16 @@ export function ItemPicker({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (searchQuery === debouncedSearch) return;
     const timer = setTimeout(() => {
+      lastLoadedData.current = null;
       setDebouncedSearch(searchQuery);
       setPage(1);
       setAccumulatedItems([]);
       setAccVersion((v) => v + 1);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, debouncedSearch]);
 
   const { data: itemsData, isLoading, isFetching } = useItems(
     {

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { ItemPicker } from '@/components/shared/item-picker';
@@ -25,7 +25,7 @@ vi.mock('@/lib/hooks/use-items', () => ({
   },
 }));
 vi.mock('@/lib/hooks/use-translated-constants', () => ({ useTypeLabel: () => (value: string) => value }));
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 beforeEach(() => {
   mock.cache.clear();
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(1000);
@@ -90,4 +90,16 @@ it('renders an empty wardrobe without requesting another page', () => {
   picker();
   expect(screen.getByText('noItems')).toBeInTheDocument();
   expect(mock.page).toBe(1);
+});
+
+it('keeps loaded pages when the initial search debounce would expire', async () => {
+  vi.useFakeTimers();
+  mock.pages = [mock.pages[0], [{ id: 'later', name: 'Later socks', type: 'socks' }]];
+  const { container } = picker();
+  const list = container.querySelector('div.overflow-y-auto')!;
+  fireEvent.scroll(list, { target: { scrollTop: 1000 } });
+  expect(screen.getByText('Later socks')).toBeInTheDocument();
+  await act(() => vi.advanceTimersByTimeAsync(300));
+  expect(screen.getByText('Later socks')).toBeInTheDocument();
+  expect(mock.page).toBe(2);
 });
