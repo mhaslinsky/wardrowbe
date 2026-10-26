@@ -124,7 +124,19 @@
     "noItems": "Nessun capo trovato",
     "noMatch": "Nessun capo corrisponde alla tua ricerca",
     "search": "Cerca nel guardaroba...",
-    "showingAll": "{count, plural, one {Mostrato # capo} other {Mostrati tutti i capi (#)}}"
+    "showingAll": "{count, plural, one {Mostrato # capo} other {Mostrati tutti i capi (#)}}",
+    "slots": {
+      "label": "Categorie",
+      "all": "Tutti",
+      "tops": "Parte superiore",
+      "layers": "Strati",
+      "jackets": "Giacche",
+      "bottoms": "Parte inferiore",
+      "underwear": "Intimo",
+      "socks": "Calzini",
+      "shoes": "Scarpe",
+      "accessories": "Accessori"
+    }
   },
   "lineage": {
     "fromLookbook": "Dalla tua voce del lookbook {name}",

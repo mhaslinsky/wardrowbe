@@ -124,7 +124,19 @@
     "noItems": "아이템이 없어요",
     "noMatch": "검색 결과가 없어요",
     "search": "옷장 검색...",
-    "showingAll": "{count, plural, other {전체 아이템 #개 표시 중}}"
+    "showingAll": "{count, plural, other {전체 아이템 #개 표시 중}}",
+    "slots": {
+      "label": "분류",
+      "all": "전체",
+      "tops": "상의",
+      "layers": "레이어",
+      "jackets": "재킷",
+      "bottoms": "하의",
+      "underwear": "속옷",
+      "socks": "양말",
+      "shoes": "신발",
+      "accessories": "액세서리"
+    }
   },
   "lineage": {
     "fromLookbook": "{name} 룩북 항목에서 가져왔어요",

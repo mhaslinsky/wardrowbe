@@ -15,6 +15,19 @@ import { useTranslations } from 'next-intl';
 import { useTypeLabel } from '@/lib/hooks/use-translated-constants';
 
 
+const SLOT_ROLES = {
+  all: [],
+  tops: ['base_top', 'full_body'],
+  layers: ['mid_layer'],
+  jackets: ['outer_layer', 'suit'],
+  bottoms: ['bottom', 'legwear'],
+  underwear: ['underwear'],
+  socks: ['socks'],
+  shoes: ['footwear'],
+  accessories: ['accessory', 'neckwear'],
+} satisfies Record<string, string[]>;
+type Slot = keyof typeof SLOT_ROLES;
+
 interface ItemPickerProps {
   selectedIds: Set<string>;
   onToggle: (item: Item) => void;
@@ -23,6 +36,7 @@ interface ItemPickerProps {
   emptyMessage?: string;
   heightClass?: string;
   outfitTypesOnly?: boolean;
+  slotFilters?: boolean;
 }
 
 export function ItemPicker({
@@ -33,9 +47,12 @@ export function ItemPicker({
   emptyMessage,
   heightClass = 'h-[360px]',
   outfitTypesOnly = false,
+  slotFilters = false,
 }: ItemPickerProps) {
   const typeLabel = useTypeLabel();
   const t = useTranslations('outfits.itemPicker');
+  const [slot, setSlot] = useState<Slot>('all');
+  const lastLoadedData = useRef<unknown>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -82,20 +99,32 @@ export function ItemPicker({
     }
   }, [itemsData?.items, page, accVersion]);
 
+  const matchesSlot = useCallback((item: Item) => {
+    const role = ITEM_ROLE[(item.type ?? '').trim().toLowerCase()];
+    return (!outfitTypesOnly || role !== 'underwear') &&
+      (!slotFilters || slot === 'all' || (SLOT_ROLES[slot] as string[]).includes(role));
+  }, [outfitTypesOnly, slotFilters, slot]);
   const items = (accumulatedItems.length > 0 ? accumulatedItems : itemsData?.items ?? [])
-    .filter(
-    (item) => !outfitTypesOnly || ITEM_ROLE[(item.type ?? '').trim().toLowerCase()] !== 'underwear'
-  );
+    .filter(matchesSlot);
 
   const loadMore = useCallback(() => {
-    if (hasMore && !isFetching) {
-      setPage((p) => p + 1);
+    if (hasMore && !isFetching && itemsData && lastLoadedData.current !== itemsData) {
+      lastLoadedData.current = itemsData;
+      setPage((previousPage) => previousPage + 1);
     }
-  }, [hasMore, isFetching]);
+  }, [hasMore, isFetching, itemsData]);
 
   useEffect(() => {
-    if (items.length === 0 && hasMore && !isFetching) loadMore();
-  }, [items.length, hasMore, isFetching, loadMore]);
+    const container = scrollContainerRef.current;
+    const fillList = () => {
+      if (slotFilters && container && container.scrollHeight <= container.clientHeight + 100) loadMore();
+    };
+    if (itemsData?.items.every((item) => !matchesSlot(item))) loadMore();
+    fillList();
+    const observer = new ResizeObserver(fillList);
+    if (container) observer.observe(container);
+    return () => observer.disconnect();
+  }, [items.length, slot, slotFilters, outfitTypesOnly, itemsData, loadMore, matchesSlot]);
 
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
@@ -108,7 +137,7 @@ export function ItemPicker({
   );
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn("flex flex-col gap-2", slotFilters && "flex-1 min-h-0")}>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -118,6 +147,28 @@ export function ItemPicker({
           className="pl-9 h-9"
         />
       </div>
+
+      {slotFilters && (
+        <div className="flex flex-wrap gap-1" aria-label={t('slots.label')}>
+          {(Object.keys(SLOT_ROLES) as Slot[]).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={slot === value}
+              onClick={() => {
+                setSlot(value);
+                if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+              }}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs',
+                slot === value ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'
+              )}
+            >
+              {t(`slots.${value}`)}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div
         ref={scrollContainerRef}
