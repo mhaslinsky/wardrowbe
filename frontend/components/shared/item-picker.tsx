@@ -117,6 +117,8 @@ export function ItemPicker({
   }, [hasMore, isFetching, itemsData]);
 
   useEffect(() => {
+    const accumulatedIds = new Set(accumulatedItems.map((item) => item.id));
+    if (itemsData?.items.some((item) => !accumulatedIds.has(item.id))) return;
     const container = scrollContainerRef.current;
     const fillList = () => {
       if (slotFilters && container && container.scrollHeight <= container.clientHeight + 100) loadMore();
@@ -126,7 +128,7 @@ export function ItemPicker({
     const observer = new ResizeObserver(fillList);
     if (container) observer.observe(container);
     return () => observer.disconnect();
-  }, [items.length, slot, slotFilters, outfitTypesOnly, itemsData, loadMore, matchesSlot]);
+  }, [items.length, slot, slotFilters, outfitTypesOnly, itemsData, loadMore, matchesSlot, accumulatedItems]);
 
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {

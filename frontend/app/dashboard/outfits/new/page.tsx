@@ -430,7 +430,7 @@ export default function StudioEditorPage() {
             </div>
           </div>
 
-          <div className="flex flex-1 min-h-64 flex-col">
+          <div className="flex flex-1 min-h-[calc(100dvh-8rem)] lg:min-h-64 flex-col">
             <h2 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
               {t('new.tabs.yourWardrobe')}
             </h2>

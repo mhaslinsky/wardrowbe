@@ -70,6 +70,7 @@ it('gives the studio picker remaining height instead of a fixed box', () => {
   const source = readFileSync('app/dashboard/outfits/new/page.tsx', 'utf8');
   expect(source).toContain('heightClass="flex-1 min-h-0 basis-0"');
   expect(source).not.toContain('heightClass="h-[280px]"');
+  expect(source).toContain('min-h-[calc(100dvh-8rem)] lg:min-h-64');
 });
 
 it.each([
@@ -102,4 +103,39 @@ it('keeps loaded pages when the initial search debounce would expire', async () 
   await act(() => vi.advanceTimersByTimeAsync(300));
   expect(screen.getByText('Later socks')).toBeInTheDocument();
   expect(mock.page).toBe(2);
+});
+
+it('loads cached page two again after searching and clearing search', async () => {
+  vi.useFakeTimers();
+  mock.pages = [mock.pages[0], [{ id: 'later', name: 'Later socks', type: 'socks' }]];
+  const { container } = picker();
+  const list = container.querySelector('div.overflow-y-auto')!;
+  fireEvent.scroll(list, { target: { scrollTop: 1000 } });
+  expect(screen.getByText('Later socks')).toBeInTheDocument();
+  mock.pages = [mock.pages[0]];
+  fireEvent.change(screen.getByPlaceholderText('search'), { target: { value: 'dress' } });
+  await act(() => vi.advanceTimersByTimeAsync(300));
+  expect(mock.page).toBe(1);
+  expect(screen.queryByText('Later socks')).not.toBeInTheDocument();
+  mock.pages.push([{ id: 'later', name: 'Later socks', type: 'socks' }]);
+  fireEvent.change(screen.getByPlaceholderText('search'), { target: { value: '' } });
+  await act(() => vi.advanceTimersByTimeAsync(300));
+  fireEvent.scroll(list, { target: { scrollTop: 1000 } });
+  expect(screen.getByText('Later socks')).toBeInTheDocument();
+  expect(mock.page).toBe(2);
+});
+
+it('measures list fill after the fetched page renders', () => {
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function(this: HTMLElement) {
+    return this.querySelectorAll('button').length * 200;
+  });
+  mock.pages = [mock.pages[0].slice(0, 1), [
+    { id: 'second', name: 'Second shirt', type: 'shirt' },
+    { id: 'third', name: 'Third shirt', type: 'shirt' },
+    { id: 'fourth', name: 'Fourth shirt', type: 'shirt' },
+  ], [{ id: 'unneeded', name: 'Unneeded shirt', type: 'shirt' }]];
+  picker();
+  expect(screen.getByText('Fourth shirt')).toBeInTheDocument();
+  expect(mock.page).toBe(2);
+  expect(screen.queryByText('Unneeded shirt')).not.toBeInTheDocument();
 });
