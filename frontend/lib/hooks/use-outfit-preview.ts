@@ -182,7 +182,7 @@ export function useOutfitPreview(outfitId: string) {
     catch { return false; }
     finally { clearTimeout(timeout); controller.signal.removeEventListener('abort', cancelRead); if (active.current === controller) active.current = null; }
   };
-  return { preview: query.data, pending: mutation.isPending || removal.isPending || feedback.isPending, error: (query.isError || mutation.isError || removal.isError || feedback.isError) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
+  return { preview: query.data, pending: mutation.isPending || removal.isPending || feedback.isPending, error: (query.isError || mutation.isError || removal.isError || (feedback.isError && !(feedback.error instanceof ApiError && feedback.error.status === 409))) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
     conflict: mutation.isError && previewErrorCode(mutation.error) === 'PREVIEW_IN_PROGRESS',
     likeConflict: feedback.isError && previewErrorCode(feedback.error) === 'PREVIEW_CHANGED',
     missingPhoto: previewErrorCode(mutation.error) === 'NO_PREVIEW_PHOTO', draw, remove, like };
