@@ -318,3 +318,35 @@ async def test_preview_tokenless_reset(client, test_user, auth_headers, body):
     assert reset.json()["standing_rules"] == []
     stale = await client.patch(url, headers=auth_headers, json={"preview_preferences": initial})
     assert stale.status_code == 409
+
+
+async def test_preview_migration_backfills_existing_rows(db_session, test_user_with_preferences):
+    from uuid import uuid4
+
+    from sqlalchemy import select
+
+    from tests.migration_helpers import migration_downgrade
+
+    other = User(id=uuid4(), email=f"{uuid4()}@test.invalid", display_name="Other")
+    db_session.add(other)
+    await db_session.flush()
+    db_session.add(UserPreference(user_id=other.id))
+    await db_session.commit()
+    try:
+        async with migration_downgrade(db_session, "e193a1b2c3d4"):
+            pass
+        values = list(
+            await db_session.scalars(
+                select(UserPreference.preview_preferences).where(
+                    UserPreference.user_id.in_([test_user_with_preferences.id, other.id])
+                )
+            )
+        )
+        assert len(values) == 2
+        assert all(
+            value["lines"] == [] and value["tuck"] == "outfit" and value["rev"] for value in values
+        )
+        assert values[0]["rev"] != values[1]["rev"]
+    finally:
+        await db_session.delete(other)
+        await db_session.commit()
