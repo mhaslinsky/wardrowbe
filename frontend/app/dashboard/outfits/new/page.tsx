@@ -430,7 +430,7 @@ export default function StudioEditorPage() {
             </div>
           </div>
 
-          <div className="flex flex-1 min-h-[calc(100dvh-8rem)] lg:min-h-64 flex-col">
+          <div className="flex flex-1 min-h-min lg:min-h-64 flex-col">
             <h2 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
               {t('new.tabs.yourWardrobe')}
             </h2>
@@ -439,7 +439,7 @@ export default function StudioEditorPage() {
               onToggle={handleToggle}
               hideNeedsWash={true}
               emptyMessage={t('new.tabs.emptyWardrobe')}
-              heightClass="flex-1 min-h-0 basis-0"
+              heightClass="flex-1 min-h-[calc(100dvh-8rem)] lg:min-h-0 basis-0"
               slotFilters
             />
           </div>

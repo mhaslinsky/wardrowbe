@@ -68,9 +68,9 @@ it('handles unknown types and empty results without hiding All items', () => {
 });
 it('gives the studio picker remaining height instead of a fixed box', () => {
   const source = readFileSync('app/dashboard/outfits/new/page.tsx', 'utf8');
-  expect(source).toContain('heightClass="flex-1 min-h-0 basis-0"');
+  expect(source).toContain('heightClass="flex-1 min-h-[calc(100dvh-8rem)] lg:min-h-0 basis-0"');
   expect(source).not.toContain('heightClass="h-[280px]"');
-  expect(source).toContain('min-h-[calc(100dvh-8rem)] lg:min-h-64');
+  expect(source).toContain('min-h-min lg:min-h-64');
 });
 
 it.each([
