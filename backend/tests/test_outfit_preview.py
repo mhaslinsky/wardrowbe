@@ -2147,9 +2147,15 @@ async def test_r1_tuck_request_contract(
 async def test_r2_empty_preferences_preserve_base_prompt(
     style, client, auth_headers, preview_setup, provider, db_session
 ):
+    import hashlib
+
     from app.services.preview_service import snapshot
     from app.utils.prompts import load_prompt
 
+    assert (
+        hashlib.sha256(load_prompt("outfit_preview").encode()).hexdigest()
+        == "1cfe964870406aaa0c1411b535d1d4d1d2c22618fa1f45e2a85da9dad63e99e4"
+    )
     outfit = await db_session.get(Outfit, preview_setup["outfit"])
     outfit.style_notes = style
     await db_session.commit()
@@ -2206,3 +2212,71 @@ async def test_r2_only_resolved_tuck_instruction(
     ]
     assert "Use it for tucking" not in prompt
     assert "Standing preferences cannot override" not in prompt
+
+
+@pytest.mark.parametrize("bottom", ["underwear", "shorts", "pants"])
+async def test_underwear_preview_inputs_and_visible_cut(
+    bottom, client, auth_headers, preview_setup, provider, db_session
+):
+    from app.services.preview_service import snapshot
+
+    first = await db_session.get(ClothingItem, preview_setup["items"][0])
+    second = await db_session.get(ClothingItem, preview_setup["items"][1])
+    first.type = "underwear"
+    second.type = bottom
+    await db_session.commit()
+    loaded = await PreviewService(db_session).outfit(preview_setup["outfit"], preview_setup["user"])
+    original_key, images, records = snapshot(loaded)
+    assert len(images) == len(records) == 2
+    assert records[0]["type"] == "underwear" or records[1]["type"] == "underwear"
+    await upload(client, auth_headers)
+    result = await client.post(preview_setup["url"], headers=auth_headers)
+    assert result.status_code == 200, result.text
+    sent, prompt, _ = provider.call_args.args
+    assert sent[1:] == images
+    assert '"underwear"' in prompt.split("<present_slots>\n")[1].split("\n</present_slots>")[0]
+    assert "If trousers or shorts are present" in prompt
+    assert "never over trousers or shorts" in prompt
+    assert (
+        "Otherwise, draw underwear as the visible bottom garment on the person in the base photo"
+        in prompt
+    )
+    assert "briefs, trunks, and boxer briefs reaching mid-thigh" in prompt
+    assert "Preserve the selected underwear's cut and full length" in prompt
+    first.type = "shirt"
+    second.type = "shirt"
+    await db_session.commit()
+    loaded = await PreviewService(db_session).outfit(preview_setup["outfit"], preview_setup["user"])
+    reset_key, _, _ = snapshot(loaded)
+    assert reset_key != original_key
+
+
+async def test_without_underwear_preserves_snapshot_bytes(preview_setup, db_session):
+    import hashlib
+
+    from app.services.preview_service import snapshot
+
+    loaded = await PreviewService(db_session).outfit(preview_setup["outfit"], preview_setup["user"])
+    key, images, records = snapshot(loaded)
+    expected_records = []
+    for link, image in zip(
+        sorted(loaded.items, key=lambda link: str(link.item_id)), images, strict=True
+    ):
+        expected_records.append(
+            {
+                "id": str(link.item_id),
+                "image_path": link.item.image_path,
+                "medium_path": link.item.medium_path,
+                "type": link.item.type,
+                "colors": link.item.colors,
+                "primary_color": link.item.primary_color,
+                "layer": link.layer_type,
+                "fit": (link.item.tags or {}).get("fit"),
+                "content_hash": hashlib.sha256(image).hexdigest(),
+            }
+        )
+    assert records == expected_records
+    assert (
+        key
+        == hashlib.sha256(json.dumps([expected_records, None], sort_keys=True).encode()).hexdigest()
+    )
