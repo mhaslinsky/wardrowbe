@@ -17,10 +17,15 @@ class ConsideringPreviewService:
         self.db = db
 
     async def validate(
-        self, user_id: UUID, anchor_id: UUID, companion_ids: list[UUID]
+        self,
+        user_id: UUID,
+        anchor_id: UUID,
+        companion_ids: list[UUID],
+        *,
+        allow_bought: bool = False,
     ) -> list[UUID]:
         purchase = await ConsideringService(self.db).get(user_id, anchor_id, lock=True)
-        if purchase.state != "considering":
+        if purchase.state != "considering" and not (allow_bought and purchase.state == "bought"):
             raise HTTPException(409, "Item is not considering")
         if (
             len(companion_ids) > 19

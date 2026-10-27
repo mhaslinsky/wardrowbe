@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, UrlConstraints, field_validator
 
 from app.schemas.item import ItemResponse
+from app.schemas.outfit import Occasion
 
 
 class PurchaseFields(BaseModel):
@@ -47,3 +48,8 @@ class ConsideringPreviewRequest(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("Choose unique companions")
         return value
+
+
+class ConsideringSuggestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    occasion: Occasion = "casual"

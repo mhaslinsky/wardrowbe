@@ -344,6 +344,9 @@
     "loadFailed": "Could not load items.",
     "failed": "Could not save changes.",
     "conflict": "Item changed. Please try again.",
-    "invalid": "Check price and currency."
+    "invalid": "Check price and currency.",
+    "wearWith": "What would I wear it with?",
+    "suggest": "Suggest outfits",
+    "aiDisabled": "AI suggestions are disabled"
   }
 }

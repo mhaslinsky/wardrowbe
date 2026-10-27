@@ -344,6 +344,9 @@
     "loadFailed": "無法載入單品。",
     "failed": "無法儲存變更。",
     "conflict": "單品已變更，請重試。",
-    "invalid": "請檢查價格和貨幣。"
+    "invalid": "請檢查價格和貨幣。",
+    "wearWith": "可以搭配什麼穿？",
+    "suggest": "推薦穿搭",
+    "aiDisabled": "AI 推薦已停用"
   }
 }

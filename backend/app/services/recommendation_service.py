@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import and_, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -863,6 +864,7 @@ class RecommendationService:
         scheduled_date: date | None = None,
         mandatory_item_ids: set[UUID] | None = None,
         drop_legwear: bool = False,
+        considering_anchor_id: UUID | None = None,
     ) -> Outfit:
         selected_numbers = outfit_data.get("items", [])
         valid_ids = []
@@ -884,6 +886,8 @@ class RecommendationService:
                 seen.add(item_id)
                 unique_ids.append(item_id)
         valid_ids = unique_ids
+        if considering_anchor_id is not None and not valid_ids:
+            raise EmptyOutfitError("AI did not select any valid items")
 
         # Ensure all mandatory items are included in valid_ids if they were candidates
         if mandatory_item_ids:
@@ -928,6 +932,20 @@ class RecommendationService:
         if not valid_ids:
             raise EmptyOutfitError("No wearable items remain after layering repair")
         valid_ids = canonical_item_order(valid_ids, item_type_map)
+        if considering_anchor_id is not None:
+            from app.services.considering_preview_service import ConsideringPreviewService
+
+            if considering_anchor_id not in valid_ids or len(valid_ids) < 2:
+                raise EmptyOutfitError("No companions selected for the anchor")
+            try:
+                await ConsideringPreviewService(self.db).validate(
+                    user.id,
+                    considering_anchor_id,
+                    [item_id for item_id in valid_ids if item_id != considering_anchor_id],
+                    allow_bought=True,
+                )
+            except HTTPException as error:
+                raise EmptyOutfitError(str(error.detail)) from error
 
         reasoning = outfit_data.get("headline") or outfit_data.get("reasoning")
         style_notes = outfit_data.get("styling_tip") or outfit_data.get("style_notes")
@@ -995,8 +1013,21 @@ class RecommendationService:
         count: int = 1,
         single_outfit: bool = False,
         scheduled_date: date | None = None,
+        considering_anchor_id: UUID | None = None,
     ) -> list[Outfit]:
-        # Guard first so deferral is unconditional, before any location/weather work.
+        anchor = None
+        if considering_anchor_id is not None:
+            from app.services.considering_preview_service import ConsideringPreviewService
+
+            await ConsideringPreviewService(self.db).validate(
+                user.id, considering_anchor_id, [], allow_bought=True
+            )
+            anchor = await self.db.get(ClothingItem, considering_anchor_id)
+            if not is_outfit_type(anchor.type):
+                raise ValueError("Underwear can't be part of an outfit")
+            if include_items and set(include_items) != {considering_anchor_id}:
+                raise ValueError("Choose one considering anchor")
+            include_items = [considering_anchor_id]
         require_internal_ai("text")
 
         exclude_items = exclude_items or []
@@ -1006,7 +1037,9 @@ class RecommendationService:
             time_of_day = get_time_of_day(user)
 
         # Determine cache eligibility before auto-merge
-        use_cache = not exclude_items and not single_outfit and not self._defer_commit
+        use_cache = (
+            anchor is None and not exclude_items and not single_outfit and not self._defer_commit
+        )
 
         # Auto-exclude today's rejected items for this occasion
         rejected_ids = await self._get_today_rejected_item_ids(user, occasion)
@@ -1065,6 +1098,8 @@ class RecommendationService:
             preferences=preferences,
             exclude_items=exclude_items,
         )
+        if anchor is not None and anchor.id not in {item.id for item in candidates}:
+            candidates.append(anchor)
 
         # Force-include specific items
         if include_items:
@@ -1258,6 +1293,7 @@ class RecommendationService:
                     scheduled_date=scheduled_date,
                     mandatory_item_ids=set(include_items) if include_items else None,
                     drop_legwear=drop_legwear,
+                    considering_anchor_id=considering_anchor_id,
                 )
                 return [outfit]
 
@@ -1283,6 +1319,7 @@ class RecommendationService:
                         scheduled_date=scheduled_date,
                         mandatory_item_ids=set(include_items) if include_items else None,
                         drop_legwear=drop_legwear,
+                        considering_anchor_id=considering_anchor_id,
                     )
                 except EmptyOutfitError:
                     logger.warning("AI outfit option has nothing left to wear, skipping")
