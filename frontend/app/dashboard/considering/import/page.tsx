@@ -1,2 +1,8 @@
+'use client';
+import { useSearchParams } from 'next/navigation';
 import { ConsideringImport } from '@/components/considering-import';
-export default function ImportPage() { return <ConsideringImport />; }
+import { ConsideringFallback } from '@/components/considering-fallback';
+export default function ImportPage() {
+  const params = useSearchParams();
+  return params.get('draft') ? <ConsideringImport /> : <ConsideringFallback />;
+}

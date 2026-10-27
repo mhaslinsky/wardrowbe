@@ -390,5 +390,15 @@
     "grantHost": "Wardrowbeへのアクセスを許可",
     "permissionGranted": "アクセスを許可しました",
     "permissionDenied": "アクセスが許可されていません"
+  },
+  "fallback": {
+    "title": "検討中のアイテムを追加",
+    "link": "商品リンク",
+    "readLink": "リンクを読み込む",
+    "imageDrop": "画像をドロップするかファイルを選択",
+    "publicOnly": "公開ページのみ。ショップのログイン状態は引き継ぎません。",
+    "linkFailed": "ページを読み取れません。画像をお試しください。",
+    "imageFailed": "20 MB未満の有効なJPEG、PNG、WebPを選択してください。",
+    "recoveryFailed": "下書きを復元できません。検討中の一覧を確認してください。"
   }
 }

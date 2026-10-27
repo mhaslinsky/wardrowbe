@@ -390,5 +390,15 @@
     "grantHost": "Wardrowbe 접근 허용",
     "permissionGranted": "접근 허용됨",
     "permissionDenied": "접근 허용되지 않음"
+  },
+  "fallback": {
+    "title": "구매 검토 상품 추가",
+    "link": "상품 링크",
+    "readLink": "링크 읽기",
+    "imageDrop": "이미지를 놓거나 파일을 선택하세요",
+    "publicOnly": "공개 페이지만 지원합니다. 쇼핑몰 로그인 상태는 공유되지 않습니다.",
+    "linkFailed": "페이지를 읽을 수 없습니다. 이미지를 사용하세요.",
+    "imageFailed": "20 MB 미만의 올바른 JPEG, PNG, WebP를 선택하세요.",
+    "recoveryFailed": "초안을 복원할 수 없습니다. 검토 목록을 확인하세요."
   }
 }

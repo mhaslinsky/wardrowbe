@@ -15,12 +15,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-export function ConsideringImport() {
+export type ImportReply = { capture?: ConfirmedProduct; partial?: boolean; uncertain?: boolean; saved?: boolean; item?: string };
+export type ImportTransport = {
+  request: (action: 'load' | 'save' | 'cancel' | 'discard', capture?: ConfirmedProduct) => Promise<ImportReply>;
+  validate: (input: unknown) => ConfirmedProduct;
+  preview?: string;
+};
+export function ConsideringImport({ transport }: { transport?: ImportTransport } = {}) {
   const t = useTranslations('wardrobe.import');
   const common = useTranslations('common');
   const materialLabel = useMaterialLabel();
   const { data: user } = useUserProfile();
-  const bridge = useConsideringImport(user?.id);
+  const extensionBridge = useConsideringImport(user?.id);
+  const bridge = transport?.request || extensionBridge;
   const [capture, setCapture] = useState<ConfirmedProduct>();
   const [images, setImages] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -34,20 +41,21 @@ export function ConsideringImport() {
     if (!user) return;
     let active = true;
     bridge('load').then(result => {
-      const data = validateCapture(result.capture);
+      const data = transport ? transport.validate(result.capture) : validateCapture(result.capture);
       if (active) {
-        setCapture(data); setImages(data.images); setSelected(data.images.slice(0, 5)); setPartial(!!result.partial); setUncertain(!!result.uncertain);
+        const candidates = transport?.preview ? [transport.preview] : data.images;
+        setCapture(data); setImages(candidates); setSelected(candidates.slice(0, 5)); setPartial(!!result.partial); setUncertain(!!result.uncertain);
       }
     }).catch(() => { if (active) setError('loadFailed'); });
     return () => { active = false; };
-  }, [bridge, user]);
+  }, [bridge, user, transport]);
   const fields = { name: 100, brand: 100, price: 24, currency: 3, selected_size: 32, selected_color: 100,
     material_detail: 1000, care: 255, fit: 2000, size_chart: 6000 } as const;
   async function act(action: 'save' | 'cancel' | 'discard') {
     if (busy || !capture) return;
     setError('');
     if (action === 'save' && !partial) {
-      try { confirmedPayload({ ...capture, images: selected }); } catch { setError('invalid'); return; }
+      try { if (transport) transport.validate({ ...capture, images: selected }); else confirmedPayload({ ...capture, images: selected }); } catch { setError('invalid'); return; }
     }
     setBusy(true);
     try {

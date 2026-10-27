@@ -390,5 +390,15 @@
     "grantHost": "Consenti accesso a Wardrowbe",
     "permissionGranted": "Accesso consentito",
     "permissionDenied": "Accesso non consentito"
+  },
+  "fallback": {
+    "title": "Aggiungi un articolo da valutare",
+    "link": "Link del prodotto",
+    "readLink": "Leggi link",
+    "imageDrop": "Trascina un’immagine o scegli un file",
+    "publicOnly": "Solo pagine pubbliche. Sessioni dei negozi con accesso non disponibili.",
+    "linkFailed": "Pagina non leggibile. Prova un’immagine.",
+    "imageFailed": "Scegli un JPEG, PNG o WebP valido sotto 20 MB.",
+    "recoveryFailed": "Impossibile ripristinare la bozza. Controlla gli articoli da valutare."
   }
 }

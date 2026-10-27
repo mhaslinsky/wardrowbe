@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 export default function ConsideringPage() {
   const t = useTranslations('wardrobe.considering');
   const common = useTranslations('common');
+  const fallback = useTranslations('wardrobe.fallback');
   const dialogOpener = useRef<HTMLButtonElement | null>(null);
   const heading = useRef<HTMLHeadingElement | null>(null);
   const [state, setState] = useState<'considering' | 'passed'>('considering');
@@ -41,6 +42,7 @@ export default function ConsideringPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4">
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold">{t('title')}</h1>
+      <Link className="inline-block rounded border px-4 py-2" href="/dashboard/considering/import">{fallback('title')}</Link>
       <div className="flex gap-2" role="group" aria-label={t('title')}>
         {(['considering', 'passed'] as const).map((tab) => <Button key={tab} disabled={busy}
           variant={state === tab ? 'default' : 'outline'} aria-pressed={state === tab}

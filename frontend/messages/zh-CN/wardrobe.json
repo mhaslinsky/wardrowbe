@@ -390,5 +390,15 @@
     "grantHost": "允许访问 Wardrowbe",
     "permissionGranted": "已允许访问",
     "permissionDenied": "未允许访问"
+  },
+  "fallback": {
+    "title": "添加待购商品",
+    "link": "商品链接",
+    "readLink": "读取链接",
+    "imageDrop": "拖放图片或选择文件",
+    "publicOnly": "仅支持公开页面，无法使用商店登录状态。",
+    "linkFailed": "无法读取此页面，请尝试图片。",
+    "imageFailed": "请选择小于20 MB的有效JPEG、PNG或WebP。",
+    "recoveryFailed": "无法恢复草稿，请检查待购列表。"
   }
 }

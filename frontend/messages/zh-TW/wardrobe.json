@@ -390,5 +390,15 @@
     "grantHost": "允許存取 Wardrowbe",
     "permissionGranted": "已允許存取",
     "permissionDenied": "未允許存取"
+  },
+  "fallback": {
+    "title": "新增考慮購買的商品",
+    "link": "商品連結",
+    "readLink": "讀取連結",
+    "imageDrop": "拖放圖片或選擇檔案",
+    "publicOnly": "僅支援公開頁面，無法使用商店登入狀態。",
+    "linkFailed": "無法讀取此頁面，請嘗試圖片。",
+    "imageFailed": "請選擇小於20 MB的有效JPEG、PNG或WebP。",
+    "recoveryFailed": "無法還原草稿，請檢查待購清單。"
   }
 }
