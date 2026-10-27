@@ -66,7 +66,7 @@ export function ConsideringFallback() {
     finally { if (request === generation.current) setBusy(false); }
   }
   async function choose(file?: File) {
-    if (error === 'recoveryFailed') return;
+    if (!user || error === 'recoveryFailed') return;
     const request = ++generation.current;
     setError(''); setBusy(false);
     try {
@@ -93,7 +93,7 @@ export function ConsideringFallback() {
     {error === 'recoveryFailed' && <Button type="button" variant="outline" onClick={() => { if (owner.current) sessionStorage.removeItem(`considering-import:${owner.current}`); reset(); }}>{importText('discardChecked')}</Button>}
     <div className="rounded border border-dashed p-6" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void choose(event.dataTransfer.files.length === 1 ? event.dataTransfer.files[0] : undefined); }}>
       <Label htmlFor="product-image">{translate('imageDrop')}</Label>
-      <Input id="product-image" disabled={error === 'recoveryFailed'} type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} />
+      <Input id="product-image" disabled={!user || error === 'recoveryFailed'} type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} />
     </div>
   </main>;
 }

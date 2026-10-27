@@ -94,11 +94,11 @@ export function ConsideringImport({ transport }: { transport?: ImportTransport }
         <p>{t('variants')}: {capture.sizes.join(', ')}; {capture.colors.join(', ')}</p>
         <datalist id="import-colors">{CLOTHING_COLORS.map(color => <option key={color.value} value={color.value} />)}</datalist>
         {capture.selected_color && !normalizeColor(capture.selected_color) && <p role="status">{t('colorInNotes')}</p>}
-        <p>{t('images')}</p><div className="grid grid-cols-3 gap-3">{images.map((image, index) => <label key={image} className="rounded border p-2">
+        {(!transport || images.length > 0) && <><p>{t('images')}</p><div className="grid grid-cols-3 gap-3">{images.map((image, index) => <label key={image} className="rounded border p-2">
           <img src={image} alt={t('image', { number: index + 1 })} referrerPolicy="no-referrer" className="aspect-square w-full object-contain" />
           <input type="checkbox" checked={selected.includes(image)} aria-label={t('image', { number: index + 1 })}
             onChange={event => setSelected(event.target.checked ? [...selected, image] : selected.filter(value => value !== image))} />
-        </label>)}</div>
+        </label>)}</div></>}
       </fieldset>
       <div className="flex gap-2"><Button disabled={busy || uncertain || (selected.length === 0 && !partial)} type="submit">{partial ? t('retry') : common('save')}</Button>
         <Button disabled={busy || partial || uncertain} type="button" variant="outline" onClick={() => void act('cancel')}>{common('cancel')}</Button></div>

@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import ImportPage from '@/app/dashboard/considering/import/page';
 import { api } from '@/lib/api';
 vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api')>(), api: { post: vi.fn(), patch: vi.fn(), get: vi.fn() } }));
-let user = { id: 'user', email: 'user@example.test' };
+let user: { id: string; email: string } | undefined = { id: 'user', email: 'user@example.test' };
 vi.mock('@/lib/hooks/use-user', () => ({ useUserProfile: () => ({ data: user }) }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }));
 const product = { source_url: 'https://shop.example/product', name: 'Shirt', images: ['https://shop.example/image.png'], sizes: [], colors: [] };
@@ -134,4 +134,33 @@ it('returns to image entry after a rejected file save and page reload', async ()
   expect(await screen.findByLabelText('imageDrop')).toBeEnabled();
   expect(screen.queryByLabelText('name')).not.toBeInTheDocument();
   expect(sessionStorage.length).toBe(0);
+});
+
+it('disables file selection while the profile is loading', () => {
+  user = undefined; render(<ImportPage />);
+  expect(screen.getByLabelText('imageDrop')).toBeDisabled();
+});
+it('ignores a valid drop while the profile is loading without an image error', async () => {
+  user = undefined; render(<ImportPage />);
+  const target = screen.getByLabelText('imageDrop').parentElement!;
+  await act(async () => fireEvent.drop(target, { dataTransfer: { files: [new File(['png'], 'shirt.png', { type: 'image/png' })] } }));
+  expect(createImageBitmap).not.toHaveBeenCalled();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+});
+it('shows uncertain file recovery without an empty image picker and keeps checked discard available', async () => {
+  sessionStorage.setItem('considering-import:user', JSON.stringify({ capture: { source_url: '', images: [], sizes: [], colors: [] }, fileBacked: true, creating: true }));
+  render(<ImportPage />);
+  expect(await screen.findByText('uncertain')).toBeVisible();
+  expect(screen.queryByText('images')).not.toBeInTheDocument();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.getByText('save')).toBeDisabled();
+  expect(screen.getByText('cancel')).toBeDisabled();
+  expect(screen.getByText('discardChecked')).toBeEnabled();
+  fireEvent.click(screen.getByText('discardChecked'));
+  expect(await screen.findByLabelText('imageDrop')).toBeEnabled();
+  expect(sessionStorage.length).toBe(0);
+  expect(api.post).not.toHaveBeenCalled();
 });
