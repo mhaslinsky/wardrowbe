@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
+from app.models.considering import owned_item
 from app.models.item import ClothingItem
 from app.models.learning import UserLearningProfile
 from app.models.notification import Notification, NotificationStatus
@@ -349,6 +350,7 @@ async def _check_wash_reminders_inner(ctx: dict):
         result = await db.execute(
             select(ClothingItem).where(
                 and_(
+                    owned_item(),
                     ClothingItem.needs_wash == True,  # noqa: E712
                     ClothingItem.is_archived == False,  # noqa: E712
                 )

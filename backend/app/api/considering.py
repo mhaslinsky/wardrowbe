@@ -17,6 +17,7 @@ from app.schemas.considering import (
 )
 from app.services.considering_service import ConsideringService, download_image
 from app.utils.auth import get_current_user
+from app.utils.rate_limit import rate_limit_by_user
 
 router = APIRouter(prefix="/considering", tags=["Considering"])
 ShelfUser = Annotated[User, Depends(get_current_user)]
@@ -43,6 +44,7 @@ async def list_considering(
 
 @router.post("", response_model=ConsideringResponse, status_code=201)
 async def create_considering(data: ConsideringCreate, db: DbSession, current_user: ShelfUser):
+    await rate_limit_by_user(str(current_user.id), "considering", max_requests=5, window_seconds=60)
     uploads = []
     try:
         for url in data.image_urls:

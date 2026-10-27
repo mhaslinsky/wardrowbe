@@ -7,7 +7,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.considering import owned_item
+from app.models.considering import owned_item, owned_outfit
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import FamilyOutfitRating, Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
@@ -357,6 +357,7 @@ class PairingService:
             and_(
                 Outfit.user_id == user_id,
                 PAIRING_SOURCE_CLAUSE,
+                owned_outfit(),
                 Outfit.source_item_id == source_item_id,
             )
         )
@@ -367,6 +368,7 @@ class PairingService:
                 and_(
                     Outfit.user_id == user_id,
                     PAIRING_SOURCE_CLAUSE,
+                    owned_outfit(),
                     Outfit.source_item_id == source_item_id,
                 )
             )
@@ -402,6 +404,7 @@ class PairingService:
         conditions = [
             Outfit.user_id == user_id,
             PAIRING_SOURCE_CLAUSE,
+            owned_outfit(),
         ]
 
         # Filter by source item type if specified

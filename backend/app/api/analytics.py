@@ -7,7 +7,7 @@ from pydantic import BaseModel, computed_field
 from sqlalchemy import and_, case, func, select
 
 from app.database import DbSession
-from app.models.considering import owned_item
+from app.models.considering import owned_item, owned_outfit
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit, OutfitStatus, UserFeedback
 from app.models.user import User
@@ -181,7 +181,7 @@ async def get_analytics(
         func.sum(case((Outfit.created_at >= month_ago, 1), else_=0)).label("this_month"),
         func.sum(case((Outfit.status == OutfitStatus.accepted, 1), else_=0)).label("accepted"),
         func.sum(case((Outfit.status == OutfitStatus.rejected, 1), else_=0)).label("rejected"),
-    ).where(Outfit.user_id == current_user.id)
+    ).where(owned_outfit(), Outfit.user_id == current_user.id)
 
     outfits_result = await db.execute(outfits_query)
     outfits_row = outfits_result.one()
@@ -199,7 +199,9 @@ async def get_analytics(
     rating_query = (
         select(func.avg(UserFeedback.rating))
         .join(Outfit)
-        .where(and_(Outfit.user_id == current_user.id, UserFeedback.rating.isnot(None)))
+        .where(
+            and_(owned_outfit(), Outfit.user_id == current_user.id, UserFeedback.rating.isnot(None))
+        )
     )
     rating_result = await db.execute(rating_query)
     avg_rating_raw = rating_result.scalar()
@@ -365,6 +367,7 @@ async def get_analytics(
         ).where(
             and_(
                 Outfit.user_id == current_user.id,
+                owned_outfit(),
                 Outfit.created_at >= week_start,
                 Outfit.created_at < week_end,
             )

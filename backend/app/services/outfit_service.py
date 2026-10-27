@@ -7,6 +7,7 @@ from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_outfit
 from app.models.item import ClothingItem
 from app.models.outfit import (
     FamilyOutfitRating,
@@ -195,6 +196,7 @@ class OutfitService:
             clauses.append(~func.coalesce(Outfit.ai_raw_response.has_key("inspiration"), False))
 
         if filters.ready_to_wear:
+            clauses.append(owned_outfit())
             clauses.append(
                 ~Outfit.items.any(OutfitItem.item.has(ClothingItem.needs_wash.is_(True)))
             )

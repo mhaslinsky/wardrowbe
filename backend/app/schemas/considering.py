@@ -1,14 +1,14 @@
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, UrlConstraints
 
 from app.schemas.item import ItemResponse
 
 
 class PurchaseFields(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    source_url: HttpUrl | None = Field(None, max_length=2000)
+    source_url: Annotated[HttpUrl, UrlConstraints(max_length=2000)] | None = None
     price: Decimal | None = Field(None, ge=0, max_digits=10, decimal_places=2)
     currency: str = Field("USD", pattern=r"^[A-Z]{3}$")
     planned_size: str | None = Field(None, max_length=100)

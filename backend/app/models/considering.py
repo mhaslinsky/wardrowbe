@@ -19,6 +19,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.database import Base
 from app.models.item import ClothingItem
+from app.models.outfit import Outfit, OutfitItem
 
 PurchaseState = Literal["considering", "passed", "bought"]
 
@@ -53,3 +54,7 @@ def owned_item(
         )
         .exists()
     )
+
+
+def owned_outfit() -> ColumnElement[bool]:
+    return ~Outfit.items.any(~owned_item(OutfitItem.item_id))

@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.database import DbSession
+from app.models.considering import owned_item
 from app.models.item import ClothingItem
 from app.models.outfit import Outfit, OutfitSource, UserFeedback
 from app.models.user import User
@@ -111,6 +112,7 @@ async def laundry_done(request: Request, db: DbSession) -> JSONResponse:
     result = await db.execute(
         select(ClothingItem)
         .where(
+            owned_item(),
             ClothingItem.user_id == user.id,
             ClothingItem.is_archived.is_(False),
             ClothingItem.needs_wash.is_(True),

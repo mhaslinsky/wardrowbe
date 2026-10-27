@@ -1133,6 +1133,7 @@ async def get_color_distribution(
 
 def _tagging_scope(user_id: UUID) -> tuple:
     return (
+        owned_item(),
         ClothingItem.user_id == user_id,
         ClothingItem.is_archived.is_(False),
         # Background-removal and rotation jobs reuse status=processing but
