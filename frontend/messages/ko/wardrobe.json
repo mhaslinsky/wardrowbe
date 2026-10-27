@@ -315,5 +315,28 @@
     "slideCount": "{total}개 중 {index}번째",
     "actualSize": "실제 크기",
     "fit": "화면에 맞추기"
+  },
+  "considering": {
+    "title": "구매 고려 중",
+    "passed": "보류한 상품",
+    "empty": "구매 고려 중인 상품이 없습니다.",
+    "emptyPassed": "보류한 상품이 없습니다.",
+    "bought": "구매했어요",
+    "buyConfirm": "이 상품을 옷장으로 옮길까요?",
+    "inWardrobe": "옷장에 추가했어요",
+    "pass": "보류하기",
+    "reason": "이유",
+    "reasonRequired": "이유를 입력하세요.",
+    "restore": "다시 고려하기",
+    "name": "이름",
+    "price": "가격",
+    "currency": "통화",
+    "size": "구매 예정 사이즈",
+    "source": "원본 페이지 보기",
+    "unnamed": "이름 없는 상품",
+    "loadFailed": "상품을 불러오지 못했어요.",
+    "failed": "변경 사항을 저장하지 못했어요.",
+    "conflict": "상품이 변경되었어요. 다시 시도하세요.",
+    "invalid": "가격과 통화를 확인하세요."
   }
 }

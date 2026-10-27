@@ -315,5 +315,28 @@
     "slideCount": "第{index}张，共{total}张",
     "actualSize": "实际大小",
     "fit": "适应屏幕"
+  },
+  "considering": {
+    "title": "考虑购买",
+    "passed": "已放弃",
+    "empty": "暂无考虑购买的单品。",
+    "emptyPassed": "暂无已放弃的单品。",
+    "bought": "已购买",
+    "buyConfirm": "将这件单品移入衣橱？",
+    "inWardrobe": "已加入衣橱",
+    "pass": "放弃",
+    "reason": "原因",
+    "reasonRequired": "请输入原因。",
+    "restore": "重新考虑",
+    "name": "名称",
+    "price": "价格",
+    "currency": "货币",
+    "size": "计划尺码",
+    "source": "查看来源",
+    "unnamed": "未命名单品",
+    "loadFailed": "无法加载单品。",
+    "failed": "无法保存更改。",
+    "conflict": "单品已更改，请重试。",
+    "invalid": "请检查价格和货币。"
   }
 }

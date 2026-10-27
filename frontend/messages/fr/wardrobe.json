@@ -315,5 +315,28 @@
     "slideCount": "{index} sur {total}",
     "actualSize": "Taille réelle",
     "fit": "Adapter à l’écran"
+  },
+  "considering": {
+    "title": "À envisager",
+    "passed": "Écartés",
+    "empty": "Aucun article à envisager.",
+    "emptyPassed": "Aucun article écarté.",
+    "bought": "Acheté",
+    "buyConfirm": "Déplacer cet article dans votre garde-robe ?",
+    "inWardrobe": "Ajouté à la garde-robe",
+    "pass": "Écarter",
+    "reason": "Motif",
+    "reasonRequired": "Saisissez un motif.",
+    "restore": "Remettre",
+    "name": "Nom",
+    "price": "Prix",
+    "currency": "Devise",
+    "size": "Taille prévue",
+    "source": "Voir la source",
+    "unnamed": "Article sans nom",
+    "loadFailed": "Impossible de charger les articles.",
+    "failed": "Impossible de sauvegarder les modifications.",
+    "conflict": "Article modifié. Réessayez.",
+    "invalid": "Vérifiez le prix et la devise."
   }
 }

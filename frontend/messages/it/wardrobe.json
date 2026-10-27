@@ -315,5 +315,28 @@
     "slideCount": "{index} di {total}",
     "actualSize": "Dimensioni reali",
     "fit": "Adatta allo schermo"
+  },
+  "considering": {
+    "title": "Da valutare",
+    "passed": "Scartati",
+    "empty": "Nessun articolo da valutare.",
+    "emptyPassed": "Nessun articolo scartato.",
+    "bought": "Acquistato",
+    "buyConfirm": "Spostare questo articolo nel guardaroba?",
+    "inWardrobe": "Aggiunto al guardaroba",
+    "pass": "Scarta",
+    "reason": "Motivo",
+    "reasonRequired": "Inserisci un motivo.",
+    "restore": "Ripristina",
+    "name": "Nome",
+    "price": "Prezzo",
+    "currency": "Valuta",
+    "size": "Taglia prevista",
+    "source": "Vedi fonte",
+    "unnamed": "Articolo senza nome",
+    "loadFailed": "Impossibile caricare gli articoli.",
+    "failed": "Impossibile salvare le modifiche.",
+    "conflict": "Articolo modificato. Riprova.",
+    "invalid": "Controlla prezzo e valuta."
   }
 }

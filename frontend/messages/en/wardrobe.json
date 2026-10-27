@@ -315,5 +315,28 @@
     "slideCount": "{index} of {total}",
     "actualSize": "Actual size",
     "fit": "Fit to screen"
+  },
+  "considering": {
+    "title": "Considering",
+    "passed": "Passed",
+    "empty": "Nothing on your considering shelf.",
+    "emptyPassed": "No passed items.",
+    "bought": "Bought it",
+    "buyConfirm": "Move this item to your wardrobe?",
+    "inWardrobe": "Added to wardrobe",
+    "pass": "Passed",
+    "reason": "Reason",
+    "reasonRequired": "Enter a reason.",
+    "restore": "Move back",
+    "name": "Name",
+    "price": "Price",
+    "currency": "Currency",
+    "size": "Planned size",
+    "source": "View source",
+    "unnamed": "Unnamed item",
+    "loadFailed": "Could not load items.",
+    "failed": "Could not save changes.",
+    "conflict": "Item changed. Please try again.",
+    "invalid": "Check price and currency."
   }
 }
