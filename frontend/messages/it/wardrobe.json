@@ -344,6 +344,9 @@
     "loadFailed": "Impossibile caricare gli articoli.",
     "failed": "Impossibile salvare le modifiche.",
     "conflict": "Articolo modificato. Riprova.",
-    "invalid": "Controlla prezzo e valuta."
+    "invalid": "Controlla prezzo e valuta.",
+    "wearWith": "Con cosa lo indosserei?",
+    "suggest": "Suggerisci outfit",
+    "aiDisabled": "I suggerimenti IA sono disattivati"
   }
 }

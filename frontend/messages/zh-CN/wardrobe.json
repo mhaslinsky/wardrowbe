@@ -344,6 +344,9 @@
     "loadFailed": "无法加载单品。",
     "failed": "无法保存更改。",
     "conflict": "单品已更改，请重试。",
-    "invalid": "请检查价格和货币。"
+    "invalid": "请检查价格和货币。",
+    "wearWith": "可以搭配什么穿？",
+    "suggest": "推荐穿搭",
+    "aiDisabled": "AI 推荐已停用"
   }
 }

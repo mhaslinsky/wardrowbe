@@ -344,6 +344,9 @@
     "loadFailed": "Artikel konnten nicht geladen werden.",
     "failed": "Änderungen konnten nicht gespeichert werden.",
     "conflict": "Artikel geändert. Bitte erneut versuchen.",
-    "invalid": "Preis und Währung prüfen."
+    "invalid": "Preis und Währung prüfen.",
+    "wearWith": "Womit würde ich das tragen?",
+    "suggest": "Outfits vorschlagen",
+    "aiDisabled": "KI-Vorschläge sind deaktiviert"
   }
 }

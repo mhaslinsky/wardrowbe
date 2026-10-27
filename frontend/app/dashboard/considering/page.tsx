@@ -9,6 +9,7 @@ import { useConsidering, type ConsideringEntry } from '@/lib/hooks/use-consideri
 import { garmentImageUrl } from '@/lib/garment-image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ConsideringSuggestionsAction } from '@/components/considering-suggestions-action';
 import { ConsideringPreviewAction } from '@/components/considering-preview-action';
 import { Label } from '@/components/ui/label';
 
@@ -68,6 +69,7 @@ export default function ConsideringPage() {
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" disabled={busy} onClick={(event) => openDialog(entry, 'edit', event.currentTarget)}>{common('edit')}</Button>
                 {state === 'considering' ? <>
+                  <ConsideringSuggestionsAction key={`${entry.item.id}:${shelf.dataUpdatedAt}`} itemId={entry.item.id} disabled={busy || entry.item.status !== 'ready'} />
                   <ConsideringPreviewAction itemId={entry.item.id} disabled={busy || entry.item.status !== 'ready'} />
                   <Button disabled={busy} onClick={() => {
                     if (busy || !confirm(t('buyConfirm'))) return;
