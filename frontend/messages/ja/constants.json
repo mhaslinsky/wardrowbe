@@ -135,6 +135,10 @@
     "vintage": "ヴィンテージ"
   },
   "subtypes": {
+    "utility": "ユーティリティ",
+    "shirt-jacket": "シャツジャケット",
+    "shacket": "薄手シャツジャケット",
+    "chore-jacket": "ワークジャケット",
     "boxer-briefs": "ボクサーブリーフ",
     "briefs": "ブリーフ",
     "boxers": "トランクス",
@@ -224,6 +228,7 @@
     "blazer": "ブレザー",
     "blouse": "ブラウス",
     "boots": "ブーツ",
+    "overshirt": "シャツジャケット",
     "cardigan": "カーディガン",
     "coat": "コート",
     "dress": "ワンピース",

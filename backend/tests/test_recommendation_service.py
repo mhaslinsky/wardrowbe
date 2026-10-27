@@ -1073,6 +1073,19 @@ class TestOvershirtNeedsATopUnderIt:
         )
         assert outfits == [{item.id for item in items}]
 
+    @pytest.mark.parametrize("cached", [None, [1, 3, 4]])
+    async def test_overshirt_type_repairs_fresh_and_cached_suggestions(
+        self, db_session, test_user, cached
+    ):
+        items, outfits = await self._outfits(
+            db_session,
+            test_user,
+            {"outfits": [{"items": [1, 3, 4]}]},
+            kinds=[("overshirt", None), ("t-shirt", None), ("pants", None), ("sneakers", None)],
+            cached=cached,
+        )
+        assert outfits == [{item.id for item in items}]
+
     @pytest.mark.asyncio
     async def test_a_scheduled_single_outfit_gets_a_top_instead_of_failing(
         self, db_session, test_user
@@ -1151,18 +1164,20 @@ class TestOvershirtNeedsATopUnderIt:
         )
         assert outfits == [{item.id for item in items}]
 
-    async def test_overshirt_only_fallback_still_materializes_a_scheduled_outfit(
-        self, db_session, test_user, caplog
+    @pytest.mark.parametrize("kind,subtype", [("shirt", "overshirt"), ("overshirt", None)])
+    async def test_overshirt_without_a_base_rejects_a_scheduled_outfit(
+        self, db_session, test_user, kind, subtype
     ):
-        items, outfits = await self._outfits(
-            db_session,
-            test_user,
-            {"items": [1, 2, 3]},
-            single_outfit=True,
-            kinds=[("shirt", "overshirt"), ("pants", None), ("sneakers", None)],
-        )
-        assert outfits == [{item.id for item in items}]
-        assert "warning" in caplog.text.lower()
+        from app.services.recommendation_service import AIRecommendationError
+
+        with pytest.raises(AIRecommendationError):
+            await self._outfits(
+                db_session,
+                test_user,
+                {"items": [1, 2, 3]},
+                single_outfit=True,
+                kinds=[(kind, subtype), ("pants", None), ("sneakers", None)],
+            )
 
     async def test_overshirt_fallback_adds_best_ranked_non_thin_top(self, db_session, test_user):
         items, outfits = await self._outfits(

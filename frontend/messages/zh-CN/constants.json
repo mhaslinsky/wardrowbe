@@ -135,6 +135,10 @@
     "vintage": "复古"
   },
   "subtypes": {
+    "utility": "工装款",
+    "shirt-jacket": "衬衫夹克",
+    "shacket": "轻薄衬衫外套",
+    "chore-jacket": "工装夹克",
     "boxer-briefs": "平角紧身内裤",
     "briefs": "三角内裤",
     "boxers": "宽松平角内裤",
@@ -224,6 +228,7 @@
     "blazer": "西装外套",
     "blouse": "女士衬衫",
     "boots": "靴子",
+    "overshirt": "衬衫外套",
     "cardigan": "开衫",
     "coat": "大衣",
     "dress": "连衣裙",

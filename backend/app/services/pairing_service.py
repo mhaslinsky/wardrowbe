@@ -11,7 +11,7 @@ from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import FamilyOutfitRating, Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
-from app.utils.clothing import covered_body_slots, deduplicate_by_body_slot
+from app.utils.clothing import covered_body_slots, deduplicate_by_body_slot, repair_top_layers
 from app.utils.garment_vocabulary import is_outfit_type, render_outfit_prompt
 from app.utils.prompts import load_prompt
 from app.utils.timezone import get_user_today
@@ -247,6 +247,9 @@ class PairingService:
         item_type_map: dict[UUID, str] = {source_item.id: (source_item.type or "").lower()}
         for item in available_items:
             item_type_map[item.id] = (item.type or "").lower()
+        item_subtype_map = {
+            item.id: (item.subtype or "").lower() for item in [source_item, *available_items]
+        }
 
         for pairing in pairings_data[:num_pairings]:
             # Get item numbers from the pairing
@@ -267,17 +270,23 @@ class PairingService:
             if source_item.id not in valid_ids:
                 valid_ids.insert(0, source_item.id)
 
-            # Deduplicate by body slot (e.g. prevent shorts + pants). The source item is
-            # mandatory: a full-body garment claims both the top and bottom slots first, so
-            # without this the source would be dropped and the pairing persisted without the
-            # item it is supposed to feature.
             picked_slots = covered_body_slots(valid_ids, item_type_map)
             valid_ids = deduplicate_by_body_slot(
                 valid_ids, item_type_map, mandatory_item_ids={source_item.id}
             )
-            # Dedup must not leave the top or bottom bare where the model had covered it: a
-            # dress dropped for a shirt source would leave the outfit with no bottom.
             if covered_body_slots(valid_ids, item_type_map) != picked_slots:
+                logger.warning("Pairing silhouette does not fit the source item, skipping")
+                continue
+            valid_ids = repair_top_layers(
+                valid_ids,
+                list(number_map.values()),
+                item_type_map,
+                item_subtype_map,
+                mandatory_item_ids={source_item.id},
+            )
+            if source_item.id not in valid_ids or not picked_slots <= covered_body_slots(
+                valid_ids, item_type_map
+            ):
                 logger.warning("Pairing silhouette does not fit the source item, skipping")
                 continue
 

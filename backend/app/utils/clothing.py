@@ -23,8 +23,7 @@ ROLE_SLOTS: dict[str, frozenset[str]] = {
 # The slots an outfit must cover; a suit's own slot is optional like an outer layer.
 BODY_SLOTS = frozenset({"base_top", "bottom"})
 
-# Shirts cut to be worn open over another top. They stay type shirt so they wash and score like
-# shirts, but one of them is never the outfit's only top.
+# Legacy shirt subtypes still need a thin base until their items are retyped as overshirts.
 OVER_LAYER_SUBTYPES = frozenset({"overshirt", "chore-jacket", "shirt-jacket", "shacket"})
 
 
@@ -114,7 +113,10 @@ class _LayerRepair:
     mandatory: set[UUID]
 
     def is_overshirt(self, item_id: UUID) -> bool:
-        return (self.item_subtype_map.get(item_id) or "").lower() in OVER_LAYER_SUBTYPES
+        return (
+            self.item_type_map.get(item_id) == "overshirt"
+            or (self.item_subtype_map.get(item_id) or "").lower() in OVER_LAYER_SUBTYPES
+        )
 
     def is_base(self, item_id: UUID, thin: bool = False) -> bool:
         kind = self.item_type_map.get(item_id, "")
@@ -157,6 +159,14 @@ class _LayerRepair:
         overshirts = {item_id for item_id in self.item_ids if self.is_overshirt(item_id)}
         if not overshirts:
             return
+        # Replacing a one-piece with a tee would also remove the outfit's bottom.
+        if any(_item_role(item_id, self.item_type_map) == "full_body" for item_id in self.item_ids):
+            self.item_ids = (
+                []
+                if overshirts & self.mandatory
+                else [item_id for item_id in self.item_ids if item_id not in overshirts]
+            )
+            return
         incompatible_pins = {
             item_id
             for item_id in self.item_ids
@@ -179,22 +189,12 @@ class _LayerRepair:
         if under is None:
             under = self.best_base(thin=True)
         if under is None:
-            others_cover_top = any(
-                self.is_under_layer(item_id) and item_id not in overshirts
-                for item_id in self.item_ids
+            logger.warning("No thin base top available for the overshirt")
+            self.item_ids = (
+                []
+                if overshirts & self.mandatory
+                else [item_id for item_id in self.item_ids if item_id not in overshirts]
             )
-            fallback = top_to_wear_under(
-                self.ranked_ids, set(self.item_ids), self.item_type_map, self.item_subtype_map
-            )
-            if not others_cover_top and fallback is None:
-                logger.warning("No other top available; keeping the overshirt")
-                return
-            logger.warning("No thin top available; keeping pinned overshirts only")
-            self.item_ids = [
-                item_id
-                for item_id in self.item_ids
-                if item_id not in overshirts or item_id in self.mandatory
-            ]
             return
         if under not in self.item_ids and not self.can_add_base():
             return

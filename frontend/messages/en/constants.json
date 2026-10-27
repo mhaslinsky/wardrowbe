@@ -135,6 +135,10 @@
     "vintage": "Vintage"
   },
   "subtypes": {
+    "utility": "Utility",
+    "shirt-jacket": "Shirt jacket",
+    "shacket": "Shacket",
+    "chore-jacket": "Chore jacket",
     "boxer-briefs": "Boxer briefs",
     "briefs": "Briefs",
     "boxers": "Boxers",
@@ -224,6 +228,7 @@
     "blazer": "Blazer",
     "blouse": "Blouse",
     "boots": "Boots",
+    "overshirt": "Overshirt",
     "cardigan": "Cardigan",
     "coat": "Coat",
     "dress": "Dress",

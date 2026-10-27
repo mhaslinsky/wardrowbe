@@ -74,7 +74,7 @@ MIN_CANDIDATES_PER_ESSENTIAL_ROLE = 4
 TEMP_RANGE_MIN_SWING = 8.0
 REMOVABLE_LAYER_HOT_FLOOR = 0.6
 
-REMOVABLE_LAYER_TYPES = {"jacket", "coat", "blazer", "hoodie", "cardigan", "vest"}
+REMOVABLE_LAYER_TYPES = {"jacket", "coat", "blazer", "hoodie", "cardigan", "vest", "overshirt"}
 RAIN_LAYER_TYPES = {"jacket", "coat", "hoodie"}
 RAIN_LIKELY_CHANCE = 50
 WARM_LAYER_TYPES = REMOVABLE_LAYER_TYPES | {"sweater"}

@@ -273,6 +273,14 @@ class TestWeatherScoreRealItemTypes:
             assert _weather_score(_item(type=item_type), swing, None) == pytest.approx(0.80)
             assert _weather_score(_item(type=item_type), rain, None) == pytest.approx(0.05)
 
+    def test_overshirt_scores_as_a_removable_layer_without_rain_protection(self):
+        item = _item(type="overshirt")
+        swing = _weather(temp=12, window_min=5, window_max=30)
+        assert _weather_score(item, swing, None) == pytest.approx(0.80)
+        assert _weather_score(item, _weather(temp=30, precipitation=60), None) == pytest.approx(
+            0.05
+        )
+
     def test_rain_boost_fires_for_coat_and_hoodie(self):
         for item_type in ("coat", "hoodie"):
             item = _item(type=item_type)

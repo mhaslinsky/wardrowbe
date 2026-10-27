@@ -135,6 +135,10 @@
     "vintage": "빈티지"
   },
   "subtypes": {
+    "utility": "유틸리티",
+    "shirt-jacket": "셔츠 재킷",
+    "shacket": "가벼운 셔츠 재킷",
+    "chore-jacket": "워크 재킷",
     "boxer-briefs": "사각 브리프",
     "briefs": "삼각팬티",
     "boxers": "트렁크",
@@ -224,6 +228,7 @@
     "blazer": "블레이저",
     "blouse": "블라우스",
     "boots": "부츠",
+    "overshirt": "셔츠 재킷",
     "cardigan": "가디건",
     "coat": "코트",
     "dress": "원피스",

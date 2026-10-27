@@ -18,6 +18,7 @@
     {"value": "suit", "role": "suit", "wash_interval": 5},
     {"value": "vest", "role": "mid_layer", "wash_interval": 5},
     {"value": "cardigan", "role": "mid_layer", "wash_interval": 5, "needs_base_top": true},
+    {"value": "overshirt", "role": "mid_layer", "wash_interval": 3, "needs_base_top": true},
     {"value": "polo", "role": "base_top", "wash_interval": 2},
     {"value": "blouse", "role": "base_top", "wash_interval": 2},
     {"value": "tank-top", "role": "base_top", "wash_interval": 1},
