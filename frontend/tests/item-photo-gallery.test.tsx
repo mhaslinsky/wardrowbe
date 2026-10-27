@@ -88,8 +88,8 @@ it.each([undefined, {}, { original: '/original.jpg' }, { redrawn: '/redrawn.jpg'
     render(<QueryClientProvider client={new QueryClient()}>
       <ItemDetailDialog item={{ ...item, additional_images: [], photo_choices: choices } as Item} open onOpenChange={vi.fn()} />
     </QueryClientProvider>);
-    expect(screen.queryByRole('button', { name: 'photoViewer.original', exact: true })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'photoViewer.redrawn', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'photoViewer.original' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'photoViewer.redrawn' })).toBeNull();
   });
 
 const customItem = { ...item, photo_redraw: { selected: 'custom' },

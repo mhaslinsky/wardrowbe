@@ -54,7 +54,7 @@ afterEach(() => {
 });
 function openPage() { render(<QueryClientProvider client={client}><ConsideringPage /></QueryClientProvider>); }
 const label = (key: string) => `wardrobe.considering.${key}`;
-const button = (key: string) => screen.getByRole('button', { name: ['edit', 'cancel'].includes(key) ? `common.${key}` : label(key), exact: true });
+const button = (key: string) => screen.getByRole('button', { name: ['edit', 'cancel'].includes(key) ? `common.${key}` : label(key) });
 function submitDialog() { fireEvent.submit(within(screen.getByRole('dialog')).getByRole('button', { name: 'common.save' }).closest('form')!); }
 function writes() { return vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method !== 'GET'); }
 

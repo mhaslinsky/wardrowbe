@@ -110,7 +110,7 @@ it('confirms deletion and clears saved and delete error states before the next u
 });
 
 it('names added base layers', async () => {
-  looks = [{ ...savedLook, items: [...savedLook.items, { id: 'base-layer', name: 'Cotton undershirt', image_url: '/base.jpg' }] }];
+  looks = [{ ...savedLook, items: [...savedLook.items, { id: 'base-layer', name: 'Cotton undershirt', image_path: 'base.jpg', image_url: '/base.jpg' }] }];
   await openPage();
   const row = screen.getByText('inspiration.baseLayer').parentElement!;
   expect(within(row).getByText('Cotton undershirt')).toBeVisible();
