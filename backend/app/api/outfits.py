@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.api.pagination import PaginationParams
 from app.config import get_settings
 from app.database import DbSession
+from app.models.considering import ItemPurchase
 from app.models.item import ClothingItem
 from app.models.outfit import (
     FamilyOutfitRating,
@@ -150,6 +151,7 @@ class FamilyRatingResponse(BaseModel):
 
 
 class OutfitResponse(BaseModel):
+    unowned_item_ids: list[UUID] = Field(default_factory=list)
     group_size: int = 1
     wear_count: int | None = None
     hidden_member_ids: list[UUID] = Field(default_factory=list)
@@ -423,6 +425,34 @@ def outfit_to_response(
     )
 
 
+async def _unowned_ids(db: AsyncSession, outfits: list[Outfit]) -> set[UUID]:
+    return set(
+        await db.scalars(
+            select(ItemPurchase.item_id).where(
+                ItemPurchase.item_id.in_(
+                    [link.item_id for outfit in outfits for link in outfit.items]
+                ),
+                ItemPurchase.state.in_(("considering", "passed")),
+            )
+        )
+    )
+
+
+async def outfit_response(
+    db: AsyncSession,
+    outfit: Outfit,
+    wore_instead_items_map: dict[str, list[WoreInsteadItem]] | None = None,
+    is_starter_suggestion: bool = False,
+    *,
+    unowned_ids: set[UUID] | None = None,
+) -> OutfitResponse:
+    if unowned_ids is None:
+        unowned_ids = await _unowned_ids(db, [outfit])
+    response = outfit_to_response(outfit, wore_instead_items_map, is_starter_suggestion)
+    response.unowned_item_ids = [item.id for item in response.items if item.id in unowned_ids]
+    return response
+
+
 @router.post("/suggest", response_model=OutfitResponse)
 async def suggest_outfit(
     request: SuggestRequest,
@@ -487,7 +517,7 @@ async def suggest_outfit(
     is_starter = total_items <= 5
 
     wore_instead_map = await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
-    return outfit_to_response(outfit, wore_instead_map, is_starter_suggestion=is_starter)
+    return await outfit_response(db, outfit, wore_instead_map, is_starter_suggestion=is_starter)
 
 
 class SuggestOptionsRequest(SuggestRequest):
@@ -568,8 +598,11 @@ async def suggest_outfit_options(
     is_starter = total_items <= 5
 
     wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
+    unowned_ids = await _unowned_ids(db, outfits)
     return [
-        outfit_to_response(outfit, wore_instead_map, is_starter_suggestion=is_starter)
+        await outfit_response(
+            db, outfit, wore_instead_map, is_starter_suggestion=is_starter, unowned_ids=unowned_ids
+        )
         for outfit in outfits
     ]
 
@@ -629,7 +662,7 @@ async def create_external_suggestion(
     await clear_suggestions(current_user.id, request.occasion)
 
     full = await service.get_full_outfit(outfit.id)
-    return outfit_to_response(full)
+    return await outfit_response(db, full)
 
 
 @router.get("", response_model=OutfitListResponse)
@@ -695,7 +728,11 @@ async def list_outfits(
 
     wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
 
-    outfit_responses = [outfit_to_response(outfit, wore_instead_map) for outfit in outfits]
+    unowned_ids = await _unowned_ids(db, outfits)
+    outfit_responses = [
+        await outfit_response(db, outfit, wore_instead_map, unowned_ids=unowned_ids)
+        for outfit in outfits
+    ]
     if group:
         for outfit, response in zip(outfits, outfit_responses, strict=True):
             response.group_size = outfit.group_size
@@ -828,8 +865,8 @@ async def get_outfit(
             detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
         )
 
-    return outfit_to_response(
-        outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
+    return await outfit_response(
+        db, outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
     )
 
 
@@ -839,32 +876,10 @@ async def accept_outfit(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> OutfitResponse:
-    query = (
-        select(Outfit)
-        .where(and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id))
-        .options(
-            selectinload(Outfit.items).selectinload(OutfitItem.item),
-            selectinload(Outfit.feedback),
-            selectinload(Outfit.family_ratings).selectinload(FamilyOutfitRating.user),
-        )
-    )
+    outfit = await OutfitService(db).set_status(outfit_id, current_user.id, OutfitStatus.accepted)
 
-    result = await db.execute(query)
-    outfit = result.scalar_one_or_none()
-
-    if not outfit:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
-        )
-
-    outfit.status = OutfitStatus.accepted
-    outfit.responded_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(outfit)
-
-    return outfit_to_response(
-        outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
+    return await outfit_response(
+        db, outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
     )
 
 
@@ -874,34 +889,11 @@ async def reject_outfit(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> OutfitResponse:
-    query = (
-        select(Outfit)
-        .where(and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id))
-        .options(
-            selectinload(Outfit.items).selectinload(OutfitItem.item),
-            selectinload(Outfit.feedback),
-            selectinload(Outfit.family_ratings).selectinload(FamilyOutfitRating.user),
-        )
-    )
-
-    result = await db.execute(query)
-    outfit = result.scalar_one_or_none()
-
-    if not outfit:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
-        )
-
-    outfit.status = OutfitStatus.rejected
-    outfit.responded_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(outfit)
-
+    outfit = await OutfitService(db).set_status(outfit_id, current_user.id, OutfitStatus.rejected)
     await clear_suggestions(current_user.id, outfit.occasion)
 
-    return outfit_to_response(
-        outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
+    return await outfit_response(
+        db, outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
     )
 
 
@@ -914,8 +906,8 @@ async def skip_outfit(
     service = OutfitService(db)
     outfit = await service.set_status(outfit_id, current_user.id, OutfitStatus.skipped)
     await clear_suggestions(current_user.id, outfit.occasion)
-    return outfit_to_response(
-        outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
+    return await outfit_response(
+        db, outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
     )
 
 
@@ -969,6 +961,8 @@ async def submit_feedback(
     if not outfit:
         raise LookupError("Outfit not found")
 
+    if request.accepted is not None:
+        await OutfitService(db).require_owned(outfit.id, current_user.id)
     posted_outfit_id = outfit.id
     if request.worn or request.actually_worn is True or request.wore_instead_items:
         target_date = WearService.date_for(current_user, outfit)
@@ -1293,7 +1287,8 @@ async def log_outfit_worn(
     await clear_suggestions(current_user.id, outfit.occasion)
     full = await StudioService(db).get_full_outfit(outfit.id)
     return WearOutfitResponse(
-        **outfit_to_response(full).model_dump(), already_logged=isinstance(result, AlreadyThis)
+        **(await outfit_response(db, full)).model_dump(),
+        already_logged=isinstance(result, AlreadyThis),
     )
 
 
@@ -1332,7 +1327,9 @@ async def undo_outfit_wear(
     except Exception:
         logger.exception("Suggestion clearing failed after undo for outfit %s", outfit_id)
     full = await StudioService(db).get_full_outfit(outfit_id)
-    return UndoWearResponse(**outfit_to_response(full).model_dump(), learning_stale=learning_stale)
+    return UndoWearResponse(
+        **(await outfit_response(db, full)).model_dump(), learning_stale=learning_stale
+    )
 
 
 class PatchOutfitRequest(BaseModel):
@@ -1381,7 +1378,7 @@ async def create_studio_outfit(
     await clear_suggestions(current_user.id, outfit.occasion)
 
     full = await service.get_full_outfit(outfit.id)
-    return outfit_to_response(full)
+    return await outfit_response(db, full)
 
 
 @router.post("/{outfit_id}/wore-instead", response_model=OutfitResponse)
@@ -1412,7 +1409,7 @@ async def create_wore_instead_outfit(
     await clear_suggestions(current_user.id, replacement.occasion)
 
     full = await service.get_full_outfit(replacement.id)
-    return outfit_to_response(full)
+    return await outfit_response(db, full)
 
 
 @router.post("/{outfit_id}/clone-to-lookbook", response_model=OutfitResponse)
@@ -1444,7 +1441,7 @@ async def clone_outfit_to_lookbook(
     await _run_learning_safely(db, clone.id, current_user.id)
 
     full = await service.get_full_outfit(clone.id)
-    return outfit_to_response(full)
+    return await outfit_response(db, full)
 
 
 @router.post("/{outfit_id}/wear-today", response_model=WearOutfitResponse)
@@ -1472,7 +1469,7 @@ async def wear_outfit_today(
 
     full = await service.get_full_outfit(wear.id)
     return WearOutfitResponse(
-        **outfit_to_response(full).model_dump(), already_logged=already_logged
+        **(await outfit_response(db, full)).model_dump(), already_logged=already_logged
     )
 
 
@@ -1520,14 +1517,14 @@ async def patch_outfit_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error_code": "OUTFIT_WORN_IMMUTABLE",
-                "message": "Cannot modify items on a worn outfit. Create a new lookbook entry instead.",
+                "message": "Copy the outfit instead.",
             },
         ) from None
 
     await db.commit()
 
     full = await service.get_full_outfit(updated.id)
-    return outfit_to_response(full)
+    return await outfit_response(db, full)
 
 
 @router.delete("/{outfit_id}/family-rating", status_code=status.HTTP_204_NO_CONTENT)

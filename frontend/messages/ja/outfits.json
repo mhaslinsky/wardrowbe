@@ -31,6 +31,7 @@
     "removeItem": "{name}を外す"
   },
   "cards": {
+    "unbought": "未購入のアイテムを含みます",
     "wash": "洗濯",
     "wearCount": "{count, plural, one {# 回着用} other {# 回着用}}",
     "history": "履歴",

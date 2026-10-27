@@ -317,6 +317,13 @@
     "fit": "符合螢幕"
   },
   "considering": {
+    "preview": "試穿預覽",
+    "companions": "選擇已有衣物，或單獨預覽。",
+    "emptyPicker": "暫無可選的已有衣物。",
+    "previewAlone": "單獨預覽",
+    "previewSelected": "搭配所選衣物預覽",
+    "chooseAgain": "重新選擇",
+    "savedPreview": "開啟已儲存的預覽",
     "title": "考慮購買",
     "passed": "已放棄",
     "empty": "暫無考慮購買的單品。",

@@ -317,6 +317,13 @@
     "fit": "An Bildschirm anpassen"
   },
   "considering": {
+    "preview": "An mir ansehen",
+    "companions": "Eigene Teile wählen oder einzeln ansehen.",
+    "emptyPicker": "Keine eigenen Teile verfügbar.",
+    "previewAlone": "Einzeln ansehen",
+    "previewSelected": "Mit ausgewählten Teilen ansehen",
+    "chooseAgain": "Neu wählen",
+    "savedPreview": "Gespeicherte Vorschau öffnen",
     "title": "In Betracht",
     "passed": "Verworfen",
     "empty": "Keine Artikel in Betracht.",

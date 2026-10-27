@@ -158,6 +158,14 @@ class OutfitService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def require_owned(self, outfit_id: UUID, user_id: UUID) -> None:
+        if not await self.db.scalar(
+            select(Outfit.id).where(
+                Outfit.id == outfit_id, Outfit.user_id == user_id, owned_outfit()
+            )
+        ):
+            raise HTTPException(422, "Outfit contains unowned items")
+
     async def set_status(self, outfit_id: UUID, user_id: UUID, new_status: OutfitStatus) -> Outfit:
         result = await self.db.execute(
             select(Outfit).where(and_(Outfit.id == outfit_id, Outfit.user_id == user_id))
@@ -170,6 +178,7 @@ class OutfitService:
                 detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
             )
 
+        await self.require_owned(outfit_id, user_id)
         outfit.status = new_status
         outfit.responded_at = datetime.utcnow()
         await self.db.commit()

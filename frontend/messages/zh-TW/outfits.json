@@ -31,6 +31,7 @@
     "removeItem": "移除 {name}"
   },
   "cards": {
+    "unbought": "包含未購買的單品",
     "wash": "待洗",
     "wearCount": "已穿過 {count, plural, one {# 次} other {# 次}}",
     "history": "歷史紀錄",

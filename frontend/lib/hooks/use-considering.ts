@@ -58,6 +58,9 @@ export function useConsidering(state: 'considering' | 'passed') {
       client.invalidateQueries({ queryKey: queryKeys.considering.all });
       invalidateItemCaches(client, request.id);
       invalidateOutfitCaches(client);
+      client.invalidateQueries({ queryKey: queryKeys.everyOutfit });
+      client.invalidateQueries({ queryKey: queryKeys.outfitPreviews });
+      client.invalidateQueries({ queryKey: queryKeys.familyOutfits.all });
     },
   });
   return { shelf, change };

@@ -317,6 +317,13 @@
     "fit": "Adapter à l’écran"
   },
   "considering": {
+    "preview": "Voir sur moi",
+    "companions": "Choisissez vos vêtements ou prévisualisez seul.",
+    "emptyPicker": "Aucun vêtement possédé disponible.",
+    "previewAlone": "Voir seul",
+    "previewSelected": "Voir avec les vêtements choisis",
+    "chooseAgain": "Choisir à nouveau",
+    "savedPreview": "Ouvrir l’aperçu enregistré",
     "title": "À envisager",
     "passed": "Écartés",
     "empty": "Aucun article à envisager.",

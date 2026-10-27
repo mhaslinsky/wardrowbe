@@ -43,6 +43,7 @@ function getSourceBadge(outfit: Outfit, t: OutfitCardTranslator): {
   icon: React.ReactNode;
   className: string;
 } | null {
+  if (outfit.unowned_item_ids?.length) return { label: t('unbought'), icon: <Shirt className="h-3 w-3" />, className: 'bg-amber-100 text-amber-700 border-amber-200' };
   if (outfit.replaces_outfit_id) {
     return {
       label: t('replacement'),

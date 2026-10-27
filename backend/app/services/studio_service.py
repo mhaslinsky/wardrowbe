@@ -7,6 +7,7 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_item
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import (
     FamilyOutfitRating,
@@ -112,6 +113,18 @@ class StudioService:
     ) -> Outfit:
         if mark_worn:
             await WearService(self.db).begin(user, scheduled_for)
+            # Reject shelf items before creating the outfit or its acceptance feedback.
+            available = set(
+                await self.db.scalars(
+                    select(ClothingItem.id).where(
+                        ClothingItem.id.in_(item_ids),
+                        ClothingItem.user_id == user.id,
+                        owned_item(),
+                    )
+                )
+            )
+            if available != set(item_ids):
+                raise ItemOwnershipError("Items are unavailable")
             scheduled_for = scheduled_for or get_user_today(user)
         items = await validate_item_ownership(self.db, user.id, item_ids)
         ordered = self._order_items_canonically(items)
@@ -290,6 +303,17 @@ class StudioService:
                 raise OutfitWornImmutableError("cannot modify items on a worn outfit")
 
             new_items = await validate_item_ownership(self.db, user.id, items)
+            if (
+                outfit.status in (OutfitStatus.accepted, OutfitStatus.rejected)
+                or outfit.feedback is not None
+            ):
+                owned_ids = set(
+                    await self.db.scalars(
+                        select(ClothingItem.id).where(ClothingItem.id.in_(items), owned_item())
+                    )
+                )
+                if owned_ids != set(items):
+                    raise OutfitWornImmutableError("Copy the outfit instead.")
             ordered = self._order_items_canonically(new_items)
 
             old_item_ids = [oi.item_id for oi in outfit.items]

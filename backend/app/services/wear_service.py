@@ -9,7 +9,7 @@ from sqlalchemy import or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.considering import owned_item
+from app.models.considering import owned_item, owned_outfit
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus, UserFeedback
 from app.models.user import User
@@ -215,6 +215,12 @@ class WearService:
             raise HTTPException(422, detail="Outfit cannot be worn")
         if not item_ids or len(item_ids) != len(set(item_ids)):
             raise HTTPException(422, detail="Choose unique items")
+        if not await self.db.scalar(
+            select(Outfit.id).where(
+                Outfit.id == outfit.id, Outfit.user_id == user.id, owned_outfit()
+            )
+        ):
+            raise ItemOwnershipError("Source outfit contains unowned items")
         if not availability:
             return
         result = await self.db.execute(
