@@ -9,6 +9,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.considering import owned_item
 from app.models.item import ClothingItem
 from app.models.outfit import Outfit, TimeOfDay, UserFeedback
 from app.models.trip import Trip
@@ -288,7 +289,9 @@ class TripService:
                 wardrobe = list(
                     (
                         await planning.execute(
-                            select(ClothingItem).where(ClothingItem.user_id == user.id)
+                            select(ClothingItem).where(
+                                ClothingItem.user_id == user.id, owned_item()
+                            )
                         )
                     ).scalars()
                 )

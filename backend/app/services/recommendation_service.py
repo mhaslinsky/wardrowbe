@@ -11,6 +11,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_item
 from app.models.item import ClothingItem, ItemStatus
 from app.models.learning import ItemPairScore, UserLearningProfile
 from app.models.outfit import (
@@ -308,6 +309,7 @@ class RecommendationService:
             and_(
                 ClothingItem.user_id == user.id,
                 ClothingItem.status == ItemStatus.ready,
+                owned_item(),
                 ClothingItem.is_archived.is_(False),
             )
         )
@@ -1070,6 +1072,7 @@ class RecommendationService:
                             ClothingItem.id.in_(missing_ids),
                             ClothingItem.user_id == user.id,
                             ClothingItem.status == ItemStatus.ready,
+                            owned_item(),
                             ClothingItem.is_archived.is_(False),
                         )
                     )

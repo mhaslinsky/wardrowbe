@@ -7,6 +7,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_item
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import FamilyOutfitRating, Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
@@ -44,6 +45,7 @@ class PairingService:
                     ClothingItem.id == item_id,
                     ClothingItem.user_id == user_id,
                     ClothingItem.status == ItemStatus.ready,
+                    owned_item(),
                     ClothingItem.is_archived.is_(False),
                 )
             )
@@ -56,6 +58,7 @@ class PairingService:
             and_(
                 ClothingItem.user_id == user.id,
                 ClothingItem.status == ItemStatus.ready,
+                owned_item(),
                 ClothingItem.is_archived.is_(False),
                 ClothingItem.id != exclude_item_id,
             )

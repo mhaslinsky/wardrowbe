@@ -22,6 +22,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_item
 from app.models.item import ClothingItem
 from app.models.learning import (
     ItemPairScore,
@@ -726,6 +727,7 @@ class LearningService:
             select(ClothingItem).where(
                 and_(
                     ClothingItem.id.in_(paired_ids),
+                    owned_item(),
                     ClothingItem.is_archived.is_(False),
                 )
             )
@@ -899,6 +901,8 @@ class LearningService:
                     ItemPairScore.user_id == user_id,
                     ItemPairScore.compatibility_score > 0,
                     ItemPairScore.times_paired >= self.MIN_PAIRS_FOR_SCORING,
+                    owned_item(ItemPairScore.item1_id),
+                    owned_item(ItemPairScore.item2_id),
                 )
             )
             .options(

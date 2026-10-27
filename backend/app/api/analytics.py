@@ -7,6 +7,7 @@ from pydantic import BaseModel, computed_field
 from sqlalchemy import and_, case, func, select
 
 from app.database import DbSession
+from app.models.considering import owned_item
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit, OutfitStatus, UserFeedback
 from app.models.user import User
@@ -159,7 +160,7 @@ async def get_analytics(
         func.sum(case((ClothingItem.status == ItemStatus.archived, 1), else_=0)).label("archived"),
         func.sum(case((ClothingItem.status == ItemStatus.error, 1), else_=0)).label("error"),
         func.sum(ClothingItem.wear_count).label("total_wears"),
-    ).where(ClothingItem.user_id == current_user.id)
+    ).where(owned_item(), ClothingItem.user_id == current_user.id)
 
     items_result = await db.execute(items_query)
     items_row = items_result.one()
@@ -223,6 +224,7 @@ async def get_analytics(
         )
         .where(
             and_(
+                owned_item(),
                 ClothingItem.user_id == current_user.id,
                 ClothingItem.primary_color.isnot(None),
                 ClothingItem.status == ItemStatus.ready,
@@ -253,6 +255,7 @@ async def get_analytics(
         )
         .where(
             and_(
+                owned_item(),
                 ClothingItem.user_id == current_user.id,
                 ClothingItem.status == ItemStatus.ready,
             )
@@ -276,6 +279,7 @@ async def get_analytics(
     def wear_stats_query(order_desc: bool, limit: int, never_worn: bool = False):
         q = select(ClothingItem).where(
             and_(
+                owned_item(),
                 ClothingItem.user_id == current_user.id,
                 ClothingItem.status == ItemStatus.ready,
             )
@@ -338,6 +342,7 @@ async def get_analytics(
     never_worn_total = (
         await db.execute(
             select(func.count(ClothingItem.id)).where(
+                owned_item(),
                 ClothingItem.user_id == current_user.id,
                 ClothingItem.status == ItemStatus.ready,
                 ClothingItem.wear_count == 0,

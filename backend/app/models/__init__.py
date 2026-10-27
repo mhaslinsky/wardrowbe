@@ -1,3 +1,4 @@
+from app.models.considering import ItemPurchase
 from app.models.family import Family, FamilyInvite
 from app.models.fit_profile import UserFitProfile
 from app.models.identity import UserIdentity
@@ -18,6 +19,7 @@ from app.models.trip import Trip
 from app.models.user import User
 
 __all__ = [
+    "ItemPurchase",
     "UserFitProfile",
     "OutfitPreview",
     "PreviewPhoto",

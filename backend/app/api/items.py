@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.api.pagination import PaginationParams
 from app.config import get_settings
 from app.database import DbSession
+from app.models.considering import owned_item
 from app.models.item import (
     ClothingItem,
     ItemHistory,
@@ -207,6 +208,38 @@ async def create_item(
     favorite: bool = Form(False),
     skip_ai: bool = Form(False),
 ) -> ItemResponse:
+    return await create_uploaded_item(
+        db,
+        current_user,
+        image,
+        type,
+        subtype,
+        name,
+        brand,
+        notes,
+        colors,
+        primary_color,
+        favorite,
+        skip_ai,
+    )
+
+
+async def create_uploaded_item(
+    db,
+    current_user,
+    image,
+    type=None,
+    subtype=None,
+    name=None,
+    brand=None,
+    notes=None,
+    colors=None,
+    primary_color=None,
+    favorite=False,
+    skip_ai=False,
+    purchase=None,
+    additional_uploads=(),
+) -> ItemResponse:
     # Validate and process image
     image_service = ImageService()
     item_service = ItemService(db)
@@ -268,6 +301,16 @@ async def create_item(
         item_data=item_data,
         image_paths=image_paths,
     )
+
+    if purchase is not None:
+        purchase.item_id = item.id
+        db.add(purchase)
+        await db.flush()
+
+    for additional_upload in additional_uploads:
+        await add_item_image(item.id, db, current_user, additional_upload)
+    if additional_uploads:
+        await db.refresh(item, ["additional_images"])
 
     do_auto_tag = settings.effective_ai_vision_enabled and not skip_ai
 
@@ -1512,7 +1555,7 @@ async def put_item_in_the_wash(
 ) -> ItemResponse:
     item = await db.scalar(
         select(ClothingItem)
-        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id)
+        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id, owned_item())
         .options(selectinload(ClothingItem.additional_images))
         .with_for_update()
         .execution_options(populate_existing=True)
@@ -1536,7 +1579,7 @@ async def log_item_wash(
     item_service = ItemService(db)
     item = await db.scalar(
         select(ClothingItem)
-        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id)
+        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id, owned_item())
         .options(selectinload(ClothingItem.additional_images))
         .with_for_update()
         .execution_options(populate_existing=True)
