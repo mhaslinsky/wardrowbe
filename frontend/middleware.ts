@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getToken, type JWT } from 'next-auth/jwt';
-import { decodeProxyHeader, proxySecretMatches } from '@/lib/proxy-headers';
+import { decodeProxyHeader, proxySecretMatches, publicOrigin } from '@/lib/proxy-headers';
 import { clearSessionCookies, sessionCookie } from '@/lib/session-cookies';
 
 // A proxy that switches users keeps the old NextAuth session cookie, and a GET to
@@ -47,17 +47,34 @@ async function sessionToken(request: NextRequest): Promise<JWT | null> {
 
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const headers = new Headers(request.headers);
+  const healthCheck = !!process.env.PUBLIC_HOSTS?.trim() && request.method === 'GET' && pathname === '/' &&
+    ['localhost:3000', '127.0.0.1:3000', '[::1]:3000'].includes(headers.get('host') || '');
+  if (healthCheck) return NextResponse.next();
+  let origin: string | null;
+  try {
+    origin = publicOrigin(headers);
+  } catch {
+    return NextResponse.json({ detail: 'Unknown host' }, { status: 400 });
+  }
+  if (origin) {
+    headers.set('x-forwarded-host', new URL(origin).host);
+    headers.set('x-forwarded-proto', 'https');
+  }
+  const next = () => origin ? NextResponse.next({ request: { headers } }) : NextResponse.next();
+  if (pathname.startsWith('/api/v1/') || pathname.startsWith('/_next/') ||
+      (!pathname.startsWith(NEXTAUTH_PREFIX) && pathname.includes('.')) || pathname === '/auth/logout') return next();
   if (pathname === LOGIN_PATH) {
-    const response = NextResponse.next();
+    const response = next();
     if (request.nextUrl.searchParams.get('loggedOut') === '1') clearSessionCookies(request, response);
     return response;
   }
   const action = nextAuthAction(pathname);
   // Every other NextAuth action, sign-in included, has to work for the new proxy user.
-  if (action !== null && action !== 'session') return NextResponse.next();
+  if (action !== null && action !== 'session') return next();
 
   const token = await sessionToken(request);
-  if (!token || belongsToRequest(token, request)) return NextResponse.next();
+  if (!token || belongsToRequest(token, request)) return next();
   if (!token.proxyUser) {
     // The login page offers OIDC or dev sign-in when the backend has no forward-auth secret, so a
     // frontend that has one would end each of those sessions with nothing on screen to say why.
@@ -73,7 +90,7 @@ export async function middleware(request: NextRequest) {
     // must never receive the previous user's backend token.
     response = NextResponse.json({});
   } else {
-    const login = request.nextUrl.clone();
+    const login = origin ? new URL(request.nextUrl.pathname + request.nextUrl.search, origin) : request.nextUrl.clone();
     login.pathname = '/login';
     login.search = new URLSearchParams({ callbackUrl: `${pathname}${search}` }).toString();
     response = NextResponse.redirect(login);
@@ -82,18 +99,7 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
-// API routes are left out, because Next buffers the whole body of every matched non-GET request
-// before forwarding it, uploads included, and the backend refuses a switched proxy user itself.
-// NextAuth's routes are the exception, since its session action hands the backend token to the
-// browser. Static files (any path with an extension) carry no session and are left out too.
-//
-// The logout route clears the session before sending the browser to /login?loggedOut=1, but a
-// session request still in flight in another tab sets the cookie again when it answers, so the
-// logged-out page clears it once more.
+// Uploads bypass middleware buffering; their route handler and the backend check Host.
 export const config = {
-  matcher: [
-    '/((?!api/|login|auth/logout|_next|.*\\..*).*)',
-    '/api/auth/:path*',
-    { source: '/login', has: [{ type: 'query', key: 'loggedOut', value: '1' }] },
-  ],
+  matcher: ['/((?!api/v1/).*)'],
 };

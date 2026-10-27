@@ -706,7 +706,7 @@ def _email_text(message: NotificationMessage) -> str:
 
 
 def build_notification_email(to: str, message: NotificationMessage) -> EmailMessage:
-    settings_url = get_settings().app_link("/dashboard/notifications")
+    settings_url = get_settings().app_link("/dashboard/notifications", email=to)
     lead = message.lead if message.has_sections else message.body
     lead_html = ""
     if lead:
@@ -767,8 +767,8 @@ def build_family_invite_email(
     invite_token: str,
 ) -> EmailMessage:
     settings = get_settings()
-    home_url = settings.app_link()
-    invite_url = settings.app_link(f"/invite?token={invite_token}")
+    home_url = settings.app_link(email=to)
+    invite_url = settings.app_link(f"/invite?token={invite_token}", email=to)
     subject = f"{inviter_name} invited you to join {family_name} on Wardrowbe"
     body_text = (
         f'{inviter_name} invited you to join the family "{family_name}" on Wardrowbe. '

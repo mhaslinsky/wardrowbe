@@ -13,6 +13,7 @@ from app.api.router import api_router
 from app.config import Settings, get_settings
 from app.database import engine
 from app.logging_config import configure_logging
+from app.utils.public_origin import PublicHostMiddleware
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -57,6 +58,7 @@ app.add_middleware(
 
 # Enable GZip compression for responses > 500 bytes
 app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(PublicHostMiddleware, settings=settings)
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
 

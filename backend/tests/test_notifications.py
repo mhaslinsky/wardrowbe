@@ -311,7 +311,7 @@ def _outfit_email() -> EmailMessage:
         ai_raw_response=None,
         style_notes=None,
     )
-    user = SimpleNamespace(display_name="Sam", timezone="UTC")
+    user = SimpleNamespace(display_name="Sam", timezone="UTC", email="sam@example.com")
     message = NotificationDispatcher(None)._build_outfit_message(outfit, user)
     return build_notification_email("to@example.com", message)
 
@@ -723,7 +723,7 @@ def _hostile_outfit_message() -> NotificationMessage:
         ai_raw_response={"highlights": [HOSTILE_NAME]},
         style_notes=HOSTILE_NAME,
     )
-    user = SimpleNamespace(display_name=HOSTILE_NAME, timezone="UTC")
+    user = SimpleNamespace(display_name=HOSTILE_NAME, timezone="UTC", email="sam@example.com")
     return NotificationDispatcher(None)._build_outfit_message(outfit, user)
 
 

@@ -37,7 +37,7 @@ OUTFIT = SimpleNamespace(
     },
     style_notes="Roll the sleeves",
 )
-USER = SimpleNamespace(display_name="Sam", timezone="UTC")
+USER = SimpleNamespace(display_name="Sam", timezone="UTC", email="sam@example.com")
 OUTFIT_DATES = {"today": date(2026, 10, 6), "tomorrow": date(2026, 10, 7)}
 CHANNELS = {
     "ntfy": {"server": "https://ntfy.example.com", "topic": "outfits"},

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { publicOrigin } from '@/lib/proxy-headers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,13 +40,18 @@ const STRIPPED_RESPONSE_HEADERS = new Set([
 
 const METHODS_WITHOUT_BODY = new Set(['GET', 'HEAD']);
 
-function buildRequestHeaders(request: NextRequest): Headers {
+function buildRequestHeaders(request: NextRequest, origin: string | null): Headers {
   const headers = new Headers();
   request.headers.forEach((value, key) => {
     if (!STRIPPED_REQUEST_HEADERS.has(key.toLowerCase())) {
       headers.set(key, value);
     }
   });
+  if (origin) {
+    headers.set('host', new URL(origin).host);
+    headers.set('x-forwarded-host', new URL(origin).host);
+    headers.set('x-forwarded-proto', 'https');
+  }
   return headers;
 }
 
@@ -66,6 +72,10 @@ function buildResponseHeaders(upstream: Response): Headers {
 }
 
 async function proxy(request: NextRequest): Promise<NextResponse> {
+  let origin: string | null;
+  try { origin = publicOrigin(request.headers); } catch {
+    return NextResponse.json({ detail: 'Unknown host' }, { status: 400 });
+  }
   const target = new URL(request.url);
   const backend = backendUrl();
   // pathname/search rather than the decoded `params.path`, so signed image URLs survive intact.
@@ -74,7 +84,7 @@ async function proxy(request: NextRequest): Promise<NextResponse> {
   const hasBody = !METHODS_WITHOUT_BODY.has(request.method);
   const init: RequestInit & { duplex?: 'half' } = {
     method: request.method,
-    headers: buildRequestHeaders(request),
+    headers: buildRequestHeaders(request, origin),
     // Manual because the default 'follow' throws on auth/mobile-callback, which redirects to
     // a wardrobe:// app scheme that fetch cannot follow.
     redirect: 'manual',

@@ -12,6 +12,8 @@ x-backend-env: &backend-env
   SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
   STORAGE_PATH: /data/uploads
   APP_URL: ${APP_URL:-https://localhost:3000}
+  PUBLIC_HOSTS: ${PUBLIC_HOSTS:-}
+  PUBLIC_HOST_BY_EMAIL: ${PUBLIC_HOST_BY_EMAIL:-}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   # Port 4141, not docker-compose.yml's Ollama 11434, because existing prod installs
   # rely on this default; changing it would silently repoint their AI calls.
@@ -181,6 +183,7 @@ services:
       PUID: ${PUID:-1001}
       PGID: ${PGID:-1001}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-https://localhost:3000}
+      PUBLIC_HOSTS: ${PUBLIC_HOSTS:-}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
       # NEXT_PUBLIC_API_URL is the pre-1.6 name, still honored so existing .env files keep working.
       BACKEND_URL: ${BACKEND_URL:-${NEXT_PUBLIC_API_URL:-http://backend:8000}}

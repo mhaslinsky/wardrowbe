@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import Field, PostgresDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.utils.public_origin import public_hostnames
 from app.utils.redis_url import parse_redis_url
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,20 @@ class Settings(BaseSettings):
     secret_key: str = Field(default=DEFAULT_SECRET_KEY)
     studio_disabled: bool = False
     app_url: str = Field(default="http://localhost:3000")
+    public_hosts: str = ""
+    public_host_by_email: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_public_hosts(self) -> "Settings":
+        hosts = public_hostnames(self.public_hosts)
+        mapping = {}
+        for email, host in self.public_host_by_email.items():
+            normalized = host.lower()
+            if normalized not in hosts:
+                raise ValueError("PUBLIC_HOST_BY_EMAIL must select a hostname in PUBLIC_HOSTS")
+            mapping[email.strip().lower()] = normalized
+        self.public_host_by_email = mapping
+        return self
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
@@ -273,8 +288,10 @@ class Settings(BaseSettings):
             return "dev"
         return "unknown"
 
-    def app_link(self, path: str = "") -> str:
-        return f"{self.app_url}/{path.lstrip('/')}"
+    def app_link(self, path: str = "", *, email: str | None = None) -> str:
+        host = self.public_host_by_email.get(email.strip().lower()) if email else None
+        origin = f"https://{host}" if host else self.app_url
+        return f"{origin}/{path.lstrip('/')}"
 
     def get_geocoding_user_agent(self) -> str:
         return self.geocoding_user_agent or "Wardrowbe/1.0"

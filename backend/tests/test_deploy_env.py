@@ -55,7 +55,14 @@ def test_every_backend_service_merges_the_shared_env(compose):
 def test_notification_settings_reach_the_worker(compose):
     worker_env = compose["services"]["worker"]["environment"]
 
-    for key in ("APP_URL", "NTFY_SERVER", "NTFY_TOKEN", "SMTP_HOST"):
+    for key in (
+        "APP_URL",
+        "PUBLIC_HOSTS",
+        "PUBLIC_HOST_BY_EMAIL",
+        "NTFY_SERVER",
+        "NTFY_TOKEN",
+        "SMTP_HOST",
+    ):
         assert key in worker_env
 
 
@@ -189,3 +196,9 @@ def test_frontend_gets_every_oidc_key_it_reads_in_compose_and_k8s():
 
     for path, keys in passed.items():
         assert keys == expected, f"{path} frontend OIDC env differs from what the frontend reads"
+
+
+def test_public_hosts_reach_frontend_and_backend(compose):
+    services = compose["services"]
+    assert services["frontend"]["environment"]["PUBLIC_HOSTS"] == "${PUBLIC_HOSTS:-}"
+    assert services["backend"]["environment"]["PUBLIC_HOSTS"] == "${PUBLIC_HOSTS:-}"
