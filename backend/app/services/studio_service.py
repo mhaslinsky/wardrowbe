@@ -112,6 +112,7 @@ class StudioService:
         notes: str | None = None,
     ) -> Outfit:
         if mark_worn:
+            await WearService(self.db).begin(user, scheduled_for)
             # Reject shelf items before creating the outfit or its acceptance feedback.
             available = set(
                 await self.db.scalars(
@@ -124,7 +125,6 @@ class StudioService:
             )
             if available != set(item_ids):
                 raise ItemOwnershipError("Items are unavailable")
-            await WearService(self.db).begin(user, scheduled_for)
             scheduled_for = scheduled_for or get_user_today(user)
         items = await validate_item_ownership(self.db, user.id, item_ids)
         ordered = self._order_items_canonically(items)

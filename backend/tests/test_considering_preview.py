@@ -2,7 +2,7 @@ from datetime import date
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.models.considering import ItemPurchase
 from app.models.item import ClothingItem, ItemStatus
@@ -10,6 +10,17 @@ from app.models.outfit import Outfit, UserFeedback
 
 pytestmark = pytest.mark.asyncio
 PATH = "/api/v1/considering"
+
+
+@pytest.fixture(autouse=True)
+async def remove_test_account(db_session, test_user):
+    from app.models.user import User
+
+    user_id = test_user.id
+    yield
+    await db_session.rollback()
+    await db_session.execute(delete(User).where(User.id == user_id))
+    await db_session.commit()
 
 
 async def fixture_items(db, user):
