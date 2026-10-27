@@ -14,7 +14,7 @@ try {
   for (const target of ['chrome', 'firefox']) {
     const outdir = `${root}/extension/dist/${target}`;
     await mkdir(outdir, { recursive: true });
-    await build({ entryPoints: ['background', 'bridge', 'options'].map(name => `${root}/extension/${name}.ts`), outdir, bundle: true, format: 'iife', target: 'es2022', minify: false });
+    await build({ entryPoints: ['background', 'bridge', 'options'].map(name => `${root}/extension/${name}.ts`), outdir, bundle: true, tsconfig: `${root}/frontend/tsconfig.json`, format: 'iife', target: 'es2022', minify: false });
     await copyFile(`${root}/extension/manifest.${target}.json`, `${outdir}/manifest.json`);
     await copyFile(`${root}/extension/options.html`, `${outdir}/options.html`);
     for (const locale of ['en', 'de', 'fr', 'it', 'ja', 'ko', 'zh-CN', 'zh-TW']) {

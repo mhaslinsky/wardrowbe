@@ -81,7 +81,7 @@ export async function handleMessage(message: any, sender: any) {
     for (const [key, value] of Object.entries(draft.update!.tags)) {
       if (value !== undefined && JSON.stringify(item.tags?.[key]) !== JSON.stringify(value)) throw Error('metadata');
     }
-    if (item.notes !== draft.update!.notes) throw Error('metadata');
+    if (draft.update!.notes !== undefined && item.notes !== draft.update!.notes) throw Error('metadata');
     const shelf = await apiRequest('/considering', token);
     if (!Array.isArray(shelf) || !shelf.some(entry => entry.state === 'considering' && entry.item?.id === draft.item && entry.item?.user_id === draft.owner)) throw Error('response');
     await browser.storage.local.remove(reference);
