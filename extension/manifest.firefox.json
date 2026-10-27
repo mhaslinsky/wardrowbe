@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Send to Wardrowbe",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["https://wardrobe.haslinsky.net/*"],
+  "action": {"default_title": "Send to Wardrowbe"},
+  "background": {"scripts": ["background.js"]},
+  "options_ui": {"page": "options.html", "open_in_tab": true},
+  "default_locale": "en",
+  "browser_specific_settings": {"gecko": {"id": "send@wardrowbe.haslinsky.net", "strict_min_version": "128.0", "data_collection_permissions": {"required": ["websiteContent", "authenticationInfo"]}}},
+  "content_scripts": [{"matches": ["https://wardrobe.haslinsky.net/dashboard/considering/import*"], "js": ["bridge.js"], "run_at": "document_start"}]
+}
