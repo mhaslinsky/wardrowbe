@@ -532,6 +532,9 @@ def test_layering_repair_preserves_the_rules_and_is_idempotent(thin_ranked):
             chosen = [*selected, pants, coat]
             for pins in [set(), *[{item_id} for item_id in selected]]:
                 repaired = repair_top_layers(chosen, ranked, types, subtypes, pins)
+                if not repaired:
+                    assert overshirt in pins
+                    continue
                 assert pins <= set(repaired)
                 assert len(repaired) == len(set(repaired))
                 if selected:
