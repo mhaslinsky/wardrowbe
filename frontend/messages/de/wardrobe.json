@@ -315,5 +315,28 @@
     "slideCount": "{index} von {total}",
     "actualSize": "Originalgröße",
     "fit": "An Bildschirm anpassen"
+  },
+  "considering": {
+    "title": "In Betracht",
+    "passed": "Verworfen",
+    "empty": "Keine Artikel in Betracht.",
+    "emptyPassed": "Keine verworfenen Artikel.",
+    "bought": "Gekauft",
+    "buyConfirm": "Diesen Artikel in den Kleiderschrank verschieben?",
+    "inWardrobe": "Zum Kleiderschrank hinzugefügt",
+    "pass": "Verwerfen",
+    "reason": "Grund",
+    "reasonRequired": "Gib einen Grund ein.",
+    "restore": "Zurücklegen",
+    "name": "Name",
+    "price": "Preis",
+    "currency": "Währung",
+    "size": "Geplante Größe",
+    "source": "Quelle ansehen",
+    "unnamed": "Unbenannter Artikel",
+    "loadFailed": "Artikel konnten nicht geladen werden.",
+    "failed": "Änderungen konnten nicht gespeichert werden.",
+    "conflict": "Artikel geändert. Bitte erneut versuchen.",
+    "invalid": "Preis und Währung prüfen."
   }
 }

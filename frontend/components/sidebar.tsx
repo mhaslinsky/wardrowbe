@@ -28,6 +28,7 @@ export function Sidebar() {
   const navigation = [
     { name: t('dashboard'), href: '/dashboard', icon: Home },
     { name: t('wardrobe'), href: '/dashboard/wardrobe', icon: Shirt },
+    { name: t('considering'), href: '/dashboard/considering', icon: Shirt },
     { name: t('suggestOutfit'), href: '/dashboard/suggest', icon: Sparkles },
     { name: t('inspiration'), href: '/dashboard/inspiration', icon: ImageIcon },
     { name: t('outfits'), href: '/dashboard/outfits', icon: LayoutGrid },

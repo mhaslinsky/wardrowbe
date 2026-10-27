@@ -315,5 +315,28 @@
     "slideCount": "第{index}張，共{total}張",
     "actualSize": "實際大小",
     "fit": "符合螢幕"
+  },
+  "considering": {
+    "title": "考慮購買",
+    "passed": "已放棄",
+    "empty": "暫無考慮購買的單品。",
+    "emptyPassed": "暫無已放棄的單品。",
+    "bought": "已購買",
+    "buyConfirm": "將這件單品移入衣櫥？",
+    "inWardrobe": "已加入衣櫥",
+    "pass": "放棄",
+    "reason": "原因",
+    "reasonRequired": "請輸入原因。",
+    "restore": "重新考慮",
+    "name": "名稱",
+    "price": "價格",
+    "currency": "貨幣",
+    "size": "預計尺寸",
+    "source": "查看來源",
+    "unnamed": "未命名單品",
+    "loadFailed": "無法載入單品。",
+    "failed": "無法儲存變更。",
+    "conflict": "單品已變更，請重試。",
+    "invalid": "請檢查價格和貨幣。"
   }
 }

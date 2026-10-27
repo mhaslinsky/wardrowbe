@@ -315,5 +315,28 @@
     "slideCount": "{total}枚中{index}枚目",
     "actualSize": "実際のサイズ",
     "fit": "画面に合わせる"
+  },
+  "considering": {
+    "title": "検討中",
+    "passed": "見送り",
+    "empty": "検討中のアイテムはありません。",
+    "emptyPassed": "見送ったアイテムはありません。",
+    "bought": "購入した",
+    "buyConfirm": "このアイテムをワードローブに移動しますか？",
+    "inWardrobe": "ワードローブに追加しました",
+    "pass": "見送る",
+    "reason": "理由",
+    "reasonRequired": "理由を入力してください。",
+    "restore": "検討中に戻す",
+    "name": "名前",
+    "price": "価格",
+    "currency": "通貨",
+    "size": "購入予定サイズ",
+    "source": "元のページを見る",
+    "unnamed": "名前のないアイテム",
+    "loadFailed": "アイテムを読み込めませんでした。",
+    "failed": "変更を保存できませんでした。",
+    "conflict": "アイテムが変更されました。再試行してください。",
+    "invalid": "価格と通貨を確認してください。"
   }
 }

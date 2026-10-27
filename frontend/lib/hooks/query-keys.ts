@@ -18,6 +18,10 @@ const WEAR_STATS = ['wear-stats'] as const;
 const WEAR_HISTORY = ['wear-history'] as const;
 
 export const queryKeys = {
+  considering: {
+    all: ['considering'] as const,
+    list: (email: string | null | undefined, state: 'considering' | 'passed') => ['considering', email, state] as const,
+  },
   trips: {
     all: ['trips'] as const,
     list: (email: string | null | undefined) => ['trips', email] as const,
