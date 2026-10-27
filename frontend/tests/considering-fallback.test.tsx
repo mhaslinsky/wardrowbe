@@ -7,6 +7,8 @@ let user = { id: 'user', email: 'user@example.test' };
 vi.mock('@/lib/hooks/use-user', () => ({ useUserProfile: () => ({ data: user }) }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }));
 const product = { source_url: 'https://shop.example/product', name: 'Shirt', images: ['https://shop.example/image.png'], sizes: [], colors: [] };
+const push = vi.fn();
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push }) }));
 const item = { id: 'item', user_id: 'user', tags: {}, notes: null };
 function readLink() {
   fireEvent.change(screen.getByLabelText('link'), { target: { value: product.source_url } });
@@ -84,4 +86,52 @@ it('offers checked discard for an invalid stored capture and resets it', async (
   render(<ImportPage />); expect(await screen.findByRole('alert')).toHaveTextContent('recoveryFailed');
   fireEvent.click(screen.getByText('discardChecked'));
   expect(sessionStorage.length).toBe(0); expect(screen.getByLabelText('link')).toBeEnabled();
+});
+
+it.each(['cancel', 'discard'])('keeps local %s on the fallback route', async action => {
+  if (action === 'discard') sessionStorage.setItem('considering-import:user', JSON.stringify({ capture: product, fileBacked: false, creating: true }));
+  else vi.mocked(api.post).mockResolvedValue(product);
+  render(<ImportPage />);
+  if (action === 'cancel') { readLink(); await screen.findByDisplayValue('Shirt'); }
+  else await screen.findByText('uncertain');
+  fireEvent.click(screen.getByText(action === 'cancel' ? 'cancel' : 'discardChecked'));
+  await screen.findByLabelText('link');
+  await waitFor(() => expect(screen.queryByDisplayValue('Shirt')).not.toBeInTheDocument());
+  expect(push).not.toHaveBeenCalled();
+});
+it('refuses a file draft with no File and no pending or partial save on reload', async () => {
+  sessionStorage.setItem('considering-import:user', JSON.stringify({ capture: { ...product, source_url: '', images: [] }, fileBacked: true, creating: false }));
+  render(<ImportPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('recoveryFailed');
+  expect(screen.queryByLabelText('name')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('discardChecked'));
+  expect(screen.getByLabelText('imageDrop')).toBeEnabled();
+  expect(sessionStorage.length).toBe(0);
+});
+it('does not bypass a recovery error by submitting the link form directly', async () => {
+  sessionStorage.setItem('considering-import:user', '{broken');
+  render(<ImportPage />); await screen.findByText('recoveryFailed');
+  fireEvent.change(screen.getByLabelText('link'), { target: { value: product.source_url } });
+  fireEvent.submit(screen.getByLabelText('link').closest('form')!);
+  expect(api.post).not.toHaveBeenCalled();
+});
+it('shows one partial status and a failure alert when saved metadata differs', async () => {
+  vi.mocked(api.post).mockResolvedValueOnce(product).mockResolvedValueOnce({ state: 'considering', item });
+  render(<ImportPage />); readLink(); await screen.findByDisplayValue('Shirt');
+  fireEvent.change(screen.getByLabelText('material_detail'), { target: { value: '100% cotton' } });
+  fireEvent.click(screen.getByText('save'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('saveFailed');
+  expect(screen.getByRole('status')).toHaveTextContent('partial');
+  expect(screen.getAllByText('partial')).toHaveLength(1);
+});
+it('returns to image entry after a rejected file save and page reload', async () => {
+  vi.mocked(fetch).mockResolvedValue(new Response('{}', { status: 422 }));
+  const view = render(<ImportPage />);
+  fireEvent.change(screen.getByLabelText('imageDrop'), { target: { files: [new File(['png'], 'shirt.png', { type: 'image/png' })] } });
+  await screen.findByLabelText('name'); fireEvent.click(screen.getByText('save'));
+  await screen.findByText('saveFailed');
+  view.unmount(); render(<ImportPage />);
+  expect(await screen.findByLabelText('imageDrop')).toBeEnabled();
+  expect(screen.queryByLabelText('name')).not.toBeInTheDocument();
+  expect(sessionStorage.length).toBe(0);
 });

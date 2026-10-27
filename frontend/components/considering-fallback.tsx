@@ -36,9 +36,9 @@ export function ConsideringFallback() {
         const saved = sessionStorage.getItem(`considering-import:${user.id}`);
         if (saved) {
           const draft = JSON.parse(saved);
-          if (typeof draft?.fileBacked !== 'boolean') throw Error('draft');
+          if (typeof draft?.fileBacked !== 'boolean' || (!draft.item && !draft.creating)) throw Error('draft');
           if (draft.fileBacked) confirmedFilePayload(draft.capture); else confirmedPayload(draft.capture);
-          setTransport(localProductImport(user.id, draft.capture, undefined, undefined, reset, () => owner.current));
+          setTransport(localProductImport(user.id, draft.capture, undefined, undefined, reset, () => owner.current, true));
         }
       } catch { setError('recoveryFailed'); }
     }
@@ -50,6 +50,7 @@ export function ConsideringFallback() {
     setTransport(localProductImport(user.id, capture, file, preview.current, reset, () => owner.current));
   }
   async function readLink() {
+    if (!user || error === 'recoveryFailed') return;
     const request = ++generation.current;
     setError('');
     try {

@@ -63,7 +63,7 @@ export function ConsideringImport({ transport }: { transport?: ImportTransport }
       if (action === 'save' && (!result.saved || typeof result.item !== 'string')) throw Error('response');
       await client.invalidateQueries({ queryKey: queryKeys.considering.list(user?.email, 'considering') });
       await client.invalidateQueries({ queryKey: queryKeys.items.all });
-      router.push('/dashboard/considering');
+      if (!transport || action === 'save') router.push('/dashboard/considering');
     } catch (failure) {
       setError(failure instanceof Error && ['token', 'rate', 'identity', 'partial', 'signin', 'uncertain'].includes(failure.message) ? failure.message : 'saveFailed');
       if (action === 'save') {

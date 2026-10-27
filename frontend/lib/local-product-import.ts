@@ -5,10 +5,10 @@ import type { ImportTransport } from '@/components/considering-import';
 import type { Item } from './types';
 
 type Draft = { capture: ConfirmedProduct; fileBacked: boolean; creating?: boolean; item?: string; update?: ReturnType<typeof confirmedPayload>['update'] };
-export function localProductImport(owner: string, initial: ConfirmedProduct, file: File | undefined, preview: string | undefined, finished: () => void, currentOwner: () => string | undefined): ImportTransport {
+export function localProductImport(owner: string, initial: ConfirmedProduct, file: File | undefined, preview: string | undefined, finished: () => void, currentOwner: () => string | undefined, recover = false): ImportTransport {
   const key = `considering-import:${owner}`;
   let draft: Draft = { capture: initial, fileBacked: !!file };
-  const stored = sessionStorage.getItem(key);
+  const stored = recover ? sessionStorage.getItem(key) : null;
   if (stored) draft = JSON.parse(stored);
   let busy = false;
   const persist = () => sessionStorage.setItem(key, JSON.stringify(draft));
@@ -47,7 +47,7 @@ export function localProductImport(owner: string, initial: ConfirmedProduct, fil
             created = await response.json();
           } else created = await api.post('/considering', payload.create);
         } catch (failure) {
-          if (failure instanceof ApiError && [400, 401, 403, 404, 409, 413, 422, 429].includes(failure.status)) { draft.creating = false; persist(); }
+          if (failure instanceof ApiError && [400, 401, 403, 404, 409, 413, 422, 429].includes(failure.status)) { draft.creating = false; sessionStorage.removeItem(key); }
           throw failure;
         }
         identity();
@@ -61,9 +61,9 @@ export function localProductImport(owner: string, initial: ConfirmedProduct, fil
       const item = itemResult(await api.get(`/items/${draft.item}`), draft.item);
       identity();
       for (const [field, value] of Object.entries(draft.update!.tags)) {
-        if (value !== undefined && JSON.stringify(item.tags?.[field as keyof typeof item.tags]) !== JSON.stringify(value)) throw Error('partial');
+        if (value !== undefined && JSON.stringify(item.tags?.[field as keyof typeof item.tags]) !== JSON.stringify(value)) throw Error('metadata');
       }
-      if (draft.update!.notes !== undefined && item.notes !== draft.update!.notes) throw Error('partial');
+      if (draft.update!.notes !== undefined && item.notes !== draft.update!.notes) throw Error('metadata');
       const shelf = await api.get<{ state: string; item: Item }[]>('/considering');
       identity();
       if (!Array.isArray(shelf) || !shelf.some(entry => entry.state === 'considering' && entry.item.id === draft.item && entry.item.user_id === owner)) throw Error('response');

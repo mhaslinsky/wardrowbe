@@ -7,8 +7,8 @@ vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof i
 const capture = { source_url: 'https://shop.example/product', name: 'Shirt', images: ['https://shop.example/image.png'], sizes: [], colors: [] };
 const item = { id: 'item', user_id: 'user', tags: {}, notes: null };
 let owner: string | undefined;
-function transport(file?: File) {
-  return localProductImport('user', file ? { ...capture, source_url: '', images: [] } : capture, file, file ? 'blob:preview' : undefined, vi.fn(), () => owner);
+function transport(file?: File, recover = false) {
+  return localProductImport('user', file ? { ...capture, source_url: '', images: [] } : capture, file, file ? 'blob:preview' : undefined, vi.fn(), () => owner, recover);
 }
 beforeEach(() => {
   vi.clearAllMocks(); sessionStorage.clear(); owner = 'user';
@@ -43,6 +43,7 @@ it('sends a File and metadata only, without blob or placeholder URLs', async () 
 it('keeps preview URLs outside capture validation and payloads', () => {
   const validate = vi.spyOn(captureModule, 'validateCapture');
   const payload = confirmedFilePayload({ ...capture, source_url: '', images: ['blob:preview'] });
+  expect(validate).toHaveBeenCalledOnce();
   expect(JSON.stringify(validate.mock.calls)).not.toContain('blob:');
   expect(JSON.stringify(payload)).not.toMatch(/blob:|wardrowbe.invalid/);
   validate.mockRestore();
@@ -56,7 +57,7 @@ it('allows retry after an explicit 422 upload rejection', async () => {
 it('does not repeat a create after an unknown network outcome, including reload', async () => {
   const local = transport(); vi.mocked(api.post).mockRejectedValue(Error('network'));
   await expect(local.request('save', capture)).rejects.toThrow('network');
-  const recovered = transport(); expect((await recovered.request('load')).uncertain).toBe(true);
+  const recovered = transport(undefined, true); expect((await recovered.request('load')).uncertain).toBe(true);
   await expect(recovered.request('save', capture)).rejects.toThrow('uncertain');
   await expect(recovered.request('cancel')).rejects.toThrow('partial');
   expect(api.post).toHaveBeenCalledTimes(1);
@@ -65,7 +66,7 @@ it('does not repeat a create after an unknown network outcome, including reload'
 it('recovers a partial save and retries metadata without creating again', async () => {
   vi.mocked(api.patch).mockRejectedValueOnce(Error('details'));
   await expect(transport().request('save', capture)).rejects.toThrow('details');
-  const recovered = transport(); expect((await recovered.request('load')).partial).toBe(true);
+  const recovered = transport(undefined, true); expect((await recovered.request('load')).partial).toBe(true);
   expect(await recovered.request('save', capture)).toEqual({ saved: true, item: 'item' });
   expect(api.post).toHaveBeenCalledTimes(1); expect(api.patch).toHaveBeenCalledTimes(2);
 });
@@ -78,4 +79,33 @@ it('checks identity after the metadata reread before requesting the shelf', asyn
   vi.mocked(api.get).mockImplementation(async () => { owner = 'other'; return item; });
   await expect(transport().request('save', capture)).rejects.toThrow('identity');
   expect(api.get).toHaveBeenCalledTimes(1);
+});
+
+it.each([400, 401, 403, 404, 409, 413, 422, 429])('does not leave a recoverable file draft after rejected Save %i', async status => {
+  const local = transport(new File(['image'], 'shirt.png', { type: 'image/png' }));
+  vi.mocked(fetch).mockResolvedValue(new Response('{}', { status }));
+  await expect(local.request('save', { ...capture, source_url: '', images: [] })).rejects.toBeInstanceOf(ApiError);
+  expect((await local.request('load')).uncertain).toBe(false);
+  expect(sessionStorage.length).toBe(0);
+});
+it('does not replace a fresh capture with a stored capture', async () => {
+  sessionStorage.setItem('considering-import:user', JSON.stringify({ capture: { ...capture, name: 'Old shirt' }, fileBacked: false, creating: true }));
+  expect((await transport().request('load')).capture?.name).toBe('Shirt');
+});
+it.each(['tags', 'notes'])('reports a metadata mismatch in %s without a partial error', async field => {
+  const input = { ...capture, material_detail: field === 'tags' ? '100% cotton' : undefined, fit: field === 'notes' ? 'Relaxed fit' : undefined };
+  const local = localProductImport('user', input, undefined, undefined, vi.fn(), () => owner);
+  await expect(local.request('save', input)).rejects.toThrow('metadata');
+  expect((await local.request('load')).partial).toBe(true);
+  expect(api.post).toHaveBeenCalledTimes(1);
+});
+it('recovers a partially saved file without its File and retries only details', async () => {
+  const input = { ...capture, source_url: '', images: [] };
+  vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ state: 'considering', item }), { status: 201 }));
+  vi.mocked(api.patch).mockRejectedValueOnce(Error('details'));
+  await expect(transport(new File(['image'], 'shirt.png', { type: 'image/png' })).request('save', input)).rejects.toThrow('details');
+  const recovered = transport(undefined, true);
+  expect((await recovered.request('load')).partial).toBe(true);
+  expect(await recovered.request('save', input)).toEqual({ saved: true, item: 'item' });
+  expect(fetch).toHaveBeenCalledTimes(1); expect(api.post).not.toHaveBeenCalled();
 });
