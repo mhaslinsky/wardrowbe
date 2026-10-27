@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException
 
+from app import product_parser as parser
 from app.services import product_import as service
 
 URL = "https://shop.example/product"
@@ -14,7 +15,7 @@ PRODUCT = '<h1>Shirt</h1><img itemprop="image" src="/shirt.png">'
 
 def test_element_count_stops_the_reported_large_page(monkeypatch):
     calls = 0
-    original = service.ProductHTML.handle_starttag
+    original = parser.ProductHTML.handle_starttag
 
     def counted(parser, tag, attrs):
         nonlocal calls
@@ -22,14 +23,14 @@ def test_element_count_stops_the_reported_large_page(monkeypatch):
         assert calls <= 20001, "Element budget exceeded before rejection"
         return original(parser, tag, attrs)
 
-    monkeypatch.setattr(service.ProductHTML, "handle_starttag", counted)
+    monkeypatch.setattr(parser.ProductHTML, "handle_starttag", counted)
     with pytest.raises(ValueError, match="element"):
-        service.extract_product(PRODUCT + "<li>" * 140 + "<b>x</b>" * 237000 + "</li>" * 140, URL)
+        parser.extract_product(PRODUCT + "<li>" * 140 + "<b>x</b>" * 237000 + "</li>" * 140, URL)
 
 
 def test_nested_rows_read_cached_text_without_subtree_rewalks(monkeypatch):
     calls = 0
-    original = service.Element.text
+    original = parser.Element.text
 
     def counted(element, *args, **kwargs):
         nonlocal calls
@@ -37,8 +38,8 @@ def test_nested_rows_read_cached_text_without_subtree_rewalks(monkeypatch):
         assert calls < 12000, "Text traversal work exceeded linear element budget"
         return original(element, *args, **kwargs)
 
-    monkeypatch.setattr(service.Element, "text", counted)
-    capture = service.extract_product(
+    monkeypatch.setattr(parser.Element, "text", counted)
+    capture = parser.extract_product(
         PRODUCT + "<li>" * 140 + "<b>fabric</b>" * 2000 + "</li>" * 140, URL
     )
     assert capture["name"] == "Shirt"
@@ -58,7 +59,7 @@ def test_long_digit_rows_do_not_use_unbounded_regex_scans(monkeypatch):
         return original(pattern, content, flags)
 
     monkeypatch.setattr(re, "search", counted)
-    capture = service.extract_product(PRODUCT + ("<p>" + "9" * 900 + "</p>") * 1500, URL)
+    capture = parser.extract_product(PRODUCT + ("<p>" + "9" * 900 + "</p>") * 1500, URL)
     assert capture["name"] == "Shirt"
     assert scanned <= 3 * 1500 * 900
     assert "material_detail" not in capture
@@ -77,7 +78,7 @@ async def test_malformed_html_returns_explicit_422(html):
 def test_amazon_fixture_prefers_product_title_over_accessibility_heading():
     html = (Path(__file__).parent / "fixtures" / "amazon-live.html").read_text()
     assert (
-        service.extract_product(html, "https://www.amazon.com/dp/B0CD86ZVRS")["name"]
+        parser.extract_product(html, "https://www.amazon.com/dp/B0CD86ZVRS")["name"]
         == "Amazon Essentials Men's Slim-Fit Short-Sleeve Crewneck Pocket T-Shirt, Pack of 2"
     )
 
@@ -90,7 +91,7 @@ def test_amazon_fixture_prefers_product_title_over_accessibility_heading():
     ],
 )
 def test_specific_titles_precede_generic_h1(specific):
-    capture = service.extract_product(
+    capture = parser.extract_product(
         "<h1>Accessibility summary</h1>" + specific + '<img itemprop="image" src="/shirt.png">', URL
     )
     assert capture["name"] == "Product title"
@@ -110,7 +111,7 @@ def test_selected_variant_inherits_parent_images():
         + json.dumps(product)
         + '</script><select name="size"><option selected value="L">L</option></select>'
     )
-    capture = service.extract_product(html, URL)
+    capture = parser.extract_product(html, URL)
     assert capture["images"] == ["https://shop.example/parent.png"]
     assert capture["selected_size"] == "L" and capture["price"] == "20"
 
