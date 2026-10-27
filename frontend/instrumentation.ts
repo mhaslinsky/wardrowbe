@@ -11,7 +11,10 @@ export async function register() {
 
   const { publicHostnames } = await import('@/lib/proxy-headers');
   try {
-    publicHostnames();
+    if (publicHostnames().length) {
+      delete process.env.NEXTAUTH_URL;
+      process.env.AUTH_TRUST_HOST = 'true';
+    }
   } catch (error) {
     console.error(`Configuration: ${error instanceof Error ? error.message : 'Invalid PUBLIC_HOSTS'}`);
     process.exit(1);
