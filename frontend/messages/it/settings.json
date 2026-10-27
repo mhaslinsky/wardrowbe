@@ -172,5 +172,25 @@
     "limits": "Massimo 10 righe di 120 caratteri. Imposta come infilare le camicie con l’opzione sopra.",
     "savePreferences": "Salva preferenze anteprima",
     "saveConflict": "Salvataggio non riuscito. Bozza conservata."
+  },
+  "fitProfile": {
+    "title": "Profilo vestibilità",
+    "brandSizes": "Taglie per marca",
+    "skipList": "Lista da evitare",
+    "brand": "Marca",
+    "line": "Linea",
+    "size": "Taglia",
+    "note": "Nota",
+    "reason": "Motivo",
+    "addBrand": "Aggiungi taglia",
+    "addSkip": "Aggiungi esclusione",
+    "measurements": "Misure (cm)",
+    "neck": "Collo",
+    "sleeve": "Manica",
+    "thigh": "Coscia",
+    "referenceGarment": "Capo di riferimento",
+    "failed": "Caricamento o salvataggio non riuscito",
+    "conflict": "Profilo modificato",
+    "reload": "Scarta bozza e ricarica"
   }
 }

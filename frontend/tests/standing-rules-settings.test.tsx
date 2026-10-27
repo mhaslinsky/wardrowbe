@@ -4,7 +4,7 @@ import SettingsPage from '@/app/dashboard/settings/page'
 import { toast } from 'sonner'
 
 const state = vi.hoisted(() => ({
-  preferences: { standing_rules: ['Never a polo under an overshirt'] },
+  preferences: { standing_rules: ['Never a polo under an overshirt'] } as { standing_rules: string[] } | undefined,
   save: vi.fn().mockResolvedValue({}),
 }))
 vi.mock('@/lib/hooks/use-preferences', () => ({
@@ -66,3 +66,33 @@ it('keeps the main Settings draft when preview preferences refresh', async () =>
     expect(screen.getAllByText('save', { selector: 'button' })[0]).toBeEnabled();
   } finally { state.preferences = original; }
 });
+
+
+it.each([false, true])('omits unseeded standing rules when saving another field (late load: %s)', async (lateLoad) => {
+  const original = state.preferences;
+  try {
+    state.preferences = undefined;
+    const { rerender } = render(<SettingsPage />);
+    const input = screen.getByText('recommendations.avoidRepeatDays').parentElement!.querySelector('input')!;
+    fireEvent.change(input, { target: { value: '4' } });
+    if (lateLoad) {
+      state.preferences = original;
+      rerender(<SettingsPage />);
+    }
+    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0]);
+    await waitFor(() => expect(state.save).toHaveBeenCalledWith({ avoid_repeat_days: 4 }));
+  } finally { state.preferences = original; }
+});
+
+it('allows explicitly clearing rules before the server data arrives', async () => {
+  const original = state.preferences;
+  try {
+    state.preferences = undefined;
+    render(<SettingsPage />);
+    fireEvent.change(screen.getByLabelText('standingRules.label'), { target: { value: '   ' } });
+    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0]);
+    await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: [] }));
+  } finally { state.preferences = original; }
+});
+
+vi.mock('@/components/fit-profile-settings', () => ({ FitProfileSettings: () => null }));

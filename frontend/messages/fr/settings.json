@@ -172,5 +172,25 @@
     "limits": "10 lignes maximum, 120 caractères chacune. Choisissez le rentré avec l’option Chemises ci-dessus.",
     "savePreferences": "Enregistrer les préférences",
     "saveConflict": "Échec de l’enregistrement. Brouillon conservé."
+  },
+  "fitProfile": {
+    "title": "Profil de coupe",
+    "brandSizes": "Tailles par marque",
+    "skipList": "Liste à éviter",
+    "brand": "Marque",
+    "line": "Gamme",
+    "size": "Taille",
+    "note": "Note",
+    "reason": "Raison",
+    "addBrand": "Ajouter une taille",
+    "addSkip": "Ajouter une exclusion",
+    "measurements": "Mensurations (cm)",
+    "neck": "Cou",
+    "sleeve": "Manche",
+    "thigh": "Cuisse",
+    "referenceGarment": "Vêtement de référence",
+    "failed": "Chargement ou enregistrement impossible",
+    "conflict": "Profil modifié",
+    "reload": "Supprimer le brouillon et recharger"
   }
 }

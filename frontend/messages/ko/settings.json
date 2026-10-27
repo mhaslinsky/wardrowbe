@@ -172,5 +172,25 @@
     "limits": "최대 10줄, 줄당 120자. 밑단은 위의 셔츠 설정에서 선택하세요.",
     "savePreferences": "미리보기 설정 저장",
     "saveConflict": "저장 실패. 초안이 유지됩니다."
+  },
+  "fitProfile": {
+    "title": "핏 프로필",
+    "brandSizes": "브랜드별 사이즈",
+    "skipList": "제외 목록",
+    "brand": "브랜드",
+    "line": "라인",
+    "size": "사이즈",
+    "note": "메모",
+    "reason": "이유",
+    "addBrand": "사이즈 추가",
+    "addSkip": "제외 항목 추가",
+    "measurements": "치수 (cm)",
+    "neck": "목둘레",
+    "sleeve": "소매 길이",
+    "thigh": "허벅지 둘레",
+    "referenceGarment": "기준 의류",
+    "failed": "불러오기 또는 저장 실패",
+    "conflict": "프로필이 변경되었습니다",
+    "reload": "초안 삭제 후 새로고침"
   }
 }

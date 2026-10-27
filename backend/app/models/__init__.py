@@ -1,4 +1,5 @@
 from app.models.family import Family, FamilyInvite
+from app.models.fit_profile import UserFitProfile
 from app.models.identity import UserIdentity
 from app.models.item import ClothingItem, ItemHistory, ItemImage, WashHistory
 from app.models.learning import (
@@ -17,6 +18,7 @@ from app.models.trip import Trip
 from app.models.user import User
 
 __all__ = [
+    "UserFitProfile",
     "OutfitPreview",
     "PreviewPhoto",
     "Family",

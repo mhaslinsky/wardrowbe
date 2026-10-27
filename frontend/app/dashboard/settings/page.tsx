@@ -1,5 +1,6 @@
 'use client';
 
+import { FitProfileSettings } from '@/components/fit-profile-settings';
 import { PreviewPhotoSettings } from '@/components/preview-photo-settings';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
@@ -186,6 +187,7 @@ export default function SettingsPage() {
   const [formData, setFormData] = useState<Partial<Preferences>>({});
   const occasions = useOccasionOptions([formData.default_occasion, preferences?.default_occasion]);
   const [standingRulesText, setStandingRulesText] = useState('');
+  const [standingRulesReady, setStandingRulesReady] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
@@ -489,6 +491,7 @@ export default function SettingsPage() {
       }
       setFormData(preferences);
       setStandingRulesText((preferences.standing_rules || []).join('\n'));
+      setStandingRulesReady(true);
       setHasChanges(false);
     }
   }, [preferences]);
@@ -530,7 +533,9 @@ export default function SettingsPage() {
       }
       const settings = { ...formData };
       delete settings.preview_preferences;
-      await updatePreferences.mutateAsync({ ...settings, standing_rules: rules });
+      if (standingRulesReady) settings.standing_rules = rules;
+      else delete settings.standing_rules;
+      await updatePreferences.mutateAsync(settings);
       setHasChanges(false);
     } catch (error) {
       console.error('Failed to save preferences:', error);
@@ -543,6 +548,7 @@ export default function SettingsPage() {
         const saved = await resetPreferences.mutateAsync(formData.preview_preferences!.rev);
         setFormData(saved);
         setStandingRulesText(saved.standing_rules.join('\n'));
+        setStandingRulesReady(true);
         setHasChanges(false);
       } catch (error) {
         console.error('Failed to reset preferences:', error);
@@ -585,6 +591,7 @@ export default function SettingsPage() {
 
       <div className="grid gap-6">
         <PreviewPhotoSettings />
+        <FitProfileSettings />
         {/* Account Section */}
         <Card>
           <CardHeader>
@@ -966,7 +973,7 @@ export default function SettingsPage() {
               id="standing-rules"
               rows={5}
               value={standingRulesText}
-              onChange={(event) => { setStandingRulesText(event.target.value); setHasChanges(true); }}
+              onChange={(event) => { setStandingRulesText(event.target.value); setStandingRulesReady(true); setHasChanges(true); }}
             />
           </CardContent>
         </Card>

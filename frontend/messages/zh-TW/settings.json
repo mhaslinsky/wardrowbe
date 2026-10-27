@@ -172,5 +172,25 @@
     "limits": "最多10行，每行120字。請用上方的襯衫選項設定衣襬。",
     "savePreferences": "儲存預覽偏好",
     "saveConflict": "儲存失敗，草稿已保留。"
+  },
+  "fitProfile": {
+    "title": "合身檔案",
+    "brandSizes": "品牌尺寸",
+    "skipList": "避選清單",
+    "brand": "品牌",
+    "line": "系列",
+    "size": "尺寸",
+    "note": "備註",
+    "reason": "原因",
+    "addBrand": "新增品牌尺寸",
+    "addSkip": "新增避選項目",
+    "measurements": "身體尺寸（公分）",
+    "neck": "頸圍",
+    "sleeve": "袖長",
+    "thigh": "大腿圍",
+    "referenceGarment": "參考服裝",
+    "failed": "無法載入或儲存",
+    "conflict": "檔案已變更",
+    "reload": "捨棄草稿並重新載入"
   }
 }

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.database import DbSession
 from app.models.user import User
+from app.schemas.fit_profile import FitProfile
 from app.schemas.outfit import stored_occasion_or_default
 from app.schemas.preference import (
     PreferenceResponse,
@@ -14,6 +15,7 @@ from app.schemas.preference import (
     PreviewPreferenceReset,
     StyleProfile,
 )
+from app.services.fit_profile_service import FitProfileService
 from app.services.preference_service import PreferenceService
 from app.utils.auth import get_current_user
 from app.utils.preference_defaults import (
@@ -196,3 +198,20 @@ async def test_ai_endpoint(
             "status": "error",
             "error": str(e),
         }
+
+
+@router.get("/fit-profile", response_model=FitProfile)
+async def get_fit_profile(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FitProfile:
+    return await FitProfileService(db).get(current_user.id)
+
+
+@router.patch("/fit-profile", response_model=FitProfile)
+async def update_fit_profile(
+    data: FitProfile,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> FitProfile:
+    return await FitProfileService(db).update(current_user.id, data)
