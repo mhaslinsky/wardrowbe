@@ -23,12 +23,13 @@ class ItemTags(BaseModel):
     fit: str | None = None
     # User-owned keys. The AI never emits these, so the tagging worker and
     # ItemService.update must merge the tags JSONB rather than replace it.
+    material_detail: str | None = Field(None, max_length=1000)
     size: str | None = Field(None, max_length=32)
     care_instructions: str | None = Field(None, max_length=255)
     source_url: str | None = Field(None, max_length=500)
 
 
-USER_TAG_KEYS = frozenset({"size", "care_instructions", "source_url"})
+USER_TAG_KEYS = frozenset({"size", "care_instructions", "source_url", "material_detail"})
 
 
 class ItemBase(BaseModel):

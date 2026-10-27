@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { useUserProfile } from '@/lib/hooks/use-user';
 import { useConsideringImport, type ConfirmedProduct } from '@/lib/hooks/use-considering-import';
+import { queryKeys } from '@/lib/hooks/query-keys';
 import { MATERIAL_VALUES, CLOTHING_COLORS } from '@/lib/generated/garment-vocabulary';
 import { confirmedPayload } from '../../extension/confirmation';
 import { validateCapture } from '../../extension/capture';
@@ -49,8 +50,8 @@ export function ConsideringImport() {
     try {
       const result = await bridge(action, { ...capture, images: selected });
       if (action === 'save' && (!result.saved || typeof result.item !== 'string')) throw Error('response');
-      await client.invalidateQueries({ queryKey: ['considering', user?.email] });
-      await client.invalidateQueries({ queryKey: ['items'] });
+      await client.invalidateQueries({ queryKey: queryKeys.considering.list(user?.email, 'considering') });
+      await client.invalidateQueries({ queryKey: queryKeys.items.all });
       router.push('/dashboard/considering');
     } catch (failure) {
       setError(failure instanceof Error && ['token', 'rate', 'identity', 'partial', 'signin', 'uncertain'].includes(failure.message) ? failure.message : 'saveFailed');

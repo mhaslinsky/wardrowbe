@@ -25,7 +25,7 @@ describe('considering confirmation', () => {
     fireEvent.click(screen.getByText('save'));
     await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard/considering'));
     expect(bridge).toHaveBeenCalledWith('save', expect.objectContaining({ material_detail: '100% cotton', images: [capture.images[0]] }));
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['considering', user.email] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['considering', user.email, 'considering'] });
   });
   it('cancels before save without creating anything', async () => {
     render(<ConsideringImport />); await screen.findByDisplayValue('Shirt');
