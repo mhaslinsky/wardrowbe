@@ -152,6 +152,9 @@
     "limit": "Bis zu 20 Regeln mit je 300 Zeichen."
   },
   "previewPhoto": {
+    "anglesSet": "{count} von 3 Ansichten gespeichert",
+    "showPhotos": "Fotos anzeigen",
+    "hidePhotos": "Fotos ausblenden",
     "title": "Vorschaufoto",
     "guidance": "Ganzkörper, zur Kamera, eng anliegende Kleidung, gleichmäßiges Licht.",
     "upload": "Foto hochladen",

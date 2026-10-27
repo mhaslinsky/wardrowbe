@@ -43,7 +43,7 @@ const PreviewPhotoSettings = (modules['../components/preview-photo-settings.tsx'
 const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24' };
 const response = (data: unknown, status = 200) => ({ ok: status < 400, status, json: async () => data });
 beforeEach(() => { translation.locale = null; vi.mocked(toast.error).mockClear(); vi.mocked(fetch).mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
-afterEach(() => { client.clear(); vi.useRealTimers(); });
+afterEach(() => { client.clear(); vi.useRealTimers(); window.history.replaceState(null, '', window.location.pathname); });
 
 it.each([false, true])('loads a saved preview on mount with stale=%s without drawing', async (stale) => {
   vi.mocked(fetch).mockResolvedValue(response({ ...saved, stale }) as Response);
@@ -118,6 +118,7 @@ it('uploads, replaces, confirms removal and resets the file input', async () => 
     return response(photo ?? { detail: 'NO_PREVIEW_PHOTO' }, photo ? 200 : 404) as Response;
   });
   render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   const input = frontInput('uploadAngle');
   await waitFor(() => expect(input).toBeEnabled());
   const file = new File(['photo'], 'photo.jpg', { type: 'image/jpeg' });
@@ -143,6 +144,7 @@ it('uploads, replaces, confirms removal and resets the file input', async () => 
 it('reports photo load and upload failures', async () => {
   vi.mocked(fetch).mockResolvedValue(response({}, 502) as Response);
   render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   expect(await screen.findByRole('alert')).toBeVisible();
   fireEvent.change(frontInput('uploadAngle'), { target: { files: [new File(['bad'], 'bad.jpg')] } });
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
@@ -227,6 +229,7 @@ it.each([false, true])('polls an existing draw with timeout=%s', async (timeout)
 it('keeps failed removal open and clears its error after a successful upload', async () => {
   vi.mocked(fetch).mockImplementation(async (_url, options) => response(options?.method === 'DELETE' ? {} : saved, options?.method === 'DELETE' ? 502 : 200) as Response);
   render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   await screen.findByRole('img');
   fireEvent.click(screen.getByText('remove'));
   fireEvent.click(screen.getByText('remove'));
@@ -258,6 +261,7 @@ it('invalidates preview and photo queries after replacing the photo', async () =
     return response({ ...saved, image_url: replaced ? '/new-photo' : saved.image_url }) as Response;
   });
   render(<><OutfitPreview outfitId="one" /><PreviewPhotoSettings /></>);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   fireEvent.click(screen.getByText('see'));
   expect(await screen.findByRole('img', { name: 'see' })).toBeVisible();
   const invalidate = vi.spyOn(client, 'invalidateQueries');
@@ -306,6 +310,7 @@ it.each(['photo', 'outfit'])('handles a %s read failure without a global toast',
   vi.mocked(fetch).mockResolvedValue(response({ detail: 'Unavailable' }, 503) as Response);
   render(kind === 'photo' ? <PreviewPhotoSettings /> : <OutfitPreview outfitId="one" />);
   if (kind === 'outfit') fireEvent.click(screen.getByText('see'));
+  else fireEvent.click(screen.getByRole('button', { expanded: false }));
   expect(await screen.findByRole('alert')).toBeVisible();
   expect(toast.error).not.toHaveBeenCalled();
 });
@@ -345,6 +350,7 @@ it('shows three angle slots with independent upload and removal', async () => {
     return response({ ...photos.front, photos: { ...photos } }) as Response;
   });
   render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   await screen.findByRole('img', { name: 'title' });
   expect(screen.getAllByRole('group')).toHaveLength(3);
   for (const angle of ['quarter', 'side']) {
@@ -368,6 +374,7 @@ it('shows three angle slots with independent upload and removal', async () => {
 it('shows optional photos without a front photo', async () => {
   vi.mocked(fetch).mockResolvedValue(response({ photos: { side: saved } }) as Response);
   render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   expect(await screen.findByRole('img', { name: 'side' })).toBeVisible();
   expect(frontInput('uploadAngle')).toBeEnabled();
   expect(screen.queryByRole('img', { name: 'title' })).not.toBeInTheDocument();
@@ -376,6 +383,7 @@ it('shows optional photos without a front photo', async () => {
 it.each([{}, { photos: {} }, { photos: { side: {} } }, { photos: { back: saved } }])('rejects malformed photo collections %j', async (data) => {
   vi.mocked(fetch).mockResolvedValue(response(data) as Response);
   render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   expect(await screen.findByRole('alert')).toBeVisible();
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
 });
@@ -389,6 +397,7 @@ it.each([
   translation.locale = locale;
   vi.mocked(fetch).mockResolvedValue(response({ photos: { front: saved } }) as Response);
   render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   await screen.findByRole('img');
   for (const label of [upload, replace]) {
     expect(screen.getByText(label)).toBeVisible();
@@ -595,6 +604,7 @@ it('keeps the preview draft and original revision after a refetch and conflict',
     return response({ detail: 'NO_PREVIEW_PHOTO' }, 404) as Response;
   });
   render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   const editor = await screen.findByLabelText('preferences');
   fireEvent.change(editor, { target: { value: '  Loose fit  ' } });
   await act(async () => {
@@ -619,6 +629,7 @@ it('keeps the saved revision for an immediate second edit while refetch is pendi
     return response({ detail: 'NO_PREVIEW_PHOTO' }, 404) as Response;
   });
   render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
   const editor = await screen.findByLabelText('preferences');
   fireEvent.change(editor, { target: { value: 'Roomy sleeves' } });
   fireEvent.click(screen.getByRole('button', { name: 'savePreferences' }));
@@ -675,4 +686,72 @@ it('purchase preview draws once on mount and not again on rerender', async () =>
   view.rerender(<OutfitPreview outfitId="one" autoDraw />);
   await waitFor(() => expect(client.isMutating()).toBe(0));
   expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+});
+
+
+it('keeps saved photos unmounted until expanded and unmounts them again', async () => {
+  vi.mocked(fetch).mockResolvedValue(response({ photos: { front: saved, side: saved } }) as Response);
+  const { container } = render(<PreviewPhotoSettings />);
+  await waitFor(() => expect(client.getQueryData(['preview-photo'])).toEqual({ front: saved, side: saved }));
+  expect(screen.getByText('anglesSet')).toBeVisible();
+  expect(container.querySelector('img')).toBeNull();
+  await act(async () => { await client.refetchQueries({ queryKey: ['preview-photo'] }); });
+  expect(container.querySelector('img')).toBeNull();
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/medium.jpg') || String(url).includes('/full.jpg'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
+  expect(screen.getAllByRole('img')).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { expanded: true }));
+  expect(container.querySelector('img')).toBeNull();
+});
+
+it.each([true, false])('opens and scrolls to the photo hash on arrival=%s', async (arrival) => {
+  const mountedAtScroll: boolean[] = [];
+  const scroll = vi.fn(() => { mountedAtScroll.push(document.getElementById('preview-photo-content') !== null); });
+  Element.prototype.scrollIntoView = scroll;
+  window.history.replaceState(null, '', arrival ? '#preview-photo' : window.location.pathname);
+  vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
+  render(<PreviewPhotoSettings />);
+  if (!arrival) act(() => {
+    window.history.replaceState(null, '', '#preview-photo');
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  });
+  expect(await screen.findByRole('img')).toBeVisible();
+  expect(screen.getByRole('button', { expanded: true })).toBeVisible();
+  expect(scroll).toHaveBeenCalled();
+  expect(mountedAtScroll.every(Boolean)).toBe(true);
+  window.history.replaceState(null, '', window.location.pathname);
+});
+
+
+it('keeps unsaved preview preferences mounted while photos hide and show', async () => {
+  const initial = { lines: [], tuck: 'outfit', rev: 'original' };
+  client.setQueryData(['preferences'], { preview_preferences: initial });
+  vi.mocked(fetch).mockImplementation(async (url) => response(String(url).endsWith('/preferences')
+    ? { preview_preferences: initial } : saved) as Response);
+  render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
+  const editor = await screen.findByLabelText('preferences');
+  fireEvent.change(editor, { target: { value: 'Roomy sleeves' } });
+  fireEvent.change(screen.getByLabelText('shirts'), { target: { value: 'untucked' } });
+  fireEvent.click(screen.getByRole('button', { expanded: true }));
+  expect(screen.getByLabelText('preferences')).toBe(editor);
+  expect(editor).toHaveValue('Roomy sleeves');
+  expect(screen.getByLabelText('shirts')).toHaveValue('untucked');
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
+  expect(screen.getByLabelText('preferences')).toBe(editor);
+  expect(editor).toHaveValue('Roomy sleeves');
+  expect(screen.getByLabelText('shirts')).toHaveValue('untucked');
+});
+
+
+it('realigns the hash card after photo dimensions load', async () => {
+  window.history.replaceState(null, '', '#preview-photo');
+  const scroll = vi.fn();
+  Element.prototype.scrollIntoView = scroll;
+  vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
+  render(<PreviewPhotoSettings />);
+  const image = await screen.findByRole('img');
+  scroll.mockClear();
+  fireEvent.load(image);
+  expect(scroll).toHaveBeenCalled();
 });

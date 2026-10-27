@@ -152,6 +152,9 @@
     "limit": "各300文字以内で最大20件入力できます。"
   },
   "previewPhoto": {
+    "anglesSet": "3方向中{count}方向を設定済み",
+    "showPhotos": "写真を表示",
+    "hidePhotos": "写真を非表示",
     "title": "プレビュー写真",
     "guidance": "全身、カメラに正面向き、体に合った服、均一な照明。",
     "upload": "写真をアップロード",

@@ -152,6 +152,9 @@
     "limit": "最多20条规则，每条不超过300个字符。"
   },
   "previewPhoto": {
+    "anglesSet": "已设置 {count}/3 个角度",
+    "showPhotos": "显示照片",
+    "hidePhotos": "隐藏照片",
     "title": "预览照片",
     "guidance": "全身、正对镜头、合身衣物、均匀光线。",
     "upload": "上传照片",
