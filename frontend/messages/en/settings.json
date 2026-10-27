@@ -172,5 +172,25 @@
     "limits": "Up to 10 lines, 120 characters each. Set tucking with the Shirts option above.",
     "savePreferences": "Save preview preferences",
     "saveConflict": "Save failed. Your draft is kept."
+  },
+  "fitProfile": {
+    "title": "Fit profile",
+    "brandSizes": "Brand sizes",
+    "skipList": "Skip list",
+    "brand": "Brand",
+    "line": "Line",
+    "size": "Size",
+    "note": "Note",
+    "reason": "Reason",
+    "addBrand": "Add brand size",
+    "addSkip": "Add skip entry",
+    "measurements": "Measurements (cm)",
+    "neck": "Neck",
+    "sleeve": "Sleeve",
+    "thigh": "Thigh",
+    "referenceGarment": "Reference garment",
+    "failed": "Could not load or save",
+    "conflict": "Profile changed",
+    "reload": "Discard draft and reload"
   }
 }

@@ -172,5 +172,25 @@
     "limits": "最多10行，每行120字。请用上方的衬衫选项设置衣摆。",
     "savePreferences": "保存预览偏好",
     "saveConflict": "保存失败，草稿已保留。"
+  },
+  "fitProfile": {
+    "title": "合身档案",
+    "brandSizes": "品牌尺码",
+    "skipList": "避选清单",
+    "brand": "品牌",
+    "line": "系列",
+    "size": "尺码",
+    "note": "备注",
+    "reason": "原因",
+    "addBrand": "添加品牌尺码",
+    "addSkip": "添加避选项",
+    "measurements": "身体尺寸（厘米）",
+    "neck": "颈围",
+    "sleeve": "袖长",
+    "thigh": "大腿围",
+    "referenceGarment": "参考服装",
+    "failed": "无法加载或保存",
+    "conflict": "档案已更改",
+    "reload": "放弃草稿并重新加载"
   }
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { FitProfileSettings } from '@/components/fit-profile-settings';
 import { PreviewPhotoSettings } from '@/components/preview-photo-settings';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
@@ -585,6 +586,7 @@ export default function SettingsPage() {
 
       <div className="grid gap-6">
         <PreviewPhotoSettings />
+        <FitProfileSettings />
         {/* Account Section */}
         <Card>
           <CardHeader>

@@ -172,5 +172,25 @@
     "limits": "Bis zu 10 Zeilen mit je 120 Zeichen. Das Einstecken mit der Hemdoption oben festlegen.",
     "savePreferences": "Vorschaueinstellungen speichern",
     "saveConflict": "Speichern fehlgeschlagen. Entwurf bleibt erhalten."
+  },
+  "fitProfile": {
+    "title": "Passformprofil",
+    "brandSizes": "Markengrößen",
+    "skipList": "Ausschlussliste",
+    "brand": "Marke",
+    "line": "Serie",
+    "size": "Größe",
+    "note": "Notiz",
+    "reason": "Grund",
+    "addBrand": "Markengröße hinzufügen",
+    "addSkip": "Ausschluss hinzufügen",
+    "measurements": "Maße (cm)",
+    "neck": "Hals",
+    "sleeve": "Ärmel",
+    "thigh": "Oberschenkel",
+    "referenceGarment": "Referenzkleidungsstück",
+    "failed": "Laden oder Speichern fehlgeschlagen",
+    "conflict": "Profil geändert",
+    "reload": "Entwurf verwerfen und neu laden"
   }
 }

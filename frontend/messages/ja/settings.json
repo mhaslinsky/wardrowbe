@@ -172,5 +172,25 @@
     "limits": "最大10行、各120文字。裾は上のシャツ設定で指定してください。",
     "savePreferences": "プレビュー設定を保存",
     "saveConflict": "保存できませんでした。下書きは保持されています。"
+  },
+  "fitProfile": {
+    "title": "フィットプロフィール",
+    "brandSizes": "ブランド別サイズ",
+    "skipList": "避けるリスト",
+    "brand": "ブランド",
+    "line": "ライン",
+    "size": "サイズ",
+    "note": "メモ",
+    "reason": "理由",
+    "addBrand": "サイズを追加",
+    "addSkip": "除外を追加",
+    "measurements": "寸法（cm）",
+    "neck": "首回り",
+    "sleeve": "袖丈",
+    "thigh": "太もも",
+    "referenceGarment": "基準にする服",
+    "failed": "読み込みまたは保存に失敗しました",
+    "conflict": "プロフィールが変更されました",
+    "reload": "下書きを破棄して再読み込み"
   }
 }
