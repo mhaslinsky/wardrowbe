@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label';
 export type ImportReply = { capture?: ConfirmedProduct; partial?: boolean; uncertain?: boolean; saved?: boolean; item?: string };
 export type ImportTransport = {
   request: (action: 'load' | 'save' | 'cancel' | 'discard', capture?: ConfirmedProduct) => Promise<ImportReply>;
-  validate: (input: unknown) => ConfirmedProduct;
+  validate: (input: unknown, saving?: boolean) => ConfirmedProduct;
   preview?: string;
 };
 export function ConsideringImport({ transport }: { transport?: ImportTransport } = {}) {
@@ -55,7 +55,7 @@ export function ConsideringImport({ transport }: { transport?: ImportTransport }
     if (busy || !capture) return;
     setError('');
     if (action === 'save' && !partial) {
-      try { if (transport) transport.validate({ ...capture, images: selected }); else confirmedPayload({ ...capture, images: selected }); } catch { setError('invalid'); return; }
+      try { if (transport) transport.validate({ ...capture, images: selected }, true); else confirmedPayload({ ...capture, images: selected }); } catch { setError('invalid'); return; }
     }
     setBusy(true);
     try {

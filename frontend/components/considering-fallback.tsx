@@ -1,9 +1,9 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { validateCapture, type ProductCapture } from '@/lib/extension-reader/capture';
-import { confirmedFilePayload } from '@/lib/extension-reader/confirmation';
+import { confirmedFilePayload, confirmedPayload } from '@/lib/extension-reader/confirmation';
 import { localProductImport } from '@/lib/local-product-import';
 import { useUserProfile } from '@/lib/hooks/use-user';
 import { useSetTokenIfAvailable } from '@/lib/hooks/use-session-token';
@@ -13,7 +13,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 
 export function ConsideringFallback() {
-  const t = useTranslations('wardrobe.fallback');
+  const translate = useTranslations('wardrobe.fallback');
+  const importText = useTranslations('wardrobe.import');
   const common = useTranslations('common');
   useSetTokenIfAvailable();
   const { data: user } = useUserProfile();
@@ -24,23 +25,25 @@ export function ConsideringFallback() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [transport, setTransport] = useState<ImportTransport>();
-  function reset() {
+  const reset = useCallback(() => {
     generation.current++; if (preview.current) URL.revokeObjectURL(preview.current);
     preview.current = undefined; setTransport(undefined); setLink(''); setError(''); setBusy(false);
-  }
+  }, []);
   useEffect(() => {
-    generation.current++; setTransport(undefined); setBusy(false);
+    generation.current++; setTransport(undefined); setBusy(false); setError('');
     if (user?.id) {
       try {
         const saved = sessionStorage.getItem(`considering-import:${user.id}`);
         if (saved) {
           const draft = JSON.parse(saved);
+          if (typeof draft?.fileBacked !== 'boolean') throw Error('draft');
+          if (draft.fileBacked) confirmedFilePayload(draft.capture); else confirmedPayload(draft.capture);
           setTransport(localProductImport(user.id, draft.capture, undefined, undefined, reset, () => owner.current));
         }
       } catch { setError('recoveryFailed'); }
     }
-    return () => { generation.current++; if (preview.current) URL.revokeObjectURL(preview.current); };
-  }, [user?.id]);
+    return () => { generation.current++; if (preview.current) URL.revokeObjectURL(preview.current); preview.current = undefined; };
+  }, [user?.id, reset]);
   function open(capture: ProductCapture, file?: File) {
     if (!user) throw Error('identity');
     if (file) preview.current = URL.createObjectURL(file);
@@ -62,6 +65,7 @@ export function ConsideringFallback() {
     finally { if (request === generation.current) setBusy(false); }
   }
   async function choose(file?: File) {
+    if (error === 'recoveryFailed') return;
     const request = ++generation.current;
     setError(''); setBusy(false);
     try {
@@ -76,18 +80,19 @@ export function ConsideringFallback() {
   }
   if (transport) return <ConsideringImport transport={transport} />;
   return <main className="mx-auto max-w-3xl space-y-5 p-4">
-    <h1 className="text-2xl font-bold">{t('title')}</h1>
+    <h1 className="text-2xl font-bold">{translate('title')}</h1>
     <form className="space-y-3" onSubmit={event => { event.preventDefault(); if (!busy) void readLink(); }}>
-      <Label htmlFor="product-link">{t('link')}</Label>
+      <Label htmlFor="product-link">{translate('link')}</Label>
       <Input id="product-link" value={link} maxLength={2000} onChange={event => { generation.current++; setBusy(false); setLink(event.target.value); }} />
-      <Button disabled={busy || !user} type="submit">{busy ? common('loading') : t('readLink')}</Button>
-      <Button type="button" variant="outline" onClick={reset}>{common('cancel')}</Button>
+      <Button disabled={busy || !user || error === 'recoveryFailed'} type="submit">{busy ? common('loading') : translate('readLink')}</Button>
+      <Button type="button" variant="outline" disabled={error === 'recoveryFailed'} onClick={reset}>{common('cancel')}</Button>
     </form>
-    <p className="text-sm text-muted-foreground">{t('publicOnly')}</p>
-    {error && <p role="alert">{t(error)}</p>}
+    <p className="text-sm text-muted-foreground">{translate('publicOnly')}</p>
+    {error && <p role="alert">{translate(error)}</p>}
+    {error === 'recoveryFailed' && <Button type="button" variant="outline" onClick={() => { if (owner.current) sessionStorage.removeItem(`considering-import:${owner.current}`); reset(); }}>{importText('discardChecked')}</Button>}
     <div className="rounded border border-dashed p-6" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void choose(event.dataTransfer.files.length === 1 ? event.dataTransfer.files[0] : undefined); }}>
-      <Label htmlFor="product-image">{t('imageDrop')}</Label>
-      <Input id="product-image" type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} />
+      <Label htmlFor="product-image">{translate('imageDrop')}</Label>
+      <Input id="product-image" disabled={error === 'recoveryFailed'} type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { void choose(event.target.files?.[0]); event.target.value = ''; }} />
     </div>
   </main>;
 }

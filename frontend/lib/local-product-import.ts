@@ -13,8 +13,8 @@ export function localProductImport(owner: string, initial: ConfirmedProduct, fil
   let busy = false;
   const persist = () => sessionStorage.setItem(key, JSON.stringify(draft));
   const identity = () => { if (currentOwner() !== owner) throw Error('identity'); };
-  const validate = (input: unknown) => {
-    if (!draft.fileBacked) { const result = validateCapture(input); confirmedPayload(result); return result; }
+  const validate = (input: unknown, saving = false) => {
+    if (!draft.fileBacked) { const result = validateCapture(input); if (saving) confirmedPayload(input); return result; }
     confirmedFilePayload(input as ConfirmedProduct);
     return { ...input as ConfirmedProduct, images: [] };
   };
@@ -47,7 +47,7 @@ export function localProductImport(owner: string, initial: ConfirmedProduct, fil
             created = await response.json();
           } else created = await api.post('/considering', payload.create);
         } catch (failure) {
-          if (failure instanceof ApiError && [400, 401, 403, 404, 409, 413, 429].includes(failure.status)) { draft.creating = false; persist(); }
+          if (failure instanceof ApiError && [400, 401, 403, 404, 409, 413, 422, 429].includes(failure.status)) { draft.creating = false; persist(); }
           throw failure;
         }
         identity();
@@ -59,6 +59,7 @@ export function localProductImport(owner: string, initial: ConfirmedProduct, fil
       await api.patch(`/items/${draft.item}`, draft.update);
       identity();
       const item = itemResult(await api.get(`/items/${draft.item}`), draft.item);
+      identity();
       for (const [field, value] of Object.entries(draft.update!.tags)) {
         if (value !== undefined && JSON.stringify(item.tags?.[field as keyof typeof item.tags]) !== JSON.stringify(value)) throw Error('partial');
       }
