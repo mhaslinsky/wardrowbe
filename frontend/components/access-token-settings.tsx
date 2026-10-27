@@ -46,6 +46,8 @@ export function AccessTokenSettings() {
       if ('name' in action) {
         setRevealed(null); setCopied(false); setCopyFailed(false);
         const created = tokenInfo.extend({ token: z.string().startsWith('wbt_') }).parse(await api.post<unknown>(endpoint, action));
+        const metadata = tokenInfo.parse(created);
+        client.setQueryData<z.infer<typeof tokenInfo>[]>(key, (current) => [metadata, ...(current ?? [])]);
         setRevealed({ owner, id: created.id, token: created.token });
         setName('');
       } else {
@@ -56,7 +58,7 @@ export function AccessTokenSettings() {
     onSuccess: () => client.invalidateQueries({ queryKey: key }),
   });
   const secret = status === 'authenticated' && revealed?.owner === owner ? revealed : null;
-  const date = (value: string) => format.dateTime(new Date(value), { dateStyle: 'medium', timeStyle: 'short' });
+  const date = (value: string) => format.dateTime(new Date(value), { dateStyle: 'medium', timeStyle: 'short', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
   return <Card>
     <CardHeader><CardTitle>{translate('title')}</CardTitle></CardHeader>
     <CardContent className="space-y-4">
