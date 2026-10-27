@@ -18,7 +18,8 @@ export function useConsideringSuggestions(itemId: string) {
       if (!Array.isArray(outfits) || !outfits.length) throw new Error('Empty suggestions');
       return outfits;
     },
-    onSuccess: (outfits) => {
+    onSuccess: (outfits, signal) => {
+      if (signal.aborted) return;
       for (const outfit of outfits) client.setQueryData(queryKeys.outfit(outfit.id), outfit);
       client.invalidateQueries({ queryKey: queryKeys.outfits.all });
     },

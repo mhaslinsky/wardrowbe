@@ -74,4 +74,6 @@ it('aborts a pending request on cancel and reopens without stale results', async
   fireEvent.click(screen.getByRole('button', { name: label('wearWith') }));
   expect(screen.queryByText('outfits.cards.unbought')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: label('suggest') })).toBeEnabled();
+  await waitFor(() => expect(client.getMutationCache().getAll()[0].state.status).toBe('success'));
+  expect(client.getQueryData(['outfit', 'suggested'])).toBeUndefined();
 });
