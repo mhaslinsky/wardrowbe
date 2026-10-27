@@ -1,6 +1,6 @@
 import { validateCapture, type ProductCapture } from './capture';
-import { MATERIAL_VALUES } from '../frontend/lib/generated/garment-vocabulary';
-import { normalizeColor } from '../frontend/lib/colors';
+import { MATERIAL_VALUES } from '../generated/garment-vocabulary';
+import { normalizeColor } from '../colors';
 
 export type ConfirmedProduct = ProductCapture & { material?: string };
 export function confirmedPayload(input: unknown) {

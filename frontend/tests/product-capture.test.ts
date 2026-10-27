@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { captureProduct, validateCapture } from '../../extension/capture';
+import { captureProduct, validateCapture } from '../lib/extension-reader/capture';
 
 describe('product capture', () => {
   it('reads nested JSON-LD variants and relative images without inventing missing fields', () => {
@@ -30,7 +30,7 @@ describe('product capture', () => {
 
 import { readFileSync } from 'node:fs';
 import { vi } from 'vitest';
-import { confirmedPayload } from '../../extension/confirmation';
+import { confirmedPayload } from '../lib/extension-reader/confirmation';
 const fixtures = `${process.cwd()}/tests/fixtures/products/`;
 function visibleLayout() {
     return vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {

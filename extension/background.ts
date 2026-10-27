@@ -1,5 +1,5 @@
-import { captureProduct, validateCapture, type ProductCapture } from './capture';
-import { confirmedPayload } from './confirmation';
+import { captureProduct, validateCapture, type ProductCapture } from '../frontend/lib/extension-reader/capture';
+import { confirmedPayload } from '../frontend/lib/extension-reader/confirmation';
 declare const chrome: any;
 const browser = (globalThis as any).browser || chrome;
 export const APP_ORIGIN = 'https://wardrobe.haslinsky.net';

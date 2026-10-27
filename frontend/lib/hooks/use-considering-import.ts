@@ -1,8 +1,8 @@
 'use client';
 import { useCallback, useRef } from 'react';
-import type { ConfirmedProduct } from '../../../extension/confirmation';
-export type { ProductCapture } from '../../../extension/capture';
-export type { ConfirmedProduct } from '../../../extension/confirmation';
+import type { ConfirmedProduct } from '../extension-reader/confirmation';
+export type { ProductCapture } from '../extension-reader/capture';
+export type { ConfirmedProduct } from '../extension-reader/confirmation';
 
 export function useConsideringImport(owner: string | undefined) {
   const busy = useRef(false);
