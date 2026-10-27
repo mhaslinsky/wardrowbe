@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { NextIntlClientProvider } from 'next-intl'
 import { describe, expect, it, vi } from 'vitest'
 import OutfitDetailPage from '@/app/dashboard/outfits/[id]/page'
@@ -15,7 +15,8 @@ vi.mock('next/navigation', () => ({
 const outfit = vi.hoisted(() => ({
   replaces_outfit_id: null as string | null,
   id: 'o1',
-  scheduled_for: '2026-10-05',
+  scheduled_for: '2026-10-05' as string | null,
+  unowned_item_ids: [] as string[],
   source: 'on_demand',
   occasion: 'casual',
   name: 'Look' as string | null,
@@ -31,8 +32,9 @@ vi.mock('@/lib/hooks/use-outfits', () => ({
   useOutfits: () => ({ data: undefined }),
   useDeleteOutfit: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }))
+const wearRequest = vi.hoisted(() => vi.fn().mockResolvedValue({ id: 'worn' }))
 vi.mock('@/lib/hooks/use-studio', () => ({
-  useWearToday: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useWearToday: () => ({ mutateAsync: wearRequest, isPending: false }),
 }))
 vi.mock('@/lib/hooks/use-user', () => ({ useUserToday: () => () => '2026-10-05' }))
 vi.mock('@/components/shared/lineage-card', () => ({ LineageCard: () => null }))
@@ -103,3 +105,40 @@ describe('outfit detail source label', () => {
 })
 
 vi.mock('@/components/outfit-preview', () => ({ OutfitPreview: ({ children }: { children: React.ReactNode }) => children }))
+
+function purchasePage() {
+  const en = Object.fromEntries(['outfits', 'common', 'history', 'constants'].map(namespace => [namespace, messages('en', namespace)]))
+  return <NextIntlClientProvider locale="en" messages={en}><OutfitDetailPage /></NextIntlClientProvider>
+}
+
+it('purchase membership disables both wear buttons', () => {
+  outfit.scheduled_for = null
+  try {
+    const view = render(purchasePage())
+    fireEvent.click(screen.getByRole('button', { name: 'Wear on…' }))
+    outfit.unowned_item_ids = ['shirt-1']
+    view.rerender(purchasePage())
+    expect(screen.getByRole('button', { name: 'Wear on…', hidden: true })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Log wear' })).toBeDisabled()
+  } finally {
+    outfit.scheduled_for = '2026-10-05'
+    outfit.unowned_item_ids = []
+  }
+})
+
+it('purchase membership prevents the wear handler from sending a request', () => {
+  outfit.scheduled_for = null
+  wearRequest.mockClear()
+  try {
+    render(purchasePage())
+    fireEvent.click(screen.getByRole('button', { name: 'Wear on…' }))
+    const submit = screen.getByRole('button', { name: 'Log wear' })
+    expect(submit).toBeEnabled()
+    outfit.unowned_item_ids = ['shirt-1']
+    fireEvent.click(submit)
+    expect(wearRequest).not.toHaveBeenCalled()
+  } finally {
+    outfit.scheduled_for = '2026-10-05'
+    outfit.unowned_item_ids = []
+  }
+})

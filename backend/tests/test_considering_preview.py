@@ -255,3 +255,97 @@ async def test_direct_preview_rejects_unavailable_anchor(
     await db_session.commit()
     response = await client.post(f"{PATH}/{anchor.id}/outfits", headers=auth_headers, json={})
     assert response.status_code == (409 if state in ("bought", "passed") else 422)
+
+
+@pytest.mark.parametrize(
+    "action", ["wore", "wore-instead", "feedback", "accept", "reject", "feedback-accept"]
+)
+async def test_unowned_source_refuses_wear_overrides_and_acceptance(
+    client, auth_headers, db_session, test_user, action
+):
+    from uuid import UUID
+
+    from app.utils.timezone import get_user_today
+
+    anchor, _, companion, *_rest = await fixture_items(db_session, test_user)
+    created = await client.post(f"{PATH}/{anchor.id}/outfits", headers=auth_headers, json={})
+    outfit_id = created.json()["id"]
+    await db_session.commit()
+    payload = {
+        "wore": {"date": get_user_today(test_user).isoformat(), "item_ids": [str(companion.id)]},
+        "wore-instead": {"items": [str(companion.id)]},
+        "feedback": {"actually_worn": False, "wore_instead_items": [str(companion.id)]},
+        "feedback-accept": {"accepted": True},
+    }.get(action, {})
+    suffix = "feedback" if action == "feedback-accept" else action
+    response = await client.post(
+        f"/api/v1/outfits/{outfit_id}/{suffix}", headers=auth_headers, json=payload
+    )
+    assert response.status_code == (
+        403 if action in ("wore", "wore-instead", "feedback") else 422
+    ), response.text
+    assert (await db_session.get(Outfit, UUID(outfit_id))).status == "pending"
+    assert (
+        await db_session.scalar(
+            select(func.count()).select_from(Outfit).where(Outfit.user_id == test_user.id)
+        )
+        == 1
+    )
+    await db_session.refresh(companion)
+    assert companion.wear_count == 0
+    assert (
+        await client.post(f"{PATH}/{anchor.id}/bought", headers=auth_headers)
+    ).status_code == 200
+    allowed = await client.post(
+        f"/api/v1/outfits/{outfit_id}/{suffix}", headers=auth_headers, json=payload
+    )
+    assert allowed.status_code == 200, allowed.text
+
+
+async def test_suggest_options_batches_purchase_queries(
+    client, auth_headers, db_session, test_user
+):
+    from unittest.mock import AsyncMock, patch
+
+    from sqlalchemy import event
+
+    from app.services.studio_service import StudioService
+
+    _, _, companion, *_rest = await fixture_items(db_session, test_user)
+    outfits = [
+        await StudioService(db_session).create_from_scratch(
+            test_user, [companion.id], "casual", None, None, False, None
+        )
+        for _index in range(3)
+    ]
+    await db_session.commit()
+    outfits = [await StudioService(db_session).get_full_outfit(outfit.id) for outfit in outfits]
+    membership_queries = []
+
+    def observe(_connection, _cursor, _statement, _parameters, context, _executemany):
+        statement = context.compiled.statement if context.compiled else None
+        if getattr(statement, "is_select", False) and any(
+            getattr(source, "name", None) == "item_purchases"
+            for source in statement.get_final_froms()
+        ):
+            membership_queries.append(statement)
+
+    event.listen(db_session.bind.sync_engine, "before_cursor_execute", observe)
+    try:
+        counts = []
+        for count in (1, 3):
+            membership_queries.clear()
+            with patch(
+                "app.services.recommendation_service.RecommendationService.generate_recommendations",
+                AsyncMock(return_value=outfits[:count]),
+            ):
+                response = await client.post(
+                    "/api/v1/outfits/suggest-options",
+                    headers=auth_headers,
+                    json={"occasion": "casual"},
+                )
+            assert response.status_code == 200, response.text
+            counts.append(len(membership_queries))
+        assert counts == [1, 1]
+    finally:
+        event.remove(db_session.bind.sync_engine, "before_cursor_execute", observe)

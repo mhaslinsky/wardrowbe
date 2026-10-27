@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.api.pagination import PaginationParams
 from app.config import get_settings
 from app.database import DbSession
-from app.models.considering import ItemPurchase
+from app.models.considering import ItemPurchase, owned_outfit
 from app.models.item import ClothingItem
 from app.models.outfit import (
     FamilyOutfitRating,
@@ -425,6 +425,24 @@ def outfit_to_response(
     )
 
 
+async def _unowned_ids(db: AsyncSession, outfits: list[Outfit]) -> set[UUID]:
+    return set(
+        await db.scalars(
+            select(ItemPurchase.item_id).where(
+                ItemPurchase.item_id.in_(
+                    [link.item_id for outfit in outfits for link in outfit.items]
+                ),
+                ItemPurchase.state.in_(("considering", "passed")),
+            )
+        )
+    )
+
+
+async def _require_owned_outfit(db: AsyncSession, outfit: Outfit) -> None:
+    if not await db.scalar(select(Outfit.id).where(Outfit.id == outfit.id, owned_outfit())):
+        raise HTTPException(422, "Outfit contains unowned items")
+
+
 async def outfit_response(
     db: AsyncSession,
     outfit: Outfit,
@@ -434,14 +452,7 @@ async def outfit_response(
     unowned_ids: set[UUID] | None = None,
 ) -> OutfitResponse:
     if unowned_ids is None:
-        unowned_ids = set(
-            await db.scalars(
-                select(ItemPurchase.item_id).where(
-                    ItemPurchase.item_id.in_([link.item_id for link in outfit.items]),
-                    ItemPurchase.state.in_(("considering", "passed")),
-                )
-            )
-        )
+        unowned_ids = await _unowned_ids(db, [outfit])
     response = outfit_to_response(outfit, wore_instead_items_map, is_starter_suggestion)
     response.unowned_item_ids = [item.id for item in response.items if item.id in unowned_ids]
     return response
@@ -592,8 +603,11 @@ async def suggest_outfit_options(
     is_starter = total_items <= 5
 
     wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
+    unowned_ids = await _unowned_ids(db, outfits)
     return [
-        await outfit_response(db, outfit, wore_instead_map, is_starter_suggestion=is_starter)
+        await outfit_response(
+            db, outfit, wore_instead_map, is_starter_suggestion=is_starter, unowned_ids=unowned_ids
+        )
         for outfit in outfits
     ]
 
@@ -719,16 +733,7 @@ async def list_outfits(
 
     wore_instead_map = await fetch_wore_instead_items_map(db, outfits, user_id=current_user.id)
 
-    unowned_ids = set(
-        await db.scalars(
-            select(ItemPurchase.item_id).where(
-                ItemPurchase.item_id.in_(
-                    [link.item_id for outfit in outfits for link in outfit.items]
-                ),
-                ItemPurchase.state.in_(("considering", "passed")),
-            )
-        )
-    )
+    unowned_ids = await _unowned_ids(db, outfits)
     outfit_responses = [
         await outfit_response(db, outfit, wore_instead_map, unowned_ids=unowned_ids)
         for outfit in outfits
@@ -895,6 +900,7 @@ async def accept_outfit(
             detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
         )
 
+    await _require_owned_outfit(db, outfit)
     outfit.status = OutfitStatus.accepted
     outfit.responded_at = datetime.utcnow()
     await db.commit()
@@ -930,6 +936,7 @@ async def reject_outfit(
             detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
         )
 
+    await _require_owned_outfit(db, outfit)
     outfit.status = OutfitStatus.rejected
     outfit.responded_at = datetime.utcnow()
     await db.commit()
@@ -1006,6 +1013,8 @@ async def submit_feedback(
     if not outfit:
         raise LookupError("Outfit not found")
 
+    if request.accepted is not None:
+        await _require_owned_outfit(db, outfit)
     posted_outfit_id = outfit.id
     if request.worn or request.actually_worn is True or request.wore_instead_items:
         target_date = WearService.date_for(current_user, outfit)

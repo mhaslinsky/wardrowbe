@@ -37,3 +37,10 @@ describe('outfit thumbnails', () => {
     expect(screen.getByText('inTheWash')).toHaveClass('[@container(min-width:480px)]:inline')
   })
 })
+
+it('purchase badge follows current unowned membership', () => {
+  const { rerender } = render(<OutfitCard outfit={{ ...outfit(1), unowned_item_ids: ['piece-0'] }} />);
+  expect(screen.getByText('unbought')).toBeVisible();
+  rerender(<OutfitCard outfit={{ ...outfit(1), unowned_item_ids: [] }} />);
+  expect(screen.queryByText('unbought')).not.toBeInTheDocument();
+});

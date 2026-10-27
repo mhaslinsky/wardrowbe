@@ -37,7 +37,7 @@ function render(ui: ReactElement) {
 
 // Missing components render nothing, so these tests can also run against the base commit.
 const modules = import.meta.glob('../components/{outfit-preview,preview-photo-settings}.tsx', { eager: true });
-const OutfitPreview = (modules['../components/outfit-preview.tsx'] as { OutfitPreview?: ComponentType<{ outfitId: string; children?: ReactNode; detail?: boolean }> } | undefined)?.OutfitPreview ?? (() => null);
+const OutfitPreview = (modules['../components/outfit-preview.tsx'] as { OutfitPreview?: ComponentType<{ outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean }> } | undefined)?.OutfitPreview ?? (() => null);
 const PreviewPhotoSettings = (modules['../components/preview-photo-settings.tsx'] as { PreviewPhotoSettings?: ComponentType } | undefined)?.PreviewPhotoSettings ?? (() => null);
 
 const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24' };
@@ -663,4 +663,16 @@ it('preserves card content when a saved preview is removed', async () => {
   await waitFor(() => expect(screen.queryByRole('img')).not.toBeInTheDocument());
   expect(screen.getByTestId('outfit-content')).toBeVisible();
   expect(screen.getByRole('button', { name: 'see' })).toBeEnabled();
+});
+
+it('purchase preview draws once on mount and not again on rerender', async () => {
+  vi.mocked(fetch).mockImplementation(async (_url, options) => response(
+    options?.method === 'POST' ? saved : { detail: 'NO_PREVIEW' },
+    options?.method === 'POST' ? 200 : 404,
+  ) as Response);
+  const view = render(<OutfitPreview outfitId="one" autoDraw />);
+  expect(await screen.findByRole('img')).toHaveAttribute('src', saved.medium_url);
+  view.rerender(<OutfitPreview outfitId="one" autoDraw />);
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
 });
