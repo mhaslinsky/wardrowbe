@@ -1,18 +1,23 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { FitProfileSettings } from '@/components/fit-profile-settings';
 
 const state = vi.hoisted(() => ({ get: vi.fn(), patch: vi.fn() }));
 vi.mock('@/lib/api', () => ({ api: state }));
+function wrapper({ children }: { children: React.ReactNode }) {
+  return <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>{children}</QueryClientProvider>;
+}
 const initial = { rev: 'old', brand_sizes: [], skip_list: [], neck: null, sleeve: null, thigh: null, reference_garment: '' };
 beforeEach(() => {
+  state.get.mockReset();
   state.get.mockResolvedValue(structuredClone(initial));
   state.patch.mockReset();
 });
 
 it('adds, edits and deletes brand sizes and skip rows', async () => {
   state.patch.mockImplementation(async (_path, profile) => ({ ...profile, rev: 'saved' }));
-  render(<FitProfileSettings />);
+  render(<FitProfileSettings />, { wrapper });
   fireEvent.click(await screen.findByRole('button', { name: 'addBrand' }));
   fireEvent.change(screen.getByLabelText('brand'), { target: { value: 'FLX' } });
   fireEvent.change(screen.getByLabelText('size'), { target: { value: 'L' } });
@@ -37,7 +42,7 @@ it('adds, edits and deletes brand sizes and skip rows', async () => {
 
 it('keeps the draft after a conflict and reloads only on request', async () => {
   state.patch.mockRejectedValue({ status: 409 });
-  render(<FitProfileSettings />);
+  render(<FitProfileSettings />, { wrapper });
   const reference = await screen.findByLabelText('referenceGarment');
   fireEvent.change(reference, { target: { value: 'Keep my draft' } });
   fireEvent.click(screen.getByRole('button', { name: 'save' }));
@@ -49,7 +54,7 @@ it('keeps the draft after a conflict and reloads only on request', async () => {
 
 it('shows a failed read and allows retry', async () => {
   state.get.mockRejectedValueOnce(new Error('offline'));
-  render(<FitProfileSettings />);
+  render(<FitProfileSettings />, { wrapper });
   expect(await screen.findByRole('alert')).toHaveTextContent('failed');
   fireEvent.click(screen.getByRole('button', { name: 'reload' }));
   expect(await screen.findByLabelText('referenceGarment')).toHaveValue('');
@@ -57,7 +62,35 @@ it('shows a failed read and allows retry', async () => {
 
 it('reports malformed responses instead of rendering a broken editor', async () => {
   state.get.mockResolvedValueOnce({ image_url: '/photo.jpg' });
-  render(<FitProfileSettings />);
+  render(<FitProfileSettings />, { wrapper });
   expect(await screen.findByRole('alert')).toHaveTextContent('failed');
   expect(screen.queryByRole('button', { name: 'save' })).not.toBeInTheDocument();
+});
+
+
+it('keeps a dirty draft and its revision when the query cache refreshes', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><FitProfileSettings /></QueryClientProvider>);
+  const reference = await screen.findByLabelText('referenceGarment');
+  fireEvent.change(reference, { target: { value: 'My unsaved draft' } });
+  act(() => client.setQueryData(['fit-profile', undefined], { ...initial, rev: 'newer', reference_garment: 'Server update' }));
+  expect(reference).toHaveValue('My unsaved draft');
+  state.patch.mockRejectedValue({ status: 409 });
+  fireEvent.click(screen.getByRole('button', { name: 'save' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('conflict');
+  expect(state.patch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ rev: 'old', reference_garment: 'My unsaved draft' }));
+});
+
+it('keeps the dirty draft when an explicit reload fails', async () => {
+  state.patch.mockRejectedValue({ status: 409 });
+  render(<FitProfileSettings />, { wrapper });
+  const reference = await screen.findByLabelText('referenceGarment');
+  fireEvent.change(reference, { target: { value: 'Keep through failed reload' } });
+  fireEvent.click(screen.getByRole('button', { name: 'save' }));
+  await screen.findByRole('alert');
+  state.get.mockRejectedValueOnce(new Error('offline'));
+  fireEvent.click(screen.getByRole('button', { name: 'reload' }));
+  await waitFor(() => expect(state.get).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'reload' })).toBeEnabled());
+  expect(reference).toHaveValue('Keep through failed reload');
 });

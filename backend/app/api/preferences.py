@@ -209,9 +209,9 @@ async def get_fit_profile(
 
 
 @router.patch("/fit-profile", response_model=FitProfile)
-async def replace_fit_profile(
+async def update_fit_profile(
     data: FitProfile,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> FitProfile:
-    return await FitProfileService(db).replace(current_user.id, data)
+    return await FitProfileService(db).update(current_user.id, data)

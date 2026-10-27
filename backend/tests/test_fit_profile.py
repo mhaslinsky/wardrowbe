@@ -39,12 +39,30 @@ async def test_fit_profile_crud_and_legacy_measurements(
     assert response.status_code == 200
     assert response.json()["brand_sizes"][0]["size"] == "XL"
     assert response.json()["skip_list"][0]["reason"] == "Short sleeves"
-    empty = {"rev": response.json()["rev"]}
-    response = await client.patch(PATH, headers=auth_headers, json=empty)
+    saved = response.json()
+    response = await client.patch(PATH, headers=auth_headers, json={"rev": saved["rev"]})
+    assert response.status_code == 200
+    assert {key: value for key, value in response.json().items() if key != "rev"} == {
+        key: value for key, value in saved.items() if key != "rev"
+    }
+    response = await client.patch(
+        PATH, headers=auth_headers, json={"rev": response.json()["rev"], "neck": 41}
+    )
+    assert response.status_code == 200
+    assert response.json()["neck"] == 41
+    for key in ("brand_sizes", "skip_list", "sleeve", "thigh", "reference_garment"):
+        assert response.json()[key] == saved[key]
+    response = await client.patch(
+        PATH,
+        headers=auth_headers,
+        json={"rev": response.json()["rev"], "brand_sizes": [], "skip_list": [], "neck": None},
+    )
     assert response.status_code == 200
     assert response.json()["brand_sizes"] == []
     assert response.json()["skip_list"] == []
     assert response.json()["neck"] is None
+    assert response.json()["sleeve"] == saved["sleeve"]
+    assert response.json()["reference_garment"] == saved["reference_garment"]
     await db_session.refresh(test_user)
     assert test_user.body_measurements == {"chest": 105, "shirt_size": "L"}
 

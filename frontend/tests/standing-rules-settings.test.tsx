@@ -94,3 +94,5 @@ it('allows explicitly clearing rules before the server data arrives', async () =
     await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: [] }));
   } finally { state.preferences = original; }
 });
+
+vi.mock('@/components/fit-profile-settings', () => ({ FitProfileSettings: () => null }));

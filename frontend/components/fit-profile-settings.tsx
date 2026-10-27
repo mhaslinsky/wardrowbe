@@ -1,43 +1,31 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { z } from 'zod';
-import { api } from '@/lib/api';
+import { useFitProfile, useUpdateFitProfile, type FitProfile } from '@/lib/hooks/use-fit-profile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-
-const text = z.string();
-const measurement = z.number().finite().positive().max(300).nullable();
-const profileSchema = z.object({
-  rev: text.min(1).max(64),
-  brand_sizes: z.array(z.object({ brand: text, line: text, size: text, note: text })),
-  skip_list: z.array(z.object({ brand: text, line: text, reason: text })),
-  neck: measurement,
-  sleeve: measurement,
-  thigh: measurement,
-  reference_garment: text,
-});
-type FitProfile = z.infer<typeof profileSchema>;
-const endpoint = '/users/me/preferences/fit-profile';
 
 export function FitProfileSettings() {
   const t = useTranslations('settings.fitProfile');
   const common = useTranslations('common');
   const [draft, setDraft] = useState<FitProfile | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [pending, setPending] = useState(false);
+  const query = useFitProfile();
+  const update = useUpdateFitProfile();
+  const pending = query.isFetching || update.isPending;
   const [error, setError] = useState<'failed' | 'conflict' | null>(null);
-  const load = useCallback(async () => {
-    setPending(true);
-    try {
-      setDraft(profileSchema.parse(await api.get<unknown>(endpoint)));
-      setDirty(false); setError(null);
-    } catch { setError('failed'); }
-    finally { setPending(false); }
-  }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (query.data && !dirty) setDraft(query.data);
+  }, [query.data, dirty]);
+  const load = async () => {
+    const result = await query.refetch();
+    if (result.isSuccess) {
+      setDraft(result.data); setDirty(false); setError(null);
+    }
+  };
+  const notice = error ?? (query.isError ? 'failed' : null);
   function edit(profile: FitProfile) { setDraft(profile); setDirty(true); setError(null); }
   return <Card id="fit-profile">
     <CardHeader><CardTitle>{t('title')}</CardTitle></CardHeader>
@@ -45,13 +33,12 @@ export function FitProfileSettings() {
       <form className="space-y-4" onSubmit={async (event) => {
         event.preventDefault();
         if (!draft) return;
-        setPending(true);
         try {
-          setDraft(profileSchema.parse(await api.patch<unknown>(endpoint, draft)));
+          setDraft(await update.mutateAsync(draft));
           setDirty(false); setError(null);
         } catch (failure) {
           setError((failure as { status?: number }).status === 409 ? 'conflict' : 'failed');
-        } finally { setPending(false); }
+        }
       }}>
         <fieldset disabled={pending} className="space-y-4">
           {draft && <>
@@ -91,8 +78,8 @@ export function FitProfileSettings() {
             <Button type="submit" disabled={!dirty}>{common('save')}</Button>
           </>}
           {pending && <p role="status">{common('loading')}</p>}
-          {error && <div className="space-y-2">
-            <p role="alert">{t(error)}</p>
+          {notice && <div className="space-y-2">
+            <p role="alert">{t(notice)}</p>
             <Button type="button" variant="outline" onClick={() => void load()}>{t('reload')}</Button>
           </div>}
         </fieldset>
