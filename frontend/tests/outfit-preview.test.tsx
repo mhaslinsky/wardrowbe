@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { act, fireEvent, render as testingRender, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { ComponentType, ReactElement } from 'react';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useOutfitPreview } from '@/lib/hooks/use-outfit-preview';
 import { createQueryClient } from '@/lib/query-client';
@@ -36,7 +36,7 @@ function render(ui: ReactElement) {
 
 // Missing components render nothing, so these tests can also run against the base commit.
 const modules = import.meta.glob('../components/{outfit-preview,preview-photo-settings}.tsx', { eager: true });
-const OutfitPreview = (modules['../components/outfit-preview.tsx'] as { OutfitPreview?: ComponentType<{ outfitId: string }> } | undefined)?.OutfitPreview ?? (() => null);
+const OutfitPreview = (modules['../components/outfit-preview.tsx'] as { OutfitPreview?: ComponentType<{ outfitId: string; children?: ReactNode; detail?: boolean }> } | undefined)?.OutfitPreview ?? (() => null);
 const PreviewPhotoSettings = (modules['../components/preview-photo-settings.tsx'] as { PreviewPhotoSettings?: ComponentType } | undefined)?.PreviewPhotoSettings ?? (() => null);
 
 const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24' };
@@ -560,7 +560,7 @@ it.each(Object.entries(outfitCatalogs))('has stale labels in %s', (_path, catalo
 it.each([
   [['clothes', 'person'], ['clothesChanged', 'personChanged']],
   [['unknown'], ['changed']],
-])('places reason labels %j above a single action row', async (reasons, labels) => {
+])('places reason labels %j above wrapping actions', async (reasons, labels) => {
   vi.mocked(fetch).mockResolvedValue(response({ ...saved, stale: true, stale_reasons: reasons }) as Response);
   render(<OutfitPreview outfitId="one" />);
   await screen.findByRole('img');
@@ -576,7 +576,7 @@ it.each([
   }
   expect(reasonContainer.nextElementSibling).toBe(actions);
   expect(within(actions).getAllByRole('button')).toHaveLength(3);
-  expect(actions).not.toHaveClass('flex-wrap');
+  expect(actions).toHaveClass('flex-wrap');
 });
 
 it('labels previews made with older preferences', async () => {
@@ -629,4 +629,37 @@ it('keeps the saved revision for an immediate second edit while refetch is pendi
   await waitFor(() => expect(patches).toBe(2));
   const requests = vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'PATCH');
   expect(JSON.parse(String(requests[1][1]?.body)).preview_preferences).toEqual({ ...initial, lines: ['Long sleeves'], rev: 'saved' });
+});
+
+
+it.each([false, true])('keeps card content full width with a stale preview=%s', async (stale) => {
+  vi.mocked(fetch).mockResolvedValue(response({ ...saved, stale, stale_reasons: ['preferences'] }) as Response);
+  render(<OutfitPreview outfitId="one"><div data-testid="outfit-content">Textured Navy Outfit</div></OutfitPreview>);
+  await screen.findByRole('img');
+  const content = screen.getByTestId('outfit-content');
+  expect(content.parentElement).not.toHaveClass('grid-cols-2');
+  expect(content.parentElement).toHaveClass('space-y-3');
+  expect(screen.getByRole('button', { name: 'redraw' }).parentElement).toHaveClass('flex-wrap');
+  expect(screen.getByRole('button', { name: 'delete' })).toBeEnabled();
+  expect(Boolean(screen.queryByText('preferencesChanged'))).toBe(stale);
+});
+
+it('preserves the responsive detail columns and wraps detail actions', async () => {
+  vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
+  render(<OutfitPreview outfitId="one" detail><div data-testid="outfit-content">Outfit details</div></OutfitPreview>);
+  await screen.findByRole('img');
+  expect(screen.getByTestId('outfit-content').parentElement).toHaveClass('sm:grid-cols-2');
+  expect(screen.getByRole('button', { name: 'redraw' }).parentElement).toHaveClass('flex-wrap');
+});
+
+it('preserves card content when a saved preview is removed', async () => {
+  vi.mocked(fetch).mockImplementation(async (_url, options) => options?.method === 'DELETE'
+    ? response(null, 204) as Response : response(saved) as Response);
+  render(<OutfitPreview outfitId="one"><div data-testid="outfit-content">Textured Navy Outfit</div></OutfitPreview>);
+  await screen.findByRole('img');
+  fireEvent.click(screen.getByRole('button', { name: 'delete' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'delete' }));
+  await waitFor(() => expect(screen.queryByRole('img')).not.toBeInTheDocument());
+  expect(screen.getByTestId('outfit-content')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'see' })).toBeEnabled();
 });
