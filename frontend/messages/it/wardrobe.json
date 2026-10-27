@@ -317,6 +317,13 @@
     "fit": "Adatta allo schermo"
   },
   "considering": {
+    "preview": "Prova su di me",
+    "companions": "Scegli i tuoi capi o visualizza da solo.",
+    "emptyPicker": "Nessun capo posseduto disponibile.",
+    "previewAlone": "Visualizza da solo",
+    "previewSelected": "Visualizza con i capi scelti",
+    "chooseAgain": "Scegli di nuovo",
+    "savedPreview": "Apri anteprima salvata",
     "title": "Da valutare",
     "passed": "Scartati",
     "empty": "Nessun articolo da valutare.",

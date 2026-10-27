@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ThumbsUp } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,13 +9,19 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { useOutfitPreview } from '@/lib/hooks/use-outfit-preview';
 
-export function OutfitPreview(props: { outfitId: string; children?: ReactNode; detail?: boolean }) {
+export function OutfitPreview(props: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean }) {
   return <PreviewContent key={props.outfitId} {...props} />;
 }
 
-function PreviewContent({ outfitId, children, detail }: { outfitId: string; children?: ReactNode; detail?: boolean }) {
+function PreviewContent({ outfitId, children, detail, autoDraw }: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean }) {
   const t = useTranslations('outfits.preview');
   const { preview, pending, error, conflict, missingPhoto, likeConflict, draw, remove, like } = useOutfitPreview(outfitId);
+  const started = useRef(false);
+  useEffect(() => {
+    let disposed = false;
+    queueMicrotask(() => { if (!disposed && autoDraw && !started.current) { started.current = true; void draw(); } });
+    return () => { disposed = true; };
+  }, [autoDraw, draw]);
   const [action, setAction] = useState<'redraw' | 'delete' | 'like' | null>(null);
   const [note, setNote] = useState('');
   const tc = useTranslations('common');

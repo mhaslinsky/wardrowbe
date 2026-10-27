@@ -31,6 +31,7 @@
     "removeItem": "{name} entfernen"
   },
   "cards": {
+    "unbought": "Enthält noch nicht gekaufte Teile",
     "wash": "Wäsche",
     "wearCount": "{count, plural, one {# Mal getragen} other {# Mal getragen}}",
     "history": "Verlauf",

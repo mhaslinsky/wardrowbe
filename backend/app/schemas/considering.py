@@ -1,7 +1,8 @@
 from decimal import Decimal
 from typing import Annotated, Literal
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, UrlConstraints
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, UrlConstraints, field_validator
 
 from app.schemas.item import ItemResponse
 
@@ -34,3 +35,15 @@ class ConsideringResponse(PurchaseFields):
     state: Literal["considering", "passed", "bought"]
     passed_reason: str | None
     item: ItemResponse
+
+
+class ConsideringPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    companion_ids: list[UUID] = Field(default_factory=list, max_length=19)
+
+    @field_validator("companion_ids")
+    @classmethod
+    def unique_companions(cls, value: list[UUID]) -> list[UUID]:
+        if len(value) != len(set(value)):
+            raise ValueError("Choose unique companions")
+        return value

@@ -66,6 +66,7 @@ export const queryKeys = {
     infinite: (filters: OutfitFilters, pageSize: number) =>
       [...OUTFITS, 'infinite', filters, pageSize] as const,
   },
+  everyOutfit: ['outfit'] as const,
   outfit: (outfitId: string) => ['outfit', outfitId] as const,
   calendarOutfits: {
     all: CALENDAR_OUTFITS,

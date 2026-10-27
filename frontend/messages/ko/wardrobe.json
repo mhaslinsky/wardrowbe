@@ -317,6 +317,13 @@
     "fit": "화면에 맞추기"
   },
   "considering": {
+    "preview": "착용 미리보기",
+    "companions": "보유한 옷을 선택하거나 단독으로 미리 보세요.",
+    "emptyPicker": "선택할 수 있는 보유 의류가 없습니다.",
+    "previewAlone": "단독 미리보기",
+    "previewSelected": "선택한 옷과 미리보기",
+    "chooseAgain": "다시 선택",
+    "savedPreview": "저장된 미리보기 열기",
     "title": "구매 고려 중",
     "passed": "보류한 상품",
     "empty": "구매 고려 중인 상품이 없습니다.",

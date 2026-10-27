@@ -317,6 +317,13 @@
     "fit": "Fit to screen"
   },
   "considering": {
+    "preview": "Preview on me",
+    "companions": "Choose owned pieces, or preview alone.",
+    "emptyPicker": "No owned pieces available.",
+    "previewAlone": "Preview alone",
+    "previewSelected": "Preview with selected pieces",
+    "chooseAgain": "Choose again",
+    "savedPreview": "Open saved preview",
     "title": "Considering",
     "passed": "Passed",
     "empty": "Nothing on your considering shelf.",

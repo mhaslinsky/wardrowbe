@@ -317,6 +317,13 @@
     "fit": "画面に合わせる"
   },
   "considering": {
+    "preview": "着用プレビュー",
+    "companions": "手持ちの服を選ぶか、単品でプレビューします。",
+    "emptyPicker": "選べる手持ちの服がありません。",
+    "previewAlone": "単品でプレビュー",
+    "previewSelected": "選んだ服とプレビュー",
+    "chooseAgain": "選び直す",
+    "savedPreview": "保存したプレビューを開く",
     "title": "検討中",
     "passed": "見送り",
     "empty": "検討中のアイテムはありません。",

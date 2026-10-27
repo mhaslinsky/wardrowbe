@@ -82,7 +82,7 @@ export default function OutfitDetailPage() {
   }
 
   const handleWearToday = async () => {
-    if (!wearDate || wearDate > today) return;
+    if (!wearDate || wearDate > today || outfit?.unowned_item_ids?.length) return;
     try {
       const result = await wearTodayMutation.mutateAsync({ scheduled_for: wearDate });
       const alreadyLogged = (result as typeof result & { already_logged?: boolean }).already_logged;
@@ -207,6 +207,7 @@ export default function OutfitDetailPage() {
         </CardContent>
       </Card>
 
+      {!!outfit.unowned_item_ids?.length && <p role="status" className="rounded-lg border p-3">{t('cards.unbought')}</p>}
       <Dialog open={wearOpen} onOpenChange={setWearOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>{t('detail.wearOn')}</DialogTitle></DialogHeader>
@@ -215,7 +216,7 @@ export default function OutfitDetailPage() {
             onChange={(event) => setWearDate(event.target.value)} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setWearOpen(false)}>{tc('cancel')}</Button>
-            <Button onClick={handleWearToday} disabled={!wearDate || wearDate > today || wearTodayMutation.isPending}>
+            <Button onClick={handleWearToday} disabled={!!outfit.unowned_item_ids?.length || !wearDate || wearDate > today || wearTodayMutation.isPending}>
               {t('detail.logWear')}
             </Button>
           </DialogFooter>
@@ -226,7 +227,7 @@ export default function OutfitDetailPage() {
           {t('detail.addNote')}
         </Button>
         {isTemplate && (
-          <Button onClick={() => { setWearDate(getUserToday()); setWearOpen(true); }} disabled={wearTodayMutation.isPending}>
+          <Button onClick={() => { setWearDate(getUserToday()); setWearOpen(true); }} disabled={!!outfit.unowned_item_ids?.length || wearTodayMutation.isPending}>
             {wearTodayMutation.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (

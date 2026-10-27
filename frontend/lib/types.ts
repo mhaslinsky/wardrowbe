@@ -360,6 +360,7 @@ export type OutfitStatus = (typeof OUTFIT_STATUSES)[number];
 export type OutfitSource = 'scheduled' | 'on_demand' | 'manual' | 'pairing' | 'external';
 
 export interface Outfit {
+  unowned_item_ids?: string[];
   id: string;
   occasion: string;
   scheduled_for: string | null;

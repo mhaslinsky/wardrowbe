@@ -31,6 +31,7 @@
     "removeItem": "Rimuovi {name}"
   },
   "cards": {
+    "unbought": "Include articoli non acquistati",
     "wash": "Lavaggio",
     "wearCount": "Indossato {count, plural, one {# volta} other {# volte}}",
     "history": "Cronologia",

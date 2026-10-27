@@ -7,6 +7,7 @@ from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_item
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import (
     FamilyOutfitRating,
@@ -111,6 +112,18 @@ class StudioService:
         notes: str | None = None,
     ) -> Outfit:
         if mark_worn:
+            # Reject shelf items before creating the outfit or its acceptance feedback.
+            available = set(
+                await self.db.scalars(
+                    select(ClothingItem.id).where(
+                        ClothingItem.id.in_(item_ids),
+                        ClothingItem.user_id == user.id,
+                        owned_item(),
+                    )
+                )
+            )
+            if available != set(item_ids):
+                raise ItemOwnershipError("Items are unavailable")
             await WearService(self.db).begin(user, scheduled_for)
             scheduled_for = scheduled_for or get_user_today(user)
         items = await validate_item_ownership(self.db, user.id, item_ids)

@@ -31,6 +31,7 @@
     "removeItem": "{name} 제거"
   },
   "cards": {
+    "unbought": "미구매 상품 포함",
     "wash": "세탁",
     "wearCount": "{count, plural, other {#회 착용}}",
     "history": "기록",
