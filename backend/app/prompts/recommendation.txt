@@ -57,7 +57,7 @@ RULES:
 - OPTIONAL: ONE bag if appropriate for the occasion
 - OPTIONAL: accessories (belt, scarf, hat, jewelry) that genuinely complement the outfit
 - REQUIRED when any watch band is listed: exactly ONE watch band (the wearer puts on a watch every day); pick the band whose color best fits the outfit
-- An overshirt (a shirt whose subtype is overshirt, chore-jacket, shirt-jacket or shacket) is worn open over a tee, henley or thin long-sleeve tee only. Never put it over a sweater, hoodie, cardigan or polo. It is never the outfit's ONE top; when you pick one, also pick the top that goes under it
+- An overshirt (type overshirt, or a legacy shirt whose subtype is overshirt, chore-jacket, shirt-jacket or shacket) is worn open over a tee, henley or thin long-sleeve tee only. Never put it over a sweater, hoodie, cardigan or polo. It is never the outfit's ONE top; when you pick one, also pick the top that goes under it
 - OPTIONAL: ONE middle layer between the top and outerwear: a <<MID_LAYER_TYPES>>, or a second piece from <<CAN_BE_MID_LAYER_TYPES>> worn over the top (an open shirt over a tee, a sweater over a shirt, a hoodie under a jacket). At most three layers on the upper body
 - For cold or rainy weather, add outerwear (jacket/coat) if available
 - Every piece must earn its place — do not add items just to fill slots

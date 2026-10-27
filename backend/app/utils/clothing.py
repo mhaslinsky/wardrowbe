@@ -23,8 +23,7 @@ ROLE_SLOTS: dict[str, frozenset[str]] = {
 # The slots an outfit must cover; a suit's own slot is optional like an outer layer.
 BODY_SLOTS = frozenset({"base_top", "bottom"})
 
-# Shirts cut to be worn open over another top. They stay type shirt so they wash and score like
-# shirts, but one of them is never the outfit's only top.
+# Legacy shirt subtypes still need a thin base until their items are retyped as overshirts.
 OVER_LAYER_SUBTYPES = frozenset({"overshirt", "chore-jacket", "shirt-jacket", "shacket"})
 
 
@@ -114,7 +113,10 @@ class _LayerRepair:
     mandatory: set[UUID]
 
     def is_overshirt(self, item_id: UUID) -> bool:
-        return (self.item_subtype_map.get(item_id) or "").lower() in OVER_LAYER_SUBTYPES
+        return (
+            self.item_type_map.get(item_id) == "overshirt"
+            or (self.item_subtype_map.get(item_id) or "").lower() in OVER_LAYER_SUBTYPES
+        )
 
     def is_base(self, item_id: UUID, thin: bool = False) -> bool:
         kind = self.item_type_map.get(item_id, "")

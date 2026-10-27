@@ -191,6 +191,7 @@ export type ClothingTypeValue = (typeof CLOTHING_TYPE_VALUES)[number];
 // Subtype is free text on the backend (and the model may answer outside this list),
 // so these are suggestions, not a closed set.
 export const CLOTHING_SUBTYPES: Record<string, readonly string[]> = {
+  overshirt: ['utility', 'shirt-jacket', 'shacket', 'chore-jacket'],
   shirt: ['henley', 'button-down', 'oxford', 'flannel', 'hawaiian', 'camp-collar'],
   pants: ['chinos', 'joggers', 'cargo', 'trousers', 'leggings', 'sweatpants'],
   dress: ['sundress', 'slip-dress', 'maxi', 'midi', 'wrap', 'shirt-dress', 'a-line'],

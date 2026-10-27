@@ -100,6 +100,31 @@ async def upload(client, headers):
     return response.json()
 
 
+async def test_overshirt_preview_keeps_the_mid_layer_over_a_base_top(
+    client, auth_headers, preview_setup, provider, db_session
+):
+    layer = await db_session.get(ClothingItem, preview_setup["items"][0])
+    base = await db_session.get(ClothingItem, preview_setup["items"][1])
+    layer.type, base.type = "overshirt", "t-shirt"
+    links = (
+        await db_session.scalars(
+            select(OutfitItem).where(OutfitItem.outfit_id == preview_setup["outfit"])
+        )
+    ).all()
+    for link in links:
+        link.layer_type = "mid" if link.item_id == layer.id else "base"
+    await db_session.commit()
+    await upload(client, auth_headers)
+    result = await client.post(preview_setup["url"], headers=auth_headers)
+    assert result.status_code == 200, result.text
+    prompt = provider.call_args.args[1]
+    garments = json.loads(prompt.split("<garment_data>\n")[1].split("\n</garment_data>")[0])
+    assert {(garment["type"], garment["layer"]) for garment in garments} == {
+        ("overshirt", "mid"),
+        ("t-shirt", "base"),
+    }
+
+
 async def test_reference_roundtrip_private_and_delete(
     client, auth_headers, preview_setup, monkeypatch
 ):

@@ -1,6 +1,6 @@
 // Generated from backend/app/data/garment_vocabulary.json by scripts/gen-shared-data.mjs.
 // Do not edit by hand; run `npm run vocab:gen`.
-export const CLOTHING_TYPE_VALUES = ['shirt', 't-shirt', 'top', 'pants', 'jeans', 'shorts', 'dress', 'jumpsuit', 'skirt', 'jacket', 'coat', 'sweater', 'hoodie', 'blazer', 'suit', 'vest', 'cardigan', 'polo', 'blouse', 'tank-top', 'shoes', 'sneakers', 'boots', 'sandals', 'socks', 'tights', 'underwear', 'tie', 'hat', 'scarf', 'belt', 'bag', 'accessories'] as const;
+export const CLOTHING_TYPE_VALUES = ['shirt', 't-shirt', 'top', 'pants', 'jeans', 'shorts', 'dress', 'jumpsuit', 'skirt', 'jacket', 'coat', 'sweater', 'hoodie', 'blazer', 'suit', 'vest', 'cardigan', 'overshirt', 'polo', 'blouse', 'tank-top', 'shoes', 'sneakers', 'boots', 'sandals', 'socks', 'tights', 'underwear', 'tie', 'hat', 'scarf', 'belt', 'bag', 'accessories'] as const;
 export const MATERIAL_VALUES = ['cotton', 'denim', 'leather', 'wool', 'polyester', 'silk', 'linen', 'knit', 'fleece', 'suede', 'velvet', 'nylon', 'canvas', 'down', 'shearling'] as const;
 export const FORMALITY_VALUES = ['very-casual', 'casual', 'smart-casual', 'business-casual', 'formal', 'very-formal'] as const;
 export const OCCASION_VALUES = ['casual', 'office', 'work', 'formal', 'smart-casual', 'business-casual', 'date', 'party', 'sporty', 'sport', 'outdoor', 'travel', 'lounge', 'beach', 'interview', 'wedding', 'dinner', 'brunch', 'gym', 'running', 'hiking', 'weekend'] as const;
@@ -24,6 +24,7 @@ export const ITEM_ROLE: Record<string, string> = {
   suit: 'suit',
   vest: 'mid_layer',
   cardigan: 'mid_layer',
+  overshirt: 'mid_layer',
   polo: 'base_top',
   blouse: 'base_top',
   'tank-top': 'base_top',
