@@ -3,7 +3,7 @@ from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "e248a1b2c3d4"
-down_revision = "e242a1b2c3d4"
+down_revision = "e243a1b2c3d4"
 branch_labels = None
 depends_on = None
 
