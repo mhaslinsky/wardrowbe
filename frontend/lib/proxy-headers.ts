@@ -37,3 +37,25 @@ export function proxySecretMatches(presented: string | null | undefined): boolea
   }
   return difference === 0;
 }
+
+export function publicHostnames(): string[] {
+  const configured = process.env.PUBLIC_HOSTS || '';
+  const hosts = configured.split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
+  if (configured && !hosts.length) throw new Error('PUBLIC_HOSTS must contain at least one hostname');
+  for (const host of hosts) {
+    const url = new URL(`https://${host}`);
+    if (url.host !== host || url.username || url.password || url.pathname !== '/' || url.search || url.hash ||
+        host.split('.').some((label) => !label || label.length > 63 || label.startsWith('-') || label.endsWith('-') || !/^[a-z0-9-]+$/.test(label))) {
+      throw new Error('PUBLIC_HOSTS must contain hostnames without schemes, paths or ports');
+    }
+  }
+  return hosts;
+}
+
+export function publicOrigin(headers: Headers): string | null {
+  const hosts = publicHostnames();
+  if (!hosts.length) return null;
+  const host = headers.get('host')?.toLowerCase();
+  if (!host || !hosts.includes(host)) throw new Error('Unknown host');
+  return `https://${host}`;
+}

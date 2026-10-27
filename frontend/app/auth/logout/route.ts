@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { publicOrigin } from '@/lib/proxy-headers';
 import { clearSessionCookies } from '@/lib/session-cookies';
 
 // loggedOut=1 stops the login page from signing straight back in through a proxy session
@@ -17,7 +18,11 @@ function logoutTarget(loggedOutUrl: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const appUrl = process.env.NEXTAUTH_URL?.replace(/\/+$/, '') || request.nextUrl.origin;
+  let origin: string | null;
+  try { origin = publicOrigin(request.headers); } catch {
+    return NextResponse.json({ detail: 'Unknown host' }, { status: 400 });
+  }
+  const appUrl = origin || process.env.NEXTAUTH_URL?.replace(/\/+$/, '') || request.nextUrl.origin;
   const response = NextResponse.redirect(logoutTarget(`${appUrl}/login?loggedOut=1`), 302);
   clearSessionCookies(request, response);
   return response;

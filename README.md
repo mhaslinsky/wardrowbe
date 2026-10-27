@@ -276,6 +276,8 @@ Upgrading from a release before sign-in identities (the `user_identities` table)
 | `AI_BASE_URL` | AI service URL | Yes |
 | `AI_API_KEY` | AI API key (if required) | Depends |
 | `AI_IMAGE_MODEL` | Gemini photo redraw model; empty disables redraw. Uses `AI_API_KEY`. | Empty |
+| `PUBLIC_HOSTS` | Comma-separated public hostnames. When set, public requests must use a listed Host; public URLs use HTTPS. Leave empty for the existing single-host behavior. | No |
+| `PUBLIC_HOST_BY_EMAIL` | JSON object mapping recipient email addresses to a hostname in `PUBLIC_HOSTS`. Notification and invite links for other recipients use `APP_URL`. | No |
 | `APP_URL` | Public app URL used in notification and invite links (default: `http://localhost:3000`) | No |
 | `LOG_LEVEL` | Log level for the API and workers (default: INFO) | No |
 
@@ -549,3 +551,11 @@ Thanks to our supporters:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Multiple public hostnames
+
+Set `PUBLIC_HOSTS` in the frontend, backend and workers. The frontend checks Host before using it and replaces forwarded host headers. NextAuth enables its host-trust flag once at startup when this list is configured. Cookies remain secure and scoped to each hostname. The API accepts listed public hosts and internal service or private IP hosts for health checks and server calls; it ignores forwarded hosts. Put the API behind your trusted proxy and restrict direct network access.
+
+For links sent by background jobs, set `PUBLIC_HOST_BY_EMAIL` in the backend and workers, for example `{"friend@example.com":"friend.example.com"}`. Every selected hostname must also appear in `PUBLIC_HOSTS`. Unmapped recipients use `APP_URL`. Keep `NEXTAUTH_URL` and `APP_URL` as the canonical single-host fallback. Hostnames share the same database; user identity and ownership determine data access.
+
+The authenticating proxy must supply a distinct trusted identity for each person on both hostnames. Preserve existing `Remote-User` identifiers when extending proxy mappings. Register each hostname's OIDC callback URL with your provider if using OIDC. Browser image links are relative and already remain on the current hostname.

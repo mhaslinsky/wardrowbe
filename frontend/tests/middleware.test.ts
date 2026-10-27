@@ -232,6 +232,15 @@ describe('middleware matcher', () => {
     '/api/auth/session/x',
     '/api/auth/%73ession',
     '/login?loggedOut=1',
+    '/login',
+    '/login?callbackUrl=%2Fdashboard',
+    '/auth/logout',
+    '/_next/static/chunks/main.js',
+    '/_next/image',
+    '/favicon.ico',
+    '/logo.svg',
+    '/icon-192.png',
+    '/manifest.json',
   ])(
     'runs on %s',
     (path) => {
@@ -245,15 +254,6 @@ describe('middleware matcher', () => {
     '/api/v1/items',
     '/api/v1/items/upload',
     '/api/v1/auth/config',
-    '/login',
-    '/login?callbackUrl=%2Fdashboard',
-    '/auth/logout',
-    '/_next/static/chunks/main.js',
-    '/_next/image',
-    '/favicon.ico',
-    '/logo.svg',
-    '/icon-192.png',
-    '/manifest.json',
   ])('skips %s', (path) => {
     expect(matches(path)).toBe(false)
   })

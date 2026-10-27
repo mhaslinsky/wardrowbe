@@ -10,6 +10,8 @@ x-backend-env: &backend-env
   SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
   STORAGE_PATH: /data/wardrobe
   APP_URL: ${APP_URL:-}
+  PUBLIC_HOSTS: ${PUBLIC_HOSTS:-}
+  PUBLIC_HOST_BY_EMAIL: ${PUBLIC_HOST_BY_EMAIL:-}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434/v1}
   AI_API_KEY: ${AI_API_KEY:-}
@@ -113,6 +115,7 @@ services:
       # NEXT_PUBLIC_API_URL is the pre-1.6 name, still honored so existing .env files keep working.
       BACKEND_URL: ${BACKEND_URL:-${NEXT_PUBLIC_API_URL:-http://backend:8000}}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      PUBLIC_HOSTS: ${PUBLIC_HOSTS:-}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change-me-in-production}
       DEV_MODE: ${DEBUG:-false}
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}

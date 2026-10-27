@@ -467,7 +467,7 @@ class NotificationDispatcher:
             lead=outfit.reasoning,
             highlights=highlights,
             tip=outfit.style_notes,
-            url=self.settings.app_link(f"/dashboard/outfits/{outfit.id}"),
+            url=self.settings.app_link(f"/dashboard/outfits/{outfit.id}", email=user.email),
             url_label="View Outfit",
             tags=[tag],
             data={"outfit_id": str(outfit.id), "screen": "history"},

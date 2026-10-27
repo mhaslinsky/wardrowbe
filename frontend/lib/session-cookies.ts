@@ -5,7 +5,7 @@ const SECURE_PREFIX = '__Secure-';
 
 // Mirrors getToken()'s default in next-auth/jwt so the middleware reads the cookie NextAuth wrote.
 export function sessionCookie() {
-  const secure = process.env.NEXTAUTH_URL?.startsWith('https://') ?? !!process.env.VERCEL;
+  const secure = !!process.env.PUBLIC_HOSTS?.trim() || (process.env.NEXTAUTH_URL?.startsWith('https://') ?? !!process.env.VERCEL);
   return { name: secure ? `${SECURE_PREFIX}${SESSION_COOKIE}` : SESSION_COOKIE, secure };
 }
 

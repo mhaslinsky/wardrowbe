@@ -8,7 +8,10 @@ import {
   FORWARD_AUTH_SERVER_ERROR,
   FORWARD_AUTH_USERNAME_CONFLICT,
 } from '@/lib/auth-errors';
-import { decodeProxyHeader, proxySecretMatches } from '@/lib/proxy-headers';
+import { decodeProxyHeader, proxySecretMatches, publicOrigin, publicHostnames } from '@/lib/proxy-headers';
+
+// NextAuth v4 reads this startup flag; middleware replaces forwarded hosts with a listed Host.
+if (publicHostnames().length) process.env.AUTH_TRUST_HOST = 'true';
 
 interface OIDCProfile {
   sub: string;
@@ -149,6 +152,11 @@ export async function authorizeForwardAuth(headers: IncomingHeaders): Promise<Us
   // The raw header strings are relayed as-is, because fetch only accepts Latin-1 header values and
   // the backend applies the same UTF-8 decoding to the bytes.
   const forwarded: Record<string, string> = {};
+  const incoming = new Headers();
+  const host = headerValue(headers, 'host');
+  if (host) incoming.set('host', host);
+  const origin = publicOrigin(incoming);
+  if (origin) forwarded.host = new URL(origin).host;
   for (const name of FORWARDED_HEADERS) {
     const value = headerValue(headers, name);
     if (value) forwarded[name] = value;

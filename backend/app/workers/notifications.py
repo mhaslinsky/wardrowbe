@@ -328,7 +328,9 @@ async def check_wash_reminders(ctx: dict):
         return {"notified": 0, "skipped": "lock_held"}
 
 
-def wash_reminder_message(items: list[ClothingItem]) -> NotificationMessage:
+def wash_reminder_message(
+    items: list[ClothingItem], email: str | None = None
+) -> NotificationMessage:
     count = len(items)
     summary = ", ".join(i.name or i.type for i in items[:5])
     if count > 5:
@@ -337,7 +339,7 @@ def wash_reminder_message(items: list[ClothingItem]) -> NotificationMessage:
     return NotificationMessage(
         title="Laundry Reminder",
         body=f"{noun} washing: {summary}",
-        url=get_settings().app_link("/dashboard/wardrobe"),
+        url=get_settings().app_link("/dashboard/wardrobe", email=email),
         url_label="View Wardrobe",
         tags=["shirt", "droplet"],
         data={"screen": "wardrobe"},
@@ -388,7 +390,10 @@ async def _check_wash_reminders_inner(ctx: dict):
                 if existing.scalars().first():
                     continue
 
-                message = wash_reminder_message(items)
+                user = await db.get(User, user_id)
+                if user is None:
+                    continue
+                message = wash_reminder_message(items, email=user.email)
                 results = await dispatcher.deliver(user_id, message)
                 if not results:
                     continue
