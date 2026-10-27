@@ -1,11 +1,13 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import Field, ValidationError
 from sqlalchemy import select
 
 from app.api.items import create_uploaded_item
 from app.api.outfits import OutfitResponse, _check_studio_kill_switch, outfit_response
+from app.api.product_import import router as product_import_router
 from app.database import DbSession
 from app.models.considering import ItemPurchase
 from app.models.item import ClothingItem
@@ -17,6 +19,7 @@ from app.schemas.considering import (
     ConsideringResponse,
     ConsideringSuggestRequest,
     PassRequest,
+    PurchaseFields,
 )
 from app.services.ai_service import AIDisabledError
 from app.services.considering_preview_service import ConsideringPreviewService
@@ -30,6 +33,7 @@ from app.utils.auth import get_current_user
 from app.utils.rate_limit import rate_limit_by_user
 
 router = APIRouter(prefix="/considering", tags=["Considering"])
+router.include_router(product_import_router)
 ShelfUser = Annotated[User, Depends(get_current_user)]
 
 
@@ -78,6 +82,32 @@ async def create_considering(data: ConsideringCreate, db: DbSession, current_use
     finally:
         for upload in uploads:
             await upload.close()
+
+
+class ImageImportFields(PurchaseFields):
+    name: str | None = Field(None, max_length=100)
+    brand: str | None = Field(None, max_length=100)
+
+
+@router.post("/upload", response_model=ConsideringResponse, status_code=201)
+async def upload_considering(
+    db: DbSession,
+    current_user: ShelfUser,
+    image: UploadFile = File(...),
+    metadata: str = Form("{}", max_length=10000),
+):
+    await rate_limit_by_user(str(current_user.id), "considering", max_requests=5, window_seconds=60)
+    try:
+        data = ImageImportFields.model_validate_json(metadata)
+    except ValidationError as error:
+        raise HTTPException(422, "Invalid product details") from error
+    purchase = ItemPurchase(
+        **data.model_dump(include={"source_url", "price", "currency", "planned_size"}, mode="json")
+    )
+    await create_uploaded_item(
+        db, current_user, image, name=data.name, brand=data.brand, purchase=purchase
+    )
+    return await ConsideringService(db).response(current_user.id, purchase)
 
 
 @router.patch("/{item_id}", response_model=ConsideringResponse)
