@@ -43,7 +43,7 @@ const PreviewPhotoSettings = (modules['../components/preview-photo-settings.tsx'
 const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24' };
 const response = (data: unknown, status = 200) => ({ ok: status < 400, status, json: async () => data });
 beforeEach(() => { translation.locale = null; vi.mocked(toast.error).mockClear(); vi.mocked(fetch).mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
-afterEach(() => { client.clear(); vi.useRealTimers(); });
+afterEach(() => { client.clear(); vi.useRealTimers(); window.history.replaceState(null, '', window.location.pathname); });
 
 it.each([false, true])('loads a saved preview on mount with stale=%s without drawing', async (stale) => {
   vi.mocked(fetch).mockResolvedValue(response({ ...saved, stale }) as Response);
@@ -691,18 +691,22 @@ it('purchase preview draws once on mount and not again on rerender', async () =>
 
 it('keeps saved photos unmounted until expanded and unmounts them again', async () => {
   vi.mocked(fetch).mockResolvedValue(response({ photos: { front: saved, side: saved } }) as Response);
-  render(<PreviewPhotoSettings />);
+  const { container } = render(<PreviewPhotoSettings />);
   await waitFor(() => expect(client.getQueryData(['preview-photo'])).toEqual({ front: saved, side: saved }));
   expect(screen.getByText('anglesSet')).toBeVisible();
-  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(container.querySelector('img')).toBeNull();
+  await act(async () => { await client.refetchQueries({ queryKey: ['preview-photo'] }); });
+  expect(container.querySelector('img')).toBeNull();
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/medium.jpg') || String(url).includes('/full.jpg'))).toBe(false);
   fireEvent.click(screen.getByRole('button', { expanded: false }));
   expect(screen.getAllByRole('img')).toHaveLength(2);
   fireEvent.click(screen.getByRole('button', { expanded: true }));
-  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(container.querySelector('img')).toBeNull();
 });
 
 it.each([true, false])('opens and scrolls to the photo hash on arrival=%s', async (arrival) => {
-  const scroll = vi.fn();
+  const mountedAtScroll: boolean[] = [];
+  const scroll = vi.fn(() => { mountedAtScroll.push(document.getElementById('preview-photo-content') !== null); });
   Element.prototype.scrollIntoView = scroll;
   window.history.replaceState(null, '', arrival ? '#preview-photo' : window.location.pathname);
   vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
@@ -714,5 +718,27 @@ it.each([true, false])('opens and scrolls to the photo hash on arrival=%s', asyn
   expect(await screen.findByRole('img')).toBeVisible();
   expect(screen.getByRole('button', { expanded: true })).toBeVisible();
   expect(scroll).toHaveBeenCalled();
+  expect(mountedAtScroll.every(Boolean)).toBe(true);
   window.history.replaceState(null, '', window.location.pathname);
+});
+
+
+it('keeps unsaved preview preferences mounted while photos hide and show', async () => {
+  const initial = { lines: [], tuck: 'outfit', rev: 'original' };
+  client.setQueryData(['preferences'], { preview_preferences: initial });
+  vi.mocked(fetch).mockImplementation(async (url) => response(String(url).endsWith('/preferences')
+    ? { preview_preferences: initial } : saved) as Response);
+  render(<PreviewPhotoSettings />);
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
+  const editor = await screen.findByLabelText('preferences');
+  fireEvent.change(editor, { target: { value: 'Roomy sleeves' } });
+  fireEvent.change(screen.getByLabelText('shirts'), { target: { value: 'untucked' } });
+  fireEvent.click(screen.getByRole('button', { expanded: true }));
+  expect(screen.getByLabelText('preferences')).toBe(editor);
+  expect(editor).toHaveValue('Roomy sleeves');
+  expect(screen.getByLabelText('shirts')).toHaveValue('untucked');
+  fireEvent.click(screen.getByRole('button', { expanded: false }));
+  expect(screen.getByLabelText('preferences')).toBe(editor);
+  expect(editor).toHaveValue('Roomy sleeves');
+  expect(screen.getByLabelText('shirts')).toHaveValue('untucked');
 });

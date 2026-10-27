@@ -16,18 +16,25 @@ export function PreviewPhotoSettings() {
   const { photos, loading, pending, error, save } = usePreviewPhoto();
   const [confirm, setConfirm] = useState<PreviewAngle | null>(null);
   const [open, setOpen] = useState(false);
+  const [scrollPending, setScrollPending] = useState(false);
   const card = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const openFromHash = () => {
       if (window.location.hash === '#preview-photo') {
         setOpen(true);
-        card.current?.scrollIntoView({ block: 'start' });
+        setScrollPending(true);
       }
     };
     openFromHash();
     window.addEventListener('hashchange', openFromHash);
     return () => window.removeEventListener('hashchange', openFromHash);
   }, []);
+  useEffect(() => {
+    if (open && scrollPending) {
+      card.current?.scrollIntoView({ block: 'start' });
+      setScrollPending(false);
+    }
+  }, [open, scrollPending]);
   const angleCount = previewAngles.filter((angle) => photos?.[angle]).length;
   return <Card id="preview-photo" ref={card}>
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -38,10 +45,12 @@ export function PreviewPhotoSettings() {
         <Button variant="outline" aria-expanded={open} aria-controls="preview-photo-content">{t(open ? 'hidePhotos' : 'showPhotos')}</Button>
       </CollapsibleTrigger>
     </CardHeader>
+    <CardContent>
+      <PreviewPreferencesEditor />
+    </CardContent>
     <CollapsibleContent>
     <CardContent id="preview-photo-content" className="space-y-3">
       <CardDescription>{t('guidance')}</CardDescription>
-      <PreviewPreferencesEditor />
       <div className="grid gap-6 sm:grid-cols-3">
         {previewAngles.map((angle) => {
           const photo = photos?.[angle];
