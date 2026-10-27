@@ -19,7 +19,7 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
   const [action, setAction] = useState<'redraw' | 'delete' | 'like' | null>(null);
   const [note, setNote] = useState('');
   const tc = useTranslations('common');
-  return <div className={children && preview ? (detail ? "grid items-start gap-4 sm:grid-cols-2" : "grid grid-cols-2 gap-3 items-start") : "space-y-3"}>
+  return <div className={children && preview && detail ? "grid min-w-0 items-start gap-4 sm:grid-cols-2" : "min-w-0 space-y-3"}>
     {children}
     <div className="space-y-2 min-w-0">
     {!preview && <Button variant="outline" disabled={pending} onClick={() => draw()}>{pending ? t('drawing') : t('see')}</Button>}
@@ -34,7 +34,7 @@ function PreviewContent({ outfitId, children, detail }: { outfitId: string; chil
       {preview.stale && <div className="space-y-1 text-sm">
         {(preview.stale_reasons?.length ? preview.stale_reasons : ['unknown'] as const).map((reason) => <p key={reason}>{t(reason === 'clothes' ? 'clothesChanged' : reason === 'person' ? 'personChanged' : reason === 'preferences' ? 'preferencesChanged' : 'changed')}</p>)}
       </div>}
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setAction('redraw'); }}>{t('redraw')}</Button>
         <Button size="sm" variant={preview.liked ? 'default' : 'outline'} aria-pressed={Boolean(preview.liked)} disabled={pending} onClick={() => { setNote(preview.like_note ?? ''); setAction('like'); }}><ThumbsUp className="mr-1 h-4 w-4" />{t(preview.liked ? 'liked' : 'like')}</Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => setAction('delete')}>{t('delete')}</Button>
