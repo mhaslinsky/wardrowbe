@@ -4,6 +4,7 @@ declare const chrome: any;
 const browser = (globalThis as any).browser || chrome;
 const APP_ORIGIN = 'https://wardrobe.haslinsky.net';
 const IMPORT_PATH = '/dashboard/considering/import';
+const PRECOMMIT_REJECTION_STATUSES = new Set([400, 401, 403, 404, 409, 413, 429]);
 type Draft = { capture: ProductCapture; owner: string; tab: number; item?: string; update?: ReturnType<typeof confirmedPayload>['update']; creating?: boolean };
 const locks = new Set<string>();
 
@@ -76,7 +77,7 @@ async function handleMessage(message: any, sender: any) {
       await browser.storage.local.set({ [reference]: draft });
       let created;
       try { created = await apiRequest('/considering', token, 'POST', payload.create); } catch (error) {
-        if ([401, 403, 409, 422, 429].includes((error as { status?: number }).status!)) {
+        if (PRECOMMIT_REJECTION_STATUSES.has((error as { status?: number }).status!)) {
           draft.creating = false;
           await browser.storage.local.set({ [reference]: draft });
         }

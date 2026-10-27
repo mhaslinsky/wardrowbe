@@ -111,7 +111,7 @@ describe('extension draft isolation and save', () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw TypeError('redirect rejected'); }));
     await expect(handleMessage(message('load'), sender)).rejects.toThrow('request');
   });
-  it('allows retry after a definite 429 rejection and cancel after 422', async () => {
+  it('allows retry after a definite 429 rejection and cancel after 400', async () => {
     const original = fetch;
     vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => options.method === 'POST' ? json({}, 429) : original(url, options)));
     await expect(handleMessage(message('save'), sender)).rejects.toThrow('rate');
@@ -120,7 +120,7 @@ describe('extension draft isolation and save', () => {
     await expect(handleMessage(message('save'), sender)).resolves.toMatchObject({ saved: true });
     expect(creates).toBe(1);
     records.set(reference, { capture, owner, tab: 7 });
-    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => options.method === 'POST' ? json({}, 422) : original(url, options)));
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => options.method === 'POST' ? json({}, 400) : original(url, options)));
     await expect(handleMessage(message('save'), sender)).rejects.toThrow('request');
     await expect(handleMessage(message('cancel'), sender)).resolves.toEqual({ cancelled: true });
   });
@@ -159,10 +159,27 @@ describe('extension draft isolation and save', () => {
     expect(await send(message('save'), sender)).toEqual({ error: status === 401 ? 'token' : status === 403 ? 'identity' : 'request' });
     expect(records.get(reference).creating).toBe(false);
   });
-  it('retains the create marker after HTTP 500', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => options.method === 'POST' ? json({}, 500) : json({ id: owner })));
+  it.each([408, 422, 500])('retains the create marker after ambiguous HTTP %s', async status => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => options.method === 'POST' ? json({}, status) : json({ id: owner })));
     expect(await send(message('save'), sender)).toEqual({ error: 'request' });
     expect(records.get(reference).creating).toBe(true);
+  });
+
+  it.each([400, 413])('retries once and permits Cancel after pre-commit HTTP %s', async status => {
+    const original = fetch;
+    const rejected = vi.fn(async (url: string, options: RequestInit) => options.method === 'POST' ? json({}, status) : original(url, options));
+    vi.stubGlobal('fetch', rejected);
+    expect(await send(message('save'), sender)).toEqual({ error: 'request' });
+    expect(records.get(reference).creating).toBe(false);
+    vi.stubGlobal('fetch', original);
+    expect(await send(message('save'), sender)).toEqual({ value: { saved: true, item: 'created-item' } });
+    expect(creates).toBe(1);
+    records.set(reference, { capture, owner, tab: 7 });
+    vi.stubGlobal('fetch', rejected);
+    expect(await send(message('save'), sender)).toEqual({ error: 'request' });
+    expect(await send(message('cancel'), sender)).toEqual({ value: { cancelled: true } });
+    expect(records.has(reference)).toBe(false);
+    expect(creates).toBe(1);
   });
 
 });
