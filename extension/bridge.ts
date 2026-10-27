@@ -11,3 +11,5 @@ window.addEventListener('message', async event => {
     window.postMessage({ channel: 'wardrowbe-import', direction: 'response', id, error: 'bridge' }, location.origin);
   }
 });
+
+export {};
