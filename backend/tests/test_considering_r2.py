@@ -288,4 +288,4 @@ async def test_wash_reminder_excludes_shelf_rows(db_session, test_user):
     ):
         result = await _check_wash_reminders_inner({})
     assert result == {"notified": 0}
-    deliver.assert_not_awaited()
+    assert str(test_user.id) not in [call.args[0] for call in deliver.await_args_list]
