@@ -135,6 +135,10 @@
     "vintage": "Vintage"
   },
   "subtypes": {
+    "utility": "Multitasche",
+    "shirt-jacket": "Giacca camicia",
+    "shacket": "Camicia giacca leggera",
+    "chore-jacket": "Giacca da lavoro",
     "boxer-briefs": "Boxer aderenti",
     "briefs": "Slip",
     "boxers": "Boxer",

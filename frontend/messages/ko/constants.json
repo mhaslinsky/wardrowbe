@@ -135,6 +135,10 @@
     "vintage": "빈티지"
   },
   "subtypes": {
+    "utility": "유틸리티",
+    "shirt-jacket": "셔츠 재킷",
+    "shacket": "가벼운 셔츠 재킷",
+    "chore-jacket": "워크 재킷",
     "boxer-briefs": "사각 브리프",
     "briefs": "삼각팬티",
     "boxers": "트렁크",

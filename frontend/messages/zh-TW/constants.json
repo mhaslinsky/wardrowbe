@@ -135,6 +135,10 @@
     "vintage": "復古"
   },
   "subtypes": {
+    "utility": "工裝款",
+    "shirt-jacket": "襯衫夾克",
+    "shacket": "輕薄襯衫外套",
+    "chore-jacket": "工裝夾克",
     "boxer-briefs": "平口貼身內褲",
     "briefs": "三角內褲",
     "boxers": "寬鬆平口內褲",

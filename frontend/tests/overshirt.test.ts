@@ -17,7 +17,10 @@ it('offers overshirts as layers alongside a base top and outerwear', () => {
 });
 
 it.each(SUPPORTED_LOCALES)('translates the overshirt label in %s', (locale) => {
-  const labels = JSON.parse(readFileSync(resolve(__dirname, '../messages', locale, 'constants.json'), 'utf8')).types;
-  expect(labels.overshirt).toBeTruthy();
-  if (locale !== 'en') expect(labels.overshirt).not.toBe('Overshirt');
+  const labels = JSON.parse(readFileSync(resolve(__dirname, '../messages', locale, 'constants.json'), 'utf8'));
+  expect(labels.types.overshirt).toBeTruthy();
+  if (locale !== 'en') expect(labels.types.overshirt).not.toBe('Overshirt');
+  for (const subtype of CLOTHING_SUBTYPES.overshirt) {
+    expect(labels.subtypes[subtype]).toBeTruthy();
+  }
 });

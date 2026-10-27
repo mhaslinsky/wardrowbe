@@ -135,6 +135,10 @@
     "vintage": "Vintage"
   },
   "subtypes": {
+    "utility": "Utilitaire",
+    "shirt-jacket": "Veste-chemise",
+    "shacket": "Surchemise légère",
+    "chore-jacket": "Veste de travail",
     "boxer-briefs": "Boxers moulants",
     "briefs": "Slips",
     "boxers": "Caleçons",

@@ -135,6 +135,10 @@
     "vintage": "Vintage"
   },
   "subtypes": {
+    "utility": "Utility-Hemd",
+    "shirt-jacket": "Hemdjacke",
+    "shacket": "Leichte Hemdjacke",
+    "chore-jacket": "Arbeitsjacke",
     "boxer-briefs": "Boxerslips",
     "briefs": "Slips",
     "boxers": "Boxershorts",
