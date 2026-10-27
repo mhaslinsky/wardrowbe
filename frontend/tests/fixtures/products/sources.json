@@ -2,5 +2,7 @@
   "capturedAt": "2026-10-27T08:21:00Z",
   "amazon.html": "https://www.amazon.com/dp/B0CD86ZVRS",
   "allbirds.html": "https://www.allbirds.com/products/mens-wool-runners",
-  "method": "Anonymous curl GET. Amazon retains product title, brand, image wrapper, product facts and size chart only. Allbirds retains published JSON-LD only. All other scripts and nonessential attributes removed. No cookies supplied."
+  "method": "Anonymous curl GET. Amazon retains product title, brand, image wrapper, product facts and size chart only. Allbirds retains published JSON-LD only. All other scripts and nonessential attributes removed. No cookies supplied.",
+  "amazon-live.html": "https://www.amazon.com/dp/B0CD86ZVRS",
+  "liveMethod": "Anonymous Chromium product excerpt, with the accessibility heading, review histogram text and inert image markup replayed from the saved live capture, plus the public related-product card. Only product text and image URLs remain; scripts, tracking attributes and personal data removed."
 }

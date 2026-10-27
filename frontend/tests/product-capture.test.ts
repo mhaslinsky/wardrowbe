@@ -8,6 +8,8 @@ describe('product capture', () => {
     expect(result).toMatchObject({ name: 'Linen shirt', brand: 'Example', price: '29.99', currency: 'USD', sizes: ['XL'], colors: ['Blue'], material_detail: '80% linen, 20% cotton' });
     expect(result.images).toEqual([new URL('/shirt.jpg', location.href).href]);
     expect(result.selected_size).toBeUndefined();
+    expect(result.selected_color).toBeUndefined();
+    expect(result.size_chart).toBeUndefined();
     expect(validateCapture(result)).toEqual(result);
   });
   it('continues after malformed JSON-LD and rejects empty non-product pages', () => {
@@ -45,7 +47,7 @@ describe('saved public product pages', () => {
     expect(result.material_detail).toContain('60% Cotton, 40% Polyester');
     expect(result.care).toContain('Machine Wash');
     expect(result.fit).toContain('Fits close to the body');
-    expect(result.size_chart).toContain('Chest');
+    expect(result.size_chart).toContain('X-Large17 - 17.546 - 4840.5 - 42.5');
     expect(result.price).toBeUndefined();
     expect(result.currency).toBeUndefined();
     layout.mockRestore();
@@ -79,9 +81,88 @@ describe('confirmed considering payload', () => {
   it('requires one to five images and supported metadata, with missing fields left out', () => {
     for (const images of [[], Array(6).fill(capture.images[0])]) expect(() => confirmedPayload({ ...capture, images })).toThrow('images');
     expect(() => confirmedPayload({ ...capture, material: 'plastic' })).toThrow('material');
-    expect(() => confirmedPayload({ ...capture, selected_color: 'Moonlight Blue' })).toThrow('colors');
+    expect(confirmedPayload({ ...capture, selected_color: 'Moonlight Blue' }).update.tags.colors).toBeUndefined();
     expect(() => confirmedPayload({ ...capture, price: '$20' })).toThrow('price');
     expect(() => confirmedPayload({ ...capture, currency: 'usd' })).toThrow('currency');
-    expect(JSON.parse(JSON.stringify(confirmedPayload({ source_url: capture.source_url, images: capture.images, sizes: [], colors: [] })))).toEqual({ create: { image_urls: capture.images, source_url: capture.source_url }, update: { tags: {}, notes: '' } });
+    expect(JSON.parse(JSON.stringify(confirmedPayload({ source_url: capture.source_url, images: capture.images, sizes: [], colors: [] })))).toEqual({ create: { image_urls: capture.images, source_url: capture.source_url }, update: { tags: {} } });
+  });
+});
+
+describe('Amazon live capture regressions', () => {
+  function amazon() {
+    document.body.innerHTML = readFileSync(`${fixtures}amazon-live.html`, 'utf8');
+    const layout = vi.spyOn(Element.prototype, 'getClientRects').mockReturnValue([{ width: 100, height: 30 }] as unknown as DOMRectList);
+    try { return captureProduct(); } finally { layout.mockRestore(); }
+  }
+  it('prefers the product title over the preceding accessibility summary', () => {
+    expect(amazon().name).toBe("Amazon Essentials Men's Slim-Fit Short-Sleeve Crewneck Pocket T-Shirt, Pack of 2");
+  });
+  it('reads the fabric table value without labels or review-star rows', () => {
+    expect(amazon().material_detail).toBe('Solids: 100% Cotton; Heathers: 60% Cotton, 40% Polyester');
+  });
+  it('keeps fit notes inside product details and excludes inert markup', () => {
+    const fit = amazon().fit;
+    expect(fit).toBe('Fits close to the body for fitted, slim silhouette');
+    expect(fit).not.toMatch(/Golf Pant|<img|src=/);
+  });
+  it('keeps the product photo and excludes navigation SVG images', () => {
+    expect(amazon().images).toEqual(['https://m.media-amazon.com/images/I/71a1XwGxVqL._AC_SX425_.jpg']);
+  });
+});
+
+describe('reviewed capture and confirmation contracts', () => {
+  function page(html: string) {
+    document.body.innerHTML = html;
+    const layout = vi.spyOn(Element.prototype, 'getClientRects').mockReturnValue([{ width: 100, height: 30 }] as unknown as DOMRectList);
+    try { return captureProduct(); } finally { layout.mockRestore(); }
+  }
+  const base = { source_url: 'https://store.example/shirt', images: ['https://store.example/front.jpg'], sizes: [], colors: [] };
+  it('uses the selected ProductGroup variant for offer currency and images', () => {
+    const variants = [{ '@type': 'Product', size: 'M', color: 'Blue', offers: { price: '10', priceCurrency: 'USD' }, image: 'https://store.example/blue.jpg' }, { '@type': 'Product', size: 'L', color: 'Red', offers: { price: '20', priceCurrency: 'GBP' }, image: 'https://store.example/red.jpg' }];
+    const result = page(`<main><select name="size"><option selected>L</option></select><select name="color"><option selected>Red</option></select><script type="application/ld+json">${JSON.stringify({ '@type': 'ProductGroup', name: 'Shirt', offers: { price: '10', priceCurrency: 'USD' }, image: 'https://store.example/blue.jpg', hasVariant: variants })}</script></main>`);
+    expect(result).toMatchObject({ selected_size: 'L', selected_color: 'Red', price: '20', currency: 'GBP', images: ['https://store.example/red.jpg'] });
+  });
+  it('reads a price and currency from the same specification and rejects malformed currencies', () => {
+    const product = (offers: unknown) => `<script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'Shirt', offers })}</script>`;
+    expect(page(product({ priceSpecification: [{ price: 50, priceCurrency: 'gbp' }] }))).toMatchObject({ price: '50', currency: 'GBP' });
+    for (const offers of [{ price: 50 }, { price: 50, priceCurrency: 'USDX' }, { price: {}, priceCurrency: 'USD' }, { price: '$10 - $20', priceCurrency: 'USD' }]) {
+      const result = page(product(offers)); expect(result.price).toBeUndefined(); expect(result.currency).toBeUndefined();
+    }
+    expect(() => confirmedPayload({ ...base, price: '50' })).toThrow('currency');
+  });
+  it('ignores recommendation prices, fabric, fit and selected variants outside the product container', () => {
+    const result = page('<aside><span itemprop="price">199</span><span itemprop="priceCurrency">EUR</span><p>Fabric: polyester</p><p>Regular fit</p><select name="size"><option selected>L</option></select></aside><main data-product-id="shirt"><h1>Shirt</h1><img itemprop="image" src="/front.jpg"></main>');
+    expect(result.price).toBeUndefined(); expect(result.currency).toBeUndefined(); expect(result.material_detail).toBeUndefined(); expect(result.fit).toBeUndefined(); expect(result.selected_size).toBeUndefined();
+  });
+  it('only assigns a selected canonical colour, preserving available colours in notes', () => {
+    expect(confirmedPayload({ ...base, colors: ['Red', 'Blue'] }).update.tags.colors).toBeUndefined();
+    for (const [selected_color, expected] of [['Light Blue', 'light-blue'], ['Grey', 'gray'], ['  BLUE  ', 'blue']]) expect(confirmedPayload({ ...base, selected_color }).update.tags.colors).toEqual([expected]);
+    const unknown = confirmedPayload({ ...base, selected_color: 'Moonlight Blue', colors: ['Moonlight Blue', 'Red'] });
+    expect(unknown.update.tags.colors).toBeUndefined(); expect(unknown.update.notes).toContain('Available colors: Moonlight Blue, Red');
+  });
+  it('rejects blank scalar and list fields, trims values and omits empty notes', () => {
+    for (const key of ['name', 'brand', 'price', 'currency', 'selected_size', 'selected_color', 'material_detail', 'care', 'fit', 'size_chart']) expect(() => validateCapture({ ...base, [key]: '  ' })).toThrow();
+    expect(() => validateCapture({ ...base, sizes: [' '] })).toThrow();
+    expect(validateCapture({ ...base, name: ' Shirt ' }).name).toBe('Shirt');
+    expect(() => confirmedPayload({ ...base, material: ' ' })).toThrow('material');
+    expect(JSON.parse(JSON.stringify(confirmedPayload(base))).update).toEqual({ tags: {} });
+  });
+  it('does not treat disabled or implicit first options as selected sizes', () => {
+    for (const options of ['<option selected disabled value="-1">Select size</option><option>L</option>', '<option>S</option><option>M</option>']) {
+      expect(page(`<main><h1>Shirt</h1><img itemprop="image" src="/front.jpg"><select name="size">${options}</select></main>`).selected_size).toBeUndefined();
+    }
+  });
+  it('checks normalized URL size and does not resolve empty images to the page URL', () => {
+    expect(() => validateCapture({ ...base, images: [`https://store.example/${'é'.repeat(400)}`] })).toThrow('URL');
+    expect(page('<script type="application/ld+json">{"@type":"Product","name":"Shirt"}</script><img itemprop="image" src="">').images).toEqual([]);
+  });
+  it('passes real fixture captures through confirmation and carries fabric exactly', () => {
+    for (const fixture of ['amazon.html', 'amazon-live.html', 'allbirds.html']) {
+      const capture = page(readFileSync(`${fixtures}${fixture}`, 'utf8'));
+      const confirmed = confirmedPayload({ ...capture, images: capture.images.slice(0, 5) });
+      expect(confirmed.update.tags.colors).toBeUndefined();
+      expect(confirmed.update.tags.material_detail).toBe(capture.material_detail);
+      if (fixture.startsWith('amazon')) expect(confirmed.update.tags.material_detail).toBe('Solids: 100% Cotton; Heathers: 60% Cotton, 40% Polyester');
+    }
   });
 });
