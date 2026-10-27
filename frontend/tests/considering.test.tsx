@@ -145,3 +145,50 @@ it('shows a load error separately from an empty shelf', async () => {
   openPage(); expect(await screen.findByRole('alert')).toHaveTextContent(label('loadFailed'));
   expect(screen.queryByText(label('empty'))).not.toBeInTheDocument();
 });
+
+it.each(['bought', 'passed', 'restore'])('applies successful %s before a failed refetch', async (action) => {
+  if (action === 'restore') saved[0].state = 'passed';
+  openPage();
+  if (action === 'restore') {
+    await screen.findByText(label('empty'));
+    fireEvent.click(button('passed'));
+  }
+  await screen.findByText('Linen shirt');
+  const realFetch = vi.mocked(fetch).getMockImplementation()!;
+  let written = false;
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    if (written && args[1]?.method === 'GET') return new Response(JSON.stringify({ detail: 'Unavailable' }), { status: 503 });
+    const response = await realFetch(...args);
+    if (args[1]?.method === 'POST') written = true;
+    return response;
+  });
+  if (action === 'passed') {
+    fireEvent.click(button('pass'));
+    fireEvent.change(screen.getByLabelText(label('reason')), { target: { value: 'Too short' } });
+    submitDialog();
+  } else fireEvent.click(button(action === 'bought' ? 'bought' : 'restore'));
+  await waitFor(() => expect(client.getQueryState(['considering', 'shelf@example.test', action === 'restore' ? 'passed' : 'considering'])?.status).toBe('error'));
+  expect(screen.queryByRole('heading', { name: 'Linen shirt' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: label('bought') })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: label('restore') })).not.toBeInTheDocument();
+});
+it('restores focus to Edit after cancelling its dialog', async () => {
+  openPage(); await screen.findByText('Linen shirt');
+  const edit = button('edit'); edit.focus(); fireEvent.click(edit);
+  fireEvent.click(button('cancel'));
+  await waitFor(() => expect(edit).toHaveFocus());
+});
+it('focuses the page heading when passing removes the dialog opener', async () => {
+  openPage(); await screen.findByText('Linen shirt');
+  button('pass').focus(); fireEvent.click(button('pass'));
+  fireEvent.change(screen.getByLabelText(label('reason')), { target: { value: 'Too short' } });
+  submitDialog();
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveFocus());
+});
+it('invalidates wardrobe item and outfit caches after buying', async () => {
+  const keys = [['items'], ['item', 'shirt1'], ['outfits'], ['calendarOutfits'], ['pendingOutfits'], ['analytics']];
+  for (const key of keys) client.setQueryData(key, []);
+  openPage(); await screen.findByText('Linen shirt'); fireEvent.click(button('bought'));
+  await screen.findByRole('link', { name: label('inWardrobe') });
+  for (const key of keys) expect(client.getQueryState(key)?.isInvalidated, key.join('/')).toBe(true);
+});

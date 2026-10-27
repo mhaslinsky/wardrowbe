@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { X, Home, Shirt, Sparkles, Layers, LayoutGrid, History, BarChart3, Brain, Settings, Users, Bell, HeartHandshake, Camera, ImageIcon } from 'lucide-react';
+import { X, Home, Shirt, ShoppingBag, Sparkles, Layers, LayoutGrid, History, BarChart3, Brain, Settings, Users, Bell, HeartHandshake, Camera, ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 
@@ -19,7 +19,7 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
   const navigation = [
     { name: t('dashboard'), href: '/dashboard', icon: Home },
     { name: t('wardrobe'), href: '/dashboard/wardrobe', icon: Shirt },
-    { name: t('considering'), href: '/dashboard/considering', icon: Shirt },
+    { name: t('considering'), href: '/dashboard/considering', icon: ShoppingBag },
     { name: t('suggestOutfit'), href: '/dashboard/suggest', icon: Sparkles },
     { name: t('inspiration'), href: '/dashboard/inspiration', icon: ImageIcon },
     { name: t('outfits'), href: '/dashboard/outfits', icon: LayoutGrid },

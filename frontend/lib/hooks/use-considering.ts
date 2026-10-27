@@ -45,6 +45,15 @@ export function useConsidering(state: 'considering' | 'passed') {
       return api.post<ConsideringEntry>(`/considering/${request.id}/${request.action}`,
         request.action === 'passed' ? { reason: request.reason } : undefined);
     },
+    onSuccess: (result) => {
+      for (const target of ['considering', 'passed'] as const) {
+        client.setQueryData<ConsideringEntry[]>(queryKeys.considering.list(session?.user?.email, target), (current) => {
+          if (!current) return current;
+          const others = current.filter((entry) => entry.item.id !== result.item.id);
+          return result.state === target ? [result, ...others] : others;
+        });
+      }
+    },
     onSettled: (_result, _error, request) => {
       client.invalidateQueries({ queryKey: queryKeys.considering.all });
       invalidateItemCaches(client, request.id);

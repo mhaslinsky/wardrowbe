@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useTranslations } from 'next-intl';
@@ -14,6 +14,8 @@ import { Label } from '@/components/ui/label';
 export default function ConsideringPage() {
   const t = useTranslations('wardrobe.considering');
   const common = useTranslations('common');
+  const dialogOpener = useRef<HTMLButtonElement | null>(null);
+  const heading = useRef<HTMLHeadingElement | null>(null);
   const [state, setState] = useState<'considering' | 'passed'>('considering');
   const { shelf, change } = useConsidering(state);
   const [dialog, setDialog] = useState<{ entry: ConsideringEntry; kind: 'edit' | 'passed' } | null>(null);
@@ -27,7 +29,8 @@ export default function ConsideringPage() {
   const busy = change.isPending;
   const error = validation || (change.error instanceof ApiError && change.error.status === 409 ? 'conflict' : change.error ? 'failed' : null);
   function resetErrors() { change.reset(); setValidation(null); }
-  function openDialog(entry: ConsideringEntry, kind: 'edit' | 'passed') {
+  function openDialog(entry: ConsideringEntry, kind: 'edit' | 'passed', opener: HTMLButtonElement) {
+    dialogOpener.current = opener;
     resetErrors(); setBoughtId(null);
     setName(entry.item.name || ''); setPrice(entry.price ?? '');
     setCurrency(entry.currency); setSize(entry.planned_size || ''); setReason('');
@@ -35,7 +38,7 @@ export default function ConsideringPage() {
   }
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4">
-      <h1 className="text-2xl font-bold">{t('title')}</h1>
+      <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold">{t('title')}</h1>
       <div className="flex gap-2" role="group" aria-label={t('title')}>
         {(['considering', 'passed'] as const).map((tab) => <Button key={tab} disabled={busy}
           variant={state === tab ? 'default' : 'outline'} aria-pressed={state === tab}
@@ -62,14 +65,14 @@ export default function ConsideringPage() {
               {source && <a className="block underline" href={source} target="_blank" rel="noopener noreferrer">{t('source')}</a>}
               {state === 'passed' && <p className="whitespace-pre-wrap break-words text-sm">{entry.passed_reason}</p>}
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" disabled={busy} onClick={() => openDialog(entry, 'edit')}>{common('edit')}</Button>
+                <Button variant="outline" disabled={busy} onClick={(event) => openDialog(entry, 'edit', event.currentTarget)}>{common('edit')}</Button>
                 {state === 'considering' ? <>
                   <Button disabled={busy} onClick={() => {
                     if (busy || !confirm(t('buyConfirm'))) return;
                     resetErrors(); setBoughtId(null);
                     change.mutate({ id: entry.item.id, action: 'bought' }, { onSuccess: () => setBoughtId(entry.item.id) });
                   }}>{t('bought')}</Button>
-                  <Button variant="outline" disabled={busy} onClick={() => openDialog(entry, 'passed')}>{t('pass')}</Button>
+                  <Button variant="outline" disabled={busy} onClick={(event) => openDialog(entry, 'passed', event.currentTarget)}>{t('pass')}</Button>
                 </> : <Button disabled={busy} onClick={() => {
                   resetErrors(); change.mutate({ id: entry.item.id, action: 'restore' });
                 }}>{t('restore')}</Button>}
@@ -81,7 +84,12 @@ export default function ConsideringPage() {
       <Dialog.Root open={!!dialog} onOpenChange={(open) => { if (!open && !busy) { setDialog(null); resetErrors(); } }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg" aria-describedby={undefined}>
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg" aria-describedby={undefined} onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            const opener = dialogOpener.current;
+            if (opener?.isConnected && !opener.disabled) opener.focus();
+            else heading.current?.focus();
+          }}>
             <Dialog.Title className="mb-4 text-lg font-semibold">{dialog?.kind === 'edit' ? common('edit') : t('pass')}</Dialog.Title>
             <form className="space-y-4" onSubmit={(event) => {
               event.preventDefault();
