@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from dataclasses import dataclass, field
@@ -15,16 +16,17 @@ class Element:
     tag: str
     attrs: dict[str, str]
     children: list = field(default_factory=list)
+    raw_text: str = ""
+    visible_text: str = ""
 
     def hidden(self):
         return (
             self.tag in {"script", "style", "noscript", "template", "nav", "footer"}
             or "hidden" in self.attrs
             or self.attrs.get("aria-hidden") == "true"
-            or bool(
-                re.search(
-                    r"display\s*:\s*none|visibility\s*:\s*hidden", self.attrs.get("style", ""), re.I
-                )
+            or any(
+                rule in "".join(self.attrs.get("style", "").lower().split())
+                for rule in ("display:none", "visibility:hidden")
             )
             or bool(
                 re.search(
@@ -35,12 +37,24 @@ class Element:
             )
         )
 
+    def cache_text(self):
+        def joined(visible, limit):
+            pieces = []
+            remaining = limit
+            for child in self.children:
+                value = child.text(visible) if isinstance(child, Element) else child
+                piece = value[:remaining]
+                pieces.append(piece)
+                remaining -= len(piece) + 1
+                if remaining <= 0:
+                    break
+            return " ".join(pieces).strip()[:limit]
+
+        self.raw_text = joined(False, 200001 if self.tag == "script" else 6000)
+        self.visible_text = "" if self.hidden() else joined(True, 6000)
+
     def text(self, visible=False):
-        if visible and self.hidden():
-            return ""
-        return " ".join(
-            child.text(visible) if isinstance(child, Element) else child for child in self.children
-        ).strip()
+        return self.visible_text if visible else self.raw_text
 
     def walk(self):
         yield self
@@ -54,10 +68,14 @@ class ProductHTML(HTMLParser):
         super().__init__()
         self.root = Element("document", {})
         self.stack = [self.root]
+        self.elements = [self.root]
 
     def handle_starttag(self, tag, attrs):
+        if len(self.elements) >= 20000:
+            raise ValueError("HTML element limit")
         element = Element(tag, {key: value or "" for key, value in attrs})
         self.stack[-1].children.append(element)
+        self.elements.append(element)
         if tag not in {
             "area",
             "base",
@@ -91,7 +109,10 @@ class ProductHTML(HTMLParser):
 def extract_product(html: str, url: str) -> dict:
     parser = ProductHTML()
     parser.feed(html)
-    elements = list(parser.root.walk())
+    parser.close()
+    elements = parser.elements
+    for element in reversed(elements):
+        element.cache_text()
     products = []
 
     def visit(value, depth=0, listed=False):
@@ -211,14 +232,22 @@ def extract_product(html: str, url: str) -> dict:
                     result[key] = list(dict.fromkeys([*result[key], *values(variant.get(kind))]))[
                         :30
                     ]
-    result["name"] = text(product.get("name")) or next(
-        (
-            text(element.text(visible=True))
-            for element in nodes
-            if element.tag == "h1" or element.attrs.get("id") == "productTitle"
-        ),
-        None,
+    titles = [
+        text(element.text(visible=True))
+        for predicate in (
+            lambda element: element.attrs.get("id") == "productTitle",
+            lambda element: element.attrs.get("itemprop") == "name",
+        )
+        for element in nodes
+        if predicate(element)
+    ]
+    titles.extend(
+        text(element.attrs.get("content"))
+        for element in elements
+        if element.tag == "meta" and element.attrs.get("property") == "og:title"
     )
+    titles.extend(text(element.text(visible=True)) for element in nodes if element.tag == "h1")
+    result["name"] = text(product.get("name")) or next((title for title in titles if title), None)
     result["brand"] = next(iter(values(chosen.get("brand") or product.get("brand"))), None)
     offers = chosen.get("offers", [])
     for offer in offers if isinstance(offers, list) else [offers]:
@@ -231,7 +260,7 @@ def extract_product(html: str, url: str) -> dict:
                 result.update(price=price, currency=currency)
                 break
     for key, words, limit in [
-        ("material_detail", r"fabric|composition|material|\d+\s*%", 1000),
+        ("material_detail", r"fabric|composition|material", 1000),
         ("care", r"machine wash|hand wash|dry clean|care instructions", 255),
         ("fit", r"\bfits?\b|runs small|runs large|true.to.size", 2000),
     ]:
@@ -239,7 +268,12 @@ def extract_product(html: str, url: str) -> dict:
             "\n".join(
                 content
                 for content in details
-                if len(content) <= limit and re.search(words, content, re.I)
+                if len(content) <= limit
+                and (
+                    re.search(words, content, re.I)
+                    or key == "material_detail"
+                    and has_percentage(content)
+                )
             ),
             limit,
         )
@@ -255,7 +289,7 @@ def extract_product(html: str, url: str) -> dict:
         ),
         None,
     )
-    images = chosen.get("image", [])
+    images = chosen.get("image") or product.get("image") or []
     images = images if isinstance(images, list) else [images]
     if not images:
         images = [
@@ -289,6 +323,18 @@ def extract_product(html: str, url: str) -> dict:
     return {key: value for key, value in result.items() if value is not None}
 
 
+def has_percentage(content: str) -> bool:
+    digits = False
+    for character in content:
+        if character.isdecimal():
+            digits = True
+        elif character == "%" and digits:
+            return True
+        elif not character.isspace():
+            digits = False
+    return False
+
+
 async def fetch_product(url: str) -> dict:
     try:
         content, _mime, final_url = await download_public(
@@ -299,9 +345,13 @@ async def fetch_product(url: str) -> dict:
             timeout=8,
             size_error="Product page exceeds limit",
         )
-        return extract_product(content.decode("utf-8", errors="replace"), final_url)
+        async with asyncio.timeout(5):
+            return await asyncio.to_thread(
+                extract_product, content.decode("utf-8", errors="replace"), final_url
+            )
     except (
         ValueError,
+        AssertionError,
         KeyError,
         OSError,
         httpx.HTTPError,

@@ -1,10 +1,14 @@
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import httpx
 import pytest
 from sqlalchemy import func, select
 
+from app.api.auth import create_access_token
 from app.models.item import ClothingItem
+from app.models.user import User
+from tests.identity_helpers import add_users_with_identities
 from tests.test_considering import image_upload
 
 pytestmark = pytest.mark.asyncio
@@ -147,6 +151,14 @@ async def test_image_import_uses_shelf_pipeline_and_isolates_users(
     saved = response.json()
     assert saved["state"] == "considering" and saved["source_url"] is None
     assert saved["planned_size"] == "L" and saved["item"]["name"] == "Screenshot"
+    foreign = User(id=uuid4(), email=f"{uuid4()}@example.com", display_name="Foreign")
+    foreign.external_id = str(foreign.id)
+    (identity,) = await add_users_with_identities(db_session, foreign)
+    await db_session.commit()
+    foreign_headers = {"Authorization": "Bearer " + create_access_token(foreign.id, identity.id)}
+    assert (
+        await client.get(f"/api/v1/items/{saved['item']['id']}", headers=foreign_headers)
+    ).status_code == 404
     await image.seek(0)
     duplicate = await client.post(
         f"{PATH}/upload",
