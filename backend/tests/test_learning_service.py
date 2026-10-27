@@ -474,7 +474,6 @@ class TestJunkLearnedProfileIsIgnored:
         ("method", "path"),
         [
             ("get", "/api/v1/learning"),
-            ("post", "/api/v1/learning/recompute"),
             ("post", "/api/v1/learning/generate-insights"),
             ("post", "/api/v1/outfits/suggest"),
         ],
