@@ -303,6 +303,17 @@ class StudioService:
                 raise OutfitWornImmutableError("cannot modify items on a worn outfit")
 
             new_items = await validate_item_ownership(self.db, user.id, items)
+            if (
+                outfit.status in (OutfitStatus.accepted, OutfitStatus.rejected)
+                or outfit.feedback is not None
+            ):
+                owned_ids = set(
+                    await self.db.scalars(
+                        select(ClothingItem.id).where(ClothingItem.id.in_(items), owned_item())
+                    )
+                )
+                if owned_ids != set(items):
+                    raise OutfitWornImmutableError("Copy the outfit instead.")
             ordered = self._order_items_canonically(new_items)
 
             old_item_ids = [oi.item_id for oi in outfit.items]

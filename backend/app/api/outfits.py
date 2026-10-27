@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.api.pagination import PaginationParams
 from app.config import get_settings
 from app.database import DbSession
-from app.models.considering import ItemPurchase, owned_outfit
+from app.models.considering import ItemPurchase
 from app.models.item import ClothingItem
 from app.models.outfit import (
     FamilyOutfitRating,
@@ -436,11 +436,6 @@ async def _unowned_ids(db: AsyncSession, outfits: list[Outfit]) -> set[UUID]:
             )
         )
     )
-
-
-async def _require_owned_outfit(db: AsyncSession, outfit: Outfit) -> None:
-    if not await db.scalar(select(Outfit.id).where(Outfit.id == outfit.id, owned_outfit())):
-        raise HTTPException(422, "Outfit contains unowned items")
 
 
 async def outfit_response(
@@ -881,30 +876,7 @@ async def accept_outfit(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> OutfitResponse:
-    query = (
-        select(Outfit)
-        .where(and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id))
-        .options(
-            selectinload(Outfit.items).selectinload(OutfitItem.item),
-            selectinload(Outfit.feedback),
-            selectinload(Outfit.family_ratings).selectinload(FamilyOutfitRating.user),
-        )
-    )
-
-    result = await db.execute(query)
-    outfit = result.scalar_one_or_none()
-
-    if not outfit:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
-        )
-
-    await _require_owned_outfit(db, outfit)
-    outfit.status = OutfitStatus.accepted
-    outfit.responded_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(outfit)
+    outfit = await OutfitService(db).set_status(outfit_id, current_user.id, OutfitStatus.accepted)
 
     return await outfit_response(
         db, outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
@@ -917,31 +889,7 @@ async def reject_outfit(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> OutfitResponse:
-    query = (
-        select(Outfit)
-        .where(and_(Outfit.id == outfit_id, Outfit.user_id == current_user.id))
-        .options(
-            selectinload(Outfit.items).selectinload(OutfitItem.item),
-            selectinload(Outfit.feedback),
-            selectinload(Outfit.family_ratings).selectinload(FamilyOutfitRating.user),
-        )
-    )
-
-    result = await db.execute(query)
-    outfit = result.scalar_one_or_none()
-
-    if not outfit:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"message": "Outfit not found", "error_code": "OUTFIT_NOT_FOUND"},
-        )
-
-    await _require_owned_outfit(db, outfit)
-    outfit.status = OutfitStatus.rejected
-    outfit.responded_at = datetime.utcnow()
-    await db.commit()
-    await db.refresh(outfit)
-
+    outfit = await OutfitService(db).set_status(outfit_id, current_user.id, OutfitStatus.rejected)
     await clear_suggestions(current_user.id, outfit.occasion)
 
     return await outfit_response(
@@ -1014,7 +962,7 @@ async def submit_feedback(
         raise LookupError("Outfit not found")
 
     if request.accepted is not None:
-        await _require_owned_outfit(db, outfit)
+        await OutfitService(db).require_owned(outfit.id, current_user.id)
     posted_outfit_id = outfit.id
     if request.worn or request.actually_worn is True or request.wore_instead_items:
         target_date = WearService.date_for(current_user, outfit)
@@ -1569,7 +1517,7 @@ async def patch_outfit_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error_code": "OUTFIT_WORN_IMMUTABLE",
-                "message": "Cannot modify items on a worn outfit. Create a new lookbook entry instead.",
+                "message": "Copy the outfit instead.",
             },
         ) from None
 

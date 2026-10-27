@@ -6,7 +6,7 @@ from sqlalchemy import delete, func, select
 
 from app.models.considering import ItemPurchase
 from app.models.item import ClothingItem, ItemStatus
-from app.models.outfit import Outfit, UserFeedback
+from app.models.outfit import Outfit, OutfitSource, OutfitStatus, UserFeedback
 
 pytestmark = pytest.mark.asyncio
 PATH = "/api/v1/considering"
@@ -258,7 +258,18 @@ async def test_direct_preview_rejects_unavailable_anchor(
 
 
 @pytest.mark.parametrize(
-    "action", ["wore", "wore-instead", "feedback", "accept", "reject", "feedback-accept"]
+    "action",
+    [
+        "wore",
+        "wore-instead",
+        "feedback",
+        "accept",
+        "reject",
+        "feedback-accept",
+        "skip",
+        "wear-today",
+        "selfie",
+    ],
 )
 async def test_unowned_source_refuses_wear_overrides_and_acceptance(
     client, auth_headers, db_session, test_user, action
@@ -268,6 +279,7 @@ async def test_unowned_source_refuses_wear_overrides_and_acceptance(
     from app.utils.timezone import get_user_today
 
     anchor, _, companion, *_rest = await fixture_items(db_session, test_user)
+    user_id, anchor_id = test_user.id, anchor.id
     created = await client.post(f"{PATH}/{anchor.id}/outfits", headers=auth_headers, json={})
     outfit_id = created.json()["id"]
     await db_session.commit()
@@ -276,29 +288,30 @@ async def test_unowned_source_refuses_wear_overrides_and_acceptance(
         "wore-instead": {"items": [str(companion.id)]},
         "feedback": {"actually_worn": False, "wore_instead_items": [str(companion.id)]},
         "feedback-accept": {"accepted": True},
+        "wear-today": {},
+        "selfie": {"request_id": str(uuid4()), "item_ids": [str(anchor.id)]},
     }.get(action, {})
     suffix = "feedback" if action == "feedback-accept" else action
-    response = await client.post(
-        f"/api/v1/outfits/{outfit_id}/{suffix}", headers=auth_headers, json=payload
+    endpoint = (
+        "/api/v1/selfie/confirm" if action == "selfie" else f"/api/v1/outfits/{outfit_id}/{suffix}"
     )
+    response = await client.post(endpoint, headers=auth_headers, json=payload)
     assert response.status_code == (
-        403 if action in ("wore", "wore-instead", "feedback") else 422
+        403 if action in ("wore", "wore-instead", "feedback", "wear-today", "selfie") else 422
     ), response.text
     assert (await db_session.get(Outfit, UUID(outfit_id))).status == "pending"
     assert (
         await db_session.scalar(
-            select(func.count()).select_from(Outfit).where(Outfit.user_id == test_user.id)
+            select(func.count()).select_from(Outfit).where(Outfit.user_id == user_id)
         )
         == 1
     )
     await db_session.refresh(companion)
     assert companion.wear_count == 0
     assert (
-        await client.post(f"{PATH}/{anchor.id}/bought", headers=auth_headers)
+        await client.post(f"{PATH}/{anchor_id}/bought", headers=auth_headers)
     ).status_code == 200
-    allowed = await client.post(
-        f"/api/v1/outfits/{outfit_id}/{suffix}", headers=auth_headers, json=payload
-    )
+    allowed = await client.post(endpoint, headers=auth_headers, json=payload)
     assert allowed.status_code == 200, allowed.text
 
 
@@ -349,3 +362,50 @@ async def test_suggest_options_batches_purchase_queries(
         assert counts == [1, 1]
     finally:
         event.remove(db_session.bind.sync_engine, "before_cursor_execute", observe)
+
+
+@pytest.mark.parametrize("shelf_state", ["considering", "passed"])
+@pytest.mark.parametrize("signal", ["accepted", "rejected", "feedback", "worn", "none"])
+async def test_patch_shelf_membership_preserves_prior_signals(
+    client, auth_headers, db_session, test_user, shelf_state, signal
+):
+    from app.models.outfit import OutfitItem
+    from app.services.learning_service import LearningService
+
+    anchor, _, owned, *_rest = await fixture_items(db_session, test_user)
+    owned.primary_color = "navy"
+    purchase = await db_session.get(ItemPurchase, anchor.id)
+    purchase.state = shelf_state
+    outfit = Outfit(
+        user_id=test_user.id,
+        occasion="casual",
+        source=OutfitSource.manual,
+        status=OutfitStatus(signal) if signal in ("accepted", "rejected") else OutfitStatus.pending,
+    )
+    db_session.add(outfit)
+    await db_session.flush()
+    db_session.add(OutfitItem(outfit_id=outfit.id, item_id=owned.id, position=0))
+    if signal in ("feedback", "worn"):
+        db_session.add(
+            UserFeedback(
+                outfit_id=outfit.id,
+                accepted=True,
+                worn_at=date.today() if signal == "worn" else None,
+            )
+        )
+    await db_session.commit()
+    profile = await LearningService(db_session).recompute_learning_profile(test_user.id)
+    before = (profile.feedback_count, profile.learned_color_scores)
+    response = await client.patch(
+        f"/api/v1/outfits/{outfit.id}", headers=auth_headers, json={"items": [str(anchor.id)]}
+    )
+    if signal == "none":
+        assert response.status_code == 200, response.text
+        assert response.json()["unowned_item_ids"] == [str(anchor.id)]
+    else:
+        assert response.status_code == 409, response.text
+        assert "copy" in response.text.lower()
+        saved = await client.get(f"/api/v1/outfits/{outfit.id}", headers=auth_headers)
+        assert [item["id"] for item in saved.json()["items"]] == [str(owned.id)]
+        rebuilt = await LearningService(db_session).recompute_learning_profile(test_user.id)
+        assert (rebuilt.feedback_count, rebuilt.learned_color_scores) == before
