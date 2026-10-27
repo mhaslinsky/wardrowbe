@@ -25,6 +25,7 @@ export function useFitProfile() {
   const { data: session, status } = useSession();
   useSetTokenIfAvailable();
   return useQuery({
+    meta: { toastsOwnErrors: true },
     queryKey: profileKey(session?.user?.email),
     queryFn: async () => profileSchema.parse(await api.get<unknown>(endpoint)),
     enabled: status !== 'loading',
@@ -36,6 +37,7 @@ export function useUpdateFitProfile() {
   const client = useQueryClient();
   const { data: session } = useSession();
   return useMutation({
+    meta: { toastsOwnErrors: true },
     mutationFn: async (profile: FitProfile) => {
       applySessionToken(session);
       return profileSchema.parse(await api.patch<unknown>(endpoint, profile));

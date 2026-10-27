@@ -1,15 +1,20 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { ApiError } from '@/lib/api';
+import { createQueryClient } from '@/lib/query-client';
+import { toast } from 'sonner';
 import { FitProfileSettings } from '@/components/fit-profile-settings';
 
 const state = vi.hoisted(() => ({ get: vi.fn(), patch: vi.fn() }));
-vi.mock('@/lib/api', () => ({ api: state }));
+vi.mock('@/lib/api', async (original) => ({ ...await original<typeof import('@/lib/api')>(), api: state }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 function wrapper({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>{children}</QueryClientProvider>;
 }
 const initial = { rev: 'old', brand_sizes: [], skip_list: [], neck: null, sleeve: null, thigh: null, reference_garment: '' };
 beforeEach(() => {
+  vi.mocked(toast.error).mockClear();
   state.get.mockReset();
   state.get.mockResolvedValue(structuredClone(initial));
   state.patch.mockReset();
@@ -93,4 +98,22 @@ it('keeps the dirty draft when an explicit reload fails', async () => {
   await waitFor(() => expect(state.get).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.getByRole('button', { name: 'reload' })).toBeEnabled());
   expect(reference).toHaveValue('Keep through failed reload');
+});
+
+
+it('shows the translated inline conflict without a raw global toast', async () => {
+  state.patch.mockRejectedValue(new ApiError('Fit profile changed', 409, {}));
+  render(<QueryClientProvider client={createQueryClient()}><FitProfileSettings /></QueryClientProvider>);
+  const reference = await screen.findByLabelText('referenceGarment');
+  fireEvent.change(reference, { target: { value: 'Keep this draft' } });
+  fireEvent.click(screen.getByRole('button', { name: 'save' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('conflict');
+  expect(toast.error).not.toHaveBeenCalled();
+});
+
+it('shows the translated load error without a raw global toast', async () => {
+  state.get.mockRejectedValue(new ApiError('Unavailable', 503, {}));
+  render(<QueryClientProvider client={createQueryClient()}><FitProfileSettings /></QueryClientProvider>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('failed');
+  expect(toast.error).not.toHaveBeenCalled();
 });
