@@ -41,7 +41,11 @@ it.each([false, true])('wires the preview on a day card with worn=%s', async (wo
   render(<DayOutfits />, { wrapper });
   fireEvent.click(screen.getByRole('button', { name: 'see' }));
   const image = await screen.findByRole('img', { name: 'see' });
-  expect(image.closest('.grid-cols-2')).toContainElement(screen.getByText('Layers'));
+  const preview = image.parentElement!.parentElement!.parentElement!;
+  expect(preview).toHaveClass('space-y-3');
+  expect(image.closest('.grid-cols-2')).toBeNull();
+  expect(preview.firstElementChild).toContainElement(screen.getByText('Layers'));
+  expect(preview.children[1]).toContainElement(image);
   expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview', expect.objectContaining({ method: 'GET' }));
 });
 
