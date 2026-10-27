@@ -6,6 +6,7 @@ import { translationMock } from './setup'
 import type { Item, Outfit } from '@/lib/types'
 
 const state = vi.hoisted(() => ({
+  savedFilters: vi.fn(),
   log: vi.fn().mockResolvedValue({}), name: vi.fn().mockResolvedValue('Blue outfit'),
   extraOutfits: [] as Outfit[], loading: false, more: false, profileReady: true, date: '', worn: false, fail: false, outfit: {} as Outfit, items: [] as Item[], post: vi.fn().mockResolvedValue([]),
 }))
@@ -25,7 +26,7 @@ vi.mock('@/lib/hooks/use-day-outfits', async (original) => ({
   useDayOutfits: (date: string) => { state.date = date; return { isError: state.fail, data: { pages: [{ total: 1, outfits: [{ ...state.outfit, feedback: state.worn ? { worn_at: date } : null }, ...state.extraOutfits] }] } } },
 }))
 vi.mock('@/lib/hooks/use-outfits', () => ({
-  useInfiniteOutfits: () => ({ data: { pages: [{ total: 1, outfits: [state.outfit] }] } }),
+  useInfiniteOutfits: (filters: unknown) => { state.savedFilters(filters); return { data: { pages: [{ total: 1, outfits: [state.outfit] }] } } },
   useRejectOutfit: () => ({ mutate: vi.fn() }),
 }))
 vi.mock('@/lib/hooks/use-items', () => ({ useItemPages: () => ({ items: state.items, isLoading: state.loading, hasMore: state.more }) }))
@@ -255,4 +256,9 @@ it('offers Undo and Replace together on each worn card', () => {
   render(<DayOutfits />, { wrapper })
   const undo = screen.getByRole('button', { name: 'undo' })
   expect(undo.parentElement).toBe(screen.getByRole('button', { name: 'replace' }).parentElement)
+})
+
+it('requests owned saved templates independently of laundry readiness', () => {
+  render(<DayOutfits />, { wrapper })
+  expect(state.savedFilters).toHaveBeenCalledWith({ source: 'manual', is_lookbook: true, owned_only: true })
 })

@@ -141,7 +141,7 @@ export function DayOutfits({ date: controlledDate, onDateChange }: { date?: stri
   const date = controlledDate ?? selection.date;
   const setDate = onDateChange ?? selection.setDate;
   const day = useDayOutfits(date);
-  const saved = useInfiniteOutfits({ source: 'manual', is_lookbook: true });
+  const saved = useInfiniteOutfits({ source: 'manual', is_lookbook: true, owned_only: true });
   const past = useInfiniteOutfits({ worn: true, date_to: shiftDay(date, -1) });
   const reject = useRejectOutfit();
   const { data: preferences } = usePreferences();

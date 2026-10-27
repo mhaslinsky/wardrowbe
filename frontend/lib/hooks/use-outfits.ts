@@ -41,6 +41,7 @@ export interface OutfitFilters {
   worn?: boolean;
   group?: boolean;
   ready_to_wear?: boolean;
+  owned_only?: boolean;
   status?: OutfitStatus;
   occasion?: string;
   date_from?: string;
@@ -91,6 +92,7 @@ function outfitListParams(filters: OutfitFilters, page: number, pageSize: number
 
   if (filters.group) params.group = String(filters.group);
   if (filters.ready_to_wear) params.ready_to_wear = String(filters.ready_to_wear);
+  if (filters.owned_only !== undefined) params.owned_only = String(filters.owned_only);
   if (filters.worn !== undefined) params.worn = String(filters.worn);
   if (filters.status) params.status = filters.status;
   if (filters.occasion) params.occasion = filters.occasion;

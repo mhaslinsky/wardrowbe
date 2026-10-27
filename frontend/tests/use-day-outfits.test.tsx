@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { useInfiniteOutfits } from '@/lib/hooks/use-outfits'
 import { api, ApiError } from '@/lib/api'
 import { loggedOutfitName, useLogDayWear, useGenerateDayOptions, useUndoDayWear } from '@/lib/hooks/use-day-outfits'
 
@@ -64,4 +65,11 @@ it('undoes wear and refreshes item, calendar and learning caches', async () => {
   expect(api.post).toHaveBeenCalledWith('/outfits/source/undo-wear', { washed_item_ids: [] })
   const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey)
   for (const key of ['outfits', 'calendarOutfits', 'pendingOutfits', 'analytics', 'learning', 'items', 'item', 'wear-stats', 'wear-history']) expect(keys).toContainEqual([key])
+})
+
+it('serializes owned-only template selection without a laundry filter', async () => {
+  vi.mocked(api.get).mockResolvedValue({ outfits: [], total: 0, page: 1, page_size: 24, has_more: false })
+  const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+  renderHook(() => useInfiniteOutfits({ source: 'manual', is_lookbook: true, owned_only: true }), { wrapper })
+  await waitFor(() => expect(api.get).toHaveBeenCalledWith('/outfits', { params: { page: '1', page_size: '20', source: 'manual', is_lookbook: 'true', owned_only: 'true' } }))
 })
