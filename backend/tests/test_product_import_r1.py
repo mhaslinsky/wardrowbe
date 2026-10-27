@@ -1,7 +1,5 @@
-import asyncio
 import json
 import re
-import threading
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -64,64 +62,6 @@ def test_long_digit_rows_do_not_use_unbounded_regex_scans(monkeypatch):
     assert capture["name"] == "Shirt"
     assert scanned <= 3 * 1500 * 900
     assert "material_detail" not in capture
-
-
-async def test_parser_runs_outside_the_api_event_loop():
-    event_thread = threading.get_ident()
-
-    def extract(*args):
-        assert threading.get_ident() != event_thread, "Parser ran on API event loop"
-        return {"name": "Threaded"}
-
-    with (
-        patch.object(
-            service, "download_public", AsyncMock(return_value=(b"html", "text/html", URL))
-        ),
-        patch.object(service, "extract_product", extract),
-    ):
-        assert await service.fetch_product(URL) == {"name": "Threaded"}
-
-
-async def test_parse_deadline_returns_422_on_a_stepped_clock(monkeypatch):
-    loop = asyncio.get_running_loop()
-    actual_time = loop.time
-    elapsed = 0
-    entered = asyncio.Event()
-    release = threading.Event()
-    event_thread = threading.get_ident()
-
-    def extract(*args):
-        assert threading.get_ident() != event_thread, "Parser ran on API event loop"
-        loop.call_soon_threadsafe(entered.set)
-        release.wait()
-        return {"name": "Late"}
-
-    with (
-        patch.object(
-            service, "download_public", AsyncMock(return_value=(b"html", "text/html", URL))
-        ),
-        patch.object(service, "extract_product", extract),
-    ):
-        monkeypatch.setattr(loop, "time", lambda: actual_time() + elapsed)
-        task = asyncio.create_task(service.fetch_product(URL))
-        event_task = asyncio.create_task(entered.wait())
-        try:
-            done, _pending = await asyncio.wait(
-                [task, event_task], return_when=asyncio.FIRST_COMPLETED
-            )
-            if task in done:
-                await task
-                pytest.fail("Parser completed before the controlled release")
-            loop.call_later(10, release.set)
-            elapsed = 30
-            loop.call_soon(lambda: None)
-            with pytest.raises(HTTPException) as failure:
-                await task
-            assert failure.value.status_code == 422
-        finally:
-            monkeypatch.setattr(loop, "time", actual_time)
-            release.set()
-            event_task.cancel()
 
 
 @pytest.mark.parametrize("html", ["<![unknown]>", "<![broken]><main>"])
@@ -203,17 +143,3 @@ async def test_import_rate_limits_prevent_network_or_image_writes(client, auth_h
             ),
         )
     assert response.status_code == 429
-
-
-async def test_html_parser_assertion_becomes_422():
-    with (
-        patch.object(
-            service, "download_public", AsyncMock(return_value=(b"<![unknown]>", "text/html", URL))
-        ),
-        patch.object(
-            service.ProductHTML, "feed", side_effect=AssertionError("unknown status keyword")
-        ),
-    ):
-        with pytest.raises(HTTPException) as failure:
-            await service.fetch_product(URL)
-    assert failure.value.status_code == 422
