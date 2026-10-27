@@ -148,3 +148,9 @@ async def test_missing_and_duplicate_hosts_are_refused(monkeypatch):
                 headers=[("host", "wardrobe.haslinsky.net"), ("host", "christina.haslinsky.net")],
             )
         ).status_code == 400
+
+
+@pytest.mark.parametrize("hosts", [",", " , ", "https://invalid.example, /invalid"])
+def test_nonempty_invalid_host_list_fails_settings_startup(hosts):
+    with pytest.raises(ValidationError, match="PUBLIC_HOSTS"):
+        Settings(_env_file=None, public_hosts=hosts)

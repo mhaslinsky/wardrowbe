@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getToken, type JWT } from 'next-auth/jwt';
 import { decodeProxyHeader, proxySecretMatches, publicOrigin } from '@/lib/proxy-headers';
+import { safeCallbackUrl } from '@/lib/callback-url';
 import { clearSessionCookies, sessionCookie } from '@/lib/session-cookies';
 
 // A proxy that switches users keeps the old NextAuth session cookie, and a GET to
@@ -61,9 +62,12 @@ export async function middleware(request: NextRequest) {
     headers.set('x-forwarded-host', new URL(origin).host);
     headers.set('x-forwarded-proto', 'https');
   }
+  const requestPath = `${pathname}${search}`;
+  const callbackUrl = safeCallbackUrl(requestPath, origin || request.nextUrl.origin);
   const next = () => origin ? NextResponse.next({ request: { headers } }) : NextResponse.next();
+  // Unsafe callback paths must reach session handling even when they contain a dot.
   if (pathname.startsWith('/api/v1/') || pathname.startsWith('/_next/') ||
-      (!pathname.startsWith(NEXTAUTH_PREFIX) && pathname.includes('.')) || pathname === '/auth/logout') return next();
+      (!pathname.startsWith(NEXTAUTH_PREFIX) && pathname.includes('.') && callbackUrl === requestPath) || pathname === '/auth/logout') return next();
   if (pathname === LOGIN_PATH) {
     const response = next();
     if (request.nextUrl.searchParams.get('loggedOut') === '1') clearSessionCookies(request, response);
@@ -90,9 +94,8 @@ export async function middleware(request: NextRequest) {
     // must never receive the previous user's backend token.
     response = NextResponse.json({});
   } else {
-    const login = origin ? new URL(request.nextUrl.pathname + request.nextUrl.search, origin) : request.nextUrl.clone();
-    login.pathname = '/login';
-    login.search = new URLSearchParams({ callbackUrl: `${pathname}${search}` }).toString();
+    const login = new URL('/login', origin || request.nextUrl.origin);
+    login.search = new URLSearchParams({ callbackUrl }).toString();
     response = NextResponse.redirect(login);
   }
   clearSessionCookies(request, response);

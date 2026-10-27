@@ -8,10 +8,10 @@ import {
   FORWARD_AUTH_SERVER_ERROR,
   FORWARD_AUTH_USERNAME_CONFLICT,
 } from '@/lib/auth-errors';
-import { decodeProxyHeader, proxySecretMatches, publicOrigin } from '@/lib/proxy-headers';
+import { decodeProxyHeader, proxySecretMatches, publicOrigin, publicHostnames } from '@/lib/proxy-headers';
 
 // NextAuth v4 reads this startup flag; middleware replaces forwarded hosts with a listed Host.
-if (process.env.PUBLIC_HOSTS?.trim()) process.env.AUTH_TRUST_HOST = 'true';
+if (publicHostnames().length) process.env.AUTH_TRUST_HOST = 'true';
 
 interface OIDCProfile {
   sub: string;

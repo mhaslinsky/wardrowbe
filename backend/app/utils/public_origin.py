@@ -33,6 +33,8 @@ def public_hostnames(value: str) -> set[str]:
         ):
             raise ValueError("PUBLIC_HOSTS must contain hostnames without schemes, paths or ports")
         hosts.add(host)
+    if value and not hosts:
+        raise ValueError("PUBLIC_HOSTS must contain at least one hostname")
     return hosts
 
 

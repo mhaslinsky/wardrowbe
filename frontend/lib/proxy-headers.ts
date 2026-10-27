@@ -39,7 +39,9 @@ export function proxySecretMatches(presented: string | null | undefined): boolea
 }
 
 export function publicHostnames(): string[] {
-  const hosts = (process.env.PUBLIC_HOSTS || '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
+  const configured = process.env.PUBLIC_HOSTS || '';
+  const hosts = configured.split(',').map((host) => host.trim().toLowerCase()).filter(Boolean);
+  if (configured && !hosts.length) throw new Error('PUBLIC_HOSTS must contain at least one hostname');
   for (const host of hosts) {
     const url = new URL(`https://${host}`);
     if (url.host !== host || url.username || url.password || url.pathname !== '/' || url.search || url.hash ||

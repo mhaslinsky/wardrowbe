@@ -63,3 +63,34 @@ describe('public hostname routing', () => {
     expect((await middleware(request(`${HOSTS[0]},attacker.example`))).status).toBe(400);
   });
 });
+
+describe('safe user-switch redirects', () => {
+  const paths = [
+    '//evil.example', String.raw`/\evil.example`, '/%2F%2Fevil.example',
+    '/%5Cevil.example', '/%2F%5Cevil.example', '/%5C%5Cevil.example',
+    '//evil', String.raw`/\evil`,
+  ];
+  it.each(paths.flatMap((path) => ['configured', 'unset'].map((mode) => ({ path, mode }))))(
+    'keeps $path on the request host with PUBLIC_HOSTS $mode', async ({ path, mode }) => {
+      const { encode } = await import('next-auth/jwt');
+      const secret = 'per257-user-switch-test-secret';
+      process.env.NEXTAUTH_SECRET = secret;
+      process.env.FORWARD_AUTH_SECRET = 'per257-forward-auth-test-secret';
+      if (mode === 'unset') delete process.env.PUBLIC_HOSTS;
+      const token = await encode({ token: { sub: 'first', proxyUser: 'first' }, secret });
+      const incoming = new NextRequest(`https://${HOSTS[0]}${path}`, {
+        headers: {
+          host: HOSTS[0], 'remote-user': 'second',
+          'x-forward-auth-secret': process.env.FORWARD_AUTH_SECRET,
+          cookie: `__Secure-next-auth.session-token=${token}`,
+        },
+      });
+      const response = await middleware(incoming);
+      expect(response.status).toBe(307);
+      const location = new URL(response.headers.get('location')!);
+      expect(location.origin).toBe(`https://${HOSTS[0]}`);
+      expect(location.pathname).toBe('/login');
+      expect(location.searchParams.get('callbackUrl')).toBe('/dashboard');
+    },
+  );
+});
