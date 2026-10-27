@@ -1,0 +1,11 @@
+{
+  "name": "wardrowbe-send-extension",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "node build.mts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

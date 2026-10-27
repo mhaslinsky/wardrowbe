@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { captureProduct, validateCapture } from '../../extension/capture';
+import { captureProduct, validateCapture } from '../lib/extension-reader/capture';
 
 describe('product capture', () => {
   it('reads nested JSON-LD variants and relative images without inventing missing fields', () => {
@@ -30,7 +30,7 @@ describe('product capture', () => {
 
 import { readFileSync } from 'node:fs';
 import { vi } from 'vitest';
-import { confirmedPayload } from '../../extension/confirmation';
+import { confirmedPayload } from '../lib/extension-reader/confirmation';
 const fixtures = `${process.cwd()}/tests/fixtures/products/`;
 function visibleLayout() {
     return vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
@@ -198,4 +198,10 @@ describe('page product and DOM offer resolution', () => {
     const result = capture(`<main><h1>Shirt</h1><img itemprop="image" src="/front.jpg"><p itemprop="description">${description}</p></main>`);
     expect(result.material_detail).toBe(description); expect(result.care).toBe(description); expect(result.fit).toBe(description);
   });
+});
+
+it('keeps an unmapped selected colour in notes', () => {
+  const payload = confirmedPayload({ source_url: 'https://store.example/shirt', images: ['https://store.example/shirt.jpg'], colors: [], sizes: [], selected_color: 'moon dust' });
+  expect(payload.update.tags.colors).toBeUndefined();
+  expect(payload.update.notes).toBe('Selected color: moon dust');
 });
