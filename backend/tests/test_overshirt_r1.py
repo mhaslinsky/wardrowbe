@@ -45,59 +45,13 @@ def test_pairing_prompt_requires_a_thin_base_under_an_overshirt():
     assert "Wear an overshirt over a tee, henley or thin long-sleeve tee only" in prompt
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("thick", [None, "sweater", "hoodie", "cardigan"])
-@pytest.mark.parametrize("legacy", [False, True])
-async def test_pairing_repairs_overshirt_layers_before_persisting(thick, legacy):
-    owner = uuid4()
-    source = SimpleNamespace(
-        id=uuid4(), type="shirt" if legacy else "overshirt", subtype="shacket" if legacy else None
-    )
-    available = [
-        SimpleNamespace(id=uuid4(), type=kind, subtype=None)
-        for kind in ["pants", "sneakers", "t-shirt", *([thick] if thick else [])]
-    ]
+async def _generate_pairing(source, available, selected):
     numbers = {index: item.id for index, item in enumerate([source, *available], 1)}
     database = AsyncMock()
     database.add = MagicMock()
     database.execute.return_value = MagicMock()
     service = PairingService(database)
-    response = SimpleNamespace(
-        content=json.dumps([{"items": [1, 2, 3, *([5] if thick else [])]}]), model="stub"
-    )
-    with (
-        patch.object(service, "get_source_item", AsyncMock(return_value=source)),
-        patch.object(service, "get_available_items", AsyncMock(return_value=available)),
-        patch.object(
-            service, "_format_items_for_prompt", return_value=("source", "items", 1, numbers)
-        ),
-        patch(
-            "app.services.pairing_service.AIService.generate_text", AsyncMock(return_value=response)
-        ),
-    ):
-        await service.generate_pairings(
-            SimpleNamespace(id=owner, timezone="UTC", preferences=None), source.id
-        )
-    saved = [
-        call.args[0].item_id
-        for call in database.add.call_args_list
-        if isinstance(call.args[0], OutfitItem)
-    ]
-    assert set(saved) == {source.id, *(item.id for item in available[:3])}
-
-
-@pytest.mark.asyncio
-async def test_pairing_rejects_a_mandatory_overshirt_without_a_base():
-    source = SimpleNamespace(id=uuid4(), type="overshirt", subtype=None)
-    available = [
-        SimpleNamespace(id=uuid4(), type=kind, subtype=None) for kind in ["pants", "sneakers"]
-    ]
-    numbers = {index: item.id for index, item in enumerate([source, *available], 1)}
-    database = AsyncMock()
-    database.add = MagicMock()
-    database.execute.return_value = MagicMock()
-    service = PairingService(database)
-    response = SimpleNamespace(content='[{"items":[1,2,3]}]', model="stub")
+    response = SimpleNamespace(content=json.dumps([{"items": selected}]), model="stub")
     with (
         patch.object(service, "get_source_item", AsyncMock(return_value=source)),
         patch.object(service, "get_available_items", AsyncMock(return_value=available)),
@@ -111,5 +65,31 @@ async def test_pairing_rejects_a_mandatory_overshirt_without_a_base():
         result = await service.generate_pairings(
             SimpleNamespace(id=uuid4(), timezone="UTC", preferences=None), source.id
         )
+    return result, [call.args[0] for call in database.add.call_args_list]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("thick", [None, "sweater", "hoodie", "cardigan"])
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_pairing_repairs_overshirt_layers_before_persisting(thick, legacy):
+    source = SimpleNamespace(
+        id=uuid4(), type="shirt" if legacy else "overshirt", subtype="shacket" if legacy else None
+    )
+    available = [
+        SimpleNamespace(id=uuid4(), type=kind, subtype=None)
+        for kind in ["pants", "sneakers", "t-shirt", *([thick] if thick else [])]
+    ]
+    _, writes = await _generate_pairing(source, available, [1, 2, 3, *([5] if thick else [])])
+    saved = [row.item_id for row in writes if isinstance(row, OutfitItem)]
+    assert set(saved) == {source.id, *(item.id for item in available[:3])}
+
+
+@pytest.mark.asyncio
+async def test_pairing_rejects_a_mandatory_overshirt_without_a_base():
+    source = SimpleNamespace(id=uuid4(), type="overshirt", subtype=None)
+    available = [
+        SimpleNamespace(id=uuid4(), type=kind, subtype=None) for kind in ["pants", "sneakers"]
+    ]
+    result, writes = await _generate_pairing(source, available, [1, 2, 3])
     assert result == []
-    database.add.assert_not_called()
+    assert writes == []
