@@ -1,4 +1,5 @@
 import json
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -33,7 +34,9 @@ def provider(test_user):
             "app.services.recommendation_service.WeatherService.get_current_weather",
             AsyncMock(return_value=_weather()),
         ),
-        patch("app.services.recommendation_service.pop_suggestion", AsyncMock()) as pop,
+        patch(
+            "app.services.recommendation_service.pop_suggestion", AsyncMock(return_value=None)
+        ) as pop,
         patch("app.services.recommendation_service.push_suggestions", AsyncMock()) as push,
     ):
         yield ai, pop, push
@@ -43,9 +46,17 @@ async def test_anchor_owned_companions_cache_and_lifecycle(
     client, auth_headers, db_session, test_user, provider
 ):
     anchor, shelf, pants, shoes, dirty = await fixture_items(db_session, test_user)
-    shelf.type = "shirt"
+    shelf.type = "jacket"
     await db_session.commit()
     ai, pop, push = provider
+
+    async def choose_from_prompt(prompt, **_kwargs):
+        numbers = [int(number) for number in re.findall(r"^\[(\d+)\] ", prompt, re.MULTILINE)]
+        return MagicMock(
+            content=json.dumps({"outfits": [{"items": numbers}] * 3}), model="stub", endpoint="stub"
+        )
+
+    ai.generate_text.side_effect = choose_from_prompt
     response = await client.post(
         f"/api/v1/considering/{anchor.id}/suggestions", headers=auth_headers, json={}
     )
@@ -210,3 +221,93 @@ async def test_empty_owned_candidates_and_disabled_ai(
     assert response.status_code == 503
     assert response.json()["detail"] == "Internal AI is disabled"
     provider[0].generate_text.assert_not_awaited()
+
+
+async def test_forced_shelf_companion_is_rejected_by_validation(db_session, test_user):
+    from fastapi import HTTPException
+
+    from app.services.considering_preview_service import ConsideringPreviewService
+
+    anchor, shelf, *_rest = await fixture_items(db_session, test_user)
+    shelf.type = "jacket"
+    await db_session.commit()
+    with pytest.raises(HTTPException) as refused:
+        await ConsideringPreviewService(db_session).validate(test_user.id, anchor.id, [shelf.id])
+    assert refused.value.status_code == 422
+
+
+async def test_materialize_rejects_forced_shelf_companion(db_session, test_user):
+    from app.models.outfit import OutfitSource
+    from app.services.recommendation_service import EmptyOutfitError, RecommendationService
+
+    anchor, shelf, pants, *_rest = await fixture_items(db_session, test_user)
+    shelf.type = "jacket"
+    await db_session.commit()
+    service = RecommendationService(db_session)
+    service._defer_commit = True
+    with pytest.raises(EmptyOutfitError):
+        await service._materialize_outfit(
+            {"items": [1, 2, 3]},
+            test_user,
+            _weather(),
+            "casual",
+            OutfitSource.on_demand,
+            {1: anchor.id, 2: pants.id, 3: shelf.id},
+            mandatory_item_ids={anchor.id},
+            considering_anchor_id=anchor.id,
+        )
+    assert not list(
+        await db_session.scalars(select(Outfit.id).where(Outfit.user_id == test_user.id))
+    )
+
+
+async def test_anchor_cache_isolation_without_deferred_commit(db_session, test_user, provider):
+    from app.services.recommendation_service import RecommendationService
+
+    anchor, *_rest = await fixture_items(db_session, test_user)
+    await db_session.refresh(test_user, ["preferences"])
+    service = RecommendationService(db_session)
+    assert service._defer_commit is False
+    outfits = await service.generate_recommendations(
+        test_user, "casual", weather_override=_weather(), considering_anchor_id=anchor.id
+    )
+    assert len(outfits) == 1
+    assert any(item.item_id == anchor.id for item in outfits[0].items)
+    provider[1].assert_not_awaited()
+    provider[2].assert_not_awaited()
+
+
+async def test_invalid_provider_option_is_skipped_without_losing_valid_options(
+    client, auth_headers, db_session, test_user, provider
+):
+    anchor, _shelf, pants, shoes, *_rest = await fixture_items(db_session, test_user)
+    for item, name in [(anchor, "Anchor shirt"), (pants, "Owned pants"), (shoes, "Changing shoes")]:
+        item.name = name
+    await db_session.commit()
+
+    async def choose_then_archive(prompt, **_kwargs):
+        numbers = {
+            name: int(number)
+            for number, name in re.findall(r'^\[(\d+)\] "([^"]+)"', prompt, re.MULTILINE)
+        }
+        shoes.is_archived = True
+        await db_session.flush()
+        bad = [numbers[name] for name in ("Anchor shirt", "Owned pants", "Changing shoes")]
+        good = [numbers[name] for name in ("Anchor shirt", "Owned pants")]
+        return MagicMock(
+            content=json.dumps({"outfits": [{"items": bad}, {"items": good}]}),
+            model="stub",
+            endpoint="stub",
+        )
+
+    provider[0].generate_text.side_effect = choose_then_archive
+    response = await client.post(
+        f"/api/v1/considering/{anchor.id}/suggestions", headers=auth_headers, json={}
+    )
+    assert response.status_code == 201, response.text
+    assert len(response.json()) == 1
+    assert {item["id"] for item in response.json()[0]["items"]} == {str(anchor.id), str(pants.id)}
+    assert (
+        len(list(await db_session.scalars(select(Outfit.id).where(Outfit.user_id == test_user.id))))
+        == 1
+    )

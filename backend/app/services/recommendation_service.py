@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import and_, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -936,12 +937,15 @@ class RecommendationService:
 
             if considering_anchor_id not in valid_ids or len(valid_ids) < 2:
                 raise EmptyOutfitError("No companions selected for the anchor")
-            await ConsideringPreviewService(self.db).validate(
-                user.id,
-                considering_anchor_id,
-                [item_id for item_id in valid_ids if item_id != considering_anchor_id],
-                allow_bought=True,
-            )
+            try:
+                await ConsideringPreviewService(self.db).validate(
+                    user.id,
+                    considering_anchor_id,
+                    [item_id for item_id in valid_ids if item_id != considering_anchor_id],
+                    allow_bought=True,
+                )
+            except HTTPException as error:
+                raise EmptyOutfitError(str(error.detail)) from error
 
         reasoning = outfit_data.get("headline") or outfit_data.get("reasoning")
         style_notes = outfit_data.get("styling_tip") or outfit_data.get("style_notes")

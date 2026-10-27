@@ -69,7 +69,7 @@ export default function ConsideringPage() {
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" disabled={busy} onClick={(event) => openDialog(entry, 'edit', event.currentTarget)}>{common('edit')}</Button>
                 {state === 'considering' ? <>
-                  <ConsideringSuggestionsAction key={`${entry.item.id}:${shelf.dataUpdatedAt}`} itemId={entry.item.id} disabled={busy || entry.item.status !== 'ready'} />
+                  <ConsideringSuggestionsAction key={`${entry.item.id}:${entry.item.status}:${entry.item.is_archived}`} itemId={entry.item.id} disabled={busy || entry.item.status !== 'ready'} />
                   <ConsideringPreviewAction itemId={entry.item.id} disabled={busy || entry.item.status !== 'ready'} />
                   <Button disabled={busy} onClick={() => {
                     if (busy || !confirm(t('buyConfirm'))) return;

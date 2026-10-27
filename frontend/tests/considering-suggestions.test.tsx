@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import ConsideringPage from '@/app/dashboard/considering/page';
 import { ConsideringSuggestionsAction } from '@/components/considering-suggestions-action';
 import { createQueryClient } from '@/lib/query-client';
 import { sessionMock, translationMock } from './setup';
@@ -76,4 +77,35 @@ it('aborts a pending request on cancel and reopens without stale results', async
   expect(screen.getByRole('button', { name: label('suggest') })).toBeEnabled();
   await waitFor(() => expect(client.getMutationCache().getAll()[0].state.status).toBe('success'));
   expect(client.getQueryData(['outfit', 'suggested'])).toBeUndefined();
+});
+
+it('keeps an in-flight suggestion dialog open when identical shelf data refetches', async () => {
+  const entry = { state: 'considering', passed_reason: null, source_url: null, price: null, currency: 'USD', planned_size: null,
+    item: { id: 'anchor', name: 'Shelf shirt', status: 'ready', is_archived: false } };
+  let finish!: (response: Response) => void;
+  let signal: AbortSignal | undefined;
+  vi.mocked(fetch).mockImplementation(async (url, options) => {
+    if (String(url).endsWith('/suggestions')) {
+      signal = options?.signal as AbortSignal;
+      return new Promise(resolve => { finish = resolve; });
+    }
+    if (String(url).includes('/considering')) return new Response(JSON.stringify([entry]));
+    return new Response(JSON.stringify({ detail: 'NO_PREVIEW' }), { status: 404 });
+  });
+  render(<QueryClientProvider client={client}><ConsideringPage /></QueryClientProvider>);
+  await screen.findByRole('heading', { name: 'Shelf shirt' });
+  fireEvent.click(screen.getByRole('button', { name: label('wearWith') }));
+  fireEvent.click(screen.getByRole('button', { name: label('suggest') }));
+  await waitFor(() => expect(signal).toBeDefined());
+  const key = ['considering', 'suggest@example.test', 'considering'];
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(client.getQueryState(key)!.dataUpdatedAt + 1);
+  try { await act(() => client.refetchQueries({ queryKey: key })); }
+  finally { clock.mockRestore(); }
+  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(signal?.aborted).toBe(false);
+  finish(new Response(JSON.stringify([saved]), { status: 201 }));
+  expect(await screen.findByText('outfits.cards.unbought')).toBeVisible();
+  await act(() => client.refetchQueries({ queryKey: key }));
+  expect(screen.getByRole('dialog')).toBeVisible();
+  expect(screen.getByText('outfits.cards.unbought')).toBeVisible();
 });
