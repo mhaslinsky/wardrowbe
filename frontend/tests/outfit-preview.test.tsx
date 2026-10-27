@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { act, fireEvent, render as testingRender, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { AbstractIntlMessages } from 'next-intl';
 import type { ComponentType, ReactElement, ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useOutfitPreview } from '@/lib/hooks/use-outfit-preview';
@@ -17,7 +18,7 @@ vi.mock('next-intl', async (original) => {
   };
   return { ...actual, useTranslations: (namespace?: string) => {
     if (!translation.locale) return (key: string) => key;
-    return actual.createTranslator({
+    return actual.createTranslator<AbstractIntlMessages, string>({
       locale: translation.locale, namespace,
       messages: { settings: catalogs[translation.locale], common: { remove: 'remove', cancel: 'cancel', loading: 'loading' } },
     });
@@ -164,7 +165,7 @@ it('ignores an earlier outfit request after navigation', async () => {
   await waitFor(() => expect(finish).toBeTypeOf('function'));
   view.rerender(<OutfitPreview outfitId="two" />);
   const json = vi.fn(async () => saved);
-  await act(async () => { finish({ ...response(saved), json } as Response); });
+  await act(async () => { finish({ ...response(saved), json } as unknown as Response); });
   await waitFor(() => expect(json).toHaveBeenCalled());
   expect(screen.getByText('see')).toBeEnabled();
   expect(screen.queryByRole('img')).not.toBeInTheDocument();

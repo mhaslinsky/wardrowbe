@@ -56,6 +56,7 @@ vi.mock('@/components/preview-photo-settings', () => ({ PreviewPhotoSettings: ()
 
 it('keeps the main Settings draft when preview preferences refresh', async () => {
   const original = state.preferences;
+  if (!original) throw new Error('Expected seeded preferences');
   try {
     const { rerender } = render(<SettingsPage />);
     const editor = screen.getByLabelText('standingRules.label');

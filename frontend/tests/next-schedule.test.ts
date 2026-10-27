@@ -12,6 +12,7 @@ function schedule(overrides: Partial<Schedule>): Schedule {
     notification_time: '07:00:00',
     occasion: 'casual',
     enabled: true,
+    notify: true,
     notify_day_before: false,
     created_at: '',
     updated_at: '',

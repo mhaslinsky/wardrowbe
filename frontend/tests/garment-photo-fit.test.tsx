@@ -105,7 +105,7 @@ describe('whole garment photos', () => {
     { name: 'outfit history', src: '/thumb', render: () => <OutfitHistoryCard outfit={outfit as unknown as Outfit} onFeedback={vi.fn()} /> },
     { name: 'outfit preview', src: '/original?signature=test', render: () => <OutfitPreviewDialog outfit={outfit as unknown as Outfit} open onClose={vi.fn()} /> },
     { name: 'outfit detail', src: '/medium', render: () => <OutfitDetailPage /> },
-    { name: 'studio canvas', src: '/thumb', render: () => <CanvasPanel items={[item as unknown as Item]} onRemove={vi.fn()} /> },
+    { name: 'studio canvas', src: '/thumb', render: () => <CanvasPanel items={[item]} onRemove={vi.fn()} /> },
     { name: 'item picker', src: '/medium', render: () => <ItemPicker selectedIds={new Set()} onToggle={vi.fn()} /> },
   ]
   it.each(views)('renders $name without cropping at the intended size', ({ render: view, src }) => {

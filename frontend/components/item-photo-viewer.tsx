@@ -2,8 +2,8 @@
 
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import Lightbox, { ControllerRef } from 'yet-another-react-lightbox';
-import Zoom, { ZoomRef } from 'yet-another-react-lightbox/plugins/zoom';
+import Lightbox, { ControllerRef, ZoomRef } from 'yet-another-react-lightbox';
+import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import { useTranslations } from 'next-intl';
 import 'yet-another-react-lightbox/styles.css';
 

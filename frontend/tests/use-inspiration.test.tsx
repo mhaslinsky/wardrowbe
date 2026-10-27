@@ -76,7 +76,7 @@ it('waits for session resolution before loading with the session token', async (
   const { result, rerender } = renderHook(() => useInspiration(), { wrapper });
   expect(result.current.looks.fetchStatus).toBe('idle');
   sessionMock.status = 'authenticated';
-  sessionMock.data = { accessToken: 'session-token', expires: '2099-01-01' };
+  sessionMock.data = { accessToken: 'session-token', expires: '2099-01-01', user: {} };
   rerender();
   await waitFor(() => expect(result.current.looks.isSuccess).toBe(true));
   expect(requestSessions).toEqual(['authenticated']);

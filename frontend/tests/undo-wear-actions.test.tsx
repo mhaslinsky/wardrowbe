@@ -10,13 +10,13 @@ import { toast } from 'sonner'
 import { translationMock } from './setup'
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/lib/api', async (original) => ({ ...(await original<typeof import('@/lib/api')>()), api: { post: vi.fn(), get: vi.fn() } }))
-const outfit = { id: 'logged', items: [{ id: 'shirt', status: 'ready', is_archived: false }], name: 'Logged' } as Outfit
+const outfit = { id: 'logged', items: [{ id: 'shirt', status: 'ready', is_archived: false }], name: 'Logged' } as unknown as Outfit
 const chosen = { ...outfit, id: 'saved', name: 'Saved' }
 const washed = new ApiError('wash', 409, { detail: { error_code: 'WASH_SINCE_WEAR', items: [
   { id: 'shirt', name: 'Shirt', washed_at: '2026-10-24' }, { id: 'pants', name: 'Pants', washed_at: '2026-10-24' },
 ] } })
 beforeEach(() => { vi.clearAllMocks(); translationMock.includeNamespace = false; vi.mocked(api.post).mockResolvedValue({ id: 'logged', learning_stale: false }); vi.mocked(api.get).mockResolvedValue({ items: [{ id: 'shirt', status: 'ready', is_archived: false }, { id: 'archived', status: 'ready', is_archived: true }, { id: 'processing', status: 'processing', is_archived: false }], page: 1, has_more: false }) })
-function setup(choices = [chosen]) {
+function setup(choices: Outfit[] = [chosen]) {
   const client = createQueryClient()
   const invalidate = vi.spyOn(client, 'invalidateQueries')
   const notice = vi.fn()
@@ -124,7 +124,7 @@ it('excludes unavailable choices and translates unnamed outfit occasions', async
   ] as Outfit[])
   fireEvent.click(screen.getByRole('button', { name: 'outfits.day.replace' }))
   await screen.findByRole('button', { name: 'constants.occasions.casual' })
-  for (const name of ['Archived', 'Processing', 'Empty', 'casual']) expect(screen.queryByRole('button', { name, exact: true })).not.toBeInTheDocument()
+  for (const name of ['Archived', 'Processing', 'Empty', 'casual']) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'constants.occasions.casual' })).toBeVisible()
   expect(api.post).not.toHaveBeenCalled()
 })
