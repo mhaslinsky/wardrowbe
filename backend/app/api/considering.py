@@ -15,10 +15,17 @@ from app.schemas.considering import (
     ConsideringEdit,
     ConsideringPreviewRequest,
     ConsideringResponse,
+    ConsideringSuggestRequest,
     PassRequest,
 )
+from app.services.ai_service import AIDisabledError
 from app.services.considering_preview_service import ConsideringPreviewService
 from app.services.considering_service import ConsideringService, download_image
+from app.services.recommendation_service import (
+    AIRecommendationError,
+    InsufficientWardrobeError,
+    RecommendationService,
+)
 from app.utils.auth import get_current_user
 from app.utils.rate_limit import rate_limit_by_user
 
@@ -118,3 +125,26 @@ async def create_considering_preview(
     )
     outfit = await ConsideringPreviewService(db).create(current_user, item_id, data.companion_ids)
     return await outfit_response(db, outfit)
+
+
+@router.post("/{item_id}/suggestions", response_model=list[OutfitResponse], status_code=201)
+async def suggest_considering_outfits(
+    item_id: UUID, data: ConsideringSuggestRequest, db: DbSession, current_user: ShelfUser
+):
+    await rate_limit_by_user(str(current_user.id), "suggest", max_requests=10, window_seconds=60)
+    service = RecommendationService(db)
+    service._defer_commit = True
+    try:
+        outfits = await service.generate_recommendations(
+            user=current_user,
+            occasion=data.occasion,
+            considering_anchor_id=item_id,
+            count=3,
+        )
+    except AIDisabledError:
+        raise HTTPException(503, "Internal AI is disabled") from None
+    except (InsufficientWardrobeError, ValueError) as error:
+        raise HTTPException(400, str(error)) from None
+    except AIRecommendationError as error:
+        raise HTTPException(503, str(error)) from None
+    return [await outfit_response(db, outfit) for outfit in outfits]
