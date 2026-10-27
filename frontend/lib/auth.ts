@@ -10,8 +10,11 @@ import {
 } from '@/lib/auth-errors';
 import { decodeProxyHeader, proxySecretMatches, publicOrigin, publicHostnames } from '@/lib/proxy-headers';
 
-// NextAuth v4 reads this startup flag; middleware replaces forwarded hosts with a listed Host.
-if (publicHostnames().length) process.env.AUTH_TRUST_HOST = 'true';
+// NextAuth 4.24.15 prioritizes NEXTAUTH_URL over the validated request host.
+if (publicHostnames().length) {
+  delete process.env.NEXTAUTH_URL;
+  process.env.AUTH_TRUST_HOST = 'true';
+}
 
 interface OIDCProfile {
   sub: string;

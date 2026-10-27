@@ -34,3 +34,36 @@ it('starts with PUBLIC_HOSTS unset and leaves host trust disabled', async () => 
   expect(exit).not.toHaveBeenCalled();
   expect(process.env.AUTH_TRUST_HOST).toBeUndefined();
 });
+
+
+it.each(['instrumentation', 'auth'])('clears the canonical NextAuth origin during %s startup in multi-host mode', async (entry) => {
+  process.env.PUBLIC_HOSTS = 'wardrobe.haslinsky.net,christina.haslinsky.net';
+  process.env.NEXTAUTH_URL = 'https://wardrobe.haslinsky.net';
+  process.env.NEXT_RUNTIME = 'nodejs';
+  process.env.NEXTAUTH_SECRET = 'a-custom-secret';
+  delete process.env.AUTH_TRUST_HOST;
+  if (entry === 'instrumentation') {
+    const { register } = await import('@/instrumentation');
+    await register();
+  } else {
+    await import('@/lib/auth');
+  }
+  expect(process.env.NEXTAUTH_URL).toBeUndefined();
+  expect(process.env.AUTH_TRUST_HOST).toBe('true');
+});
+
+it.each(['instrumentation', 'auth'])('preserves the canonical NextAuth origin during %s startup with PUBLIC_HOSTS unset', async (entry) => {
+  delete process.env.PUBLIC_HOSTS;
+  process.env.NEXTAUTH_URL = 'https://wardrobe.haslinsky.net';
+  process.env.NEXT_RUNTIME = 'nodejs';
+  process.env.NEXTAUTH_SECRET = 'a-custom-secret';
+  delete process.env.AUTH_TRUST_HOST;
+  if (entry === 'instrumentation') {
+    const { register } = await import('@/instrumentation');
+    await register();
+  } else {
+    await import('@/lib/auth');
+  }
+  expect(process.env.NEXTAUTH_URL).toBe('https://wardrobe.haslinsky.net');
+  expect(process.env.AUTH_TRUST_HOST).toBeUndefined();
+});
