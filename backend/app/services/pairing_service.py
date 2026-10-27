@@ -11,7 +11,7 @@ from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import FamilyOutfitRating, Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
-from app.utils.clothing import covered_body_slots, repair_top_layers
+from app.utils.clothing import covered_body_slots, deduplicate_by_body_slot, repair_top_layers
 from app.utils.garment_vocabulary import is_outfit_type, render_outfit_prompt
 from app.utils.prompts import load_prompt
 from app.utils.timezone import get_user_today
@@ -271,6 +271,12 @@ class PairingService:
                 valid_ids.insert(0, source_item.id)
 
             picked_slots = covered_body_slots(valid_ids, item_type_map)
+            valid_ids = deduplicate_by_body_slot(
+                valid_ids, item_type_map, mandatory_item_ids={source_item.id}
+            )
+            if covered_body_slots(valid_ids, item_type_map) != picked_slots:
+                logger.warning("Pairing silhouette does not fit the source item, skipping")
+                continue
             valid_ids = repair_top_layers(
                 valid_ids,
                 list(number_map.values()),
