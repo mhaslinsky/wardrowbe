@@ -120,3 +120,87 @@ async def test_inactive_user_cannot_use_token(client, auth_headers, test_user, d
 async def test_missing_auth(client):
     assert (await client.get(PATH)).status_code == 401
     assert (await client.post(PATH, json={"name": "Extension"})).status_code == 401
+
+
+async def test_token_loads_preferences_in_fresh_session(
+    client, auth_headers, test_user_with_preferences, db_session, monkeypatch
+):
+    from unittest.mock import AsyncMock
+
+    created = await mint(client, auth_headers)
+    await db_session.commit()
+    db_session.expunge_all()
+    generate = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.api.outfits.RecommendationService.generate_recommendations", generate)
+    response = await client.post(
+        "/api/v1/outfits/suggest-options", headers=bearer(created["token"]), json={}
+    )
+    assert response.status_code == 200
+    generate.assert_awaited_once()
+    assert generate.await_args.kwargs["occasion"] == "casual"
+
+
+async def test_throttled_request_sends_no_update(client, auth_headers, db_session, monkeypatch):
+    created = await mint(client, auth_headers)
+    headers = bearer(created["token"])
+    assert (await client.get(ME, headers=headers)).status_code == 200
+    from unittest.mock import AsyncMock
+
+    execute = AsyncMock(wraps=db_session.execute)
+    monkeypatch.setattr(db_session, "execute", execute)
+    assert (await client.get(ME, headers=headers)).status_code == 200
+    assert not any(getattr(call.args[0], "is_update", False) for call in execute.await_args_list)
+
+
+@pytest.mark.parametrize("optional", [False, True])
+@pytest.mark.parametrize("refusal", ["inactive", "proxy"])
+async def test_refused_token_does_not_record_usage(
+    client, auth_headers, test_user, db_session, monkeypatch, optional, refusal
+):
+    from unittest.mock import AsyncMock
+
+    from fastapi import HTTPException, Request
+    from fastapi.security import HTTPAuthorizationCredentials
+
+    from app.utils.auth import get_current_user, get_current_user_optional
+
+    created = await mint(client, auth_headers)
+    if refusal == "inactive":
+        test_user.is_active = False
+        await db_session.commit()
+    else:
+        monkeypatch.setattr("app.utils.auth._proxy_user_switched", AsyncMock(return_value=True))
+    dependency = get_current_user_optional if optional else get_current_user
+    request = Request({"type": "http", "headers": []})
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=created["token"])
+    if optional:
+        assert await dependency(request, credentials, db_session) is None
+    else:
+        with pytest.raises(HTTPException):
+            await dependency(request, credentials, db_session)
+    used = await db_session.scalar(
+        text("SELECT last_used_at FROM personal_access_tokens WHERE id = :id"),
+        {"id": created["id"]},
+    )
+    assert used is None
+
+
+async def test_usage_write_failure_does_not_poison_request(
+    client, auth_headers, db_session, monkeypatch
+):
+    from sqlalchemy.exc import DBAPIError, OperationalError
+
+    created = await mint(client, auth_headers)
+    original_execute = db_session.execute
+
+    async def fail_update(statement, *args, **kwargs):
+        if getattr(statement, "is_update", False):
+            try:
+                await original_execute(text("SELECT 1 / 0"))
+            except DBAPIError as failure:
+                raise OperationalError("usage update", {}, failure) from failure
+        return await original_execute(statement, *args, **kwargs)
+
+    monkeypatch.setattr(db_session, "execute", fail_update)
+    assert (await client.get(ME, headers=bearer(created["token"]))).status_code == 200
+    assert await db_session.scalar(text("SELECT 1")) == 1

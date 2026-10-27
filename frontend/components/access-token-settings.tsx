@@ -24,7 +24,8 @@ export function AccessTokenSettings() {
   const { data: session, status } = useSession();
   useSetTokenIfAvailable();
   const client = useQueryClient();
-  const key = ['access-tokens', session?.user?.email];
+  const owner = session?.user?.email ?? '';
+  const key = ['access-tokens', owner];
   const [name, setName] = useState('');
   const [revealed, setRevealed] = useState<{ owner: string; id: string; token: string } | null>(null);
   useEffect(() => { setRevealed(null); }, [session?.user?.email, status]);
@@ -45,7 +46,7 @@ export function AccessTokenSettings() {
       if ('name' in action) {
         setRevealed(null); setCopied(false); setCopyFailed(false);
         const created = tokenInfo.extend({ token: z.string().startsWith('wbt_') }).parse(await api.post<unknown>(endpoint, action));
-        setRevealed({ owner: session?.user?.email ?? '', id: created.id, token: created.token });
+        setRevealed({ owner, id: created.id, token: created.token });
         setName('');
       } else {
         await api.delete(`${endpoint}/${action.id}`);
@@ -54,7 +55,7 @@ export function AccessTokenSettings() {
     },
     onSuccess: () => client.invalidateQueries({ queryKey: key }),
   });
-  const secret = status === 'authenticated' && revealed?.owner === session?.user?.email ? revealed : null;
+  const secret = status === 'authenticated' && revealed?.owner === owner ? revealed : null;
   const date = (value: string) => format.dateTime(new Date(value), { dateStyle: 'medium', timeStyle: 'short' });
   return <Card>
     <CardHeader><CardTitle>{translate('title')}</CardTitle></CardHeader>

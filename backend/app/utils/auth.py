@@ -6,6 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
 from app.database import DbSession
+from app.models.access_token import PersonalAccessToken
 from app.models.user import User
 from app.schemas.auth import AuthSession, TokenPayload
 from app.services.access_token_service import TOKEN_PREFIX, AccessTokenService
@@ -55,7 +56,7 @@ async def get_current_user_optional(
 
     try:
         user_service = UserService(db)
-        user = await _resolve_bearer(credentials.credentials, db, user_service)
+        user, access_token = await _resolve_bearer(credentials.credentials, db, user_service)
     except HTTPException:
         return None
     # A deactivated account or a switched proxy user is treated as anonymous, as
@@ -64,6 +65,8 @@ async def get_current_user_optional(
         return None
     if await _proxy_user_switched(request, user, user_service):
         return None
+    if access_token is not None:
+        await AccessTokenService(db).touch(access_token)
     return user
 
 
@@ -86,9 +89,10 @@ async def get_current_user(
 ) -> User:
     user_service = UserService(db)
     user = None
+    access_token = None
 
     if credentials:
-        user = await _resolve_bearer(credentials.credentials, db, user_service)
+        user, access_token = await _resolve_bearer(credentials.credentials, db, user_service)
 
     if not user:
         raise HTTPException(
@@ -110,6 +114,8 @@ async def get_current_user(
             detail="User account is inactive",
         )
 
+    if access_token is not None:
+        await AccessTokenService(db).touch(access_token)
     return user
 
 
@@ -132,10 +138,12 @@ CurrentSession = Annotated[AuthSession, Depends(get_current_session)]
 WriteUser = CurrentUser
 
 
-async def _resolve_bearer(secret: str, db: DbSession, user_service: UserService) -> User | None:
+async def _resolve_bearer(
+    secret: str, db: DbSession, user_service: UserService
+) -> tuple[User | None, PersonalAccessToken | None]:
     if secret.startswith(TOKEN_PREFIX):
         return await AccessTokenService(db).authenticate(secret)
-    return await user_service.get_by_token(decode_token(secret))
+    return await user_service.get_by_token(decode_token(secret)), None
 
 
 async def get_session_user(
