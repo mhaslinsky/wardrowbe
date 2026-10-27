@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ACCEPTED_IMAGE_INPUT } from '@/lib/image-types';
 import { useTranslations } from 'next-intl';
 import { usePreferences, useUpdatePreferences } from '@/lib/hooks/use-preferences';
 import type { Preferences } from '@/lib/types';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { previewAngles, type PreviewAngle, usePreviewPhoto } from '@/lib/hooks/use-outfit-preview';
@@ -14,9 +15,32 @@ export function PreviewPhotoSettings() {
   const common = useTranslations('common');
   const { photos, loading, pending, error, save } = usePreviewPhoto();
   const [confirm, setConfirm] = useState<PreviewAngle | null>(null);
-  return <Card id="preview-photo">
-    <CardHeader><CardTitle>{t('title')}</CardTitle><CardDescription>{t('guidance')}</CardDescription></CardHeader>
-    <CardContent className="space-y-3">
+  const [open, setOpen] = useState(false);
+  const card = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const openFromHash = () => {
+      if (window.location.hash === '#preview-photo') {
+        setOpen(true);
+        card.current?.scrollIntoView({ block: 'start' });
+      }
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+  }, []);
+  const angleCount = previewAngles.filter((angle) => photos?.[angle]).length;
+  return <Card id="preview-photo" ref={card}>
+    <Collapsible open={open} onOpenChange={setOpen}>
+    <CardHeader>
+      <CardTitle>{t('title')}</CardTitle>
+      <CardDescription>{loading ? common('loading') : error ? t('failed') : t('anglesSet', { count: angleCount })}</CardDescription>
+      <CollapsibleTrigger asChild>
+        <Button variant="outline" aria-expanded={open} aria-controls="preview-photo-content">{t(open ? 'hidePhotos' : 'showPhotos')}</Button>
+      </CollapsibleTrigger>
+    </CardHeader>
+    <CollapsibleContent>
+    <CardContent id="preview-photo-content" className="space-y-3">
+      <CardDescription>{t('guidance')}</CardDescription>
       <PreviewPreferencesEditor />
       <div className="grid gap-6 sm:grid-cols-3">
         {previewAngles.map((angle) => {
@@ -52,6 +76,8 @@ export function PreviewPhotoSettings() {
       {(loading || pending) && <p role="status">{common('loading')}</p>}
       {error && <p role="alert" className="text-destructive">{t('failed')}</p>}
     </CardContent>
+    </CollapsibleContent>
+    </Collapsible>
   </Card>;
 }
 

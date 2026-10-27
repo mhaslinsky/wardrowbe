@@ -152,6 +152,9 @@
     "limit": "Use up to 20 rules of 300 characters each."
   },
   "previewPhoto": {
+    "anglesSet": "{count} of 3 angles set",
+    "showPhotos": "Show photos",
+    "hidePhotos": "Hide photos",
     "title": "Preview photo",
     "guidance": "Full-length, facing the camera, fitted clothes, even light.",
     "upload": "Upload photo",

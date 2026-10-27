@@ -152,6 +152,9 @@
     "limit": "20 règles maximum de 300 caractères chacune."
   },
   "previewPhoto": {
+    "anglesSet": "{count} angles sur 3 enregistrés",
+    "showPhotos": "Afficher les photos",
+    "hidePhotos": "Masquer les photos",
     "title": "Photo d’aperçu",
     "guidance": "En pied, face caméra, vêtements ajustés, lumière uniforme.",
     "upload": "Importer une photo",

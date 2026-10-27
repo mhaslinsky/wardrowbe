@@ -152,6 +152,9 @@
     "limit": "最多20條規則，每條不超過300個字元。"
   },
   "previewPhoto": {
+    "anglesSet": "已設定 {count}/3 個角度",
+    "showPhotos": "顯示照片",
+    "hidePhotos": "隱藏照片",
     "title": "預覽照片",
     "guidance": "全身、正對鏡頭、合身衣物、均勻光線。",
     "upload": "上傳照片",

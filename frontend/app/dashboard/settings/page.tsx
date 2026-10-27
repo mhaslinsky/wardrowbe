@@ -591,7 +591,6 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6">
-        <PreviewPhotoSettings />
         <FitProfileSettings />
         <AccessTokenSettings />
         {/* Account Section */}
@@ -1292,6 +1291,7 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        <PreviewPhotoSettings />
       </div>
     </div>
   );

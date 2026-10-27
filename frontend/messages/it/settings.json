@@ -152,6 +152,9 @@
     "limit": "Massimo 20 regole di 300 caratteri ciascuna."
   },
   "previewPhoto": {
+    "anglesSet": "{count} angolazioni su 3 salvate",
+    "showPhotos": "Mostra foto",
+    "hidePhotos": "Nascondi foto",
     "title": "Foto per anteprima",
     "guidance": "Figura intera, di fronte, vestiti aderenti, luce uniforme.",
     "upload": "Carica foto",

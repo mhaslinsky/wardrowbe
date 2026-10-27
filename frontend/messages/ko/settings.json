@@ -152,6 +152,9 @@
     "limit": "규칙당 300자 이내로 최대 20개까지 입력하세요."
   },
   "previewPhoto": {
+    "anglesSet": "3개 각도 중 {count}개 설정됨",
+    "showPhotos": "사진 보기",
+    "hidePhotos": "사진 숨기기",
     "title": "미리보기 사진",
     "guidance": "전신, 카메라 정면, 몸에 맞는 옷, 고른 조명.",
     "upload": "사진 업로드",
