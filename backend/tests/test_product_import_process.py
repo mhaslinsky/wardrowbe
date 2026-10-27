@@ -15,11 +15,19 @@ PRODUCT = b'<h1>Shirt</h1><img itemprop="image" src="/shirt.png">'
 
 
 def child_pids():
-    return {
-        int(pid)
-        for task in Path("/proc/self/task").iterdir()
-        for pid in (task / "children").read_text().split()
-    }
+    children = set()
+    for task in Path("/proc/self/task").iterdir():
+        try:
+            content = (task / "children").read_text()
+        except FileNotFoundError:
+            continue
+        children.update(int(pid) for pid in content.split())
+    return children
+
+
+@pytest.fixture(autouse=True)
+def isolated_parse_slots(monkeypatch):
+    monkeypatch.setattr(service, "_parse_slots", asyncio.Semaphore(2))
 
 
 async def started_child(queue, request):
@@ -288,3 +296,35 @@ async def test_deadline_during_launch_still_kills_and_reaps(client, auth_headers
                 if process.returncode is None:
                     process.kill()
                 await process.wait()
+
+
+def test_child_inventory_handles_a_thread_exiting_during_scan(monkeypatch):
+    original_iterdir = Path.iterdir
+    original_read_text = Path.read_text
+    exited = Path("/proc/self/task/exited")
+    current = Path("/proc/self/task/current")
+
+    def listed(path):
+        if path == Path("/proc/self/task"):
+            return iter([exited, current])
+        return original_iterdir(path)
+
+    def read(path, *args, **kwargs):
+        if path == exited / "children":
+            raise FileNotFoundError(path)
+        if path == current / "children":
+            return "123 456"
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "iterdir", listed)
+    monkeypatch.setattr(Path, "read_text", read)
+    assert child_pids() == {123, 456}
+
+
+def test_child_inventory_reports_unreadable_children(monkeypatch):
+    def denied(path, *args, **kwargs):
+        raise PermissionError(path)
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    with pytest.raises(PermissionError):
+        child_pids()
