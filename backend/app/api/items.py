@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
@@ -15,7 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.api.pagination import PaginationParams
 from app.config import get_settings
 from app.database import DbSession
-from app.models.considering import owned_item
+from app.models.considering import ItemPurchase, owned_item
 from app.models.item import (
     ClothingItem,
     ItemHistory,
@@ -225,20 +226,20 @@ async def create_item(
 
 
 async def create_uploaded_item(
-    db,
-    current_user,
-    image,
-    type=None,
-    subtype=None,
-    name=None,
-    brand=None,
-    notes=None,
-    colors=None,
-    primary_color=None,
-    favorite=False,
-    skip_ai=False,
-    purchase=None,
-    additional_uploads=(),
+    db: AsyncSession,
+    current_user: User,
+    image: UploadFile,
+    type: str | None = None,
+    subtype: str | None = None,
+    name: str | None = None,
+    brand: str | None = None,
+    notes: str | None = None,
+    colors: str | None = None,
+    primary_color: str | None = None,
+    favorite: bool = False,
+    skip_ai: bool = False,
+    purchase: ItemPurchase | None = None,
+    additional_uploads: Sequence[UploadFile] = (),
 ) -> ItemResponse:
     # Validate and process image
     image_service = ImageService()

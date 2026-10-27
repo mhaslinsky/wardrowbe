@@ -338,7 +338,9 @@ async def create_external_pairing(
         str(current_user.id), "external_pairing", max_requests=20, window_seconds=60
     )
 
-    source_item = await PairingService(db).get_source_item(current_user.id, item_id)
+    source_item = await PairingService(db).get_source_item(
+        current_user.id, item_id, owned_only=False
+    )
     if not source_item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

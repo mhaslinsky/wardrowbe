@@ -1,12 +1,26 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, func, select
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    SQLColumnExpression,
+    String,
+    Text,
+    func,
+    select,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.database import Base
 from app.models.item import ClothingItem
+
+PurchaseState = Literal["considering", "passed", "bought"]
 
 
 class ItemPurchase(Base):
@@ -16,7 +30,7 @@ class ItemPurchase(Base):
     item_id: Mapped[UUID] = mapped_column(
         ForeignKey("clothing_items.id", ondelete="CASCADE"), primary_key=True
     )
-    state: Mapped[str] = mapped_column(String(16), default="considering")
+    state: Mapped[PurchaseState] = mapped_column(String(16), default="considering")
     source_url: Mapped[str | None] = mapped_column(String(2000))
     price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     currency: Mapped[str] = mapped_column(String(3), default="USD")
@@ -28,7 +42,9 @@ class ItemPurchase(Base):
     )
 
 
-def owned_item(item_id=ClothingItem.id):
+def owned_item(
+    item_id: SQLColumnExpression[UUID] = ClothingItem.id,
+) -> ColumnElement[bool]:
     return (
         ~select(ItemPurchase.item_id)
         .where(

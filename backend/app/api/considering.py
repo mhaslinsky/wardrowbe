@@ -1,7 +1,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
 from app.api.items import create_uploaded_item
@@ -74,6 +74,8 @@ async def edit_considering(
 ):
     service = ConsideringService(db)
     purchase = await service.get(current_user.id, item_id, lock=True)
+    if purchase.state == "bought":
+        raise HTTPException(409, "Item already bought")
     fields = data.model_dump(exclude_unset=True, mode="json")
     if "name" in fields:
         item = await db.get(ClothingItem, item_id)

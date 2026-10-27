@@ -165,6 +165,8 @@ class RecommendationService:
             .where(
                 Outfit.user_id == user_id,
                 Outfit.scheduled_for == day,
+                # External authors can save outfits containing shelf items.
+                ~Outfit.items.any(~owned_item(OutfitItem.item_id)),
                 Outfit.source.in_(
                     [OutfitSource.scheduled, OutfitSource.on_demand, OutfitSource.external]
                 ),

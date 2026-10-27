@@ -2,6 +2,7 @@ from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
+from fastapi import HTTPException
 from sqlalchemy import and_, case, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes, selectinload
@@ -435,8 +436,6 @@ class ItemService:
         if not await self.db.scalar(
             select(ClothingItem.id).where(ClothingItem.id == item.id, owned_item())
         ):
-            from fastapi import HTTPException
-
             raise HTTPException(422, "Item is unavailable")
         [history] = await self.record_wears(
             item.user_id, [item.id], worn_at, occasion=occasion, notes=notes, outfit_id=outfit_id

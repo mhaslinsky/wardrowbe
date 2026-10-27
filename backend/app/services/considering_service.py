@@ -2,14 +2,16 @@ import asyncio
 import ipaddress
 import socket
 from io import BytesIO
+from uuid import UUID
 
 import httpx
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import Headers
 
 from app.config import get_settings
-from app.models.considering import ItemPurchase
+from app.models.considering import ItemPurchase, PurchaseState
 from app.models.item import ClothingItem
 from app.schemas.considering import ConsideringResponse
 from app.schemas.item import ItemResponse
@@ -84,10 +86,10 @@ async def download_image(url: str) -> UploadFile:
 
 
 class ConsideringService:
-    def __init__(self, db):
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def get(self, user_id, item_id, *, lock=False):
+    async def get(self, user_id: UUID, item_id: UUID, *, lock: bool = False) -> ItemPurchase:
         query = (
             select(ItemPurchase)
             .join(ClothingItem, ClothingItem.id == ItemPurchase.item_id)
@@ -103,7 +105,7 @@ class ConsideringService:
             raise HTTPException(404, "Shelf item not found")
         return purchase
 
-    async def response(self, user_id, purchase):
+    async def response(self, user_id: UUID, purchase: ItemPurchase) -> ConsideringResponse:
         item = await ItemService(self.db).get_by_id(purchase.item_id, user_id)
         return ConsideringResponse(
             source_url=purchase.source_url,
@@ -115,10 +117,16 @@ class ConsideringService:
             item=ItemResponse.model_validate(item),
         )
 
-    async def transition(self, user_id, item_id, state, reason=None):
+    async def transition(
+        self, user_id: UUID, item_id: UUID, state: PurchaseState, reason: str | None = None
+    ) -> ConsideringResponse:
         purchase = await self.get(user_id, item_id, lock=True)
-        if purchase.state == "bought" and state != "bought":
-            raise HTTPException(409, "Item already bought")
+        if (purchase.state, state) not in {
+            ("considering", "bought"),
+            ("considering", "passed"),
+            ("passed", "considering"),
+        }:
+            raise HTTPException(409, "Invalid purchase transition")
         purchase.state = state
         purchase.passed_reason = reason if state == "passed" else None
         await self.db.flush()
