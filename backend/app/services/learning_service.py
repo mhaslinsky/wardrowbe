@@ -488,12 +488,6 @@ class LearningService:
         )
         outfits = list(result.scalars().all())
 
-        if len(outfits) < self.MIN_FEEDBACK_FOR_LEARNING:
-            logger.info(f"Not enough feedback for user {user_id} ({len(outfits)} outfits)")
-            profile = await self._get_or_create_profile(user_id)
-            await self.db.commit()
-            return profile
-
         # Initialize accumulators
         color_scores: dict[str, list[float]] = {}
         style_scores: dict[str, list[float]] = {}
@@ -620,6 +614,9 @@ class LearningService:
         # Update or create profile
         profile = await self._get_or_create_profile(user_id)
 
+        # An empty history must replace preferences learned from outfits that no longer qualify.
+        if not outfits:
+            profile.learned_temporal_patterns = {}
         profile.learned_color_scores = learned_color_scores
         profile.learned_style_scores = learned_style_scores
         profile.learned_occasion_patterns = learned_occasion_patterns
