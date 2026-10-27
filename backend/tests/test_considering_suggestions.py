@@ -43,6 +43,8 @@ async def test_anchor_owned_companions_cache_and_lifecycle(
     client, auth_headers, db_session, test_user, provider
 ):
     anchor, shelf, pants, shoes, dirty = await fixture_items(db_session, test_user)
+    shelf.type = "shirt"
+    await db_session.commit()
     ai, pop, push = provider
     response = await client.post(
         f"/api/v1/considering/{anchor.id}/suggestions", headers=auth_headers, json={}
@@ -60,6 +62,27 @@ async def test_anchor_owned_companions_cache_and_lifecycle(
     pop.assert_not_awaited()
     push.assert_not_awaited()
     outfit_id = outfits[0]["id"]
+    user_id = test_user.id
+    from uuid import UUID
+
+    from app.models.learning import ItemPairScore, OutfitPerformance, UserLearningProfile
+    from app.services.learning_service import LearningService
+
+    async def learning_rows():
+        return [
+            list(
+                (
+                    await db_session.execute(
+                        select(model.__table__).where(model.user_id == user_id)
+                    )
+                ).all()
+            )
+            for model in (UserLearningProfile, OutfitPerformance, ItemPairScore)
+        ]
+
+    baseline = await learning_rows()
+    await LearningService(db_session).process_feedback(UUID(outfit_id), user_id)
+    assert await learning_rows() == baseline
     refused = await client.post(
         f"/api/v1/outfits/{outfit_id}/wore",
         headers=auth_headers,
@@ -75,11 +98,23 @@ async def test_anchor_owned_companions_cache_and_lifecycle(
         assert transition.status_code == 200
         saved = await client.get(f"/api/v1/outfits/{outfit_id}", headers=auth_headers)
         assert saved.json()["unowned_item_ids"] == ([] if action == "bought" else [str(anchor.id)])
+        if action != "bought":
+            await LearningService(db_session).process_feedback(UUID(outfit_id), user_id)
+            assert await learning_rows() == baseline
     bought = await client.post(
         f"/api/v1/considering/{anchor.id}/suggestions", headers=auth_headers, json={}
     )
     assert bought.status_code == 201, bought.text
     assert all(not outfit["unowned_item_ids"] for outfit in bought.json())
+    worn = await client.post(
+        f"/api/v1/outfits/{outfit_id}/wore",
+        headers=auth_headers,
+        json={"date": outfits[0]["scheduled_for"]},
+    )
+    assert worn.status_code == 200, worn.text
+    await db_session.refresh(anchor)
+    assert anchor.wear_count == 1
+    assert await learning_rows() != baseline
 
 
 @pytest.mark.parametrize(
