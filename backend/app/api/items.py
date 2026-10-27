@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
@@ -15,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.api.pagination import PaginationParams
 from app.config import get_settings
 from app.database import DbSession
+from app.models.considering import ItemPurchase, owned_item
 from app.models.item import (
     ClothingItem,
     ItemHistory,
@@ -207,6 +209,38 @@ async def create_item(
     favorite: bool = Form(False),
     skip_ai: bool = Form(False),
 ) -> ItemResponse:
+    return await create_uploaded_item(
+        db,
+        current_user,
+        image,
+        type,
+        subtype,
+        name,
+        brand,
+        notes,
+        colors,
+        primary_color,
+        favorite,
+        skip_ai,
+    )
+
+
+async def create_uploaded_item(
+    db: AsyncSession,
+    current_user: User,
+    image: UploadFile,
+    type: str | None = None,
+    subtype: str | None = None,
+    name: str | None = None,
+    brand: str | None = None,
+    notes: str | None = None,
+    colors: str | None = None,
+    primary_color: str | None = None,
+    favorite: bool = False,
+    skip_ai: bool = False,
+    purchase: ItemPurchase | None = None,
+    additional_uploads: Sequence[UploadFile] = (),
+) -> ItemResponse:
     # Validate and process image
     image_service = ImageService()
     item_service = ItemService(db)
@@ -268,6 +302,16 @@ async def create_item(
         item_data=item_data,
         image_paths=image_paths,
     )
+
+    if purchase is not None:
+        purchase.item_id = item.id
+        db.add(purchase)
+        await db.flush()
+
+    for additional_upload in additional_uploads:
+        await add_item_image(item.id, db, current_user, additional_upload)
+    if additional_uploads:
+        await db.refresh(item, ["additional_images"])
 
     do_auto_tag = settings.effective_ai_vision_enabled and not skip_ai
 
@@ -1089,6 +1133,7 @@ async def get_color_distribution(
 
 def _tagging_scope(user_id: UUID) -> tuple:
     return (
+        owned_item(),
         ClothingItem.user_id == user_id,
         ClothingItem.is_archived.is_(False),
         # Background-removal and rotation jobs reuse status=processing but
@@ -1512,7 +1557,7 @@ async def put_item_in_the_wash(
 ) -> ItemResponse:
     item = await db.scalar(
         select(ClothingItem)
-        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id)
+        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id, owned_item())
         .options(selectinload(ClothingItem.additional_images))
         .with_for_update()
         .execution_options(populate_existing=True)
@@ -1536,7 +1581,7 @@ async def log_item_wash(
     item_service = ItemService(db)
     item = await db.scalar(
         select(ClothingItem)
-        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id)
+        .where(ClothingItem.id == item_id, ClothingItem.user_id == current_user.id, owned_item())
         .options(selectinload(ClothingItem.additional_images))
         .with_for_update()
         .execution_options(populate_existing=True)

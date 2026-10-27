@@ -7,6 +7,7 @@ from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_outfit
 from app.models.item import ClothingItem
 from app.models.outfit import (
     FamilyOutfitRating,
@@ -25,6 +26,7 @@ class OutfitListFilters:
     group: bool = False
     worn: bool | None = None
     ready_to_wear: bool = False
+    owned_only: bool = False
     status_filter: str | None = None
     occasion: str | None = None
     date_from: date | None = None
@@ -194,6 +196,15 @@ class OutfitService:
         ]:
             clauses.append(~func.coalesce(Outfit.ai_raw_response.has_key("inspiration"), False))
 
+        if (
+            filters.ready_to_wear
+            or filters.owned_only
+            or filters.date_from is not None
+            or filters.date_to is not None
+            or filters.has_source_item is True
+        ):
+            clauses.append(owned_outfit())
+
         if filters.ready_to_wear:
             clauses.append(
                 ~Outfit.items.any(OutfitItem.item.has(ClothingItem.needs_wash.is_(True)))
@@ -230,6 +241,8 @@ class OutfitService:
                     source_values.append(OutfitSource(s.strip()))
                 except ValueError:
                     continue
+            if OutfitSource.pairing in source_values:
+                clauses.append(owned_outfit())
             if len(source_values) == 1:
                 clauses.append(Outfit.source == source_values[0])
             elif source_values:

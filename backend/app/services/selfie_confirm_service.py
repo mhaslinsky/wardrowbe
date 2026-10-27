@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.considering import owned_item
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit
 from app.models.selfie_confirm import SelfieConfirm
@@ -56,6 +57,7 @@ class SelfieConfirmService:
                 ClothingItem.id.in_(item_ids),
                 ClothingItem.user_id == user.id,
                 ClothingItem.status == ItemStatus.ready,
+                owned_item(),
                 ClothingItem.is_archived.is_(False),
             )
         )

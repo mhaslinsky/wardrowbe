@@ -2,10 +2,12 @@ from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
+from fastapi import HTTPException
 from sqlalchemy import and_, case, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes, selectinload
 
+from app.models.considering import owned_item
 from app.models.item import (
     TAG_COLUMNS,
     ClothingItem,
@@ -37,6 +39,7 @@ class ItemService:
                 and_(
                     ClothingItem.user_id == user_id,
                     ClothingItem.status == ItemStatus.ready,
+                    owned_item(),
                     ClothingItem.is_archived.is_(False),
                 )
             )
@@ -45,7 +48,7 @@ class ItemService:
 
     @staticmethod
     def _apply_filters(query, user_id: UUID, filters: ItemFilter):
-        query = query.where(ClothingItem.user_id == user_id)
+        query = query.where(ClothingItem.user_id == user_id, owned_item())
         if filters.type:
             query = query.where(ClothingItem.type == filters.type)
         if filters.subtype:
@@ -430,6 +433,10 @@ class ItemService:
         notes: str | None = None,
         outfit_id: UUID | None = None,
     ) -> ItemHistory:
+        if not await self.db.scalar(
+            select(ClothingItem.id).where(ClothingItem.id == item.id, owned_item())
+        ):
+            raise HTTPException(422, "Item is unavailable")
         [history] = await self.record_wears(
             item.user_id, [item.id], worn_at, occasion=occasion, notes=notes, outfit_id=outfit_id
         )
@@ -449,11 +456,12 @@ class ItemService:
     ) -> list[ItemHistory]:
         result = await self.db.execute(
             select(ClothingItem).where(
-                ClothingItem.id.in_(item_ids), ClothingItem.user_id == user_id
+                ClothingItem.id.in_(item_ids), ClothingItem.user_id == user_id, owned_item()
             )
         )
+        items = list(result.scalars().all())
         histories = []
-        for item in result.scalars().all():
+        for item in items:
             effective_interval = (
                 item.wash_interval
                 if item.wash_interval is not None
@@ -605,6 +613,7 @@ class ItemService:
                 and_(
                     ClothingItem.user_id == user_id,
                     ClothingItem.is_archived == False,  # noqa: E712
+                    owned_item(),
                 )
             )
             .group_by(ClothingItem.type)
@@ -622,6 +631,7 @@ class ItemService:
                 and_(
                     ClothingItem.user_id == user_id,
                     ClothingItem.is_archived == False,  # noqa: E712
+                    owned_item(),
                 )
             )
             .group_by("color")

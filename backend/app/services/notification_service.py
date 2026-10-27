@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.config import get_settings
+from app.models.considering import owned_outfit
 from app.models.notification import Notification, NotificationSettings, NotificationStatus
 from app.models.outfit import Outfit, OutfitItem, OutfitStatus
 from app.models.schedule import Schedule
@@ -298,7 +299,7 @@ class NotificationDispatcher:
 
         outfit_result = await self.db.execute(
             select(Outfit)
-            .where(Outfit.id == outfit_id)
+            .where(owned_outfit(), Outfit.id == outfit_id, Outfit.user_id == user_id)
             .options(selectinload(Outfit.items).selectinload(OutfitItem.item))
         )
         outfit = outfit_result.scalar_one_or_none()
@@ -373,7 +374,11 @@ class NotificationDispatcher:
 
         outfit_result = await self.db.execute(
             select(Outfit)
-            .where(Outfit.id == notification.outfit_id)
+            .where(
+                owned_outfit(),
+                Outfit.id == notification.outfit_id,
+                Outfit.user_id == notification.user_id,
+            )
             .options(selectinload(Outfit.items).selectinload(OutfitItem.item))
         )
         outfit = outfit_result.scalar_one_or_none()

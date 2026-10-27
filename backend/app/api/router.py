@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
+from app.api.considering import router as considering_router
 from app.api.families import router as families_router
 from app.api.ha import router as ha_router
 from app.api.health import router as health_router
@@ -27,6 +28,7 @@ api_router.include_router(health_router, tags=["health"])
 api_router.include_router(auth_router)
 api_router.include_router(users_router)
 api_router.include_router(items_router)
+api_router.include_router(considering_router)
 api_router.include_router(images_router)
 api_router.include_router(inspiration_router)
 api_router.include_router(preferences_router)

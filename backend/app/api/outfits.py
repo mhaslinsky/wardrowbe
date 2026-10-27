@@ -653,6 +653,7 @@ async def list_outfits(
     group: bool = Query(False),
     worn: bool | None = Query(None),
     ready_to_wear: bool = Query(False),
+    owned_only: bool = Query(False),
     search: str | None = Query(None, max_length=50),
     occasions: str | None = Query(
         None, max_length=500, description="Comma-separated occasion keys the search also matches"
@@ -672,6 +673,7 @@ async def list_outfits(
         group=group,
         worn=worn,
         ready_to_wear=ready_to_wear,
+        owned_only=owned_only,
         status_filter=status_filter,
         occasion=occasion,
         date_from=date_from,

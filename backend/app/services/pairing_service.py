@@ -7,6 +7,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_item, owned_outfit
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import FamilyOutfitRating, Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
@@ -37,17 +38,20 @@ class PairingService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_source_item(self, user_id: UUID, item_id: UUID) -> ClothingItem | None:
-        result = await self.db.execute(
-            select(ClothingItem).where(
-                and_(
-                    ClothingItem.id == item_id,
-                    ClothingItem.user_id == user_id,
-                    ClothingItem.status == ItemStatus.ready,
-                    ClothingItem.is_archived.is_(False),
-                )
+    async def get_source_item(
+        self, user_id: UUID, item_id: UUID, *, owned_only: bool = True
+    ) -> ClothingItem | None:
+        query = select(ClothingItem).where(
+            and_(
+                ClothingItem.id == item_id,
+                ClothingItem.user_id == user_id,
+                ClothingItem.status == ItemStatus.ready,
+                ClothingItem.is_archived.is_(False),
             )
         )
+        if owned_only:
+            query = query.where(owned_item())
+        result = await self.db.execute(query)
         item = result.scalar_one_or_none()
         return item if item is not None and is_outfit_type(item.type) else None
 
@@ -56,6 +60,7 @@ class PairingService:
             and_(
                 ClothingItem.user_id == user.id,
                 ClothingItem.status == ItemStatus.ready,
+                owned_item(),
                 ClothingItem.is_archived.is_(False),
                 ClothingItem.id != exclude_item_id,
             )
@@ -352,6 +357,7 @@ class PairingService:
             and_(
                 Outfit.user_id == user_id,
                 PAIRING_SOURCE_CLAUSE,
+                owned_outfit(),
                 Outfit.source_item_id == source_item_id,
             )
         )
@@ -362,6 +368,7 @@ class PairingService:
                 and_(
                     Outfit.user_id == user_id,
                     PAIRING_SOURCE_CLAUSE,
+                    owned_outfit(),
                     Outfit.source_item_id == source_item_id,
                 )
             )
@@ -397,6 +404,7 @@ class PairingService:
         conditions = [
             Outfit.user_id == user_id,
             PAIRING_SOURCE_CLAUSE,
+            owned_outfit(),
         ]
 
         # Filter by source item type if specified

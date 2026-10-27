@@ -9,6 +9,7 @@ from sqlalchemy import or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_item
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus, UserFeedback
 from app.models.user import User
@@ -222,6 +223,7 @@ class WearService:
                 ClothingItem.user_id == user.id,
                 ClothingItem.is_archived.is_(False),
                 ClothingItem.status == ItemStatus.ready,
+                owned_item(),
             )
         )
         if set(result.scalars()) != set(item_ids):

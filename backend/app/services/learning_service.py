@@ -22,6 +22,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_item, owned_outfit
 from app.models.item import ClothingItem
 from app.models.learning import (
     ItemPairScore,
@@ -208,7 +209,7 @@ class LearningService:
     ) -> None:
         result = await self.db.execute(
             select(Outfit)
-            .where(Outfit.id == outfit_id)
+            .where(owned_outfit(), Outfit.id == outfit_id)
             .options(
                 selectinload(Outfit.feedback),
                 selectinload(Outfit.items).selectinload(OutfitItem.item),
@@ -334,6 +335,7 @@ class LearningService:
             .join(Outfit.feedback)
             .where(
                 Outfit.user_id == user_id,
+                owned_outfit(),
                 _HAS_PAIR_SIGNAL,
                 Outfit.items.any(OutfitItem.item_id.in_(item_ids)),
             )
@@ -403,7 +405,7 @@ class LearningService:
         result = await self.db.execute(
             select(Outfit)
             .join(Outfit.feedback)
-            .where(Outfit.user_id == user_id, _HAS_PAIR_SIGNAL)
+            .where(owned_outfit(), Outfit.user_id == user_id, _HAS_PAIR_SIGNAL)
             .options(selectinload(Outfit.items))
         )
         for outfit in result.scalars().all():
@@ -454,7 +456,9 @@ class LearningService:
     async def _get_feedback_count(self, user_id: UUID) -> int:
         """Get total feedback count for a user."""
         result = await self.db.execute(
-            select(func.count(UserFeedback.id)).join(Outfit).where(Outfit.user_id == user_id)
+            select(func.count(UserFeedback.id))
+            .join(Outfit)
+            .where(owned_outfit(), Outfit.user_id == user_id)
         )
         return result.scalar() or 0
 
@@ -476,7 +480,7 @@ class LearningService:
     async def _recompute_profile(self, user_id: UUID) -> UserLearningProfile:
         result = await self.db.execute(
             select(Outfit)
-            .where(Outfit.user_id == user_id, _HAS_PROFILE_SIGNAL)
+            .where(owned_outfit(), Outfit.user_id == user_id, _HAS_PROFILE_SIGNAL)
             .options(
                 selectinload(Outfit.feedback),
                 selectinload(Outfit.items).selectinload(OutfitItem.item),
@@ -701,6 +705,8 @@ class LearningService:
             .where(
                 and_(
                     ItemPairScore.user_id == user_id,
+                    owned_item(ItemPairScore.item1_id),
+                    owned_item(ItemPairScore.item2_id),
                     ItemPairScore.compatibility_score > 0,
                     (ItemPairScore.item1_id == item_id) | (ItemPairScore.item2_id == item_id),
                 )
@@ -726,6 +732,7 @@ class LearningService:
             select(ClothingItem).where(
                 and_(
                     ClothingItem.id.in_(paired_ids),
+                    owned_item(),
                     ClothingItem.is_archived.is_(False),
                 )
             )
@@ -897,6 +904,8 @@ class LearningService:
             .where(
                 and_(
                     ItemPairScore.user_id == user_id,
+                    owned_item(ItemPairScore.item1_id),
+                    owned_item(ItemPairScore.item2_id),
                     ItemPairScore.compatibility_score > 0,
                     ItemPairScore.times_paired >= self.MIN_PAIRS_FOR_SCORING,
                 )

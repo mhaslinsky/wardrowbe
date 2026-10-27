@@ -11,6 +11,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.considering import owned_item, owned_outfit
 from app.models.item import ClothingItem, ItemStatus
 from app.models.learning import ItemPairScore, UserLearningProfile
 from app.models.outfit import (
@@ -164,6 +165,8 @@ class RecommendationService:
             .where(
                 Outfit.user_id == user_id,
                 Outfit.scheduled_for == day,
+                # External authors can save outfits containing shelf items.
+                owned_outfit(),
                 Outfit.source.in_(
                     [OutfitSource.scheduled, OutfitSource.on_demand, OutfitSource.external]
                 ),
@@ -308,6 +311,7 @@ class RecommendationService:
             and_(
                 ClothingItem.user_id == user.id,
                 ClothingItem.status == ItemStatus.ready,
+                owned_item(),
                 ClothingItem.is_archived.is_(False),
             )
         )
@@ -336,6 +340,7 @@ class RecommendationService:
             select(UserFeedback)
             .join(Outfit, UserFeedback.outfit_id == Outfit.id)
             .where(
+                owned_outfit(),
                 Outfit.user_id == user.id,
                 UserFeedback.comment.is_not(None),
                 UserFeedback.comment.op("~")(r"[^\s]"),
@@ -399,6 +404,7 @@ class RecommendationService:
             .join(Outfit, OutfitItem.outfit_id == Outfit.id)
             .where(
                 and_(
+                    owned_outfit(),
                     Outfit.user_id == user.id,
                     Outfit.status == OutfitStatus.rejected,
                     Outfit.scheduled_for == user_today,
@@ -454,6 +460,7 @@ class RecommendationService:
             select(Outfit)
             .where(
                 and_(
+                    owned_outfit(),
                     Outfit.user_id == user.id,
                     Outfit.created_at >= cutoff_time,
                 )
@@ -737,6 +744,8 @@ class RecommendationService:
             .where(
                 and_(
                     ItemPairScore.user_id == user_id,
+                    owned_item(ItemPairScore.item1_id),
+                    owned_item(ItemPairScore.item2_id),
                     ItemPairScore.compatibility_score > 0.3,
                     ItemPairScore.times_paired >= 2,
                 )
@@ -1070,6 +1079,7 @@ class RecommendationService:
                             ClothingItem.id.in_(missing_ids),
                             ClothingItem.user_id == user.id,
                             ClothingItem.status == ItemStatus.ready,
+                            owned_item(),
                             ClothingItem.is_archived.is_(False),
                         )
                     )

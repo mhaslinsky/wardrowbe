@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.api.outfits import OutfitResponse, outfit_to_response
 from app.config import get_settings
 from app.database import DbSession
+from app.models.considering import owned_item
 from app.models.item import ClothingItem, ItemStatus
 from app.models.user import User
 from app.schemas.item import ItemResponse
@@ -78,6 +79,7 @@ async def recognise_outfit(
             and_(
                 ClothingItem.user_id == current_user.id,
                 ClothingItem.status == ItemStatus.ready,
+                owned_item(),
                 ClothingItem.is_archived.is_(False),
             )
         )
