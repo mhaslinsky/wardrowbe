@@ -742,3 +742,16 @@ it('keeps unsaved preview preferences mounted while photos hide and show', async
   expect(editor).toHaveValue('Roomy sleeves');
   expect(screen.getByLabelText('shirts')).toHaveValue('untucked');
 });
+
+
+it('realigns the hash card after photo dimensions load', async () => {
+  window.history.replaceState(null, '', '#preview-photo');
+  const scroll = vi.fn();
+  Element.prototype.scrollIntoView = scroll;
+  vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
+  render(<PreviewPhotoSettings />);
+  const image = await screen.findByRole('img');
+  scroll.mockClear();
+  fireEvent.load(image);
+  expect(scroll).toHaveBeenCalled();
+});

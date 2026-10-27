@@ -30,11 +30,24 @@ export function PreviewPhotoSettings() {
     return () => window.removeEventListener('hashchange', openFromHash);
   }, []);
   useEffect(() => {
-    if (open && scrollPending) {
+    if (!open || !scrollPending || loading) return;
+    const images = Array.from(card.current?.querySelectorAll('img') ?? []);
+    const alignCard = () => {
       card.current?.scrollIntoView({ block: 'start' });
-      setScrollPending(false);
+      if (images.every((image) => image.complete)) setScrollPending(false);
+    };
+    for (const image of images) {
+      image.addEventListener('load', alignCard);
+      image.addEventListener('error', alignCard);
     }
-  }, [open, scrollPending]);
+    alignCard();
+    return () => {
+      for (const image of images) {
+        image.removeEventListener('load', alignCard);
+        image.removeEventListener('error', alignCard);
+      }
+    };
+  }, [open, scrollPending, loading, photos]);
   const angleCount = previewAngles.filter((angle) => photos?.[angle]).length;
   return <Card id="preview-photo" ref={card}>
     <Collapsible open={open} onOpenChange={setOpen}>
