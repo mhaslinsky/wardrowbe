@@ -192,5 +192,23 @@
     "failed": "Chargement ou enregistrement impossible",
     "conflict": "Profil modifié",
     "reload": "Supprimer le brouillon et recharger"
+  },
+  "accessTokens": {
+    "title": "Jetons d’accès",
+    "name": "Nom",
+    "create": "Créer",
+    "warning": "Copiez ce jeton maintenant. Il ne sera plus affiché.",
+    "token": "Jeton",
+    "copy": "Copier",
+    "copied": "Copié",
+    "dismiss": "Masquer",
+    "failed": "Échec de l’action",
+    "loading": "Chargement",
+    "empty": "Aucun jeton d’accès",
+    "created": "Créé",
+    "lastUsed": "Dernière utilisation",
+    "actions": "Actions",
+    "never": "Jamais",
+    "revoke": "Révoquer"
   }
 }

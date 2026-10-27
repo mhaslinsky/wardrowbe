@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.api.access_tokens import router as access_tokens_router
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.considering import router as considering_router
@@ -22,6 +23,7 @@ from app.api.users import router as users_router
 from app.api.weather import router as weather_router
 
 api_router = APIRouter()
+api_router.include_router(access_tokens_router)
 
 # Include sub-routers
 api_router.include_router(health_router, tags=["health"])

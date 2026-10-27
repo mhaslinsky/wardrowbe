@@ -8,6 +8,7 @@ from app.config import get_settings
 from app.database import DbSession
 from app.models.user import User
 from app.schemas.auth import AuthSession, TokenPayload
+from app.services.access_token_service import TOKEN_PREFIX, AccessTokenService
 from app.services.user_service import FORWARD_AUTH, UserService
 from app.utils.forward_auth import (
     FORWARD_AUTH_SECRET_HEADER,
@@ -53,9 +54,8 @@ async def get_current_user_optional(
         return None
 
     try:
-        token_data = decode_token(credentials.credentials)
         user_service = UserService(db)
-        user = await user_service.get_by_token(token_data)
+        user = await _resolve_bearer(credentials.credentials, db, user_service)
     except HTTPException:
         return None
     # A deactivated account or a switched proxy user is treated as anonymous, as
@@ -88,8 +88,7 @@ async def get_current_user(
     user = None
 
     if credentials:
-        token_data = decode_token(credentials.credentials)
-        user = await user_service.get_by_token(token_data)
+        user = await _resolve_bearer(credentials.credentials, db, user_service)
 
     if not user:
         raise HTTPException(
@@ -131,3 +130,21 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentUserOptional = Annotated[User | None, Depends(get_current_user_optional)]
 CurrentSession = Annotated[AuthSession, Depends(get_current_session)]
 WriteUser = CurrentUser
+
+
+async def _resolve_bearer(secret: str, db: DbSession, user_service: UserService) -> User | None:
+    if secret.startswith(TOKEN_PREFIX):
+        return await AccessTokenService(db).authenticate(secret)
+    return await user_service.get_by_token(decode_token(secret))
+
+
+async def get_session_user(
+    user: CurrentUser,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> User:
+    if credentials and credentials.credentials.startswith(TOKEN_PREFIX):
+        raise HTTPException(status_code=403, detail="Sign in to manage tokens")
+    return user
+
+
+SessionUser = Annotated[User, Depends(get_session_user)]

@@ -192,5 +192,23 @@
     "failed": "불러오기 또는 저장 실패",
     "conflict": "프로필이 변경되었습니다",
     "reload": "초안 삭제 후 새로고침"
+  },
+  "accessTokens": {
+    "title": "액세스 토큰",
+    "name": "이름",
+    "create": "만들기",
+    "warning": "지금 복사하세요. 이 토큰은 다시 표시되지 않습니다.",
+    "token": "토큰",
+    "copy": "복사",
+    "copied": "복사됨",
+    "dismiss": "숨기기",
+    "failed": "작업 실패",
+    "loading": "로딩 중",
+    "empty": "액세스 토큰 없음",
+    "created": "생성일",
+    "lastUsed": "마지막 사용",
+    "actions": "작업",
+    "never": "사용한 적 없음",
+    "revoke": "폐기"
   }
 }

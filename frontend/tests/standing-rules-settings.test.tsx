@@ -96,3 +96,4 @@ it('allows explicitly clearing rules before the server data arrives', async () =
 });
 
 vi.mock('@/components/fit-profile-settings', () => ({ FitProfileSettings: () => null }));
+vi.mock('@/components/access-token-settings', () => ({ AccessTokenSettings: () => null }));

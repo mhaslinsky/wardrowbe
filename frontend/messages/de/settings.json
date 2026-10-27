@@ -192,5 +192,23 @@
     "failed": "Laden oder Speichern fehlgeschlagen",
     "conflict": "Profil geändert",
     "reload": "Entwurf verwerfen und neu laden"
+  },
+  "accessTokens": {
+    "title": "Zugriffstoken",
+    "name": "Name",
+    "create": "Erstellen",
+    "warning": "Jetzt kopieren. Dieses Token wird nicht erneut angezeigt.",
+    "token": "Token",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "dismiss": "Ausblenden",
+    "failed": "Aktion fehlgeschlagen",
+    "loading": "Wird geladen",
+    "empty": "Keine Zugriffstoken",
+    "created": "Erstellt",
+    "lastUsed": "Zuletzt verwendet",
+    "actions": "Aktionen",
+    "never": "Nie",
+    "revoke": "Widerrufen"
   }
 }

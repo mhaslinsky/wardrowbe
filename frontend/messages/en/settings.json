@@ -192,5 +192,23 @@
     "failed": "Could not load or save",
     "conflict": "Profile changed",
     "reload": "Discard draft and reload"
+  },
+  "accessTokens": {
+    "title": "Access tokens",
+    "name": "Name",
+    "create": "Create",
+    "warning": "Copy this token now. It won’t appear again.",
+    "token": "Token",
+    "copy": "Copy",
+    "copied": "Copied",
+    "dismiss": "Hide",
+    "failed": "Action failed",
+    "loading": "Loading",
+    "empty": "No access tokens",
+    "created": "Created",
+    "lastUsed": "Last used",
+    "actions": "Actions",
+    "never": "Never",
+    "revoke": "Revoke"
   }
 }

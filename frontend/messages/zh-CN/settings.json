@@ -192,5 +192,23 @@
     "failed": "无法加载或保存",
     "conflict": "档案已更改",
     "reload": "放弃草稿并重新加载"
+  },
+  "accessTokens": {
+    "title": "访问令牌",
+    "name": "名称",
+    "create": "创建",
+    "warning": "请立即复制。此令牌不会再次显示。",
+    "token": "令牌",
+    "copy": "复制",
+    "copied": "已复制",
+    "dismiss": "隐藏",
+    "failed": "操作失败",
+    "loading": "加载中",
+    "empty": "暂无访问令牌",
+    "created": "创建时间",
+    "lastUsed": "最后使用",
+    "actions": "操作",
+    "never": "从未使用",
+    "revoke": "撤销"
   }
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { AccessTokenSettings } from '@/components/access-token-settings';
 import { FitProfileSettings } from '@/components/fit-profile-settings';
 import { PreviewPhotoSettings } from '@/components/preview-photo-settings';
 import { useState, useEffect, useRef } from 'react';
@@ -592,6 +593,7 @@ export default function SettingsPage() {
       <div className="grid gap-6">
         <PreviewPhotoSettings />
         <FitProfileSettings />
+        <AccessTokenSettings />
         {/* Account Section */}
         <Card>
           <CardHeader>
