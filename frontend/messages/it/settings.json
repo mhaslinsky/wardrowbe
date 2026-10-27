@@ -192,5 +192,23 @@
     "failed": "Caricamento o salvataggio non riuscito",
     "conflict": "Profilo modificato",
     "reload": "Scarta bozza e ricarica"
+  },
+  "accessTokens": {
+    "title": "Token di accesso",
+    "name": "Nome",
+    "create": "Crea",
+    "warning": "Copia ora il token. Non verrà più mostrato.",
+    "token": "Token",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "dismiss": "Nascondi",
+    "failed": "Operazione non riuscita",
+    "loading": "Caricamento",
+    "empty": "Nessun token di accesso",
+    "created": "Creato",
+    "lastUsed": "Ultimo utilizzo",
+    "actions": "Azioni",
+    "never": "Mai",
+    "revoke": "Revoca"
   }
 }

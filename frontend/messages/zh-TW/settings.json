@@ -192,5 +192,23 @@
     "failed": "無法載入或儲存",
     "conflict": "檔案已變更",
     "reload": "捨棄草稿並重新載入"
+  },
+  "accessTokens": {
+    "title": "存取權杖",
+    "name": "名稱",
+    "create": "建立",
+    "warning": "請立即複製。此權杖不會再次顯示。",
+    "token": "權杖",
+    "copy": "複製",
+    "copied": "已複製",
+    "dismiss": "隱藏",
+    "failed": "操作失敗",
+    "loading": "載入中",
+    "empty": "尚無存取權杖",
+    "created": "建立時間",
+    "lastUsed": "上次使用",
+    "actions": "操作",
+    "never": "從未使用",
+    "revoke": "撤銷"
   }
 }
