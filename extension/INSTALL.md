@@ -23,10 +23,10 @@ The browser manifests differ: Chrome uses a service worker; Firefox uses backgro
 
 ## Connect and capture
 
-Sign in to Wardrowbe in this browser, including Cloudflare Access. In Wardrowbe Settings, create an access token named Send to Wardrowbe. Open the extension options, paste the token and choose Connect. The token stays in extension-private storage; shopping pages and confirmation pages never receive it.
+Sign in to Wardrowbe in this browser, including Cloudflare Access. In Wardrowbe Settings, create an access token named Send to Wardrowbe. Open the extension options, paste the token and choose Connect. If extension options show Grant Wardrowbe access, click it and approve the host permission. The token stays in extension-private storage; shopping pages and confirmation pages never receive it.
 
-Open a product page, select its size and colour, then click Send to Wardrowbe. The confirmation tab shows the captured fields and image choices. Correct missing values, choose one to five images and select Save. Cancel creates nothing. A badge showing `!` opens setup after a capture or connection failure.
+Open a product page, select its size and colour, then click Send to Wardrowbe. The confirmation tab shows the captured fields and image choices. Correct missing values, choose one to five images and select Save. Cancel creates nothing. A badge showing `!` opens setup after a missing or rejected token.
 
-If details fail after an item was created, Retry details updates that same item. Resume unfinished saves in extension options reopens retained partial saves. If the create response was lost, the extension blocks another create and asks you to check the shelf. Keep the unfinished draft until the saved item is identified.
+If details fail after an item was created, Retry details updates that same item. Resume unfinished saves in extension options reopens retained partial saves. If the create response was lost, the extension blocks another create and asks you to check the shelf. After checking the shelf, use the discard action to remove the draft; it never deletes a shelf item.
 
 Browser requests include its existing Access session and the application token. The extension never reads cookies. A redirect or sign-in page is a connection failure. The public Access session must be checked in the actual browser; a localhost test cannot prove it.

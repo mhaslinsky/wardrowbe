@@ -383,6 +383,12 @@
     "connected": "接続済み",
     "setupFailed": "Wardrowbeへのログインとトークンを確認してください。",
     "recovered": "未完了の保存を開きました",
-    "noneToRecover": "未完了の保存はありません"
+    "noneToRecover": "未完了の保存はありません",
+    "discardChecked": "棚を確認したので下書きを破棄",
+    "colorInNotes": "未登録の色はメモに保存されます。",
+    "captureFailed": "取得できませんでした。商品ページを開いて再試行してください。",
+    "grantHost": "Wardrowbeへのアクセスを許可",
+    "permissionGranted": "アクセスを許可しました",
+    "permissionDenied": "アクセスが許可されていません"
   }
 }

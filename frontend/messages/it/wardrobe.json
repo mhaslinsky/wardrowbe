@@ -383,6 +383,12 @@
     "connected": "Connesso",
     "setupFailed": "Accedi a Wardrowbe e controlla il token.",
     "recovered": "Salvataggi incompleti aperti",
-    "noneToRecover": "Nessun salvataggio incompleto"
+    "noneToRecover": "Nessun salvataggio incompleto",
+    "discardChecked": "Scaffale controllato, elimina questa bozza",
+    "colorInNotes": "Colore non elencato conservato nelle note.",
+    "captureFailed": "Acquisizione non riuscita. Apri una pagina prodotto e riprova.",
+    "grantHost": "Consenti accesso a Wardrowbe",
+    "permissionGranted": "Accesso consentito",
+    "permissionDenied": "Accesso non consentito"
   }
 }

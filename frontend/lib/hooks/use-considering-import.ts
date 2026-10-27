@@ -8,7 +8,7 @@ export function useConsideringImport(owner: string | undefined) {
   const busy = useRef(false);
   type Reply = { capture?: ConfirmedProduct; partial?: boolean; uncertain?: boolean; saved?: boolean; item?: string };
   const loading = useRef<{ key: string; promise: Promise<Reply> }>();
-  return useCallback(async (action: 'load' | 'save' | 'cancel', capture?: ConfirmedProduct) => {
+  return useCallback(async (action: 'load' | 'save' | 'cancel' | 'discard', capture?: ConfirmedProduct) => {
     if (!owner) throw Error('identity');
     const reference = new URL(location.href).searchParams.get('draft');
     if (!reference || !/^draft-[a-f0-9]{64}$/.test(reference)) throw Error('bridge');

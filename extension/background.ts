@@ -2,16 +2,16 @@ import { captureProduct, validateCapture, type ProductCapture } from '../fronten
 import { confirmedPayload } from '../frontend/lib/extension-reader/confirmation';
 declare const chrome: any;
 const browser = (globalThis as any).browser || chrome;
-export const APP_ORIGIN = 'https://wardrobe.haslinsky.net';
+const APP_ORIGIN = 'https://wardrobe.haslinsky.net';
 const IMPORT_PATH = '/dashboard/considering/import';
 type Draft = { capture: ProductCapture; owner: string; tab: number; item?: string; update?: ReturnType<typeof confirmedPayload>['update']; creating?: boolean };
 const locks = new Set<string>();
 
-export async function apiRequest(path: string, token: string, method = 'GET', body?: unknown) {
+async function apiRequest(path: string, token: string, method = 'GET', body?: unknown) {
   const response = await fetch(`${APP_ORIGIN}/api/v1${path}`, { method, credentials: 'include', redirect: 'error',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
-  if (!response.headers.get('content-type')?.includes('application/json')) throw Error('signin');
-  if (!response.ok) throw Error(response.status === 401 ? 'token' : response.status === 429 ? 'rate' : response.status === 403 ? 'identity' : 'request');
+  if (!response.headers.get('content-type')?.includes('application/json')) throw Object.assign(Error('signin'), { status: response.status });
+  if (!response.ok) throw Object.assign(Error(response.status === 401 ? 'token' : response.status === 429 ? 'rate' : response.status === 403 ? 'identity' : 'request'), { status: response.status });
   return response.json();
 }
 const privateSender = (sender: any) => sender.id === browser.runtime.id && sender.url === browser.runtime.getURL('options.html');
@@ -30,7 +30,7 @@ async function openDraft(reference: string, draft: Draft) {
   await browser.storage.local.set({ [reference]: draft });
   await browser.tabs.update(tab.id, { url: `${APP_ORIGIN}${IMPORT_PATH}?draft=${reference}` });
 }
-export async function handleMessage(message: any, sender: any) {
+async function handleMessage(message: any, sender: any) {
   if (privateSender(sender)) {
     if (message?.action === 'configure') {
       if (typeof message.token !== 'string' || !/^wbt_[A-Za-z0-9_-]+$/.test(message.token)) throw Error('token');
@@ -59,6 +59,10 @@ export async function handleMessage(message: any, sender: any) {
     const user = await apiRequest('/users/me', token);
     if (user.id !== draft.owner || message.owner !== draft.owner) throw Error('identity');
     if (message.action === 'load') return { capture: draft.capture, partial: !!draft.item, uncertain: !!draft.creating };
+    if (message.action === 'discard') {
+      await browser.storage.local.remove(reference);
+      return { discarded: true };
+    }
     if (message.action === 'cancel') {
       if (draft.item || draft.creating) throw Error('partial');
       await browser.storage.local.remove(reference);
@@ -70,7 +74,14 @@ export async function handleMessage(message: any, sender: any) {
       const payload = confirmedPayload(message.capture);
       draft.creating = true; draft.capture = validateCapture(message.capture);
       await browser.storage.local.set({ [reference]: draft });
-      const created = await apiRequest('/considering', token, 'POST', payload.create);
+      let created;
+      try { created = await apiRequest('/considering', token, 'POST', payload.create); } catch (error) {
+        if ([401, 403, 409, 422, 429].includes((error as { status?: number }).status!)) {
+          draft.creating = false;
+          await browser.storage.local.set({ [reference]: draft });
+        }
+        throw error;
+      }
       const item = itemResult(created.item, draft.owner);
       if (created.state !== 'considering') throw Error('response');
       draft.item = item.id; draft.update = payload.update; draft.creating = false;
@@ -103,9 +114,14 @@ browser.action.onClicked.addListener(async (tab: any) => {
     const reference = `draft-${Array.from(crypto.getRandomValues(new Uint8Array(32)), value => value.toString(16).padStart(2, '0')).join('')}`;
     await openDraft(reference, { capture, owner: user.id, tab: -1 });
     await browser.action.setBadgeText({ tabId: tab.id, text: '' });
-  } catch {
-    await browser.action.setBadgeText({ tabId: tab.id, text: '!' });
-    await browser.runtime.openOptionsPage();
+  } catch (error) {
+    const failure = error as Error & { status?: number };
+    if (failure.message === 'token' || failure.status === 401 || failure.status === 403) {
+      await browser.action.setBadgeText({ tabId: tab.id, text: '!' });
+      await browser.runtime.openOptionsPage();
+    } else {
+      await browser.tabs.create({ url: browser.runtime.getURL('error.html') });
+    }
   }
 });
 browser.tabs.onRemoved.addListener(async (tab: number) => {

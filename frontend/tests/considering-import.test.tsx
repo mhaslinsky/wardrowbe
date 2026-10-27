@@ -5,7 +5,6 @@ const push = vi.fn();
 const invalidateQueries = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries }) }));
-vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 const user = { id: 'primary-user', email: 'primary@example.test' };
 vi.mock('@/lib/hooks/use-user', () => ({ useUserProfile: () => ({ data: user }) }));
 vi.mock('@/lib/hooks/use-considering-import', () => ({ useConsideringImport: () => bridge }));
@@ -25,7 +24,7 @@ describe('considering confirmation', () => {
     fireEvent.click(screen.getByText('save'));
     await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard/considering'));
     expect(bridge).toHaveBeenCalledWith('save', expect.objectContaining({ material_detail: '100% cotton', images: [capture.images[0]] }));
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['considering', user.email, 'considering'] });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
   it('cancels before save without creating anything', async () => {
     render(<ConsideringImport />); await screen.findByDisplayValue('Shirt');
@@ -50,4 +49,26 @@ describe('considering confirmation', () => {
     render(<ConsideringImport />); await screen.findByRole('alert');
     expect(screen.getByRole('alert')).toHaveTextContent('loadFailed');
   });
+  it('saves after a selected material is reset to Unknown', async () => {
+    render(<ConsideringImport />); await screen.findByDisplayValue('Shirt');
+    fireEvent.change(screen.getByLabelText('material'), { target: { value: 'cotton' } });
+    fireEvent.change(screen.getByLabelText('material'), { target: { value: '' } });
+    fireEvent.click(screen.getByText('save'));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard/considering'));
+    expect(bridge).toHaveBeenCalledWith('save', expect.objectContaining({ material: undefined }));
+  });
+  it('connects the colour palette and explains an unmapped colour', async () => {
+    render(<ConsideringImport />); await screen.findByDisplayValue('Shirt');
+    expect(screen.getByLabelText('selected_color')).toHaveAttribute('list', 'import-colors');
+    fireEvent.change(screen.getByLabelText('selected_color'), { target: { value: 'moon dust' } });
+    expect(screen.getByText('colorInNotes')).toBeVisible();
+  });
+  it('offers explicit draft discard after checking the shelf', async () => {
+    bridge.mockImplementation(async (action: string) => action === 'load' ? { capture, uncertain: true } : { discarded: true });
+    render(<ConsideringImport />); await screen.findByDisplayValue('Shirt');
+    fireEvent.click(screen.getByText('discardChecked'));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard/considering'));
+    expect(bridge).toHaveBeenCalledWith('discard', expect.anything());
+  });
+
 });

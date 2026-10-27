@@ -11,7 +11,7 @@ export function confirmedPayload(input: unknown) {
   const material = (input as ConfirmedProduct).material;
   if (material !== undefined && (typeof material !== 'string' || !(MATERIAL_VALUES as readonly string[]).includes(material.trim()))) throw Error('material');
   const color = capture.selected_color ? normalizeColor(capture.selected_color) : null;
-  const notes = [capture.fit, capture.size_chart, capture.sizes.length ? `Available sizes: ${capture.sizes.join(', ')}` : '',
+  const notes = [capture.selected_color && !color ? `Selected color: ${capture.selected_color}` : '', capture.fit, capture.size_chart, capture.sizes.length ? `Available sizes: ${capture.sizes.join(', ')}` : '',
     capture.colors.length ? `Available colors: ${capture.colors.join(', ')}` : ''].filter(Boolean).join('\n').slice(0, 10000);
   return {
     create: { image_urls: capture.images, source_url: capture.source_url, name: capture.name, brand: capture.brand,

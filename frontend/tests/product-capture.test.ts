@@ -199,3 +199,9 @@ describe('page product and DOM offer resolution', () => {
     expect(result.material_detail).toBe(description); expect(result.care).toBe(description); expect(result.fit).toBe(description);
   });
 });
+
+it('keeps an unmapped selected colour in notes', () => {
+  const payload = confirmedPayload({ source_url: 'https://store.example/shirt', images: ['https://store.example/shirt.jpg'], colors: [], sizes: [], selected_color: 'moon dust' });
+  expect(payload.update.tags.colors).toBeUndefined();
+  expect(payload.update.notes).toBe('Selected color: moon dust');
+});

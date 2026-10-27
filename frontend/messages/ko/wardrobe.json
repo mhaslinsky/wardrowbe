@@ -383,6 +383,12 @@
     "connected": "연결됨",
     "setupFailed": "Wardrowbe 로그인과 토큰을 확인하세요.",
     "recovered": "미완료 저장을 열었습니다",
-    "noneToRecover": "미완료 저장 없음"
+    "noneToRecover": "미완료 저장 없음",
+    "discardChecked": "선반 확인 완료, 초안 삭제",
+    "colorInNotes": "목록에 없는 색상은 메모에 보관됩니다.",
+    "captureFailed": "가져오지 못했습니다. 상품 페이지를 열고 다시 시도하세요.",
+    "grantHost": "Wardrowbe 접근 허용",
+    "permissionGranted": "접근 허용됨",
+    "permissionDenied": "접근 허용되지 않음"
   }
 }

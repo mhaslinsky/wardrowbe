@@ -383,6 +383,12 @@
     "connected": "Verbunden",
     "setupFailed": "Bei Wardrowbe anmelden und Token prüfen.",
     "recovered": "Unfertige Speichervorgänge geöffnet",
-    "noneToRecover": "Keine unfertigen Speichervorgänge"
+    "noneToRecover": "Keine unfertigen Speichervorgänge",
+    "discardChecked": "Ablage geprüft, Entwurf verwerfen",
+    "colorInNotes": "Unbekannte Farbe in Notizen gespeichert.",
+    "captureFailed": "Erfassung fehlgeschlagen. Produktseite öffnen und erneut versuchen.",
+    "grantHost": "Wardrowbe-Zugriff erlauben",
+    "permissionGranted": "Zugriff erlaubt",
+    "permissionDenied": "Zugriff nicht erlaubt"
   }
 }

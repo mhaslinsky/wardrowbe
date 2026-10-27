@@ -7,10 +7,16 @@ vi.stubGlobal('chrome', { runtime, storage: { local: {
   get: async (key: string | null) => key ? { [key]: structuredClone(records.get(key)) } : Object.fromEntries(records),
   set: async (data: Record<string, unknown>) => { for (const [key, value] of Object.entries(data)) records.set(key, structuredClone(value)); },
   remove: async (key: string) => { records.delete(key); }, setAccessLevel: vi.fn(),
-} }, tabs: { onRemoved: { addListener: (listener: unknown) => { listeners.remove = listener; } } }, action: { onClicked: { addListener: vi.fn() } } });
-let handleMessage: typeof import('../../extension/background').handleMessage;
-let apiRequest: typeof import('../../extension/background').apiRequest;
-beforeAll(async () => { ({ handleMessage, apiRequest } = await import('../../extension/background')); });
+} }, tabs: { create: vi.fn(), onRemoved: { addListener: (listener: unknown) => { listeners.remove = listener; } } }, scripting: { executeScript: vi.fn() }, action: { onClicked: { addListener: (listener: unknown) => { listeners.action = listener; } }, setBadgeText: vi.fn() } });
+beforeAll(async () => { await import('../../extension/background'); });
+async function send(message: unknown, sender: unknown) {
+  return new Promise<any>(resolve => { expect(listeners.message(message, sender, resolve)).toBe(true); });
+}
+async function handleMessage(message: unknown, sender: unknown) {
+  const reply = await send(message, sender);
+  if (reply.error) throw Error(reply.error);
+  return reply.value;
+}
 const reference = `draft-${'a'.repeat(64)}`;
 const owner = 'primary-user';
 const sender = { id: runtime.id, frameId: 0, url: `https://wardrobe.haslinsky.net/dashboard/considering/import?draft=${reference}`, tab: { id: 7 } };
@@ -22,6 +28,7 @@ let patchFails = false;
 let item: any;
 let requests: { url: string; options: RequestInit }[];
 beforeEach(() => {
+  vi.clearAllMocks();
   records.clear(); records.set('token', 'wbt_disposable'); records.set(reference, { capture, owner, tab: 7 });
   creates = 0; patchFails = false; item = { id: 'created-item', user_id: owner, tags: {}, notes: '' }; requests = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
@@ -83,7 +90,7 @@ describe('extension draft isolation and save', () => {
       if (options.method === 'POST') throw Error('Connection lost');
       return json({ id: owner });
     }));
-    await expect(handleMessage(message('save'), sender)).rejects.toThrow('Connection lost');
+    await expect(handleMessage(message('save'), sender)).rejects.toThrow('request');
     expect(records.get(reference).creating).toBe(true);
     await expect(handleMessage(message('save'), sender)).rejects.toThrow('uncertain');
     expect(creates).toBe(0);
@@ -94,14 +101,68 @@ describe('extension draft isolation and save', () => {
     expect(records.has(reference)).toBe(true);
   });
   it('reports missing, unknown and revoked tokens, 429, Access HTML and redirects explicitly', async () => {
-    records.delete('token'); await expect(handleMessage(message('load'), sender)).rejects.toThrow('token');
+    records.delete('token'); expect(await send(message('load'), sender)).toEqual({ error: 'token' }); records.set('token', 'wbt_disposable');
     for (const status of [401, 429, 403]) {
       vi.stubGlobal('fetch', vi.fn(async () => json({}, status)));
-      await expect(apiRequest('/users/me', 'wbt_invalid')).rejects.toThrow(status === 401 ? 'token' : status === 429 ? 'rate' : 'identity');
+      await expect(handleMessage(message('load'), sender)).rejects.toThrow(status === 401 ? 'token' : status === 429 ? 'rate' : 'identity');
     }
     vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>Sign in</html>', { headers: { 'content-type': 'text/html' } })));
-    await expect(apiRequest('/users/me', 'wbt_invalid')).rejects.toThrow('signin');
+    await expect(handleMessage(message('load'), sender)).rejects.toThrow('signin');
     vi.stubGlobal('fetch', vi.fn(async () => { throw TypeError('redirect rejected'); }));
-    await expect(apiRequest('/users/me', 'wbt_invalid')).rejects.toThrow('redirect rejected');
+    await expect(handleMessage(message('load'), sender)).rejects.toThrow('request');
   });
+  it('allows retry after a definite 429 rejection and cancel after 422', async () => {
+    const original = fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => options.method === 'POST' ? json({}, 429) : original(url, options)));
+    await expect(handleMessage(message('save'), sender)).rejects.toThrow('rate');
+    expect(records.get(reference).creating).toBe(false);
+    vi.stubGlobal('fetch', original);
+    await expect(handleMessage(message('save'), sender)).resolves.toMatchObject({ saved: true });
+    expect(creates).toBe(1);
+    records.set(reference, { capture, owner, tab: 7 });
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => options.method === 'POST' ? json({}, 422) : original(url, options)));
+    await expect(handleMessage(message('save'), sender)).rejects.toThrow('request');
+    await expect(handleMessage(message('cancel'), sender)).resolves.toEqual({ cancelled: true });
+  });
+  it.each([true, false])('discards a checked partial or uncertain draft without deleting an item: %s', async partial => {
+    records.set(reference, { capture, owner, tab: 7, ...(partial ? { item: 'created-item' } : { creating: true }) });
+    await expect(handleMessage(message('discard'), sender)).resolves.toEqual({ discarded: true });
+    expect(records.has(reference)).toBe(false);
+    expect(requests.some(request => request.options.method === 'DELETE')).toBe(false);
+  });
+  it.each(['material_detail', 'notes'])('keeps the draft when persisted %s differs', async field => {
+    const original = fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+      const response = await original(url, options);
+      if (url.endsWith('/items/created-item') && options.method === 'GET') return json({ ...item, ...(field === 'notes' ? { notes: 'different' } : { tags: { ...item.tags, material_detail: 'different' } }) });
+      return response;
+    }));
+    await expect(handleMessage(message('save'), sender)).rejects.toThrow('metadata');
+    expect(records.get(reference).item).toBe('created-item');
+  });
+
+  it('opens setup only for auth failures and a plain page for capture failures', async () => {
+    const browser = (globalThis as any).chrome;
+    browser.scripting.executeScript.mockRejectedValueOnce(Error('No product found'));
+    await listeners.action({ id: 9 });
+    expect(runtime.openOptionsPage).not.toHaveBeenCalled();
+    expect(browser.tabs.create).toHaveBeenCalledWith({ url: runtime.getURL('error.html') });
+    expect(browser.action.setBadgeText).not.toHaveBeenCalled();
+    browser.scripting.executeScript.mockResolvedValueOnce([{ result: capture }]); records.delete('token');
+    await listeners.action({ id: 9 });
+    expect(runtime.openOptionsPage).toHaveBeenCalledOnce();
+    expect(browser.action.setBadgeText).toHaveBeenCalledWith({ tabId: 9, text: '!' });
+  });
+
+  it.each([401, 403, 409])('clears the create marker after definite HTTP %s', async status => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => options.method === 'POST' ? json({}, status) : json({ id: owner })));
+    expect(await send(message('save'), sender)).toEqual({ error: status === 401 ? 'token' : status === 403 ? 'identity' : 'request' });
+    expect(records.get(reference).creating).toBe(false);
+  });
+  it('retains the create marker after HTTP 500', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => options.method === 'POST' ? json({}, 500) : json({ id: owner })));
+    expect(await send(message('save'), sender)).toEqual({ error: 'request' });
+    expect(records.get(reference).creating).toBe(true);
+  });
+
 });

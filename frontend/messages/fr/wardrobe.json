@@ -383,6 +383,12 @@
     "connected": "Connecté",
     "setupFailed": "Connectez-vous à Wardrowbe et vérifiez votre jeton.",
     "recovered": "Enregistrements incomplets ouverts",
-    "noneToRecover": "Aucun enregistrement incomplet"
+    "noneToRecover": "Aucun enregistrement incomplet",
+    "discardChecked": "Étagère vérifiée, abandonner ce brouillon",
+    "colorInNotes": "Couleur inconnue conservée dans les notes.",
+    "captureFailed": "Capture impossible. Ouvrez une page produit et réessayez.",
+    "grantHost": "Autoriser l’accès à Wardrowbe",
+    "permissionGranted": "Accès autorisé",
+    "permissionDenied": "Accès non autorisé"
   }
 }

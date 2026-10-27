@@ -383,6 +383,12 @@
     "connected": "Connected",
     "setupFailed": "Sign in to Wardrowbe and check your token.",
     "recovered": "Opened unfinished saves",
-    "noneToRecover": "No unfinished saves"
+    "noneToRecover": "No unfinished saves",
+    "discardChecked": "I checked my shelf, discard this",
+    "colorInNotes": "Unlisted color kept in notes.",
+    "captureFailed": "Could not capture. Open a product page and retry.",
+    "grantHost": "Grant Wardrowbe access",
+    "permissionGranted": "Access granted",
+    "permissionDenied": "Access not granted"
   }
 }
