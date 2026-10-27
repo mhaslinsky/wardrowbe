@@ -32,13 +32,14 @@ import { readFileSync } from 'node:fs';
 import { vi } from 'vitest';
 import { confirmedPayload } from '../../extension/confirmation';
 const fixtures = `${process.cwd()}/tests/fixtures/products/`;
-
-describe('saved public product pages', () => {
-  function visibleLayout() {
+function visibleLayout() {
     return vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
       return (this.closest('[hidden]') ? [] : [{ width: 100, height: 30 }]) as unknown as DOMRectList;
     });
   }
+
+
+describe('saved public product pages', () => {
   it('captures Amazon text details without using related-product prices', () => {
     const layout = visibleLayout();
     document.body.innerHTML = readFileSync(`${fixtures}amazon.html`, 'utf8');
@@ -91,7 +92,7 @@ describe('confirmed considering payload', () => {
 describe('Amazon live capture regressions', () => {
   function amazon() {
     document.body.innerHTML = readFileSync(`${fixtures}amazon-live.html`, 'utf8');
-    const layout = vi.spyOn(Element.prototype, 'getClientRects').mockReturnValue([{ width: 100, height: 30 }] as unknown as DOMRectList);
+    const layout = visibleLayout();
     try { return captureProduct(); } finally { layout.mockRestore(); }
   }
   it('prefers the product title over the preceding accessibility summary', () => {
@@ -113,7 +114,7 @@ describe('Amazon live capture regressions', () => {
 describe('reviewed capture and confirmation contracts', () => {
   function page(html: string) {
     document.body.innerHTML = html;
-    const layout = vi.spyOn(Element.prototype, 'getClientRects').mockReturnValue([{ width: 100, height: 30 }] as unknown as DOMRectList);
+    const layout = visibleLayout();
     try { return captureProduct(); } finally { layout.mockRestore(); }
   }
   const base = { source_url: 'https://store.example/shirt', images: ['https://store.example/front.jpg'], sizes: [], colors: [] };
@@ -157,12 +158,44 @@ describe('reviewed capture and confirmation contracts', () => {
     expect(page('<script type="application/ld+json">{"@type":"Product","name":"Shirt"}</script><img itemprop="image" src="">').images).toEqual([]);
   });
   it('passes real fixture captures through confirmation and carries fabric exactly', () => {
-    for (const fixture of ['amazon.html', 'amazon-live.html', 'allbirds.html']) {
+    for (const [fixture, expectedMaterial] of [['amazon.html', 'Solids: 100% Cotton; Heathers: 60% Cotton, 40% Polyester'], ['amazon-live.html', 'Solids: 100% Cotton; Heathers: 60% Cotton, 40% Polyester'], ['allbirds.html', undefined]] as const) {
       const capture = page(readFileSync(`${fixtures}${fixture}`, 'utf8'));
       const confirmed = confirmedPayload({ ...capture, images: capture.images.slice(0, 5) });
       expect(confirmed.update.tags.colors).toBeUndefined();
-      expect(confirmed.update.tags.material_detail).toBe(capture.material_detail);
-      if (fixture.startsWith('amazon')) expect(confirmed.update.tags.material_detail).toBe('Solids: 100% Cotton; Heathers: 60% Cotton, 40% Polyester');
+      expect(confirmed.update.tags.material_detail).toBe(expectedMaterial);
     }
+  });
+});
+
+describe('page product and DOM offer resolution', () => {
+  function capture(html: string) {
+    document.body.innerHTML = html;
+    const layout = visibleLayout();
+    try { return captureProduct(); } finally { layout.mockRestore(); }
+  }
+  it('resolves the page mainEntity or matching URL before a recommended ProductGroup', () => {
+    const main = { '@type': 'Product', '@id': location.href, name: 'Page shirt', image: 'https://store.example/page.jpg', offers: { price: '30', priceCurrency: 'USD' } };
+    const recommendation = { '@type': 'ItemList', itemListElement: [{ '@type': 'ProductGroup', name: 'Recommended coat', image: 'https://store.example/coat.jpg', offers: { price: '199', priceCurrency: 'EUR' } }] };
+    const group = recommendation.itemListElement[0];
+    const graphPages = [[{ '@type': 'WebPage', mainEntity: main }, group], [recommendation, main], [group, main]].map(graph => `<script type="application/ld+json">${JSON.stringify({ '@graph': graph })}</script>`);
+    const contained = { ...main, '@id': undefined };
+    const containedPage = `<script type="application/ld+json">${JSON.stringify(group)}</script><main><h1>Page shirt</h1><script type="application/ld+json">${JSON.stringify(contained)}</script></main>`;
+    for (const html of [...graphPages, containedPage]) expect(capture(html)).toMatchObject({ name: 'Page shirt', price: '30', currency: 'USD', images: ['https://store.example/page.jpg'] });
+  });
+  it('resolves a single-object hasVariant without requiring a back-reference', () => {
+    const variant = { '@type': 'Product', size: 'L', color: 'Red', image: 'https://store.example/red.jpg', offers: { price: '20', priceCurrency: 'GBP' } };
+    const group = { '@type': 'ProductGroup', name: 'Shirt', hasVariant: variant, image: 'https://store.example/blue.jpg', offers: { price: '10', priceCurrency: 'USD' } };
+    expect(capture(`<main><select name="size"><option selected>L</option></select><select name="color"><option selected>Red</option></select><script type="application/ld+json">${JSON.stringify(group)}</script></main>`)).toMatchObject({ price: '20', currency: 'GBP', images: ['https://store.example/red.jpg'], sizes: ['L'], colors: ['Red'] });
+  });
+  it('pairs DOM price and currency within one offer and omits unpaired offers', () => {
+    const product = (offers: string) => `<main><h1>Shirt</h1><img itemprop="image" src="/front.jpg">${offers}</main>`;
+    expect(capture(product('<div itemprop="offers"><span itemprop="price">80</span></div><div itemprop="offers"><span itemprop="price">20</span><meta itemprop="priceCurrency" content="EUR"></div>'))).toMatchObject({ price: '20', currency: 'EUR' });
+    const unpaired = capture(product('<div itemprop="offers"><span itemprop="price">80</span></div><div itemprop="offers"><span itemprop="priceCurrency">EUR</span></div>'));
+    expect(unpaired.price).toBeUndefined(); expect(unpaired.currency).toBeUndefined();
+  });
+  it('reads fabric, care and fit from a leaf product description', () => {
+    const description = 'Composition: 80% cotton, 20% linen. Machine wash cold. Relaxed fit.';
+    const result = capture(`<main><h1>Shirt</h1><img itemprop="image" src="/front.jpg"><p itemprop="description">${description}</p></main>`);
+    expect(result.material_detail).toBe(description); expect(result.care).toBe(description); expect(result.fit).toBe(description);
   });
 });

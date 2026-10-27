@@ -48,16 +48,25 @@ export function captureProduct(): ProductCapture {
     return content ? [content] : [];
   }).slice(0, 30);
   const products: Record<string, any>[] = [];
-  const visit = (value: any, depth = 0) => {
+  const entities: Record<string, any>[] = [];
+  const listedProducts = new Set<Record<string, any>>();
+  const productScripts = new Map<Record<string, any>, Element>();
+  let currentScript: Element;
+  const visit = (value: any, depth = 0, listed = false) => {
     if (!value || depth > 12) return;
-    if (Array.isArray(value)) return value.slice(0, 100).forEach(entry => visit(entry, depth + 1));
+    if (Array.isArray(value)) return value.slice(0, 100).forEach(entry => visit(entry, depth + 1, listed));
     if (typeof value !== 'object') return;
+    entities.push(value);
     const types = Array.isArray(value['@type']) ? value['@type'] : [value['@type']];
-    if (types.includes('Product') || types.includes('ProductGroup')) products.push(value);
-    for (const key of ['@graph', 'hasVariant', 'mainEntity', 'itemListElement', 'item']) visit(value[key], depth + 1);
+    if (types.includes('Product') || types.includes('ProductGroup')) {
+      products.push(value); productScripts.set(value, currentScript);
+      if (listed) listedProducts.add(value);
+    }
+    for (const key of ['@graph', 'hasVariant', 'mainEntity', 'itemListElement', 'item']) visit(value[key], depth + 1, listed || types.includes('ItemList'));
   };
   for (const script of Array.from(document.querySelectorAll('script[type="application/ld+json"]')).slice(0, 30)) {
     if ((script.textContent?.length || 0) > 200000) continue;
+    currentScript = script;
     try { visit(JSON.parse(script.textContent || 'null')); } catch { continue; }
   }
   const visible = (element: Element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden' && !element.closest('[hidden], [aria-hidden="true"]');
@@ -87,25 +96,49 @@ export function captureProduct(): ProductCapture {
     .filter(element => !excluded(element) && (element instanceof HTMLOptionElement ? !element.disabled && !!element.value.trim() && !/^(select|choose)\b/i.test(element.textContent?.trim() || '') && !!element.closest('select') && visible(element.closest('select')!) : visible(element)))
     .flatMap(element => values(element.textContent)).slice(0, 30);
   const hasType = (entry: Record<string, any>, kind: string) => (Array.isArray(entry['@type']) ? entry['@type'] : [entry['@type']]).includes(kind);
-  const product = products.find(entry => hasType(entry, 'ProductGroup')) || products[0] || {};
+  const array = (value: any): any[] => Array.isArray(value) ? value : value ? [value] : [];
+  const ownUrl = (value: unknown) => {
+    if (typeof value !== 'string' || value.startsWith('#')) return false;
+    try {
+      const url = new URL(value, location.href);
+      return !url.hash && url.origin === location.origin && url.pathname.replace(/\/$/, '') === location.pathname.replace(/\/$/, '') && (!url.search || url.search === location.search);
+    } catch { return false; }
+  };
+  const resolveProduct = (value: any) => products.includes(value) ? value : products.find(product => product['@id'] && product['@id'] === value?.['@id']);
+  const mainEntity = entities.filter(entry => hasType(entry, 'WebPage') && (!entry.url || ownUrl(entry.url))).flatMap(entry => array(entry.mainEntity)).map(resolveProduct).find(Boolean);
+  const ownProducts = products.filter(entry => !listedProducts.has(entry));
+  const scoped = ownProducts.filter(entry => { const script = productScripts.get(entry); return script && root.contains(script) && script.parentElement && !excluded(script.parentElement); });
+  const product = mainEntity || ownProducts.find(entry => ownUrl(entry.url) || ownUrl(entry['@id'])) || scoped.find(entry => hasType(entry, 'ProductGroup')) || scoped[0] || ownProducts.find(entry => hasType(entry, 'ProductGroup')) || ownProducts[0] || {};
   const selectedSize = selected('size')?.slice(0, 32);
   const selectedColor = selected('color');
-  const variants = products.filter(entry => entry !== product && (Array.isArray(product.hasVariant) ? product.hasVariant.includes(entry) : entry.isVariantOf?.['@id'] === product['@id'] && !!product['@id']));
+  const variants = products.filter(entry => entry !== product && (array(product.hasVariant).map(resolveProduct).includes(entry) || entry.isVariantOf?.['@id'] === product['@id'] && !!product['@id']));
   const key = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
   const matches = variants.filter(entry => (!selectedSize || values(entry.size).some(value => key(value) === key(selectedSize))) && (!selectedColor || values(entry.color).some(value => key(value) === key(selectedColor))));
   const variant = (selectedSize || selectedColor) && matches.length === 1 ? matches[0] : undefined;
   const chosenProduct = variant || product;
-  const array = (value: any): any[] => Array.isArray(value) ? value : value ? [value] : [];
   const pair = (value: any) => {
     const price = typeof value?.price === 'number' || typeof value?.price === 'string' ? String(value.price).trim() : '';
     const currency = typeof value?.priceCurrency === 'string' ? value.priceCurrency.trim().toUpperCase() : '';
     return /^\d{1,8}(\.\d{1,2})?$/.test(price) && /^[A-Z]{3}$/.test(currency) ? { price, currency } : undefined;
   };
   let purchase = array(chosenProduct.offers).flatMap(offer => [offer, ...array(offer.priceSpecification)]).map(pair).find(Boolean);
-  if (!purchase && !variant) purchase = pair({ price: read('[itemprop="price"]', 24), priceCurrency: read('[itemprop="priceCurrency"]', 10) });
+  if (!purchase && !variant) {
+    const offerSelector = '[itemprop="offers"], [itemtype$="/Offer"], [itemtype$="/PriceSpecification"]';
+    for (const offer of Array.from(root.querySelectorAll(offerSelector)).filter(element => !excluded(element))) {
+      const offerValue = (property: string) => {
+        const element = Array.from(offer.querySelectorAll(`[itemprop="${property}"]`)).find(element => element.closest(offerSelector) === offer && !excluded(element) && (visible(element) || element.tagName === 'META'));
+        return element?.getAttribute('content') || content(element || null);
+      };
+      purchase = pair({ price: offerValue('price'), priceCurrency: offerValue('priceCurrency') });
+      if (purchase) break;
+    }
+  }
   // Recommendations and reviews can repeat product words without describing this item.
   const zones = Array.from(root.querySelectorAll('#productFactsDesktopExpander, #feature-bullets, [id*="productDetails"], [itemprop="description"], [class*="product-detail"], [class*="product-description"]'));
-  const detailRows = Array.from(new Set((zones.length ? zones : [root]).flatMap(zone => Array.from(zone.querySelectorAll('li, tr, p, details, .product-facts-detail'))))).filter(element => visible(element) && !excluded(element));
+  const detailRows = Array.from(new Set((zones.length ? zones : [root]).flatMap(zone => {
+    const rows = Array.from(zone.querySelectorAll('li, tr, p, details, .product-facts-detail'));
+    return zone.matches('li, tr, p, details, .product-facts-detail') || !rows.length ? [zone, ...rows] : rows;
+  }))).filter(element => visible(element) && !excluded(element));
   const rowValue = (label: RegExp, max: number) => {
     for (const row of detailRows) {
       const heading = row.querySelector('.a-col-left, th, dt') || row.children[0];
