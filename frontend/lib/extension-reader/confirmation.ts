@@ -21,3 +21,9 @@ export function confirmedPayload(input: unknown) {
     notes: notes || undefined },
   };
 }
+
+export function confirmedFilePayload(input: ConfirmedProduct) {
+  const payload = confirmedPayload({ ...input, source_url: input.source_url || 'https://wardrowbe.invalid/', images: ['https://wardrowbe.invalid/image'] });
+  const { image_urls: unusedImages, source_url: unusedSource, ...fields } = payload.create;
+  return { create: { ...fields, source_url: input.source_url || undefined }, update: payload.update };
+}

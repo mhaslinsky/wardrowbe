@@ -390,5 +390,15 @@
     "grantHost": "Autoriser l’accès à Wardrowbe",
     "permissionGranted": "Accès autorisé",
     "permissionDenied": "Accès non autorisé"
+  },
+  "fallback": {
+    "title": "Ajouter un article envisagé",
+    "link": "Lien du produit",
+    "readLink": "Lire le lien",
+    "imageDrop": "Déposez une image ou choisissez un fichier",
+    "publicOnly": "Pages publiques uniquement. Sessions de boutique connectées indisponibles.",
+    "linkFailed": "Page illisible. Essayez une image.",
+    "imageFailed": "Choisissez un JPEG, PNG ou WebP valide de moins de 20 Mo.",
+    "recoveryFailed": "Brouillon non restauré. Vérifiez votre liste."
   }
 }

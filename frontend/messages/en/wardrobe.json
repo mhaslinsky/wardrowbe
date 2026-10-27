@@ -390,5 +390,15 @@
     "grantHost": "Grant Wardrowbe access",
     "permissionGranted": "Access granted",
     "permissionDenied": "Access not granted"
+  },
+  "fallback": {
+    "title": "Add considering item",
+    "link": "Product link",
+    "readLink": "Read link",
+    "imageDrop": "Drop an image or choose a file",
+    "publicOnly": "Public pages only. Signed-in store sessions are unavailable.",
+    "linkFailed": "Could not read this page. Try an image.",
+    "imageFailed": "Choose a valid JPEG, PNG or WebP under 20 MB.",
+    "recoveryFailed": "Could not restore the draft. Check your shelf."
   }
 }

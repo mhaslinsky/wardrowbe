@@ -390,5 +390,15 @@
     "grantHost": "Wardrowbe-Zugriff erlauben",
     "permissionGranted": "Zugriff erlaubt",
     "permissionDenied": "Zugriff nicht erlaubt"
+  },
+  "fallback": {
+    "title": "Artikel vormerken",
+    "link": "Produktlink",
+    "readLink": "Link lesen",
+    "imageDrop": "Bild ablegen oder Datei wählen",
+    "publicOnly": "Nur öffentliche Seiten. Angemeldete Shop-Sitzungen sind nicht verfügbar.",
+    "linkFailed": "Seite nicht lesbar. Versuche ein Bild.",
+    "imageFailed": "Gültiges JPEG, PNG oder WebP unter 20 MB wählen.",
+    "recoveryFailed": "Entwurf nicht wiederhergestellt. Prüfe deine Merkliste."
   }
 }
