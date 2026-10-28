@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import SettingsPage from '@/app/dashboard/settings/page'
 
 const state = vi.hoisted(() => ({
-  preferences: { standing_rules: ['Never a polo under an overshirt'] } as { standing_rules: string[] } | undefined,
+  preferences: { standing_rules: ['Never a polo under an overshirt'] } as { standing_rules: string[]; color_season?: 'cool-winter' | null } | undefined,
   save: vi.fn().mockResolvedValue({}),
 }))
 vi.mock('@/lib/hooks/use-preferences', () => ({
@@ -41,12 +41,21 @@ it('offers all seasons, saves a choice, and clears it', async () => {
   fireEvent.change(select, { target: { value: 'cool-winter' } })
   fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
   await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
-    style_profile: expect.objectContaining({ color_season: 'cool-winter', casual: 50 }),
+    color_season: 'cool-winter',
   })))
   state.save.mockClear()
   fireEvent.change(select, { target: { value: '' } })
   fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
   await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
-    style_profile: expect.objectContaining({ color_season: null, casual: 50 }),
+    color_season: null,
   })))
+})
+
+it('loads the saved season from the preferences field', () => {
+  const original = state.preferences
+  try {
+    state.preferences = { standing_rules: [], color_season: 'cool-winter' }
+    render(<SettingsPage />)
+    expect(screen.getByLabelText('colorSeason.label')).toHaveValue('cool-winter')
+  } finally { state.preferences = original }
 })

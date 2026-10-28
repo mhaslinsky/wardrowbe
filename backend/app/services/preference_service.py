@@ -66,6 +66,7 @@ class PreferenceService:
         preferences = await self.get_or_create_preferences(user_id)
 
         update_data = data.model_dump(include=data.model_fields_set, exclude_unset=True)
+        color_season = update_data.pop("color_season", None)
         preview = update_data.pop("preview_preferences", None)
         if "preview_preferences" in data.model_fields_set:
             if preview is None:
@@ -90,6 +91,13 @@ class PreferenceService:
                 flag_modified(preferences, field)
             else:
                 setattr(preferences, field, value)
+
+        if "color_season" in data.model_fields_set:
+            preferences.style_profile = {
+                **(preferences.style_profile or {}),
+                "color_season": color_season,
+            }
+            flag_modified(preferences, "style_profile")
 
         await self.db.commit()
         await self.db.refresh(preferences)
@@ -149,7 +157,7 @@ class PreferenceService:
             statement = statement.where(UserPreference.preview_preferences["rev"].astext == rev)
         result = await self.db.execute(
             statement.values(
-                **PreferenceCreate().model_dump(),
+                **PreferenceCreate().model_dump(exclude={"color_season"}),
                 excluded_item_ids=[],
                 excluded_combinations=[],
                 preview_preferences={"lines": [], "tuck": "outfit", "rev": uuid.uuid4().hex},

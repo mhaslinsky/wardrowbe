@@ -181,28 +181,33 @@ def test_prompt_limits_palette_to_near_face_and_preserves_explicit_priority(seas
 
 @pytest.mark.parametrize("season", SEASONS + [None])
 def test_schema_accepts_season_and_clear(season):
-    update = PreferenceUpdate(style_profile={"color_season": season})
-    assert update.style_profile.model_dump()["color_season"] == season
+    update = PreferenceUpdate(color_season=season)
+    assert update.color_season == season
 
 
 @pytest.mark.parametrize("season", ["unknown", "", 123, []])
 def test_schema_rejects_invalid_season(season):
     with pytest.raises(ValidationError):
-        PreferenceUpdate(style_profile={"color_season": season})
+        PreferenceUpdate(color_season=season)
 
 
 async def test_season_persists_per_user_and_clears(client, test_user, auth_headers, db_session):
     response = await client.patch(
         "/api/v1/users/me/preferences",
         headers=auth_headers,
-        json={"style_profile": {"color_season": "cool-winter", "casual": 80}},
+        json={"color_season": "cool-winter", "style_profile": {"casual": 80}},
     )
     assert response.status_code == 200
-    assert response.json()["style_profile"]["color_season"] == "cool-winter"
+    assert response.json()["color_season"] == "cool-winter"
     db_session.expire_all()
     saved = await client.get("/api/v1/users/me/preferences", headers=auth_headers)
-    assert saved.json()["style_profile"]["color_season"] == "cool-winter"
+    assert saved.json()["color_season"] == "cool-winter"
     assert saved.json()["style_profile"]["casual"] == 80
+    assert "color_season" not in saved.json()["style_profile"]
+    numeric_only = await client.patch(
+        "/api/v1/users/me/preferences", headers=auth_headers, json={"style_profile": {"casual": 90}}
+    )
+    assert numeric_only.json()["color_season"] == "cool-winter"
     from uuid import uuid4
 
     from app.models.user import User
@@ -222,9 +227,13 @@ async def test_season_persists_per_user_and_clears(client, test_user, auth_heade
     cleared = await client.patch(
         "/api/v1/users/me/preferences",
         headers=auth_headers,
-        json={"style_profile": {"color_season": None, "casual": 80}},
+        json={"color_season": None},
     )
-    assert cleared.json()["style_profile"]["color_season"] is None
+    assert cleared.json()["color_season"] is None
+    assert cleared.json()["style_profile"]["casual"] == 90
+    await client.patch(
+        "/api/v1/users/me/preferences", headers=auth_headers, json={"color_season": "cool-winter"}
+    )
     reset = await client.post("/api/v1/users/me/preferences/reset", headers=auth_headers)
-    assert reset.json()["style_profile"]["color_season"] is None
+    assert reset.json()["color_season"] is None
     assert reset.json()["style_profile"]["casual"] == 50

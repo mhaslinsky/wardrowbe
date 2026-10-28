@@ -63,8 +63,6 @@ class AIEndpoint(BaseModel):
 
 
 class StyleProfile(BaseModel):
-    color_season: ColorSeason | None = None
-
     casual: int = Field(
         default=DEFAULT_STYLE_SCORE,
         ge=STYLE_SCORE_MIN,
@@ -98,6 +96,7 @@ class StyleProfile(BaseModel):
 
 
 class PreferenceBase(BaseModel):
+    color_season: ColorSeason | None = None
     standing_rules: StandingRules = Field(default_factory=list)
 
     # Color preferences
@@ -169,6 +168,7 @@ class PreferenceCreate(PreferenceBase):
 
 
 class PreferenceUpdate(BaseModel):
+    color_season: ColorSeason | None = None
     preview_preferences: PreviewPreferences | None = None
 
     standing_rules: StandingRules = Field(default_factory=list)

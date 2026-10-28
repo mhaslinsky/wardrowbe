@@ -514,7 +514,7 @@ export default function SettingsPage() {
     setHasChanges(true);
   };
 
-  const updateStyleProfile = (key: keyof StyleProfile, value: number | StyleProfile['color_season']) => {
+  const updateStyleProfile = (key: keyof StyleProfile, value: number) => {
     setFormData((prev) => ({
       ...prev,
       style_profile: {
@@ -819,9 +819,9 @@ export default function SettingsPage() {
               <select
                 id="color-season"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={formData.style_profile?.color_season || ''}
-                onChange={(event) => updateStyleProfile(
-                  'color_season', event.target.value as StyleProfile['color_season'] || null,
+                value={formData.color_season || ''}
+                onChange={(event) => updateField(
+                  'color_season', event.target.value as Preferences['color_season'] || null,
                 )}
               >
                 <option value="">{t('colorSeason.notSet')}</option>

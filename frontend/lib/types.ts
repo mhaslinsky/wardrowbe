@@ -146,10 +146,6 @@ export interface ItemFilter {
 }
 
 export interface StyleProfile {
-  color_season?: 'deep-winter' | 'cool-winter' | 'clear-winter'
-    | 'deep-autumn' | 'warm-autumn' | 'soft-autumn'
-    | 'light-spring' | 'warm-spring' | 'clear-spring'
-    | 'light-summer' | 'cool-summer' | 'soft-summer' | null;
   casual: number;
   formal: number;
   sporty: number;
@@ -166,6 +162,10 @@ export interface AIEndpoint {
 }
 
 export interface Preferences {
+  color_season?: 'deep-winter' | 'cool-winter' | 'clear-winter'
+    | 'deep-autumn' | 'warm-autumn' | 'soft-autumn'
+    | 'light-spring' | 'warm-spring' | 'clear-spring'
+    | 'light-summer' | 'cool-summer' | 'soft-summer' | null;
   preview_preferences: { lines: string[]; tuck: 'untucked' | 'tucked' | 'outfit'; rev: string };
   standing_rules: string[];
   color_favorites: string[];
