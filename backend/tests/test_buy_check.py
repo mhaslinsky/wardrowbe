@@ -104,19 +104,25 @@ async def test_fallback_records_raw_answers_and_throttles_notice(
     assert notify.await_count == 1
     assert len(records) == 4 and records[1]["fallback_reason"] == "http_404"
     assert records[1]["answer"]["structured"][0] == FIXTURE["answers"]
+    assert "stub-only" not in json.dumps(result) and "stub-only" not in str(records)
 
 
 @pytest.mark.parametrize("case", ["missing_key", "both_down", "malformed"])
 async def test_clear_error_without_percentage(
     client, auth_headers, shelf, provider, monkeypatch, case
 ):
-    _calls, _records, responses, _notify = provider
+    calls, records, responses, _notify = provider
     if case == "missing_key":
         monkeypatch.setattr(get_settings(), "wardrowbe_openrouter_api_key", None)
     else:
         responses.extend([(503, {}) if case == "both_down" else (200, {"answers": {}})] * 2)
     result = await check(client, auth_headers, shelf)
     assert result["status"] == "error" and result["percentage"] is None and result["error"]
+    if case != "missing_key":
+        assert len(calls) == 2 and records[1]["fallback_reason"] == (
+            "http_503" if case == "both_down" else "invalid_answer"
+        )
+    assert "stub-only" not in json.dumps(result) and "stub-only" not in str(records)
 
 
 @pytest.mark.parametrize("gate", ["skip", "wrong_size", "duplicate"])
@@ -174,18 +180,72 @@ async def test_cited_reasons_and_fiber_only_never_plus(
             ClothingItem.user_id == test_user.id, ClothingItem.id != shelf.id
         )
     ):
-        garment.type = "pants"
-        garment.brand = "Other"
         garment.notes = "Rating: love | Fabric: 100% cotton"
         garment.tags = {"material_detail": "100% cotton"}
     await db_session.commit()
+    payload = copy.deepcopy(FIXTURE)
+    payload["answers"]["feel_and_quality"]["noul"] = 0.9
+    provider[2].append((200, payload))
     result = await check(client, auth_headers, shelf)
-    assert result["status"] == "insufficient" and result["pluses"] == []
+    assert result["status"] == "scored"
+    assert not any(reason["kind"] == "feel_and_quality" for reason in result["pluses"])
+    assert any(reason["kind"] == "feel_and_quality" for reason in result["unknowns"])
 
 
-async def test_foreign_user_refused(client, auth_headers, provider):
-    response = await client.post(f"/api/v1/considering/{uuid4()}/buy-check", headers=auth_headers)
-    assert response.status_code == 404 and not provider[0]
+async def test_foreign_user_refused(client, auth_headers, provider, db_session, shelf):
+    from datetime import date
+
+    from sqlalchemy import delete
+
+    from app.models.item import ItemHistory
+    from app.models.learning import UserLearningProfile
+    from app.models.user import User
+
+    other = User(
+        id=uuid4(), external_id=str(uuid4()), email=f"{uuid4()}@example.test", display_name="Other"
+    )
+    other_id = other.id
+    db_session.add(other)
+    await db_session.flush()
+    foreign_items = [
+        ClothingItem(
+            user_id=other.id,
+            type="shirt",
+            brand="Example",
+            image_path="fixture.png",
+            status=ItemStatus.ready,
+            wear_count=40,
+            notes="Rating: love | Fit: regular | Wear: private-foreign-notes",
+        )
+        for _index in range(2)
+    ]
+    db_session.add_all(foreign_items)
+    await db_session.flush()
+    db_session.add_all(
+        [
+            ItemPurchase(item_id=foreign_items[0].id),
+            ItemHistory(item_id=foreign_items[1].id, worn_at=date.today()),
+            UserLearningProfile(
+                user_id=other.id,
+                learned_color_scores={"private-foreign-color": 1},
+                learned_style_scores={"private-foreign-style": 1},
+            ),
+        ]
+    )
+    await db_session.commit()
+    try:
+        response = await client.post(
+            f"/api/v1/considering/{foreign_items[0].id}/buy-check", headers=auth_headers
+        )
+        assert response.status_code == 404 and not provider[0]
+        assert (await check(client, auth_headers, shelf))["status"] == "scored"
+        state = json.dumps(provider[0][0]["state"])
+        assert "private-foreign" not in state and str(other.id) not in state
+        assert all(str(item.id) not in state for item in foreign_items)
+    finally:
+        await db_session.rollback()
+        await db_session.execute(delete(User).where(User.id == other_id))
+        await db_session.commit()
 
 
 @pytest.mark.parametrize("change", ["legend", "missing", "boolean", "sum", "nan", "noul"])

@@ -1,23 +1,26 @@
 import re
 from datetime import date, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.considering import ItemPurchase, owned_item
 from app.models.item import ClothingItem, ItemHistory, ItemStatus
 from app.models.learning import UserLearningProfile
-from app.services.fit_evidence_parser import normalize, parse_item
+from app.schemas.fit_evidence import FitEvidence
+from app.services.fit_evidence_parser import EvidenceRecord, normalize, parse_item
 from app.services.fit_evidence_service import compare
 
 DIMENSIONS = {
-    "fit_and_cut": ("fit",),
-    "feel_and_quality": ("fabric_detail", "warmth", "works", "doesnt"),
-    "style_and_look": ("style", "color", "works"),
+    "fit_and_cut": ("fit", "doesnt"),
+    "feel_and_quality": ("fabric_detail", "warmth"),
+    "style_and_look": ("style", "color", "works", "doesnt"),
 }
 
 
-def citation(record, source_id):
+def citation(record: EvidenceRecord, source_id: str) -> dict[str, Any]:
     return {
         "source_id": source_id,
         **record.sources[source_id].model_dump(),
@@ -25,11 +28,13 @@ def citation(record, source_id):
     }
 
 
-def reason(kind, record, source_ids):
+def reason(kind: str, record: EvidenceRecord, source_ids: list[str]) -> dict[str, Any]:
     return {"kind": kind, "citations": [citation(record, source_id) for source_id in source_ids]}
 
 
-async def build_state(db, user_id, evidence):
+async def build_state(
+    db: AsyncSession, user_id: UUID, evidence: FitEvidence
+) -> tuple[dict[str, Any], EvidenceRecord, list[dict[str, Any]]]:
     anchor = await db.get(ClothingItem, UUID(evidence.anchor_id))
     purchase = await db.get(ItemPurchase, anchor.id)
     candidate = parse_item(anchor)
@@ -111,6 +116,7 @@ async def build_state(db, user_id, evidence):
     neighbours.sort(key=lambda row: (row["rank"], row["wear_count"], row["item_id"]), reverse=True)
     selected = neighbours[:15]
     profile = await db.get(UserLearningProfile, user_id)
+    type_ids = {item.id for item in garments if item.type == anchor.type}
     state = {
         "candidate": {
             "item_id": str(anchor.id),
@@ -129,7 +135,7 @@ async def build_state(db, user_id, evidence):
                 or None
                 for field in ("fit", "fabric_detail", "warmth", "works", "doesnt", "style")
             },
-            "planned_size": purchase.planned_size,
+            "planned_size": purchase.planned_size if purchase is not None else None,
             "cut": (anchor.tags or {}).get("fit"),
             "notes": {
                 source_id: source.model_dump()
@@ -154,10 +160,7 @@ async def build_state(db, user_id, evidence):
             )
             if anchor.primary_color
             else None,
-            "recent_wears_of_type": sum(
-                row.item_id in {item.id for item in garments if item.type == anchor.type}
-                for row in recent
-            ),
+            "recent_wears_of_type": sum(row.item_id in type_ids for row in recent),
             "outfits_completed": evidence.outfit_ideas_found,
         },
         "evidence": evidence.model_dump(),
@@ -165,7 +168,9 @@ async def build_state(db, user_id, evidence):
     return state, candidate, selected
 
 
-def reasons(candidate, neighbours, probabilities):
+def reasons(
+    candidate: EvidenceRecord, neighbours: list[dict[str, Any]], probabilities: dict[str, float]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     pluses, minuses, unknowns = [], [], []
     for dimension, fields in DIMENSIONS.items():
         supported = False
@@ -173,7 +178,17 @@ def reasons(candidate, neighbours, probabilities):
             if not neighbour["close"] or not neighbour["rating"]:
                 continue
             for comparison in neighbour["comparisons"]:
-                if comparison["field"] not in fields or comparison["status"] != "match":
+                field = comparison["field"]
+                if field not in fields or (comparison["status"] != "match" and field != "doesnt"):
+                    continue
+                probability = probabilities[dimension]
+                positive = probability > 0.5
+                supported_sign = (
+                    (neighbour["rating"] in {"like", "love"} and field != "doesnt")
+                    if positive
+                    else (neighbour["rating"] in {"dislike", "mixed"} or field == "doesnt")
+                )
+                if probability == 0.5 or not supported_sign:
                     continue
                 record = neighbour["record"]
                 source_ids = comparison["reference_source_ids"]
@@ -192,10 +207,8 @@ def reasons(candidate, neighbours, probabilities):
                     citation(candidate, source_id)
                     for source_id in comparison["candidate_source_ids"]
                 ]
-                probability = probabilities[dimension]
-                if probability != 0.5:
-                    (pluses if probability > 0.5 else minuses).append(evidence_reason)
-                    supported = True
+                (pluses if positive else minuses).append(evidence_reason)
+                supported = True
         if not supported:
             source_id = f"{candidate.key}:unknown:{dimension}"
             unknowns.append(

@@ -1,20 +1,23 @@
-import math
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 from uuid import UUID
 
 from httpx import AsyncClient, HTTPError
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models.notification import NotificationSettings
 from app.schemas.notification import NtfyConfig
+from app.services.ai_service import AIDisabledError, require_internal_ai
 from app.services.ai_telemetry_service import CallContext, record_ai_call
-from app.services.buy_check_state import DIMENSIONS, build_state, reason, reasons
+from app.services.buy_check_state import DIMENSIONS, build_state, reasons
 from app.services.fit_evidence_parser import normalize
 from app.services.fit_evidence_service import get_fit_evidence
 from app.services.notification_providers import NtfyNotification, NtfyProvider
+from app.utils.numbers import is_finite_number
 
 MODEL_URL = "https://openrouter.ai/api/v1/systemone"
 LEGEND = dict(enumerate(("dislike", "mixed", "like", "love")))
@@ -35,18 +38,13 @@ QUESTIONS = {
 }
 
 
-def number(value, minimum=0, maximum=1):
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-        or not minimum <= value <= maximum
-    ):
+def number(value: Any, minimum: float = 0, maximum: float = 1) -> float:
+    if not is_finite_number(value) or not minimum <= value <= maximum:
         raise ValueError("Invalid probability")
     return value
 
 
-def parse_answer(payload):
+def parse_answer(payload: Any) -> tuple[int, dict[str, float]]:
     try:
         if not isinstance(payload["model"], str) or not payload["model"].strip():
             raise ValueError("Missing model")
@@ -75,11 +73,11 @@ def parse_answer(payload):
             * 100
         )
         return min(100, percentage), dimensions
-    except (KeyError, TypeError, AttributeError) as error:
+    except (KeyError, TypeError, AttributeError, ArithmeticError) as error:
         raise ValueError("Invalid decision answer") from error
 
 
-async def fallback_notice(db, user_id, failure):
+async def fallback_notice(db: AsyncSession, user_id: UUID, failure: str) -> str:
     channel = await db.scalar(
         select(NotificationSettings)
         .where(
@@ -104,7 +102,7 @@ async def fallback_notice(db, user_id, failure):
             NtfyNotification(
                 topic=channel.config["topic"],
                 title="Decision model fallback",
-                message=f"Elephant unavailable ({failure}). Check its endpoints.",
+                message=f"{get_settings().buy_check_primary_model} unavailable ({failure}).",
             )
         )
         status = "sent" if result.get("success") is True else "failed"
@@ -120,7 +118,7 @@ async def fallback_notice(db, user_id, failure):
     return status
 
 
-async def get_buy_check(db, user_id: UUID, item_id: UUID):
+async def get_buy_check(db: AsyncSession, user_id: UUID, item_id: UUID) -> dict[str, Any]:
     evidence = await get_fit_evidence(db, user_id, item_id)
     state, candidate, neighbours = await build_state(db, user_id, evidence)
     result = {
@@ -130,6 +128,7 @@ async def get_buy_check(db, user_id: UUID, item_id: UUID):
         "minuses": [],
         "unknowns": [],
         "model_used": None,
+        "requested_model": None,
         "fallback_reason": None,
         "notice_status": None,
         "error": None,
@@ -192,6 +191,10 @@ async def get_buy_check(db, user_id: UUID, item_id: UUID):
     close = [row for row in neighbours if row["close"] and row["rating"] and row["notes"]]
     if len(close) < 2 or ({row["rating"] in {"like", "love"} for row in close} == {True, False}):
         return result
+    try:
+        require_internal_ai("text")
+    except AIDisabledError:
+        return {**result, "status": "error", "error": "disabled"}
     settings = get_settings()
     if not settings.wardrowbe_openrouter_api_key:
         return {**result, "status": "error", "error": "missing_key"}
@@ -200,6 +203,7 @@ async def get_buy_check(db, user_id: UUID, item_id: UUID):
         for index, model in enumerate(
             (settings.buy_check_primary_model, settings.buy_check_fallback_model)
         ):
+            result["requested_model"] = model
             if index:
                 result["notice_status"] = await fallback_notice(
                     db, user_id, result["fallback_reason"]
@@ -225,17 +229,25 @@ async def get_buy_check(db, user_id: UUID, item_id: UUID):
                 pluses, minuses, unknowns = reasons(candidate, neighbours, dimensions)
                 if evidence.outfit_ideas_found["count"] <= 1:
                     minuses.append(
-                        reason(
-                            "few_outfits",
-                            candidate,
-                            [fact.source_id for fact in candidate.of_kind("type")],
-                        )
+                        {
+                            "kind": "few_outfits",
+                            "citations": [
+                                {
+                                    "source_id": f"closet:{item_id}:outfits_completed",
+                                    "item_id": str(item_id),
+                                    "field": "closet.outfits_completed.count",
+                                    "quote": None,
+                                    "value": evidence.outfit_ideas_found["count"],
+                                }
+                            ],
+                        }
                     )
                 return {
                     **result,
                     "status": "scored",
                     "percentage": percentage,
-                    "model_used": payload["model"],
+                    "model_used": payload["model"][:120],
+                    "requested_model": model,
                     "pluses": pluses,
                     "minuses": minuses,
                     "unknowns": unknowns,

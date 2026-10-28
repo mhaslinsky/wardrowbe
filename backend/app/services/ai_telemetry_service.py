@@ -156,10 +156,18 @@ def _response_metadata(
         from app.services.buy_check_service import parse_answer
 
         result["answer"] = {
-            "structured": [payload.get("answers", payload)],
+            "structured": [],
             "text": [],
             "images": [],
         }
+        if response.status_code >= 400:
+            result["error_kind"] = "http_error"
+            return result
+        answers = payload.get("answers")
+        if not isinstance(answers, dict):
+            result["error_kind"] = "invalid_answer"
+            return result
+        result["answer"]["structured"] = [answers]
         try:
             parse_answer(payload)
         except ValueError:
