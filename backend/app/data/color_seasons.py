@@ -1,4 +1,5 @@
 # Source: https://theconceptwardrobe.com/colour-analysis-comprehensive-guides/complete-seasonal-guides
+# Soft Summer also uses Mike's ColorWise card (Oct 28, 2026), recorded in PER-274.
 # Approximate mappings to broad app colors. Shades within a color can differ.
 # ColorWise Deep/Cool/Clear correspond to Dark/True/Bright in the source.
 from typing import Literal
@@ -64,8 +65,8 @@ COLOR_SEASONS = {
         "avoid": ["orange", "gold", "brown", "yellow"],
     },
     "soft-summer": {
-        "best": ["gray", "light-blue", "pink", "purple", "navy"],
-        "avoid": ["black", "white", "orange", "yellow", "gold"],
+        "best": ["gray", "light-blue", "pink", "purple", "navy", "olive"],
+        "avoid": ["black", "white", "orange", "yellow", "gold", "red", "brown"],
     },
 }
 
