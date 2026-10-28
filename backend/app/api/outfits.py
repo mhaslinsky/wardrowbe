@@ -339,6 +339,8 @@ def outfit_to_response(
     outfit: Outfit,
     wore_instead_items_map: dict[str, list[WoreInsteadItem]] | None = None,
     is_starter_suggestion: bool = False,
+    *,
+    viewer_id: UUID,
 ) -> OutfitResponse:
     items = []
     for outfit_item in sorted(outfit.items, key=lambda x: x.position):
@@ -404,7 +406,7 @@ def outfit_to_response(
     from app.services.outfit_photo_service import photo_fields
 
     return OutfitResponse(
-        **photo_fields(outfit),
+        **(photo_fields(outfit) if outfit.user_id == viewer_id else {}),
         id=outfit.id,
         occasion=outfit.occasion,
         scheduled_for=outfit.scheduled_for,
@@ -450,12 +452,15 @@ async def outfit_response(
     wore_instead_items_map: dict[str, list[WoreInsteadItem]] | None = None,
     is_starter_suggestion: bool = False,
     *,
+    viewer_id: UUID,
     unowned_ids: set[UUID] | None = None,
 ) -> OutfitResponse:
     if unowned_ids is None:
         unowned_ids = await _unowned_ids(db, [outfit])
-    response = outfit_to_response(outfit, wore_instead_items_map, is_starter_suggestion)
-    if outfit.card_image_choice == "preview":
+    response = outfit_to_response(
+        outfit, wore_instead_items_map, is_starter_suggestion, viewer_id=viewer_id
+    )
+    if outfit.user_id == viewer_id and outfit.card_image_choice == "preview":
         from app.models.preview import OutfitPreview
         from app.services.outfit_photo_service import photo_fields
 
@@ -531,7 +536,9 @@ async def suggest_outfit(
     is_starter = total_items <= 5
 
     wore_instead_map = await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
-    return await outfit_response(db, outfit, wore_instead_map, is_starter_suggestion=is_starter)
+    return await outfit_response(
+        db, outfit, wore_instead_map, is_starter_suggestion=is_starter, viewer_id=current_user.id
+    )
 
 
 class SuggestOptionsRequest(SuggestRequest):
@@ -615,7 +622,12 @@ async def suggest_outfit_options(
     unowned_ids = await _unowned_ids(db, outfits)
     return [
         await outfit_response(
-            db, outfit, wore_instead_map, is_starter_suggestion=is_starter, unowned_ids=unowned_ids
+            db,
+            outfit,
+            wore_instead_map,
+            is_starter_suggestion=is_starter,
+            unowned_ids=unowned_ids,
+            viewer_id=current_user.id,
         )
         for outfit in outfits
     ]
@@ -676,7 +688,7 @@ async def create_external_suggestion(
     await clear_suggestions(current_user.id, request.occasion)
 
     full = await service.get_full_outfit(outfit.id)
-    return await outfit_response(db, full)
+    return await outfit_response(db, full, viewer_id=current_user.id)
 
 
 @router.get("", response_model=OutfitListResponse)
@@ -744,7 +756,9 @@ async def list_outfits(
 
     unowned_ids = await _unowned_ids(db, outfits)
     outfit_responses = [
-        await outfit_response(db, outfit, wore_instead_map, unowned_ids=unowned_ids)
+        await outfit_response(
+            db, outfit, wore_instead_map, unowned_ids=unowned_ids, viewer_id=current_user.id
+        )
         for outfit in outfits
     ]
     if group:
@@ -880,7 +894,10 @@ async def get_outfit(
         )
 
     return await outfit_response(
-        db, outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
+        db,
+        outfit,
+        await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id),
+        viewer_id=current_user.id,
     )
 
 
@@ -893,7 +910,10 @@ async def accept_outfit(
     outfit = await OutfitService(db).set_status(outfit_id, current_user.id, OutfitStatus.accepted)
 
     return await outfit_response(
-        db, outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
+        db,
+        outfit,
+        await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id),
+        viewer_id=current_user.id,
     )
 
 
@@ -907,7 +927,10 @@ async def reject_outfit(
     await clear_suggestions(current_user.id, outfit.occasion)
 
     return await outfit_response(
-        db, outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
+        db,
+        outfit,
+        await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id),
+        viewer_id=current_user.id,
     )
 
 
@@ -921,7 +944,10 @@ async def skip_outfit(
     outfit = await service.set_status(outfit_id, current_user.id, OutfitStatus.skipped)
     await clear_suggestions(current_user.id, outfit.occasion)
     return await outfit_response(
-        db, outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
+        db,
+        outfit,
+        await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id),
+        viewer_id=current_user.id,
     )
 
 
@@ -1301,7 +1327,7 @@ async def log_outfit_worn(
     await clear_suggestions(current_user.id, outfit.occasion)
     full = await StudioService(db).get_full_outfit(outfit.id)
     return WearOutfitResponse(
-        **(await outfit_response(db, full)).model_dump(),
+        **(await outfit_response(db, full, viewer_id=current_user.id)).model_dump(),
         already_logged=isinstance(result, AlreadyThis),
     )
 
@@ -1342,7 +1368,8 @@ async def undo_outfit_wear(
         logger.exception("Suggestion clearing failed after undo for outfit %s", outfit_id)
     full = await StudioService(db).get_full_outfit(outfit_id)
     return UndoWearResponse(
-        **(await outfit_response(db, full)).model_dump(), learning_stale=learning_stale
+        **(await outfit_response(db, full, viewer_id=current_user.id)).model_dump(),
+        learning_stale=learning_stale,
     )
 
 
@@ -1392,7 +1419,7 @@ async def create_studio_outfit(
     await clear_suggestions(current_user.id, outfit.occasion)
 
     full = await service.get_full_outfit(outfit.id)
-    return await outfit_response(db, full)
+    return await outfit_response(db, full, viewer_id=current_user.id)
 
 
 @router.post("/{outfit_id}/wore-instead", response_model=OutfitResponse)
@@ -1423,7 +1450,7 @@ async def create_wore_instead_outfit(
     await clear_suggestions(current_user.id, replacement.occasion)
 
     full = await service.get_full_outfit(replacement.id)
-    return await outfit_response(db, full)
+    return await outfit_response(db, full, viewer_id=current_user.id)
 
 
 @router.post("/{outfit_id}/clone-to-lookbook", response_model=OutfitResponse)
@@ -1455,7 +1482,7 @@ async def clone_outfit_to_lookbook(
     await _run_learning_safely(db, clone.id, current_user.id)
 
     full = await service.get_full_outfit(clone.id)
-    return await outfit_response(db, full)
+    return await outfit_response(db, full, viewer_id=current_user.id)
 
 
 @router.post("/{outfit_id}/wear-today", response_model=WearOutfitResponse)
@@ -1483,7 +1510,8 @@ async def wear_outfit_today(
 
     full = await service.get_full_outfit(wear.id)
     return WearOutfitResponse(
-        **(await outfit_response(db, full)).model_dump(), already_logged=already_logged
+        **(await outfit_response(db, full, viewer_id=current_user.id)).model_dump(),
+        already_logged=already_logged,
     )
 
 
@@ -1538,7 +1566,7 @@ async def patch_outfit_endpoint(
     await db.commit()
 
     full = await service.get_full_outfit(updated.id)
-    return await outfit_response(db, full)
+    return await outfit_response(db, full, viewer_id=current_user.id)
 
 
 @router.delete("/{outfit_id}/family-rating", status_code=status.HTTP_204_NO_CONTENT)
@@ -1631,13 +1659,13 @@ async def attach_outfit_photo(
     current_user: Annotated[User, Depends(get_current_user)],
     image: UploadFile,
 ):
-    from app.services.outfit_photo_service import OutfitPhotoService, photo_fields, read_photo
+    from app.services.outfit_photo_service import OutfitPhotoService, read_photo
 
     service = OutfitPhotoService(db)
     outfit = await service.owned(outfit_id, current_user.id)
     data = await read_photo(image)
     await service.save(outfit, data, image.filename)
-    return photo_fields(outfit)
+    return await service.response(outfit)
 
 
 @router.delete("/{outfit_id}/photo", status_code=204)

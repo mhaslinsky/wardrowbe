@@ -116,7 +116,7 @@ Use **Show on card** to choose the picture shown in the outfit list:
 - **My photo** uses the attached outfit photo.
 - **AI preview** uses the saved generated preview.
 
-If the selected picture is unavailable, the card shows garment thumbnails. **Delete photo** removes the attached photo while keeping the outfit and its AI preview. Deleting the outfit also deletes its attached photo.
+If the selected picture is unavailable, the card shows garment thumbnails. **Delete photo** removes the attached photo while keeping the outfit and its AI preview. Deleting the outfit also deletes its attached photo. Family outfit cards show garment thumbnails; they do not show your attached photo or AI preview.
 
 Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outfits page](../frontend/app/dashboard/outfits/page.tsx), [outfit detail](../frontend/app/dashboard/outfits/[id]/page.tsx), [daily view](../frontend/components/day-outfits.tsx), [wear corrections](../frontend/components/undo-wear-actions.tsx), [history](../frontend/app/dashboard/history/page.tsx), [selfie page](../frontend/app/dashboard/selfie/page.tsx), [outfit photo controls](../frontend/components/outfit-photo.tsx), [outfit photo storage](../backend/app/services/outfit_photo_service.py), [feedback dialog](../frontend/components/feedback-dialog.tsx), [History rating action](../frontend/components/outfit-history-card.tsx).
 

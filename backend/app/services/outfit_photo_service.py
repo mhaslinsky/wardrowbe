@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -9,6 +10,8 @@ from app.models.outfit import Outfit
 from app.services.image_service import ALLOWED_EXTENSIONS
 from app.services.preview_service import PreviewService, delete_preview_files, store_photo, urls
 from app.utils.uploads import UploadTooLargeError, read_upload_within_limit
+
+logger = logging.getLogger(__name__)
 
 
 def photo_fields(outfit, preview_paths=None):
@@ -55,10 +58,21 @@ class OutfitPhotoService:
             select(Outfit)
             .where(Outfit.id == outfit_id, Outfit.user_id == user_id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if outfit is None:
             raise HTTPException(404, "Outfit not found")
         return outfit
+
+    async def response(self, outfit):
+        from app.models.preview import OutfitPreview
+
+        preview = (
+            await self.db.get(OutfitPreview, outfit.id)
+            if outfit.card_image_choice == "preview"
+            else None
+        )
+        return photo_fields(outfit, preview.paths if preview else None)
 
     def clear(self, outfit):
         if outfit.selfie_paths:
@@ -81,6 +95,7 @@ class OutfitPhotoService:
             await self.db.rollback()
             try:
                 paths = await pending
-            finally:
-                delete_preview_files(paths)
+            except BaseException:
+                logger.warning("Outfit photo storage failed")
+            delete_preview_files(paths)
             raise

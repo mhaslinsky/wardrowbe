@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
-from app.api.outfits import OutfitResponse, outfit_to_response
+from app.api.outfits import OutfitResponse, outfit_response
 from app.config import get_settings
 from app.database import DbSession
 from app.models.considering import owned_item
@@ -164,7 +164,7 @@ async def _confirm_outfit(
             from app.services.outfit_photo_service import OutfitPhotoService
 
             await OutfitPhotoService(db).save(outfit, *photo)
-        response = outfit_to_response(outfit)
+        response = await outfit_response(db, outfit, viewer_id=current_user.id)
         outfit_id, user_id, occasion = outfit.id, current_user.id, outfit.occasion
         await db.commit()
     except Exception:

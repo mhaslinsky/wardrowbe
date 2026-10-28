@@ -22,6 +22,13 @@ def upgrade():
 
 
 def downgrade():
+    from app.models.preview import delete_preview_files
+
+    connection = op.get_bind()
+    for paths in connection.execute(
+        sa.text("SELECT selfie_paths FROM outfits WHERE selfie_paths IS NOT NULL")
+    ).scalars():
+        delete_preview_files(paths, strict=True)
     op.drop_constraint("ck_outfit_card_image_choice", "outfits", type_="check")
     op.drop_column("outfits", "card_image_choice")
     op.drop_column("outfits", "selfie_paths")
