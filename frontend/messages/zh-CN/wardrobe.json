@@ -374,6 +374,8 @@
       "thisItem": "这件单品",
       "outfitItem": "单品{number}",
       "sampled": "显示衣橱中的部分样本。",
+      "showAllOutfits": "显示全部",
+      "showFewerOutfits": "收起",
       "outfitsUnknown": "搭配选择未知。",
       "outfitsNotApplicable": "搭配不适用于此单品。",
       "skipReason": "符合排除清单",
