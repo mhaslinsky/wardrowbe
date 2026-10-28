@@ -21,15 +21,17 @@ Sources: [sign-in page](../frontend/app/login/page.tsx), [onboarding page](../fr
 2. Use **Single Item** for one piece or **Bulk Upload** for several photos. Photograph one garment at a time, with its shape and color visible. Uploads accept JPEG, PNG, WebP, and HEIC/HEIF.
 3. For a single item, you can enter its name, brand, notes, type, and primary color. Leave the type empty to let AI detect it.
 4. Keep the browser tab open until uploads finish. Uploading and AI analysis are separate steps: after upload, items can still be queued or analyzing.
-5. Open **View queue** to see analysis progress and failures. If an upload fails, use **Retry** or **Retry all**. AI analysis needs a working service configured by the operator.
+5. Open **View queue** for AI analysis progress and failures. Each failed analysis has its own **Retry** button. AI analysis needs a working service configured by the operator.
+
+Failed uploads appear separately in the upload indicator. It offers **Retry** and **Retry all** only for retryable failures. For an oversized, unsupported, duplicate, or invalid file, address the reported problem before uploading again: resize it, choose a supported format or valid photo, or check the existing wardrobe item.
 
 Bulk upload also offers a checkbox to skip AI analysis. Those items start with placeholder details that you can edit yourself.
 
 ### Find and correct an item
 
-Search by name, filter by clothing type or favorites, and change the sort order to find recently added or less-worn pieces. **Clear filters** restores the unfiltered view.
+Search by name, filter by clothing type or favorites, and change the sort order to find recently added or less-worn pieces. **Clear filters** clears the clothing type, **Needs wash**, and favorites filters. It leaves search text and sort order unchanged. With only a search active, this button may not appear; clear the search field yourself.
 
-Open an item, choose **Edit item**, correct its details, then save. Add useful fit information to **Notes**, such as “roomy through the waist” or “sleeves run short.” Correcting an incorrect type, color, or brand improves future suggestions and previews. For previews to read a garment size, put it on a separate line in Notes as `Size: M` (using the actual size).
+Open an item, choose **Edit item**, correct its details, then save. Add useful fit information to **Notes**, such as “roomy through the waist” or “sleeves run short.” Correcting an incorrect type or color improves future suggestions and previews. For previews to read a garment size, put it on a separate line in Notes as `Size: M` (using the actual size).
 
 The item dialog also lets you rotate or replace photos, remove a background, choose a primary image, retry AI analysis, toggle a favorite, and delete an item. Deletion asks for confirmation and cannot be undone.
 
@@ -62,7 +64,7 @@ The **Pairings** page collects outfits built around source pieces. Filter by the
 
 ### Recreate an inspiration photo
 
-1. Set your location in **Settings** first. Open **Inspiration** and choose a **Photo or screenshot** of a look you like: JPEG, PNG, or WebP under 10 MB.
+1. Set your location in **Settings** first. Open **Inspiration** and choose a **Photo or screenshot** of a look you like: JPEG, PNG, or WebP up to 10 MB.
 2. Select **Recreate and save**. This requires working vision AI and current weather at your location. Wardrowbe matches the look against your clothes and saves the result.
 3. Inspect the matched pieces and match percentages. **No match** means a part of the inspiration had no match; an **Added base layer** is shown separately.
 4. Use **Open outfit** to inspect the saved outfit. You can delete a saved inspiration look after confirming.
@@ -137,7 +139,7 @@ Sources: [trip planning service](../backend/app/services/trip_service.py), [trip
 
 1. Open **Notifications** and choose **Add Schedule**.
 2. Pick **Day**, **Time**, and **Occasion**. Check your **Timezone** in Settings first.
-3. Enable **Send notification** if you want delivery through a notification channel. You can switch notification delivery on or off for a schedule.
+3. **Send notification** defaults to on. If it is on and no enabled channel is available, the worker skips outfit generation entirely. Set up and enable a channel, or switch **Send notification** off to generate outfits without sending notifications.
 4. Enable **Notify day before** to deliver on the previous day at the configured **Time**, using tomorrow's forecast when available. Choose an evening time if you prefer. Review the displayed notification day and time.
 
 Review generated outfits in the daily view. Schedules can be enabled, disabled, or deleted independently of channels.
@@ -164,7 +166,7 @@ In Settings, open **Preview photo** and **Show photos**. Start with **Front**, w
 
 Wear fitted clothes that show your shape clearly. A swimsuit or underwear is also an option if you are comfortable using those photos. Loose clothes hide your proportions and give the image generator less information. The generator uses the build and proportions visible in your photos and any measurements you supply.
 
-Replace or remove an angle when needed, reading the removal confirmation before continuing. Removing the front photo also removes saved outfit previews. Use photos you are comfortable sending to the image-generation provider configured by the operator.
+Replacing or removing the front photo deletes saved outfit previews. Replacing it happens as soon as you choose a file, with no confirmation. Removal asks for confirmation before proceeding. Use photos you are comfortable sending to the image-generation provider configured by the operator.
 
 ### Generate and improve a preview
 
@@ -179,7 +181,7 @@ Sources: [photo and preference settings](../frontend/components/preview-photo-se
 ## Try before buying
 
 1. Open **Considering**, then **Add considering item**.
-2. Paste a **Product link** and choose **Read link**, or drop in a product screenshot. Link reading works with public pages, not signed-in store sessions. If a store blocks reading, try an image. The image form accepts JPEG, PNG, or WebP under 20 MB.
+2. Paste a **Product link** and choose **Read link**, or drop in a product screenshot. Link reading works with public pages, not signed-in store sessions. If a store blocks reading, try an image. The image form accepts JPEG, PNG, or WebP up to 20 MB.
 3. On **Confirm product**, review the name, brand, price, currency, selected size and color, fabric, care, and fit notes. Select the product images you want to keep, then save. Check the extracted details and fill in anything missing.
 4. Once the item is ready, **Preview on me** lets you preview it alone or with selected owned pieces. **What would I wear it with?** asks for outfits using your wardrobe.
 5. If you purchase it, **Bought it** moves the item into your wardrobe after confirmation. **Passed** asks for a reason and moves it to the passed shelf. **Move back** restores a passed item to Considering.
@@ -231,8 +233,8 @@ Family membership is optional. It enables shared outfit browsing and ratings; co
 1. Open **Family** and choose **Create Family**, or use **Join Family** with an **Invite Code** supplied by an existing family.
 2. A family admin can share the code or use **Send Invite** for an email invitation. If the invitation is saved but email cannot be sent, share the code instead.
 3. Admins can edit the family name, regenerate the invite code, manage member roles, remove members, and cancel pending invitations. Review confirmations before removing someone.
-4. Use **Open Family Feed** to browse other members' dated outfits. Undated lookbook templates are not included. Choose a rating and optional comment, then **Submit Rating**. **Update Rating** changes your feedback; you can also remove your rating.
-5. Before choosing **Leave Family**, a sole admin with other members must make another member an admin or remove all other members. Then confirm leaving. You can join again later with an invite code.
+4. Use **Open Family Feed** to browse other members' dated outfits. Undated lookbook templates are not included. Open the rating form with the member's Rate button, or **Edit** for an existing rating. Choose a rating and optional comment, then **Submit Rating** or **Update Rating**. You can also remove your rating.
+5. Before choosing **Leave Family**, a sole admin with other members must make another member an admin or remove all other members. Then confirm leaving. Removing all other members and then leaving deletes the family; its old invite code cannot restore it. You can rejoin later with a valid invite code only if the family still exists.
 
 Sources: [family leave endpoint](../backend/app/api/families.py), [outfit filtering](../backend/app/services/outfit_service.py), [family management](../frontend/app/dashboard/family/page.tsx), [family feed](../frontend/app/dashboard/family/feed/page.tsx), [family labels](../frontend/messages/en/family.json).
 
