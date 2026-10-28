@@ -42,6 +42,7 @@ export function ConsideringBuyCheck({ itemId, itemName, disabled }: { itemId: st
         const controller = new AbortController();
         request.current = controller;
         check.reset();
+        setShowAll(false);
         check.mutate(controller.signal, { onSettled: () => {
           if (request.current === controller) request.current = null;
         } });
@@ -62,7 +63,7 @@ export function ConsideringBuyCheck({ itemId, itemName, disabled }: { itemId: st
             {idea.item_ids.filter((id) => id !== itemId).map((id, itemIndex) => <span key={id}>{itemIndex > 0 && ' + '}<Link className="underline" href={`/dashboard/wardrobe?item=${encodeURIComponent(id)}`}>{itemNames.get(id) || t('outfitItem', { number: itemIndex + 1 })}</Link></span>)}
           </li>)}</ul>
           {ideas.length > OUTFIT_PREVIEW && <Button variant="link" className="h-auto p-0" onClick={() => setShowAll(!showAll)}>{t(showAll ? 'showFewerOutfits' : 'showAllOutfits')}</Button>}
-          {showAll && (result.outfits.pool_truncated || result.outfits.idea_limit_truncated) && <p className="text-muted-foreground">{t('sampled')}</p>}
+          {(showAll || ideas.length <= OUTFIT_PREVIEW) && (result.outfits.pool_truncated || result.outfits.idea_limit_truncated) && <p className="text-muted-foreground">{t('sampled')}</p>}
         </> : <p>{t(result.outfits.status === 'not_applicable' ? 'outfitsNotApplicable' : 'outfitsUnknown')}</p>}
       </div>
     </div>}
