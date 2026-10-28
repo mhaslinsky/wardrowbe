@@ -40,7 +40,7 @@ const modules = import.meta.glob('../components/{outfit-preview,preview-photo-se
 const OutfitPreview = (modules['../components/outfit-preview.tsx'] as { OutfitPreview?: ComponentType<{ outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; hasRealPhoto?: boolean; cardImageUrl?: string; cardImageIsPreview?: boolean }> } | undefined)?.OutfitPreview ?? (() => null);
 const PreviewPhotoSettings = (modules['../components/preview-photo-settings.tsx'] as { PreviewPhotoSettings?: ComponentType } | undefined)?.PreviewPhotoSettings ?? (() => null);
 
-const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24' };
+const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24', comment: '' };
 const response = (data: unknown, status = 200) => ({ ok: status < 400, status, json: async () => data });
 beforeEach(() => { translation.locale = null; vi.mocked(toast.error).mockClear(); vi.mocked(fetch).mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
 afterEach(() => { client.clear(); vi.useRealTimers(); window.history.replaceState(null, '', window.location.pathname); });

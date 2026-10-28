@@ -53,7 +53,7 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
       </div>}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setComparisonCallId(undefined); setComparisonNotice(false); setAction('redraw'); }}>{t('redraw')}</Button>
-        <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(preview.comment ?? ''); setAction('comment'); }}><MessageSquare className="mr-1 h-4 w-4" />{t('comment')}</Button>
+        <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(preview.comment); setAction('comment'); }}><MessageSquare className="mr-1 h-4 w-4" />{t('comment')}</Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => setAction('delete')}>{t('delete')}</Button>
       </div>
       {preview.comment && <p className="truncate text-sm text-muted-foreground" title={preview.comment}>{preview.comment}</p>}

@@ -2513,7 +2513,7 @@ async def test_clear_preview_comment(note, commented_preview, client, auth_heade
 async def test_comment_migration_preserves_notes_and_drops_empty(db_session, test_user):
     user_id = test_user.id
     async with migration_downgrade(db_session, "ac2610000001"):
-        for note in ["Keep this note", "", " \t\n "]:
+        for note in ["Keep this note", "", " \t\n ", "\u00a0"]:
             await db_session.execute(
                 text(
                     "INSERT INTO preview_feedback (id, user_id, kind, note) "
@@ -2543,3 +2543,45 @@ async def test_comment_migration_preserves_notes_and_drops_empty(db_session, tes
         )
         == "comment"
     )
+
+
+@pytest.mark.parametrize("retained_by", [None, "preview", "comment", "like"])
+async def test_comment_migration_cleans_only_unreferenced_files(
+    retained_by, db_session, preview_setup, tmp_path
+):
+    image = tmp_path / "previous-preview.jpg"
+    image.write_bytes(_jpeg_bytes())
+    paths = {"image_path": str(image)}
+    deleted_id = uuid4()
+    async with migration_downgrade(db_session, "ac2610000001"):
+        db_session.add(
+            PreviewFeedback(
+                id=deleted_id,
+                user_id=preview_setup["user"],
+                outfit_id=preview_setup["outfit"],
+                kind="like",
+                note="",
+                paths=paths,
+            )
+        )
+        if retained_by == "preview":
+            db_session.add(
+                OutfitPreview(
+                    user_id=preview_setup["user"],
+                    outfit_id=preview_setup["outfit"],
+                    paths=paths,
+                )
+            )
+        elif retained_by is not None:
+            db_session.add(
+                PreviewFeedback(
+                    user_id=preview_setup["user"],
+                    outfit_id=preview_setup["outfit"],
+                    kind=retained_by,
+                    note="Keep this drawing",
+                    paths=paths,
+                )
+            )
+        await db_session.commit()
+    assert await db_session.get(PreviewFeedback, deleted_id) is None
+    assert image.exists() is (retained_by is not None)
