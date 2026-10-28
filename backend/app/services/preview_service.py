@@ -570,7 +570,7 @@ class PreviewService:
                 telemetry=CallContext(
                     user_id,
                     "considering_preview"
-                    if purchase is not None
+                    if purchase is not None and purchase.state in {"considering", "passed"}
                     else "preview_redraw"
                     if regenerate
                     else "preview",

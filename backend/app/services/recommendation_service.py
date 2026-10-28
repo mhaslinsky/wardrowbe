@@ -302,7 +302,7 @@ class RecommendationService:
             raise
         finally:
             self._defer_commit = False
-        self.telemetry_feature = "outfit_suggestion"
+            self.telemetry_feature = "outfit_suggestion"
 
     async def get_candidate_items(
         self,

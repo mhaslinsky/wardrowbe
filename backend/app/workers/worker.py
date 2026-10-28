@@ -6,6 +6,7 @@ from arq.jobs import Job, JobStatus
 from sqlalchemy import and_, or_, select, update
 
 from app.config import get_settings
+from app.database import engine
 from app.logging_config import configure_logging
 from app.models.item import ClothingItem, ItemStatus
 from app.services.ai_service import AIService
@@ -118,6 +119,7 @@ async def shutdown(ctx: dict) -> None:
     logger.info("Worker shutting down...")
     await drain_recordings()
     await close_db(ctx)
+    await engine.dispose()
 
 
 class WorkerSettings:

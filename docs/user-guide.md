@@ -246,7 +246,7 @@ Sources: [Settings](../frontend/app/dashboard/settings/page.tsx), [season palett
 
 AI results are recorded to improve the app. These records keep prompt and image sizes and hashes, structured answers, and provider usage when available. Plain-text answers are kept only as sizes and hashes. Call records are deleted with your account.
 
-Operator note: graceful shutdown waits up to five seconds for pending records; an abrupt stop can lose pending records.
+Operator note: graceful shutdown allows five seconds for writes and one for cleanup; an abrupt stop can lose pending records.
 
 ### Review AI Learning
 

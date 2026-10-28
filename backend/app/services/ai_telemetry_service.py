@@ -3,24 +3,35 @@ import base64
 import hashlib
 import json
 import logging
+import math
 from asyncio import create_task
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from time import monotonic
+from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
+
+import httpx
 
 from app.database import async_session_maker
 from app.models.ai_call import AICall
 
 logger = logging.getLogger(__name__)
 MAX_PENDING = 128
+WRITE_TIMEOUT = 3.0
+recording_enabled = True
 recording_failures = 0
-_pending: set[asyncio.Task] = set()
+_pending: set[asyncio.Task[None]] = set()
+_write_slots = asyncio.Semaphore(2)
 
 
 @dataclass
 class CallContext:
+    """User and feature attribution for one request's provider attempt chain."""
+
     user_id: UUID
     feature: str
     resource_type: str | None = None
@@ -29,31 +40,67 @@ class CallContext:
     failure_reason: str | None = None
 
 
-def _failed(reason):
+def _failed(reason: str) -> None:
     global recording_failures
     recording_failures += 1
-    try:
-        logger.warning(
-            "AI recording failed: %s; ai_recording_failures_total=%d", reason, recording_failures
-        )
-    except Exception:
-        return False
-    return True
+    logger.warning(
+        "AI recording failed: %s; ai_recording_failures_total=%d", reason, recording_failures
+    )
 
 
-def _fingerprint(data):
+def _fingerprint(data: bytes) -> dict[str, int | str]:
     return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 
 
-def _usage_counts(values):
-    return {
-        name: _usage_counts(value) if isinstance(value, dict) else value
-        for name, value in values.items()
-        if isinstance(value, (dict, int, float)) and not isinstance(value, bool)
-    }
+def _usage_counts(values: dict[str, Any]) -> dict[str, Any]:
+    counts = {}
+    for name, value in values.items():
+        if isinstance(value, dict):
+            nested = _usage_counts(value)
+            if nested:
+                counts[name] = nested
+        elif isinstance(value, int) and not isinstance(value, bool):
+            counts[name] = value
+        elif isinstance(value, float) and math.isfinite(value):
+            counts[name] = value
+    return counts
 
 
-def _request_metadata(body):
+def _bounded_text(value: Any) -> str | None:
+    return value[:120] if isinstance(value, str) else None
+
+
+def _reported_cost(value: Any) -> Decimal | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        cost = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    return cost if cost.is_finite() else None
+
+
+def _logprob_summary(logprobs: dict[str, Any]) -> dict[str, int | float]:
+    values = [
+        token["logprob"]
+        for token in logprobs.get("content", [])
+        if isinstance(token, dict)
+        and isinstance(token.get("logprob"), (int, float))
+        and not isinstance(token["logprob"], bool)
+        and math.isfinite(token["logprob"])
+    ]
+    return (
+        {
+            "token_count": len(values),
+            "mean_logprob": sum(values) / len(values),
+            "min_logprob": min(values),
+        }
+        if values
+        else {}
+    )
+
+
+def _request_metadata(body: dict[str, Any], request: bytes) -> dict[str, Any]:
     texts, images = [], []
     for message in body.get("messages", []):
         content = message.get("content")
@@ -80,7 +127,6 @@ def _request_metadata(body):
     for text in texts:
         digest.update(len(text).to_bytes(8, "big"))
         digest.update(text)
-    request = json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
     return {
         "request_bytes": len(request),
         "request_sha256": hashlib.sha256(request).hexdigest(),
@@ -90,21 +136,21 @@ def _request_metadata(body):
     }
 
 
-def _response_metadata(response, native):
+def _response_metadata(response: httpx.Response, native: bool) -> dict[str, Any]:
     try:
         payload = response.json()
     except (ValueError, UnicodeError):
         return {"error_kind": "malformed_response"}
     if not isinstance(payload, dict):
         return {"error_kind": "malformed_response"}
-    result = {"returned_model": payload.get("modelVersion" if native else "model")}
+    result = {"returned_model": _bounded_text(payload.get("modelVersion" if native else "model"))}
     usage = payload.get("usageMetadata" if native else "usage")
     if isinstance(usage, dict):
         result["usage"] = _usage_counts(usage)
-        cost = usage.get("cost")
-        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+        cost = _reported_cost(usage.get("cost"))
+        if cost is not None:
             result["reported_cost"] = cost
-            result["cost_currency"] = usage.get("currency")
+            result["cost_currency"] = _bounded_text(usage.get("currency"))
     if payload.get("error"):
         result["error_kind"] = "provider_error"
         return result
@@ -116,7 +162,7 @@ def _response_metadata(response, native):
             choice = payload["choices"][0]
             parts = [{"text": choice["message"].get("content")}]
             if choice.get("logprobs"):
-                answer["logprobs"] = choice["logprobs"]
+                answer["logprobs"] = _logprob_summary(choice["logprobs"])
         for part in parts:
             text = part.get("text")
             if text:
@@ -141,28 +187,30 @@ def _response_metadata(response, native):
         result["error_kind"] = "empty_answer"
     except (KeyError, TypeError, AttributeError, ValueError):
         result["error_kind"] = "malformed_response"
-    if not any(answer.values()):
+    if not any(answer[name] for name in ("structured", "text", "images")):
         result.setdefault("error_kind", "empty_answer")
     result["answer"] = answer
     return result
 
 
-async def _persist(record):
+async def _persist(record: dict[str, Any]) -> None:
     async with async_session_maker() as session:
         session.add(AICall(**record))
         await session.commit()
 
 
-async def _write(record):
+async def _write(record: dict[str, Any]) -> None:
     try:
-        await _persist(record)
-    except asyncio.CancelledError:
-        raise
+        async with asyncio.timeout(WRITE_TIMEOUT):
+            async with _write_slots:
+                await _persist(record)
+    except TimeoutError:
+        _failed("write_timeout")
     except Exception:
         _failed("database")
 
 
-def _enqueue(record):
+def _enqueue(record: dict[str, Any]) -> None:
     if len(_pending) >= MAX_PENDING:
         _failed("full")
         return
@@ -178,8 +226,16 @@ def _enqueue(record):
 
 
 async def record_ai_call(
-    client, url, *, context, model, body, headers=None, native=False, feature=None
-):
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    context: CallContext | None,
+    model: str,
+    body: dict[str, Any],
+    headers: Mapping[str, str] | None = None,
+    native: bool = False,
+    feature: str | None = None,
+) -> httpx.Response:
     """POST a model request and record the attempt without awaiting database writes.
 
     New providers use this function with a request-local CallContext containing
@@ -189,6 +245,9 @@ async def record_ai_call(
     The original response or exception is preserved even if recording fails.
     Health checks must call their HTTP client directly.
     """
+    if context is None or not recording_enabled:
+        return await client.post(url, headers=headers, json=body)
+    request = json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
     record = None
     if context is not None:
         try:
@@ -203,14 +262,16 @@ async def record_ai_call(
                 "fallback_reason": context.failure_reason,
                 "provider": urlsplit(url).hostname,
                 "requested_model": model,
-                **_request_metadata(body),
+                **_request_metadata(body, request),
             }
             context.last_call_id = record["id"]
         except Exception:
             _failed("serialization")
     started = monotonic()
     try:
-        response = await client.post(url, headers=headers, json=body)
+        request_headers = httpx.Headers(headers)
+        request_headers["Content-Type"] = "application/json"
+        response = await client.post(url, headers=request_headers, content=request)
     except BaseException as error:
         if record is not None:
             try:
@@ -246,12 +307,17 @@ async def record_ai_call(
     return response
 
 
-async def drain_recordings(timeout=5):
-    """Wait at most timeout seconds for pending writes, then cancel unfinished writes."""
+async def drain_recordings(timeout: float = 5) -> None:
+    """Wait for writes, then cancel them and allow one more second for cleanup."""
     tasks = set(_pending)
     if tasks:
         _, pending = await asyncio.wait(tasks, timeout=timeout)
         for task in pending:
             _failed("shutdown_timeout")
             task.cancel()
-        _pending.difference_update(tasks)
+        if pending:
+            cleanup = asyncio.gather(*pending, return_exceptions=True)
+            completed, _ = await asyncio.wait({cleanup}, timeout=1)
+            if not completed:
+                _failed("shutdown_cleanup_timeout")
+        _pending.difference_update(task for task in tasks if task.done())

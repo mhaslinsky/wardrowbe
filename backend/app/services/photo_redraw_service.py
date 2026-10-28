@@ -282,7 +282,7 @@ def color_check(original: Image.Image, redrawn: Image.Image) -> dict:
 
 
 class PhotoRedrawService:
-    def __init__(self, *, telemetry=None):
+    def __init__(self, *, telemetry: CallContext | None = None) -> None:
         self.telemetry = telemetry
         self.calls = 0
         self.usage = {}

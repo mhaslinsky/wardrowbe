@@ -2,20 +2,25 @@ import asyncio
 import base64
 import hashlib
 import json
+from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import httpx
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
 
 
-@pytest.fixture
-def telemetry(monkeypatch, session_maker):
+@pytest_asyncio.fixture
+async def telemetry(monkeypatch, session_maker):
     from app.services import ai_telemetry_service
 
     monkeypatch.setattr(ai_telemetry_service, "async_session_maker", session_maker)
-    return ai_telemetry_service
+    monkeypatch.setattr(ai_telemetry_service, "recording_enabled", True)
+    monkeypatch.setattr(ai_telemetry_service, "_write_slots", asyncio.Semaphore(2))
+    yield ai_telemetry_service
+    await ai_telemetry_service.drain_recordings(timeout=0)
 
 
 def chat_reply(content='{"choices": [1], "score": 0.8}', **extra):
@@ -162,7 +167,7 @@ async def test_semantic_errors_and_fallback(telemetry, test_user, payload, kind)
     assert saved[1]["fallback_reason"] == kind
 
 
-@pytest.mark.parametrize("failure", ["database", "scheduling", "full", "serialization", "logging"])
+@pytest.mark.parametrize("failure", ["database", "scheduling", "full", "serialization"])
 @pytest.mark.parametrize("provider_fails", [False, True])
 async def test_recording_failure_preserves_result(
     telemetry, test_user, monkeypatch, failure, provider_fails
@@ -188,13 +193,7 @@ async def test_recording_failure_preserves_result(
         monkeypatch.setattr(
             telemetry,
             "_request_metadata",
-            lambda body: (_ for _ in ()).throw(ValueError("bad body")),
-        )
-    elif failure == "logging":
-        monkeypatch.setattr(
-            telemetry.logger,
-            "warning",
-            lambda *args: (_ for _ in ()).throw(RuntimeError("logger unavailable")),
+            lambda body, request: (_ for _ in ()).throw(ValueError("bad body")),
         )
     before = telemetry.recording_failures
     if provider_fails:
@@ -257,19 +256,15 @@ async def test_plain_text_is_hashed_and_provider_cost_is_kept(telemetry, test_us
     assert saved[0]["answer"]["text"] == [
         {"bytes": 18, "sha256": hashlib.sha256(b"plain private text").hexdigest()}
     ]
-    assert saved[0]["reported_cost"] == 0.012 and saved[0]["cost_currency"] == "USD"
+    assert saved[0]["reported_cost"] == Decimal("0.012") and saved[0]["cost_currency"] == "USD"
 
 
-async def test_shutdown_cancels_pending_without_waiting_forever(telemetry, test_user, monkeypatch):
+async def test_shutdown_cancels_pending_without_waiting_forever(telemetry, test_user):
     entered, release = asyncio.Event(), asyncio.Event()
 
     async def held(record):
         entered.set()
         await release.wait()
-
-    async def deadline(tasks, timeout):
-        assert timeout == 5
-        return set(), set(tasks)
 
     client = AsyncMock()
     client.post.return_value = httpx.Response(200, json=chat_reply())
@@ -283,8 +278,9 @@ async def test_shutdown_cancels_pending_without_waiting_forever(telemetry, test_
         )
         assert telemetry._pending
         await entered.wait()
-        monkeypatch.setattr(telemetry.asyncio, "wait", deadline)
+        task = next(iter(telemetry._pending))
         before = telemetry.recording_failures
-        await telemetry.drain_recordings()
+        await telemetry.drain_recordings(timeout=0)
+        assert task.done() and task.cancelled()
         assert not telemetry._pending
         assert telemetry.recording_failures > before

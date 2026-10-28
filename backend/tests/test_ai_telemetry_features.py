@@ -1,6 +1,7 @@
 import base64
 import json
 from unittest.mock import AsyncMock, patch
+from uuid import UUID
 
 import httpx
 import pytest
@@ -31,13 +32,23 @@ async def rows(db, telemetry, user):
     )
 
 
-@pytest.mark.parametrize("mode", ["preview", "preview_redraw", "considering_preview"])
+@pytest.mark.parametrize(
+    "mode,purchase_state",
+    [
+        ("preview", None),
+        ("preview_redraw", None),
+        ("considering_preview", "considering"),
+        ("considering_preview", "passed"),
+        ("preview", "bought"),
+        ("preview_redraw", "bought"),
+    ],
+)
 async def test_preview_caller_keeps_exact_call_id(
-    telemetry, client, auth_headers, db_session, test_user, preview_setup, mode
+    telemetry, client, auth_headers, db_session, test_user, preview_setup, mode, purchase_state
 ):
-    if mode == "considering_preview":
+    if purchase_state is not None:
         anchor = preview_setup["items"][0]
-        db_session.add(ItemPurchase(item_id=anchor))
+        db_session.add(ItemPurchase(item_id=anchor, state=purchase_state))
         outfit = await db_session.get(Outfit, preview_setup["outfit"])
         outfit.source_item_id = anchor
         await db_session.commit()
@@ -142,7 +153,7 @@ async def test_tagging_worker_records_both_model_passes(
     assert result["status"] == "success"
     recorded = await rows(db_session, telemetry, test_user)
     assert len(recorded) == 2
-    assert {row.feature for row in recorded} == {"item_tagging"}
+    assert {row.feature for row in recorded} == {"item_tagging", "item_description"}
     assert {row.resource_id for row in recorded} == {item.id}
 
 
@@ -184,9 +195,11 @@ async def test_inspiration_caller_is_attributed(telemetry, db_session, test_user
         ),
         patch("httpx.AsyncClient.post", AsyncMock(return_value=response)),
     ):
-        await InspirationService(db_session).create(test_user, _jpeg_bytes())
+        created = await InspirationService(db_session).create(test_user, _jpeg_bytes())
     recorded = await rows(db_session, telemetry, test_user)
     assert len(recorded) == 1 and recorded[0].feature == "inspiration"
+    outfit = await db_session.get(Outfit, UUID(created["id"]))
+    assert outfit.ai_raw_response["_ai_call_id"] == str(recorded[0].id)
 
 
 async def test_photo_redraw_caller_records_assessment_and_generation(

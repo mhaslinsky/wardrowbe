@@ -42,7 +42,7 @@ class AICall(Base):
     request_sha256: Mapped[str] = mapped_column(Text)
     prompt_bytes: Mapped[int] = mapped_column(BigInteger)
     prompt_sha256: Mapped[str] = mapped_column(Text)
-    images: Mapped[list] = mapped_column(JSONB)
+    images: Mapped[list] = mapped_column(JSONB, nullable=False)
     latency_ms: Mapped[float] = mapped_column(Float)
     outcome: Mapped[str] = mapped_column(Text)
     error_kind: Mapped[str | None] = mapped_column(Text)

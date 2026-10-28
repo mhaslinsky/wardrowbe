@@ -13,7 +13,7 @@ from PIL import Image, ImageOps
 from pydantic import BaseModel
 
 from app.config import get_settings
-from app.services.ai_telemetry_service import record_ai_call
+from app.services.ai_telemetry_service import CallContext, record_ai_call
 from app.utils.garment_vocabulary import (
     COLORS,
     FORMALITY,
@@ -277,19 +277,22 @@ class AIEndpointConfig:
 class AIService:
     """Service for AI-powered image analysis and text generation."""
 
-    def __init__(self, endpoints: list[dict] | None = None, *, telemetry=None):
-        self.telemetry = telemetry
+    def __init__(
+        self, endpoints: list[dict] | None = None, *, telemetry: CallContext | None = None
+    ) -> None:
         """
         Initialize AI service with optional custom endpoints.
 
         Args:
             endpoints: List of endpoint configs from user preferences.
                       If None or empty, uses default from settings.
+            telemetry: Request-local user, feature and provider attempt context.
 
         Raises:
             AIDisabledError: backstop when internal AI is disabled; call sites
                 should guard with require_internal_ai() first.
         """
+        self.telemetry = telemetry
         self.settings = get_settings()
         if not self.settings.ai_enabled:
             raise AIDisabledError("Internal AI is disabled; defer to an external agent.")
@@ -454,6 +457,9 @@ class AIService:
         use_vision_model: bool = True,
         request_logprobs: bool = False,
     ) -> tuple[str | None, Exception | None, list | None]:
+        if self.telemetry is not None:
+            self.telemetry.last_call_id = None
+            self.telemetry.failure_reason = None
         last_error = None
         every_endpoint_repeats = True
 
@@ -487,6 +493,7 @@ class AIService:
                             body=request_body,
                             model=request_body["model"],
                             context=self.telemetry,
+                            feature="item_description" if task_name == "description" else None,
                         )
                         response.raise_for_status()
 
@@ -751,6 +758,9 @@ class AIService:
         system_prompt: str | None = None,
         return_metadata: bool = False,
     ) -> str | TextGenerationResult:
+        if self.telemetry is not None:
+            self.telemetry.last_call_id = None
+            self.telemetry.failure_reason = None
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})

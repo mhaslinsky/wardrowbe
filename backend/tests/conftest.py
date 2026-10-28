@@ -118,6 +118,13 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 # configure_logging is a once-per-process startup call, so a test that runs worker startup or the
 # API lifespan would otherwise leave its handler and level on "app" for every later test.
 @pytest.fixture(autouse=True)
+def _disable_ai_recording(monkeypatch):
+    from app.services import ai_telemetry_service
+
+    monkeypatch.setattr(ai_telemetry_service, "recording_enabled", False)
+
+
+@pytest.fixture(autouse=True)
 def _restore_app_logger():
     logger = logging.getLogger("app")
     saved_level, saved_handlers = logger.level, list(logger.handlers)
