@@ -27,7 +27,9 @@ async def list_calls(
 
 
 @router.get("/{call_id}", response_model=AICallRead)
-async def read_call(call_id: UUID, user: CurrentUser, db: DbSession, response: Response) -> AICallRead:
+async def read_call(
+    call_id: UUID, user: CurrentUser, db: DbSession, response: Response
+) -> AICallRead:
     response.headers["Cache-Control"] = "no-store"
     call = await AICallQueryService(db).get(user.id, call_id)
     if call is None:
