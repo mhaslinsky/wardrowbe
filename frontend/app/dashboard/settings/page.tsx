@@ -191,6 +191,7 @@ export default function SettingsPage() {
   const [standingRulesReady, setStandingRulesReady] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [colorSeasonDirty, setColorSeasonDirty] = useState(false);
+  const colorSeasonRevision = useRef(0);
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
   const [endpointTests, setEndpointTests] = useState<Record<number, EndpointTestResult>>({});
@@ -500,7 +501,10 @@ export default function SettingsPage() {
   }, [preferences]);
 
   const updateField = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
-    if (key === 'color_season') setColorSeasonDirty(true);
+    if (key === 'color_season') {
+      colorSeasonRevision.current += 1;
+      setColorSeasonDirty(true);
+    }
     setFormData((prev) => {
       const next = { ...prev, [key]: value };
       if (key === 'color_favorites' && Array.isArray(value)) {
@@ -540,9 +544,12 @@ export default function SettingsPage() {
       if (!colorSeasonDirty) delete settings.color_season;
       if (standingRulesReady) settings.standing_rules = rules;
       else delete settings.standing_rules;
+      const submittedSeason = 'color_season' in settings;
+      const submittedSeasonRevision = colorSeasonRevision.current;
       await updatePreferences.mutateAsync(settings);
-      setColorSeasonDirty(false);
-      setHasChanges(false);
+      const seasonChangedDuringSave = colorSeasonRevision.current !== submittedSeasonRevision;
+      if (submittedSeason && !seasonChangedDuringSave) setColorSeasonDirty(false);
+      setHasChanges(seasonChangedDuringSave);
     } catch (error) {
       console.error('Failed to save preferences:', error);
     }

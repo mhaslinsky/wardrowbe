@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import SettingsPage from '@/app/dashboard/settings/page'
 
@@ -98,4 +98,25 @@ it('clears the season dirty flag after a successful save', async () => {
   fireEvent.click(save)
   await waitFor(() => expect(state.save).toHaveBeenCalled())
   expect(state.save.mock.calls[0][0]).not.toHaveProperty('color_season')
+})
+
+it.each([false, true])('keeps a season edit made while saving (season submitted: %s)', async (submittedSeason) => {
+  let finishSave!: (value: unknown) => void
+  const pending = new Promise((resolve) => { finishSave = resolve })
+  state.save.mockReturnValueOnce(pending)
+  render(<SettingsPage />)
+  const season = screen.getByLabelText('colorSeason.label')
+  const save = screen.getAllByText('save', { selector: 'button' })[0]
+  if (submittedSeason) fireEvent.change(season, { target: { value: 'cool-winter' } })
+  else fireEvent.keyDown(screen.getAllByRole('slider')[0], { key: 'ArrowRight' })
+  fireEvent.click(save)
+  expect(state.save).toHaveBeenCalledTimes(1)
+  if (!submittedSeason) expect(state.save.mock.calls[0][0]).not.toHaveProperty('color_season')
+  const selected = submittedSeason ? 'warm-autumn' : 'cool-winter'
+  fireEvent.change(season, { target: { value: selected } })
+  await act(async () => { finishSave({}); await pending })
+  expect(save).toBeEnabled()
+  fireEvent.click(save)
+  await waitFor(() => expect(state.save).toHaveBeenCalledTimes(2))
+  expect(state.save.mock.calls[1][0]).toHaveProperty('color_season', selected)
 })
