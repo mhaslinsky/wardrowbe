@@ -59,3 +59,23 @@ it.each(['draw', 'remove'] as const)('refreshes outfit cards after preview %s', 
   expect(client.getQueryState(queryKeys.outfit('look'))?.isInvalidated).toBe(true);
   expect(client.getQueryState(queryKeys.outfits.all)?.isInvalidated).toBe(true);
 });
+
+import { useOutfit } from '@/lib/hooks/use-outfits';
+
+it('refreshes selfie URLs before their ten-minute expiry', async () => {
+  vi.useFakeTimers();
+  const client = createQueryClient();
+  vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...outfit(1), selfie_photo: { image_url: '/me.jpg?fresh=1' } }) } as Response);
+  try {
+    const hook = renderHook(() => useOutfit('look'), { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(hook.result.current.data?.selfie_photo?.image_url).toBe('/me.jpg?fresh=1');
+    vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...outfit(1), selfie_photo: { image_url: '/me.jpg?fresh=2' } }) } as Response);
+    await act(async () => { await vi.advanceTimersByTimeAsync(9 * 60_000); });
+    expect(hook.result.current.data?.selfie_photo?.image_url).toBe('/me.jpg?fresh=2');
+    hook.unmount();
+  } finally {
+    client.clear();
+    vi.useRealTimers();
+  }
+});

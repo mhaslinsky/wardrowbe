@@ -76,7 +76,16 @@ async def inspiration_image(
 @router.delete("/{outfit_id}", status_code=204)
 async def delete_inspiration(outfit_id: UUID, db: DbSession, user: CurrentUser):
     service = InspirationService(db)
-    outfit = await service.find(user.id, outfit_id)
+    outfit = await db.scalar(
+        select(Outfit)
+        .where(
+            Outfit.id == outfit_id,
+            Outfit.user_id == user.id,
+            Outfit.ai_raw_response.has_key("inspiration"),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if outfit is None:
         raise HTTPException(404, "Look not found")
     await db.delete(outfit)

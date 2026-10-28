@@ -119,7 +119,6 @@ def collect_deleted_preview_files(session, _context, _instances):
                     paths.update({path: path for path in preview_file_paths(stored)})
     for record in session.deleted:
         if isinstance(record, Outfit):
-            session.refresh(record, attribute_names=["selfie_paths"], with_for_update=True)
             if record.selfie_paths:
                 paths.update({path: path for path in preview_file_paths(record.selfie_paths)})
         if isinstance(record, (PreviewPhoto, OutfitPreview, PreviewFeedback)):

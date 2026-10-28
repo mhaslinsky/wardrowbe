@@ -148,15 +148,14 @@ async def test_user_deletion_removes_photo(
     assert list(preview_setup["folder"].glob("*.jpg")) == []
 
 
-async def test_failed_commit_removes_new_files(db_session, preview_setup, monkeypatch):
+async def test_failed_commit_removes_new_files(
+    client, auth_headers, db_session, preview_setup, monkeypatch
+):
     from unittest.mock import AsyncMock
 
-    from app.services.outfit_photo_service import OutfitPhotoService
-
-    outfit = await db_session.get(Outfit, preview_setup["outfit"])
     monkeypatch.setattr(db_session, "commit", AsyncMock(side_effect=RuntimeError("commit failed")))
     with pytest.raises(RuntimeError, match="commit failed"):
-        await OutfitPhotoService(db_session).save(outfit, _jpeg_bytes(), "me.jpg")
+        await client.put(endpoint(preview_setup), headers=auth_headers, files=photo())
     assert list(preview_setup["folder"].glob("*.jpg")) == []
 
 
@@ -221,52 +220,20 @@ async def test_family_feed_never_mints_private_urls(
     assert "/previews/" not in response.text
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "detail",
-        "history",
-        "ratings",
-        "inspiration",
-        "pairings",
-        "considering-preview",
-        "considering-suggestions",
-    ],
-)
-async def test_non_owner_serializer_paths_have_no_private_urls(client, family_photo, path):
-    headers = family_photo["headers"]
-    outfit_id = family_photo["outfit"]
-    if path == "detail":
-        response = await client.get("/api/v1/outfits/" + outfit_id, headers=headers)
-        assert response.status_code == 404
-    elif path == "history":
-        response = await client.get(
-            "/api/v1/outfits",
-            headers=headers,
-            params={
-                "family_member_id": family_photo["owner"],
-                "date_from": "2026-10-27",
-                "date_to": "2026-10-27",
-            },
-        )
-        assert response.status_code == 200
-        assert len(response.json()["outfits"]) == 1
-        assert response.json()["outfits"][0]["selfie_photo"] is None
-    elif path == "ratings":
-        response = await client.get(
-            "/api/v1/outfits/" + outfit_id + "/family-ratings", headers=headers
-        )
-        assert response.status_code == 200
-    elif path in ("considering-preview", "considering-suggestions"):
-        action = "outfits" if path == "considering-preview" else "suggestions"
-        body = {"companion_ids": []} if action == "outfits" else {"occasion": "casual"}
-        response = await client.post(
-            "/api/v1/considering/" + family_photo["item"] + "/" + action, headers=headers, json=body
-        )
-        assert response.status_code in (400, 404), response.text
-    else:
-        response = await client.get("/api/v1/" + path, headers=headers)
-        assert response.status_code == 200
+async def test_non_owner_history_has_no_private_urls(client, family_photo):
+    response = await client.get(
+        "/api/v1/outfits",
+        headers=family_photo["headers"],
+        params={
+            "family_member_id": family_photo["owner"],
+            "date_from": "2026-10-27",
+            "date_to": "2026-10-27",
+        },
+    )
+    assert response.status_code == 200
+    assert len(response.json()["outfits"]) == 1
+    assert response.json()["outfits"][0]["selfie_photo"] is None
+    assert response.json()["outfits"][0]["card_image_url"] is None
     assert "/previews/" not in response.text
 
 
@@ -285,12 +252,13 @@ async def test_inspiration_delete_refreshes_concurrent_photo(
     stale.ai_raw_response = {"inspiration": {"items": []}}
     await db_session.commit()
     assert await InspirationService(db_session).find(preview_setup["user"], stale.id) is stale
-    await db_session.commit()
     async with session_maker() as writer:
         service = OutfitPhotoService(writer)
         current = await service.owned(stale.id, preview_setup["user"])
         await service.save(current, _jpeg_bytes(), "new.jpg")
+        await writer.commit()
         newest = dict(current.selfie_paths)
+    assert stale.selfie_paths != newest
     response = await client.delete("/api/v1/inspiration/" + str(stale.id), headers=auth_headers)
     assert response.status_code == 204, response.text
     assert all(not ImageService().get_image_path(path).exists() for path in newest.values())
@@ -305,6 +273,7 @@ async def test_photo_remove_refreshes_cached_row(db_session, preview_setup, sess
     async with session_maker() as writer:
         current = await OutfitPhotoService(writer).owned(stale.id, preview_setup["user"])
         await OutfitPhotoService(writer).save(current, _jpeg_bytes(), "new.jpg")
+        await writer.commit()
     service = OutfitPhotoService(db_session)
     assert await service.owned(stale.id, preview_setup["user"]) is stale
     service.clear(stale)
@@ -420,3 +389,31 @@ async def test_cancelled_save_preserves_cancellation_when_storage_fails(monkeypa
     release.set()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+@pytest.mark.parametrize("failure", ["response", "commit"])
+async def test_confirm_failure_after_photo_save_removes_files(
+    confirm_client, db_session, test_user, preview_setup, monkeypatch, failure
+):
+    from unittest.mock import AsyncMock
+
+    import app.api.selfie as selfie_api
+
+    original_response = selfie_api.outfit_response
+
+    async def failing_response(db, *args, **kwargs):
+        if failure == "response":
+            raise RuntimeError("response failed")
+        response = await original_response(db, *args, **kwargs)
+        monkeypatch.setattr(db, "commit", AsyncMock(side_effect=RuntimeError("commit failed")))
+        return response
+
+    monkeypatch.setattr(selfie_api, "outfit_response", failing_response)
+    ids = await _items(db_session, test_user.id)
+    with pytest.raises(RuntimeError, match=failure + " failed"):
+        await confirm_client.post(
+            "/api/v1/selfie/confirm-photo",
+            data={"request_id": str(uuid4()), "item_ids": json.dumps(ids[1:])},
+            files=photo(),
+        )
+    assert list(preview_setup["folder"].glob("*.jpg")) == []

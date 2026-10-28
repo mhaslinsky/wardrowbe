@@ -1664,8 +1664,20 @@ async def attach_outfit_photo(
     service = OutfitPhotoService(db)
     outfit = await service.owned(outfit_id, current_user.id)
     data = await read_photo(image)
-    await service.save(outfit, data, image.filename)
-    return await service.response(outfit)
+    from app.services.preview_service import delete_preview_files
+
+    new_paths = {}
+    try:
+        new_paths = await service.save(outfit, data, image.filename)
+        response = await service.response(outfit)
+        await db.commit()
+    except BaseException:
+        try:
+            await db.rollback()
+        finally:
+            delete_preview_files(new_paths)
+        raise
+    return response
 
 
 @router.delete("/{outfit_id}/photo", status_code=204)

@@ -156,6 +156,9 @@ async def _confirm_outfit(
     current_user: Annotated[User, Depends(get_current_user)],
     photo: tuple[bytes, str] | None = None,
 ) -> OutfitResponse:
+    from app.services.preview_service import delete_preview_files
+
+    new_paths = {}
     try:
         outfit, created = await SelfieConfirmService(db).confirm(
             current_user, request.request_id, request.item_ids
@@ -163,12 +166,15 @@ async def _confirm_outfit(
         if photo is not None and created:
             from app.services.outfit_photo_service import OutfitPhotoService
 
-            await OutfitPhotoService(db).save(outfit, *photo)
+            new_paths = await OutfitPhotoService(db).save(outfit, *photo)
         response = await outfit_response(db, outfit, viewer_id=current_user.id)
         outfit_id, user_id, occasion = outfit.id, current_user.id, outfit.occasion
         await db.commit()
-    except Exception:
-        await db.rollback()
+    except BaseException:
+        try:
+            await db.rollback()
+        finally:
+            delete_preview_files(new_paths)
         raise
     if created:
         try:

@@ -90,7 +90,7 @@ class OutfitPhotoService:
             paths = await asyncio.shield(pending)
             self.clear(outfit)
             outfit.selfie_paths = paths
-            await self.db.commit()
+            return paths
         except BaseException:
             await self.db.rollback()
             try:
