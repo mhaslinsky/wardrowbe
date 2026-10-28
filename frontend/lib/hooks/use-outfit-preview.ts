@@ -123,14 +123,14 @@ export function useOutfitPreview(outfitId: string) {
   });
   const mutation = useMutation({
     meta: { toastsOwnErrors: true },
-    mutationFn: async ({ regenerate, signal, note }: { regenerate: boolean; signal: AbortSignal; note?: string }) => {
+    mutationFn: async ({ regenerate, signal, note, comparisonCallId }: { regenerate: boolean; signal: AbortSignal; note?: string; comparisonCallId?: string }) => {
       const previousCreatedAt = client.getQueryData<OutfitPreview>(key)?.created_at;
       if (!regenerate) {
         const saved = await client.fetchQuery({ queryKey: key, queryFn: ({ signal: querySignal }) => read(querySignal), staleTime: 0, retry: false, meta: { toastsOwnErrors: true } });
         if (saved) return saved;
       }
       if (signal.aborted) throw new Error('Preview cancelled');
-      try { return checkedPhoto(await api.post<OutfitPreview>(`/outfits/${outfitId}/preview${regenerate ? '?regenerate=true' : ''}`, regenerate ? { note: note ?? '' } : undefined, { signal })); }
+      try { return checkedPhoto(await api.post<OutfitPreview>(`/outfits/${outfitId}/preview${regenerate ? '?regenerate=true' : ''}`, regenerate ? { note: note ?? '', ...(comparisonCallId ? { comparison_call_id: comparisonCallId } : {}) } : undefined, { signal })); }
       catch (error) {
         if (!(error instanceof ApiError && error.status === 409 && previewErrorCode(error) === 'PREVIEW_IN_PROGRESS')) throw error;
         if (regenerate && note?.trim()) throw error;
@@ -171,20 +171,29 @@ export function useOutfitPreview(outfitId: string) {
     try { await removal.mutateAsync(); return true; }
     catch { return false; }
   };
-  const draw = async (regenerate = false, note?: string) => {
+  const comparison = useMutation({
+    meta: { toastsOwnErrors: true },
+    mutationFn: () => api.post<{ note: string; call_id: string }>(`/outfits/${outfitId}/preview/compare`),
+  });
+  const compare = async () => {
+    if (active.current || comparison.isPending || removal.isPending || feedback.isPending) return null;
+    try { return await comparison.mutateAsync(); }
+    catch { return null; }
+  };
+  const draw = async (regenerate = false, note?: string, comparisonCallId?: string) => {
     if (active.current || removal.isPending) return false;
-    removal.reset();
+    removal.reset(); comparison.reset();
     const controller = new AbortController();
     active.current = controller;
     const cancelRead = () => { void client.cancelQueries({ queryKey: key }); };
     controller.signal.addEventListener('abort', cancelRead, { once: true });
     const timeout = setTimeout(() => controller.abort(), 200_000);
-    try { await mutation.mutateAsync({ regenerate, signal: controller.signal, note }); return true; }
+    try { await mutation.mutateAsync({ regenerate, signal: controller.signal, note, comparisonCallId }); return true; }
     catch { return false; }
     finally { clearTimeout(timeout); controller.signal.removeEventListener('abort', cancelRead); if (active.current === controller) active.current = null; }
   };
-  return { preview: query.data, pending: mutation.isPending || removal.isPending || feedback.isPending, error: (query.isError || mutation.isError || removal.isError || (feedback.isError && !(feedback.error instanceof ApiError && feedback.error.status === 409))) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
+  return { preview: query.data, pending: mutation.isPending || removal.isPending || feedback.isPending || comparison.isPending, error: (comparison.isError || query.isError || mutation.isError || removal.isError || (feedback.isError && !(feedback.error instanceof ApiError && feedback.error.status === 409))) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
     conflict: mutation.isError && previewErrorCode(mutation.error) === 'PREVIEW_IN_PROGRESS',
     likeConflict: feedback.isError && previewErrorCode(feedback.error) === 'PREVIEW_CHANGED',
-    missingPhoto: previewErrorCode(mutation.error) === 'NO_PREVIEW_PHOTO', draw, remove, like };
+    missingPhoto: previewErrorCode(mutation.error) === 'NO_PREVIEW_PHOTO', draw, remove, like, compare };
 }

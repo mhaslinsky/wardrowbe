@@ -7,15 +7,16 @@ import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
+import { RedrawConfirmation } from '@/components/photo-redraw-controls';
 import { useOutfitPreview } from '@/lib/hooks/use-outfit-preview';
 
-export function OutfitPreview(props: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview: boolean }) {
+export function OutfitPreview(props: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview: boolean; hasRealPhoto?: boolean }) {
   return <PreviewContent key={`${props.outfitId}:${props.cardImageUrl ? props.cardImageIsPreview ? 'preview' : 'photo' : 'none'}`} {...props} />;
 }
 
-function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, cardImageIsPreview }: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview: boolean }) {
+function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, cardImageIsPreview, hasRealPhoto }: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview: boolean; hasRealPhoto?: boolean }) {
   const t = useTranslations('outfits.preview');
-  const { preview, pending, error, conflict, missingPhoto, likeConflict, draw, remove, like } = useOutfitPreview(outfitId);
+  const { preview, pending, error, conflict, missingPhoto, likeConflict, draw, remove, like, compare } = useOutfitPreview(outfitId);
   const started = useRef(false);
   useEffect(() => {
     let disposed = false;
@@ -24,6 +25,8 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
   }, [autoDraw, draw]);
   const [action, setAction] = useState<'redraw' | 'delete' | 'like' | null>(null);
   const [note, setNote] = useState('');
+  const [comparisonCallId, setComparisonCallId] = useState<string>();
+  const [compareConfirm, setCompareConfirm] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const collapsed = Boolean(cardImageUrl) && !expanded;
   const selectedPreview = Boolean(cardImageUrl && cardImageIsPreview);
@@ -31,6 +34,7 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
   return <div className={children && preview && detail && !cardImageUrl ? "grid min-w-0 items-start gap-4 sm:grid-cols-2" : "min-w-0 space-y-3"}>
     {children}
     {cardImageUrl && <Button variant="outline" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{t(expanded ? 'hide' : preview ? 'show' : 'title')}</Button>}
+    {preview && hasRealPhoto && <Button size="sm" variant="outline" disabled={pending} onClick={() => setCompareConfirm(true)}>{t('compare')}</Button>}
     <div className="space-y-2 min-w-0" hidden={collapsed}>
     {!preview && <Button variant="outline" disabled={pending} onClick={() => draw()}>{pending ? t('drawing') : t('see')}</Button>}
     {pending && <p role="status" className="text-sm text-muted-foreground">{t('drawing')}</p>}
@@ -45,12 +49,18 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
         {(preview.stale_reasons?.length ? preview.stale_reasons : ['unknown'] as const).map((reason) => <p key={reason}>{t(reason === 'clothes' ? 'clothesChanged' : reason === 'person' ? 'personChanged' : reason === 'preferences' ? 'preferencesChanged' : 'changed')}</p>)}
       </div>}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setAction('redraw'); }}>{t('redraw')}</Button>
+        <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setComparisonCallId(undefined); setAction('redraw'); }}>{t('redraw')}</Button>
         <Button size="sm" variant={preview.liked ? 'default' : 'outline'} aria-pressed={Boolean(preview.liked)} disabled={pending} onClick={() => { setNote(preview.like_note ?? ''); setAction('like'); }}><ThumbsUp className="mr-1 h-4 w-4" />{t(preview.liked ? 'liked' : 'like')}</Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => setAction('delete')}>{t('delete')}</Button>
       </div>
     </>}
     </div>
+    <RedrawConfirmation title={t('compare')} description={t('comparePaid')} open={compareConfirm} onOpenChange={setCompareConfirm} paidRetry={false} onConfirm={() => {
+      setCompareConfirm(false);
+      void compare().then((result) => {
+        if (result) { setNote(result.note); setComparisonCallId(result.call_id); setAction('redraw'); }
+      });
+    }} />
     <Dialog open={action !== null} onOpenChange={(open) => { if (!open) setAction(null); }}>
       <DialogContent aria-describedby={undefined} className="max-w-sm">
         <DialogTitle>{t(action === 'delete' ? 'deleteConfirm' : action === 'like' ? 'like' : 'redraw')}</DialogTitle>
@@ -70,7 +80,7 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
             else if (selected === 'like') {
               if (preview && !await like(note, preview.created_at)) setAction('like');
             } else {
-              const success = await draw(true, note);
+              const success = await draw(true, note, note.trim() ? comparisonCallId : undefined);
               if (!success && note.trim()) setAction('redraw');
             }
           }}>{t(action === 'delete' ? 'delete' : action === 'like' ? 'like' : 'redraw')}</Button>

@@ -12,6 +12,7 @@ function previewNetworkState(): ReturnType<typeof useOutfitPreview> {
     draw: vi.fn(async () => true),
     remove: vi.fn(async () => true),
     like: vi.fn(async () => true),
+    compare: vi.fn(async () => null),
   };
 }
 

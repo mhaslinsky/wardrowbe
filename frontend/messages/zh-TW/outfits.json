@@ -226,6 +226,8 @@
     "replaceFailedStale": "替換失敗，推薦可能延遲更新"
   },
   "preview": {
+    "comparePaid": "使用一次付費 AI 呼叫。",
+    "compare": "與我的照片比較",
     "likeChanged": "預覽已變更。請重新整理後再按喜歡。",
     "like": "喜歡",
     "liked": "已喜歡",

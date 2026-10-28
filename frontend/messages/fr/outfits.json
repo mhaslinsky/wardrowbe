@@ -226,6 +226,8 @@
     "replaceFailedStale": "Remplacement échoué ; suggestions parfois retardées"
   },
   "preview": {
+    "comparePaid": "Utilise un appel IA payant.",
+    "compare": "Comparer avec ma photo",
     "likeChanged": "Cet aperçu a changé. Rechargez-le pour l’aimer.",
     "like": "J’aime",
     "liked": "Aimé",

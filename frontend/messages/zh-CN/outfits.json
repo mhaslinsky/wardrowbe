@@ -226,6 +226,8 @@
     "replaceFailedStale": "替换失败，推荐可能延迟更新"
   },
   "preview": {
+    "comparePaid": "使用一次付费 AI 调用。",
+    "compare": "与我的照片比较",
     "likeChanged": "预览已更改。请刷新后再点赞。",
     "like": "喜欢",
     "liked": "已喜欢",

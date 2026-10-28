@@ -1605,6 +1605,7 @@ async def get_outfit_preview(
 
 
 class PreviewDrawRequest(BaseModel):
+    comparison_call_id: UUID | None = None
     note: str | None = Field(default=None, max_length=500)
 
 
@@ -1648,8 +1649,21 @@ async def create_outfit_preview(
     from app.services.preview_service import PreviewService
 
     return await PreviewService(db).generate(
-        outfit_id, current_user.id, regenerate, body.note if body else None
+        outfit_id,
+        current_user.id,
+        regenerate,
+        body.note if body else None,
+        body.comparison_call_id if body else None,
     )
+
+
+@router.post("/{outfit_id}/preview/compare")
+async def compare_outfit_preview(
+    outfit_id: UUID, db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
+):
+    from app.services.preview_compare_service import compare_preview
+
+    return await compare_preview(db, outfit_id, current_user.id)
 
 
 @router.put("/{outfit_id}/photo")
