@@ -709,6 +709,8 @@ class TestIncludeItems:
             fake_outfits = []
             for _ in range(3):
                 o = MagicMock()
+                o.selfie_paths = None
+                o.card_image_choice = "automatic"
                 o.id = uuid4()
                 o.occasion = "casual"
                 o.scheduled_for = None
