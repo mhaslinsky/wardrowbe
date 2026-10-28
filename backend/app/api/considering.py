@@ -23,6 +23,7 @@ from app.schemas.considering import (
 )
 from app.schemas.fit_evidence import FitEvidence
 from app.services.ai_service import AIDisabledError
+from app.services.buy_check_service import get_buy_check
 from app.services.considering_preview_service import ConsideringPreviewService
 from app.services.considering_service import ConsideringService, download_image
 from app.services.fit_evidence_service import get_fit_evidence
@@ -37,6 +38,12 @@ from app.utils.rate_limit import rate_limit_by_user
 router = APIRouter(prefix="/considering", tags=["Considering"])
 router.include_router(product_import_router)
 ShelfUser = Annotated[User, Depends(get_current_user)]
+
+
+@router.post("/{item_id}/buy-check")
+async def buy_check(item_id: UUID, db: DbSession, current_user: ShelfUser):
+    await rate_limit_by_user(str(current_user.id), "buy_check", max_requests=5, window_seconds=60)
+    return await get_buy_check(db, current_user.id, item_id)
 
 
 @router.get("/{item_id}/fit-evidence", response_model=FitEvidence)

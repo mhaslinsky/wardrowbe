@@ -224,6 +224,12 @@ Feel excerpts match only when their sets are identical and nonempty; other prose
 
 Source: [fit evidence](../backend/app/services/fit_evidence_service.py).
 
+### Request a buying check through the API
+
+Signed-in integrations can also request `POST /api/v1/considering/{id}/buy-check`. The response gives the decision model's estimated percentage, cited pluses and minuses, unknowns, sampled outfits, the model used, and any fallback reason. Skip-list matches, known-wrong sizes, and exact duplicates replace the percentage with a reason. Too few close rated items or conflicting experience produces no estimate. Price is excluded from the request.
+
+The operator configures `WARDROWBE_OPENROUTER_API_KEY`, `BUY_CHECK_PRIMARY_MODEL` (default `baseten/elephant-1:free`), and `BUY_CHECK_FALLBACK_MODEL` (default `typesafe/jev-1.14`). Unavailable or invalid primary answers trigger the fallback. Each attempt is recorded in AI calls. Fallback notices use your enabled ntfy channel, at most once per day; failed notices can retry on the next check.
+
 ## Make suggestions more useful
 
 ### Preferences and fit information

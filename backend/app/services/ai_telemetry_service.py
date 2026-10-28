@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from time import monotonic
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -135,7 +135,9 @@ def _request_metadata(body: dict[str, Any], request: bytes) -> dict[str, Any]:
     }
 
 
-def _response_metadata(response: httpx.Response, native: bool) -> dict[str, Any]:
+def _response_metadata(
+    response: httpx.Response, native: bool, response_format: str = "chat"
+) -> dict[str, Any]:
     try:
         payload = response.json()
     except (ValueError, UnicodeError):
@@ -150,6 +152,19 @@ def _response_metadata(response: httpx.Response, native: bool) -> dict[str, Any]
         if cost is not None:
             result["reported_cost"] = cost
             result["cost_currency"] = _bounded_text(usage.get("currency"))
+    if response_format == "decision":
+        from app.services.buy_check_service import parse_answer
+
+        result["answer"] = {
+            "structured": [payload.get("answers", payload)],
+            "text": [],
+            "images": [],
+        }
+        try:
+            parse_answer(payload)
+        except ValueError:
+            result["error_kind"] = "invalid_answer"
+        return result
     if payload.get("error"):
         result["error_kind"] = "provider_error"
         return result
@@ -234,6 +249,8 @@ async def record_ai_call(
     headers: Mapping[str, str] | None = None,
     native: bool = False,
     feature: str | None = None,
+    response_format: Literal["chat", "decision"] = "chat",
+    notice_status: str | None = None,
 ) -> httpx.Response:
     """POST a model request and record the attempt without awaiting database writes.
 
@@ -281,6 +298,7 @@ async def record_ai_call(
                         "latency_ms": (monotonic() - started) * 1000,
                         "outcome": "error",
                         "error_kind": context.failure_reason,
+                        **({"answer": {"fallback_notice": notice_status}} if notice_status else {}),
                     }
                 )
             except Exception:
@@ -288,7 +306,9 @@ async def record_ai_call(
         raise
     if record is not None:
         try:
-            metadata = _response_metadata(response, native)
+            metadata = _response_metadata(response, native, response_format)
+            if notice_status:
+                metadata.setdefault("answer", {})["fallback_notice"] = notice_status
             if response.status_code >= 400:
                 metadata["error_kind"] = "http_error"
             context.failure_reason = metadata.get("error_kind")
