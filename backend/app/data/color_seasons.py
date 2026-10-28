@@ -1,5 +1,5 @@
 # Source: https://theconceptwardrobe.com/colour-analysis-comprehensive-guides/complete-seasonal-guides
-# Soft Summer also uses Mike's ColorWise card (Oct 28, 2026), recorded in PER-274.
+# Soft Summer also follows ColorWise's Soft Summer card (PER-274).
 # Approximate mappings to broad app colors. Shades within a color can differ.
 # ColorWise Deep/Cool/Clear correspond to Dark/True/Bright in the source.
 from typing import Literal
