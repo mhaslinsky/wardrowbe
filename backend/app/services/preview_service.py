@@ -32,20 +32,8 @@ from app.utils.rate_limit import rate_limit_by_user
 logger = logging.getLogger(__name__)
 ANGLES = ("front", "quarter", "side")
 FACE_REFERENCE_TIMEOUT = 3.0
-# Matches the measurements used by RecommendationService._format_preferences_for_prompt.
-MEASUREMENT_FIELDS = frozenset(
-    (
-        "height",
-        "weight",
-        "chest",
-        "waist",
-        "hips",
-        "inseam",
-        "shirt_size",
-        "pants_size",
-        "dress_size",
-        "shoe_size",
-    )
+DRAWING_MEASUREMENT_FIELDS = frozenset(
+    ("height", "inseam", "shirt_size", "pants_size", "shoe_size")
 )
 
 
@@ -299,7 +287,7 @@ class PreviewService:
         measurements = {
             field: value
             for field, value in (user.body_measurements or {}).items()
-            if field in MEASUREMENT_FIELDS and value is not None and value != ""
+            if field in DRAWING_MEASUREMENT_FIELDS and value is not None and value != ""
         }
         face_hash = await asyncio.to_thread(reference_hash, paths)
         if not include_face:
