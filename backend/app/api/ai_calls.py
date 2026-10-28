@@ -18,7 +18,7 @@ async def list_calls(
     response: Response,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     cursor: Annotated[str | None, Query(max_length=100)] = None,
-):
+) -> AICallPage:
     response.headers["Cache-Control"] = "no-store"
     try:
         return await AICallQueryService(db).page(user.id, limit, cursor)
@@ -27,7 +27,7 @@ async def list_calls(
 
 
 @router.get("/{call_id}", response_model=AICallRead)
-async def read_call(call_id: UUID, user: CurrentUser, db: DbSession, response: Response):
+async def read_call(call_id: UUID, user: CurrentUser, db: DbSession, response: Response) -> AICallRead:
     response.headers["Cache-Control"] = "no-store"
     call = await AICallQueryService(db).get(user.id, call_id)
     if call is None:

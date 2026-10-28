@@ -317,7 +317,11 @@ class WearService:
                 ),
                 name=source.name,
                 source_item_id=source.source_item_id,
-                ai_raw_response={"_ai_call_id": (source.ai_raw_response or {}).get("_ai_call_id")},
+                ai_raw_response=(
+                    {"_ai_call_id": source.ai_raw_response["_ai_call_id"]}
+                    if source.ai_raw_response and source.ai_raw_response.get("_ai_call_id")
+                    else None
+                ),
             )
             self.db.add(wear)
             await self.db.flush()

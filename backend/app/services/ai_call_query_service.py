@@ -23,7 +23,7 @@ def linked_call_id(metadata: dict | None) -> UUID | None:
 class AICallQueryService:
     """Read calls with current feedback, scoped to the call owner's records."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     async def get(self, user_id: UUID, call_id: UUID) -> AICallRead | None:

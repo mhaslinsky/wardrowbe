@@ -200,14 +200,16 @@ async def test_preview_feedback_keeps_replaced_version(
     assert record.created_at > previous_time
 
 
-@pytest.mark.parametrize("copy", ["clone", "wear"])
+@pytest.mark.parametrize("copy,linked", [("clone", True), ("clone", False), ("wear", True)])
 async def test_copied_outfit_preserves_only_call_link(
-    db_session, studio_user, wardrobe_items, copy
+    db_session, studio_user, wardrobe_items, copy, linked
 ):
     original = await source(
         db_session, studio_user, [item.id for item in wardrobe_items], kind="manual"
     )
     original.ai_raw_response = {"_ai_call_id": str(uuid4()), "inspiration": {"private": "source"}}
+    if not linked:
+        original.ai_raw_response = {"inspiration": {"private": "source"}}
     await db_session.commit()
     if copy == "clone":
         result = await StudioService(db_session).clone_to_lookbook(
@@ -219,7 +221,8 @@ async def test_copied_outfit_preserves_only_call_link(
                 studio_user, original, get_user_today(studio_user), caller="wore"
             )
         ).outfit
-    assert result.ai_raw_response == {"_ai_call_id": original.ai_raw_response["_ai_call_id"]}
+    expected = {"_ai_call_id": original.ai_raw_response["_ai_call_id"]} if linked else None
+    assert result.ai_raw_response == expected
 
 
 def export(path, **environment):
