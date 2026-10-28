@@ -226,6 +226,12 @@
     "replaceFailedStale": "変更できず、提案の反映が遅れる場合があります"
   },
   "preview": {
+    "comparisonChanged": "メモを確認するか、もう一度比較してください。",
+    "comparing": "写真を比較中…",
+    "comparisonFailed": "比較に失敗しました",
+
+    "comparePaid": "自分の写真とプレビューをAIに送信します。有料のAI呼び出しを1回使用します。",
+    "compare": "自分の写真と比較",
     "likeChanged": "プレビューが変更されました。再読み込みしてからいいねしてください。",
     "like": "いいね",
     "liked": "いいね済み",

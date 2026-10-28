@@ -392,7 +392,7 @@ class PreviewService:
         await self.db.delete(record)
         await self.db.commit()
 
-    async def generate(self, outfit_id, user_id, regenerate, note=None):
+    async def generate(self, outfit_id, user_id, regenerate, note=None, comparison_call_id=None):
         note = note.strip() if note else None
         paths, pending_store, claim_id = {}, None, None
         try:
@@ -416,6 +416,12 @@ class PreviewService:
                     undefer(OutfitPreview.preferences_key),
                 ],
             )
+            if comparison_call_id is not None:
+                from app.services.preview_compare_service import validate_comparison
+
+                if not regenerate or not note:
+                    raise HTTPException(422, "COMPARISON_NOTE_REQUIRED")
+                await validate_comparison(self.db, outfit_id, user_id, record, comparison_call_id)
             if (
                 record
                 and record.claim_id
@@ -650,6 +656,7 @@ class PreviewService:
                         kind="fix",
                         note=note,
                         ai_call_id=previous_call_id,
+                        comparison_call_id=comparison_call_id,
                         preview_created_at=previous_created_at,
                     )
                 )

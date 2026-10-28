@@ -226,6 +226,12 @@
     "replaceFailedStale": "Sostituzione fallita; suggerimenti in ritardo"
   },
   "preview": {
+    "comparisonChanged": "Rivedi la nota o confronta di nuovo.",
+    "comparing": "Confronto delle foto…",
+    "comparisonFailed": "Confronto non riuscito",
+
+    "comparePaid": "Invia la tua foto e l’anteprima all’IA. Usa una chiamata IA a pagamento.",
+    "compare": "Confronta con la mia foto",
     "likeChanged": "L’anteprima è cambiata. Ricarica per mettere Mi piace.",
     "like": "Mi piace",
     "liked": "Ti piace",

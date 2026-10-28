@@ -209,7 +209,7 @@ export default function OutfitDetailPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={outfit.card_image_url} alt={getTitle(outfit)} className="max-h-96 w-full object-contain" />
           </div>}
-          <OutfitPreview key={outfit.id} outfitId={outfit.id} detail cardImageUrl={outfit.card_image_url} cardImageIsPreview={outfit.card_image_choice === 'preview'}>{itemGrid}</OutfitPreview>
+          <OutfitPreview key={outfit.id} outfitId={outfit.id} detail hasRealPhoto={Boolean(outfit.selfie_photo)} cardImageUrl={outfit.card_image_url} cardImageIsPreview={outfit.card_image_choice === 'preview'}>{itemGrid}</OutfitPreview>
           {outfit.card_image_url ? <details className="mt-4">
             <summary className="cursor-pointer text-sm">{t('photo.title')}</summary>
             <OutfitPhoto outfit={outfit} />

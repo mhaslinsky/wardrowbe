@@ -13,12 +13,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-export function RedrawConfirmation({ open, onOpenChange, onConfirm, paidRetry, count = 1, onRetryChange }: {
+export function RedrawConfirmation({ open, onOpenChange, onConfirm, paidRetry, count = 1, onRetryChange, title, description }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   paidRetry: boolean;
   count?: number;
+  title?: string;
+  description?: string;
   onRetryChange?: (retry: boolean) => void;
 }) {
   const translate = useTranslations('wardrobe.photoRedraw');
@@ -26,8 +28,8 @@ export function RedrawConfirmation({ open, onOpenChange, onConfirm, paidRetry, c
   return <AlertDialog open={open} onOpenChange={onOpenChange}>
     <AlertDialogContent>
       <AlertDialogHeader>
-        <AlertDialogTitle>{translate('confirmTitle', { count })}</AlertDialogTitle>
-        <AlertDialogDescription>{translate(paidRetry ? 'paidRetry' : 'paidConfirm')}</AlertDialogDescription>
+        <AlertDialogTitle>{title ?? translate('confirmTitle', { count })}</AlertDialogTitle>
+        <AlertDialogDescription>{description ?? translate(paidRetry ? 'paidRetry' : 'paidConfirm')}</AlertDialogDescription>
       </AlertDialogHeader>
       {onRetryChange && <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={paidRetry} onChange={(event) => onRetryChange(event.target.checked)} />{translate('includeRetries')}

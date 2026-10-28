@@ -226,6 +226,12 @@
     "replaceFailedStale": "Could not replace; suggestions may lag"
   },
   "preview": {
+    "comparisonChanged": "Review the note or compare again.",
+    "comparing": "Comparing photos…",
+    "comparisonFailed": "Comparison failed",
+
+    "comparePaid": "Sends your photo and the preview to the AI. Uses one paid AI call.",
+    "compare": "Compare with my photo",
     "likeChanged": "This preview changed. Reload to like it.",
     "like": "Like",
     "liked": "Liked",

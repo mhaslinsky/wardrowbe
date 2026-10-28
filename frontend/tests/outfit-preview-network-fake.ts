@@ -7,11 +7,14 @@ function previewNetworkState(): ReturnType<typeof useOutfitPreview> {
     pending: false,
     error: false,
     conflict: false,
+    comparisonPending: false,
+    comparisonError: false,
     missingPhoto: false,
     likeConflict: false,
     draw: vi.fn(async () => true),
     remove: vi.fn(async () => true),
     like: vi.fn(async () => true),
+    compare: vi.fn(async () => null),
   };
 }
 

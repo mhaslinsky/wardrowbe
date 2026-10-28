@@ -136,7 +136,13 @@ class AICallQueryService:
                     user_id=feedback.user_id,
                     outfit_id=feedback.outfit_id,
                     created_at=feedback.created_at,
-                    data={"note": feedback.note, "preview_created_at": feedback.preview_created_at},
+                    data={
+                        "note": feedback.note,
+                        "preview_created_at": feedback.preview_created_at,
+                        "comparison_call_id": feedback.comparison_call_id,
+                        "real_photo_informed": feedback.kind == "comparison"
+                        or feedback.comparison_call_id is not None,
+                    },
                 )
             )
         purchase_calls = (

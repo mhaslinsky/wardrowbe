@@ -226,6 +226,12 @@
     "replaceFailedStale": "Remplacement échoué ; suggestions parfois retardées"
   },
   "preview": {
+    "comparisonChanged": "Vérifiez la note ou comparez à nouveau.",
+    "comparing": "Comparaison des photos…",
+    "comparisonFailed": "Échec de la comparaison",
+
+    "comparePaid": "Envoie votre photo et l’aperçu à l’IA. Utilise un appel IA payant.",
+    "compare": "Comparer avec ma photo",
     "likeChanged": "Cet aperçu a changé. Rechargez-le pour l’aimer.",
     "like": "J’aime",
     "liked": "Aimé",
