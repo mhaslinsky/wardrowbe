@@ -8,10 +8,11 @@ from app.api.preferences import _build_preference_response
 from app.models import User, UserPreference
 
 DEFAULT_PREFERENCES_RESPONSE = {
+    "color_season": None,
     "standing_rules": [],
     "color_favorites": [],
     "color_avoid": [],
-    "style_profile": {"casual": 50, "formal": 50, "sporty": 50, "minimalist": 50, "bold": 50, "color_season": None},
+    "style_profile": {"casual": 50, "formal": 50, "sporty": 50, "minimalist": 50, "bold": 50},
     "default_occasion": "casual",
     "temperature_unit": "celsius",
     "temperature_sensitivity": "normal",
