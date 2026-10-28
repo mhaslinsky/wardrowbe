@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.models.item import ClothingItem, ItemStatus
 from app.services.ai_service import AIService
+from app.services.ai_telemetry_service import drain_recordings
 from app.workers.db import close_db, get_db_session, init_db
 from app.workers.notifications import (
     check_scheduled_notifications,
@@ -115,6 +116,7 @@ async def startup(ctx: dict) -> None:
 
 async def shutdown(ctx: dict) -> None:
     logger.info("Worker shutting down...")
+    await drain_recordings()
     await close_db(ctx)
 
 

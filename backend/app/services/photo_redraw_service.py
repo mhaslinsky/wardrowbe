@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.models.item import ClothingItem, ItemStatus
+from app.services.ai_telemetry_service import CallContext, record_ai_call
 from app.services.background_removal import get_provider
 from app.services.image_service import ImageService
 from app.services.mask_cleanup import NoGarmentFound, clean_cutout
@@ -281,7 +282,8 @@ def color_check(original: Image.Image, redrawn: Image.Image) -> dict:
 
 
 class PhotoRedrawService:
-    def __init__(self):
+    def __init__(self, *, telemetry=None):
+        self.telemetry = telemetry
         self.calls = 0
         self.usage = {}
         self.mark_paid = None
@@ -306,10 +308,19 @@ class PhotoRedrawService:
         }
         self.calls += 1
         async with httpx.AsyncClient(timeout=180) as client:
-            response = await client.post(
+            response = await record_ai_call(
+                client,
                 f"https://generativelanguage.googleapis.com/v1beta/models/{settings.ai_image_model}:generateContent",
                 headers={"x-goog-api-key": settings.ai_api_key},
-                json=body,
+                body=body,
+                context=self.telemetry,
+                model=settings.ai_image_model,
+                native=True,
+                feature="photo_redraw_assessment"
+                if modality == "TEXT"
+                and self.telemetry
+                and self.telemetry.feature == "photo_redraw"
+                else None,
             )
             response.raise_for_status()
             payload = response.json()
@@ -413,6 +424,7 @@ class PhotoRedrawService:
         if not photo_redraw_enabled():
             raise HTTPException(503, "Photo redraw is disabled")
         item = await lock_photo(db, item)
+        self.telemetry = CallContext(item.user_id, "photo_redraw", "item", item_id)
         previous = item.photo_redraw or {}
         status = previous.get("status")
         stale = status == "generating" and stale_claim(previous)

@@ -13,6 +13,7 @@ from app.models.item import TAG_COLUMNS, ClothingItem, ItemStatus, TaggedBy, Tag
 from app.models.preference import UserPreference
 from app.models.user import User
 from app.services.ai_service import AIService, ClothingTags, repeats_identically
+from app.services.ai_telemetry_service import CallContext
 from app.utils.locale import DEFAULT_LOCALE
 from app.workers.db import get_db_session
 
@@ -238,7 +239,10 @@ async def tag_item_image(ctx: dict, item_id: str, image_path: str) -> dict[str, 
             await db.close()
 
         # Analyze with AI (uses custom endpoints if available)
-        ai_service = AIService(endpoints=ai_endpoints)
+        ai_service = AIService(
+            endpoints=ai_endpoints,
+            telemetry=CallContext(item.user_id, "item_tagging", "item", UUID(item_id)),
+        )
         tags = await asyncio.wait_for(
             ai_service.analyze_image(path, locale=locale), timeout=_tagging_call_budget(ai_service)
         )

@@ -1,4 +1,5 @@
 from app.models.access_token import PersonalAccessToken
+from app.models.ai_call import AICall
 from app.models.considering import ItemPurchase
 from app.models.family import Family, FamilyInvite
 from app.models.fit_profile import UserFitProfile
@@ -20,6 +21,7 @@ from app.models.trip import Trip
 from app.models.user import User
 
 __all__ = [
+    "AICall",
     "ItemPurchase",
     "PersonalAccessToken",
     "UserFitProfile",

@@ -17,6 +17,7 @@ from app.models.outfit import Outfit, OutfitItem
 from app.models.preference import UserPreference
 from app.models.preview import OutfitPreview, PreviewFeedback, PreviewPhoto, delete_preview_files
 from app.models.user import User
+from app.services.ai_telemetry_service import CallContext
 from app.services.image_service import ImageService, ImageVariant
 from app.services.photo_redraw_service import (
     PhotoRedrawService,
@@ -558,7 +559,25 @@ class PreviewService:
                     + json.dumps(note).replace("<", "\\u003c").replace(">", "\\u003e")
                     + "\n</change_request>"
                 )
-            provider = PhotoRedrawService()
+            from app.models.considering import ItemPurchase
+
+            purchase = (
+                await self.db.get(ItemPurchase, outfit.source_item_id)
+                if outfit.source_item_id
+                else None
+            )
+            provider = PhotoRedrawService(
+                telemetry=CallContext(
+                    user_id,
+                    "considering_preview"
+                    if purchase is not None
+                    else "preview_redraw"
+                    if regenerate
+                    else "preview",
+                    "outfit",
+                    outfit_id,
+                )
+            )
             payload = await provider.request(images, prompt, "IMAGE", mime_type="image/jpeg")
             inline = next(
                 part["inlineData"]["data"]
@@ -608,7 +627,15 @@ class PreviewService:
             record.paths, record.cache_key = paths, key
             record.clothes_key, record.person_key = clothes_key, person_key
             record.preferences_key = preferences_key
-            record.created_at, record.usage = datetime.now(UTC), provider.usage
+            record.created_at, record.usage = (
+                datetime.now(UTC),
+                {
+                    **provider.usage,
+                    "_ai_call_id": str(provider.telemetry.last_call_id)
+                    if provider.telemetry.last_call_id
+                    else None,
+                },
+            )
             record.claim_id, record.started_at = None, None
             if regenerate and note:
                 self.db.add(

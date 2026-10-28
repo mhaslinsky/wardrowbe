@@ -13,6 +13,7 @@ from PIL import Image, ImageOps
 from pydantic import BaseModel
 
 from app.config import get_settings
+from app.services.ai_telemetry_service import record_ai_call
 from app.utils.garment_vocabulary import (
     COLORS,
     FORMALITY,
@@ -37,6 +38,7 @@ class TextGenerationResult(BaseModel):
     content: str
     model: str
     endpoint: str
+    call_id: str | None = None
 
 
 class ClothingTags(BaseModel):
@@ -275,7 +277,8 @@ class AIEndpointConfig:
 class AIService:
     """Service for AI-powered image analysis and text generation."""
 
-    def __init__(self, endpoints: list[dict] | None = None):
+    def __init__(self, endpoints: list[dict] | None = None, *, telemetry=None):
+        self.telemetry = telemetry
         """
         Initialize AI service with optional custom endpoints.
 
@@ -477,10 +480,13 @@ class AIService:
                         if use_reasoning_effort and current_reasoning_effort:
                             request_body["reasoning_effort"] = current_reasoning_effort
 
-                        response = await client.post(
+                        response = await record_ai_call(
+                            client,
                             f"{endpoint.url}/chat/completions",
                             headers=self._get_headers(),
-                            json=request_body,
+                            body=request_body,
+                            model=request_body["model"],
+                            context=self.telemetry,
                         )
                         response.raise_for_status()
 
@@ -771,10 +777,13 @@ class AIService:
                         if use_reasoning_effort and current_reasoning_effort:
                             request_body["reasoning_effort"] = current_reasoning_effort
 
-                        response = await client.post(
+                        response = await record_ai_call(
+                            client,
                             f"{endpoint.url}/chat/completions",
                             headers=self._get_headers(),
-                            json=request_body,
+                            body=request_body,
+                            model=request_body["model"],
+                            context=self.telemetry,
                         )
                         response.raise_for_status()
 
@@ -827,6 +836,9 @@ class AIService:
                                 content=content,
                                 model=used_model,
                                 endpoint=endpoint.name,
+                                call_id=str(self.telemetry.last_call_id)
+                                if self.telemetry and self.telemetry.last_call_id
+                                else None,
                             )
                         return content
 

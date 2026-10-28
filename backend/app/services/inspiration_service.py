@@ -12,6 +12,7 @@ from app.models.item import ClothingItem
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
 from app.services.ai_service import AIService, require_internal_ai
+from app.services.ai_telemetry_service import CallContext
 from app.services.image_service import ImageService
 from app.services.item_scorer import get_season, score_items
 from app.services.preference_service import PreferenceService
@@ -160,7 +161,10 @@ class InspirationService:
             + "\n</WARDROBE>"
         )
         prompt += "\n" + recommendations._format_wearer_preferences(preferences, notes)
-        ai = AIService(endpoints=preferences.ai_endpoints if preferences else None)
+        ai = AIService(
+            endpoints=preferences.ai_endpoints if preferences else None,
+            telemetry=CallContext(user.id, "inspiration"),
+        )
         path = self.image_path(user.id, uuid4())
         path.parent.mkdir(parents=True, exist_ok=True)
         image.save(path, format="JPEG", quality=90)

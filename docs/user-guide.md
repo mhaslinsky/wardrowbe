@@ -242,6 +242,12 @@ If you change **Color season** during a save, choose **Save** again after it fin
 
 Sources: [Settings](../frontend/app/dashboard/settings/page.tsx), [season palettes](../backend/app/data/color_seasons.py), [item scoring](../backend/app/services/item_scorer.py), [suggestion preferences](../backend/app/services/recommendation_service.py).
 
+### AI call records
+
+AI results are recorded to improve the app. These records keep prompt and image sizes and hashes, structured answers, and provider usage when available. Plain-text answers are kept only as sizes and hashes. Call records are deleted with your account.
+
+Operator note: graceful shutdown waits up to five seconds for pending records; an abrupt stop can lose pending records.
+
 ### Review AI Learning
 
 Open **AI Learning** after logging wears, dismissing suggestions, and rating outfits. It shows feedback totals, acceptance rate, style ratings, learned color and style preferences, occasion patterns, weather preferences, and combinations you tend to like.

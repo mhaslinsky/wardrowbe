@@ -13,6 +13,7 @@ from app.api.router import api_router
 from app.config import Settings, get_settings
 from app.database import engine
 from app.logging_config import configure_logging
+from app.services.ai_telemetry_service import drain_recordings
 from app.utils.public_origin import PublicHostMiddleware
 
 settings = get_settings()
@@ -27,6 +28,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error("Configuration: %s", warning)
     logger.info("Auth mode: %s", settings.get_auth_mode())
     yield
+    await drain_recordings()
     await engine.dispose()
 
 
