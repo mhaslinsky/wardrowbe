@@ -68,7 +68,7 @@ export interface Item {
   acceptance_count: number;
   wears_since_wash: number;
   last_washed_at?: string;
-  wash_interval?: number;
+  wash_interval?: number | null;
   needs_wash: boolean;
   effective_wash_interval: number;
   additional_images: ItemImage[];
