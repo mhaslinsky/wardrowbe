@@ -206,6 +206,16 @@ If a save partly succeeds, use **Retry details** to finish it. If the save statu
 
 Sources: [Considering page](../frontend/app/dashboard/considering/page.tsx), [link and image entry](../frontend/components/considering-fallback.tsx), [product confirmation](../frontend/components/considering-import.tsx), [preview action](../frontend/components/considering-preview-action.tsx), [suggestions action](../frontend/components/considering-suggestions-action.tsx).
 
+### Read fit evidence through the API
+
+Signed-in integrations can request `GET /api/v1/considering/{id}/fit-evidence` for a ready, active item on their own Considering shelf. The response includes brand-size and skip-list matches, fabric comparisons with owned pieces, explicit ratings and feel notes, possible duplicates, and sampled outfit ideas.
+
+Keep **Fit profile** current and record item notes with `Rating:`, `Size:`, `Fabric:`, `Fabric detail:`, `Fit:`, `Warmth:`, `Line:`, `Color:`, `Works:`, `Doesnt:`, or `Style:`. Ratings accept `love`, `like`, `mixed`, and `dislike`. Missing information stays unknown; a shared fiber alone does not establish comfort or fit. Outfit ideas ignore weather and laundry, and do not test every possible combination.
+
+Each fact cites its item or fit-profile row. Conflicting sizes yield no recommendation. The endpoint makes no AI calls and saves no outfits or wear history. Items return 404 if they are unready, missing, archived, bought, passed, or owned by another user.
+
+Source: [fit evidence](../backend/app/services/fit_evidence_service.py).
+
 ## Make suggestions more useful
 
 ### Preferences and fit information
