@@ -17,31 +17,39 @@ from app.services.trip_service import TripService, TripWeather, packing_list, re
 from app.services.weather_service import WeatherService, WeatherServiceError
 
 
-def item(kind, wears=0, interval=None):
+def item(kind, wears=0, interval=None, type_setting=None):
     return SimpleNamespace(
-        type=kind, subtype=None, name=kind, wears_since_wash=wears, wash_interval=interval
+        type=kind,
+        subtype=None,
+        name=kind,
+        wears_since_wash=wears,
+        wash_interval=interval,
+        type_wash_interval=type_setting,
     )
 
 
 @pytest.mark.parametrize(
-    "kind,wears,interval,expected",
+    "kind,wears,interval,type_setting,expected",
     [
-        ("t-shirt", 0, None, 1),
-        ("shirt", 0, None, 1),
-        ("jeans", 0, None, 6),
-        ("jacket", 1000, 999, float("inf")),
-        ("jacket", 0, 1, 1),
-        ("hoodie", 1, 2, 1),
-        ("sweater", 0, 2, 2),
-        ("JEANS", 0, None, 6),
-        ("jeans", 2, 3, 1),
-        ("jeans", 3, 3, 0),
-        ("unknown", 0, None, 3),
-        ("shirt", 2, None, 0),
+        ("t-shirt", 0, None, None, 1),
+        ("shirt", 0, None, None, 1),
+        ("jeans", 0, None, None, 6),
+        ("jacket", 1000, 999, None, float("inf")),
+        ("jacket", 0, 1, None, 1),
+        ("hoodie", 1, 2, None, 1),
+        ("sweater", 0, 2, None, 2),
+        ("JEANS", 0, None, None, 6),
+        ("jeans", 2, 3, None, 1),
+        ("jeans", 3, 3, None, 0),
+        ("unknown", 0, None, None, 3),
+        ("shirt", 2, None, None, 0),
+        ("socks", 0, None, 2, 2),
+        ("socks", 0, None, 999, float("inf")),
+        ("socks", 0, 5, 2, 5),
     ],
 )
-def test_reuse_limits(kind, wears, interval, expected):
-    assert reuse_limit(item(kind, wears, interval)) == expected
+def test_reuse_limits(kind, wears, interval, type_setting, expected):
+    assert reuse_limit(item(kind, wears, interval, type_setting)) == expected
 
 
 def test_packing_has_one_entry_per_item_and_days_worn():

@@ -17,6 +17,7 @@ export function WashingSettings({ values, defaults, onChange }: WashingSettingsP
   const translate = useTranslations('settings');
   const typeLabel = useTypeLabel();
   const { data: types, isLoading, isError } = useItemTypes();
+  const ownedTypes = types?.filter(({ type }) => type in defaults) ?? [];
 
   return (
     <Card>
@@ -27,8 +28,8 @@ export function WashingSettings({ values, defaults, onChange }: WashingSettingsP
       <CardContent className="space-y-4">
         {isLoading ? <p>{translate('washing.loading')}</p> : isError ? (
           <p role="alert">{translate('washing.error')}</p>
-        ) : types?.length === 0 ? <p>{translate('washing.empty')}</p> : (
-          types?.filter(({ type }) => type in defaults).map(({ type }) => (
+        ) : ownedTypes.length === 0 ? <p>{translate('washing.empty')}</p> : (
+          ownedTypes.map(({ type }) => (
             <div key={type} className="flex flex-wrap items-center gap-3">
               <Label htmlFor={`wash-${type}`} className="min-w-24">{typeLabel(type)}</Label>
               <select

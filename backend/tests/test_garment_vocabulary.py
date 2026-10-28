@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from app.schemas.item import DEFAULT_WASH_INTERVALS
 from app.services.ai_service import (
     TAGGING_PROMPT,
     VALID_COLORS,
@@ -24,6 +23,7 @@ from app.services.pairing_service import PAIRING_OCCASION
 from app.utils.garment_vocabulary import (
     COLOR_ALIASES,
     COLORS,
+    DEFAULT_WASH_INTERVALS,
     FORMALITY,
     ITEM_ROLE,
     MATERIALS,

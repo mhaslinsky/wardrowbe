@@ -49,6 +49,16 @@ def validate_wash_intervals(values: dict[str, int]) -> dict[str, int]:
     return values
 
 
+def stored_wash_intervals(values: object) -> dict[str, int]:
+    if not isinstance(values, dict):
+        return {}
+    return {
+        kind: interval
+        for kind, interval in values.items()
+        if kind in TYPES and type(interval) is int and (interval == 999 or 1 <= interval <= 30)
+    }
+
+
 WashIntervals = Annotated[
     dict[str, Annotated[int, Field(strict=True)]], AfterValidator(validate_wash_intervals)
 ]

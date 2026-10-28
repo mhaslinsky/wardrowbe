@@ -233,6 +233,7 @@ In **Settings**, review these sections. Use **Save** for general preference chan
 - **Location**: use **Use My Location** or enter coordinates, review the timezone, then **Save Location**. Browser permission can be denied; manual entry remains available.
 - **Style Profile**, **Favorite Colors**, and **Colors to Avoid**: describe the styles and colors you want.
 - **Temperature & Comfort**: choose temperature units, sensitivity, layering, and your hot and cold thresholds.
+- **Washing**: set wears before washing by clothing type; see [laundry](#keep-laundry-up-to-date).
 - **Recommendation Settings**: choose a default occasion, variety, repeat avoidance, and whether to prefer underused items.
 - **Standing rules**: add one instruction per line, up to 20 rules of 300 characters each.
 - **Body Measurements**: choose metric or imperial units, enter the measurements you know and usual clothing sizes, then **Save Measurements**.

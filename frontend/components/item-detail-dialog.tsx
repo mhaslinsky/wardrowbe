@@ -193,6 +193,9 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
   useEffect(() => { setActiveImageIndex(0); }, [comparisonCount]);
 
   if (!item) return null;
+  const defaultWashInterval = preferences?.wash_intervals?.[editForm.type]
+    ?? preferences?.wash_interval_defaults?.[editForm.type]
+    ?? item.effective_wash_interval;
 
   const handleSave = async () => {
     try {
@@ -795,9 +798,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                         wash_interval_bad_input: event.target.validity.badInput,
                       })}
                       placeholder={t('placeholders.washIntervalDefault', {
-                        count: preferences?.wash_intervals?.[editForm.type]
-                          ?? preferences?.wash_interval_defaults?.[editForm.type]
-                          ?? item.effective_wash_interval,
+                        count: defaultWashInterval === 999 ? t('view.never') : defaultWashInterval,
                       })}
                     />
                     <p className="text-xs text-muted-foreground">

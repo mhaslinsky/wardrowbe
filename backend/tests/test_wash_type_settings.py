@@ -1,5 +1,4 @@
 from datetime import date
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -12,7 +11,6 @@ from app.models.item import ClothingItem, ItemStatus
 from app.models.preference import UserPreference
 from app.models.user import User
 from app.services.item_service import ItemService
-from app.services.trip_service import reuse_limit
 from app.services.undo_wear_service import UndoWearService
 from app.services.wear_service import WearService
 from app.utils.auth import get_current_user
@@ -175,6 +173,28 @@ async def test_missing_and_reset_preferences(client, test_user):
     assert response.json()["wash_intervals"] == {}
 
 
+async def test_stored_invalid_type_settings_are_ignored(client, db_session, test_user):
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    db_session.add(
+        UserPreference(
+            user_id=test_user.id,
+            wash_intervals={
+                "socks": 2,
+                "retired-type": 3,
+                "shirt": True,
+                "coat": 31,
+                "jacket": "2",
+                "underwear": 0,
+                "dress": 999,
+            },
+        )
+    )
+    await db_session.commit()
+    response = await client.get(PREFERENCES)
+    assert response.status_code == 200, response.text
+    assert response.json()["wash_intervals"] == {"socks": 2, "dress": 999}
+
+
 async def test_list_has_no_per_item_preference_queries(client, db_session, test_user):
     app.dependency_overrides[get_current_user] = lambda: test_user
     await setting(client, {"socks": 2})
@@ -202,17 +222,6 @@ async def test_list_has_no_per_item_preference_queries(client, db_session, test_
         print(f"list query counts: {counts}")
     finally:
         event.remove(db_session.bind.sync_engine, "before_cursor_execute", capture)
-
-
-def test_trip_uses_type_setting_and_override():
-    item = SimpleNamespace(
-        type="socks", wash_interval=None, type_wash_interval=2, wears_since_wash=0
-    )
-    assert reuse_limit(item) == 2
-    item.type_wash_interval = 999
-    assert reuse_limit(item) == float("inf")
-    item.wash_interval = 5
-    assert reuse_limit(item) == 5
 
 
 async def test_type_change_refreshes_setting(client, db_session, test_user):

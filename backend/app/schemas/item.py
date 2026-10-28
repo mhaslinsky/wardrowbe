@@ -16,7 +16,6 @@ from pydantic import (
 from app.models.item import ProcessingKind, TaggingStatus
 from app.schemas.color import ColorList, ColorName
 from app.schemas.outfit import Occasion
-from app.utils.garment_vocabulary import DEFAULT_WASH_INTERVALS as DEFAULT_WASH_INTERVALS
 from app.utils.photo_urls import image_url, optional_image_url
 from app.utils.washing import wash_interval
 

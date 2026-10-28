@@ -38,8 +38,8 @@ it('resets a type without removing another type setting', () => {
   expect(change).toHaveBeenCalledWith({ shirt: 5 });
 });
 
-it('shows an empty state when no types are owned', () => {
-  state.types = [];
+it.each([{ types: [] }, { types: [{ type: 'unknown', count: 1 }] }])('shows an empty state without supported owned types: %j', ({ types }) => {
+  state.types = types;
   render(<WashingSettings values={{}} defaults={defaults} onChange={change} />);
   expect(screen.getByText('washing.empty')).toBeInTheDocument();
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
