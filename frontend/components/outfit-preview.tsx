@@ -56,7 +56,7 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
         <DialogTitle>{t(action === 'delete' ? 'deleteConfirm' : action === 'like' ? 'like' : 'redraw')}</DialogTitle>
         {(action === 'redraw' || action === 'like') && <label className="space-y-2">
           <span>{t(action === 'like' ? 'likeNote' : 'changeNote')}</span>
-          <Textarea aria-label={t(action === 'like' ? 'likeNote' : 'changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
+          <Textarea placeholder={action === 'like' ? t('likeNotePlaceholder') : undefined} aria-label={t(action === 'like' ? 'likeNote' : 'changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
         </label>}
         {action === 'like' && likeConflict && <p role="alert" className="text-sm text-destructive">{t('likeChanged')}</p>}
         {action === 'redraw' && conflict && <p role="alert" className="text-sm text-destructive">{t('redrawConflict')}</p>}
