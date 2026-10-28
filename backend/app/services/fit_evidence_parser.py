@@ -2,11 +2,15 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from decimal import Decimal
+from itertools import combinations
 
-from app.schemas.fit_evidence import EvidenceFact, EvidenceSource
-from app.utils.garment_vocabulary import ITEM_ROLE
+from app.models.item import ClothingItem
+from app.schemas.fit_evidence import EvidenceFact, EvidenceSource, FactKind, FactOrigin
+from app.schemas.fit_profile import FitProfile
+from app.schemas.item import USER_TAG_KEYS
+from app.utils.garment_vocabulary import ITEM_ROLE, canonical_color
 
-NOTE_KINDS = {
+NOTE_KINDS: dict[str, FactKind] = {
     "rating": "rating",
     "size": "size",
     "fabric": "fiber",
@@ -23,11 +27,13 @@ def normalize(value: str) -> str:
 def fibers(value: str) -> list[dict[str, str | None]]:
     components = []
     for part in re.split(r"[,/+]", value):
-        match = re.fullmatch(r"\s*(?:(\d+(?:\.\d+)?)%\s*)?([^\d%]+?)\s*", part)
+        match = re.fullmatch(r"\s*(?:(\d+(?:\.\d{1,2})?)%\s*)?([^\d%]+?)\s*", part)
         if not match:
             return []
         percent, name = match.groups()
-        if not normalize(name) or (percent is not None and Decimal(percent) > 100):
+        if not 0 < len(normalize(name)) <= 300 or (
+            percent is not None and not 0 < Decimal(percent) <= 100
+        ):
             return []
         percent = format(Decimal(percent), "f") if percent is not None else None
         components.append(
@@ -46,36 +52,41 @@ def fibers(value: str) -> list[dict[str, str | None]]:
 @dataclass
 class EvidenceRecord:
     key: str
-    locator: dict
+    locator: dict[str, str]
     sources: dict[str, EvidenceSource] = field(default_factory=dict)
     facts: list[EvidenceFact] = field(default_factory=list)
     notes_truncated: bool = False
 
-    def add(self, source_field, kind, raw, origin):
+    def add(
+        self, source_field: str, kind: FactKind | None, raw: object, origin: FactOrigin
+    ) -> None:
         source_id = f"{self.key}:{source_field}"
-        text = raw if isinstance(raw, str) else ""
-        bounded = 0 < len(text) <= 300
+        text = raw.strip() if isinstance(raw, str) else ""
+        normalized = normalize(text)
+        if kind == "color":
+            normalized = canonical_color(normalized)
+        bounded = 0 < len(text) <= 300 and len(normalized) <= 300
         self.sources[source_id] = EvidenceSource(
             **self.locator,
             field=source_field,
             excerpt=text if bounded else None,
-            truncated=len(text) > 300,
+            truncated=len(text) > 300 or len(normalized) > 300,
         )
         if kind is None or raw is None or (isinstance(raw, str) and not raw.strip()):
             return
-        normalized = normalize(text) if bounded else ""
-        valid = bool(normalized)
+        valid = bounded and bool(normalized)
         if kind == "rating":
             valid &= normalized in {"love", "like", "mixed", "dislike"}
         if kind == "size":
-            valid &= len(text) <= 32
+            valid &= len(text) <= 32 and len(normalized) <= 32
         if kind == "type":
             valid &= normalized in ITEM_ROLE
         values = fibers(text) if kind == "fiber" and valid else []
         if kind != "fiber" and valid:
             values = [{"label" if kind == "rating" else "normalized": normalized}]
-        conflict = (
-            kind == "fiber" and sum(Decimal(value["percent"] or "0") for value in values) > 100
+        total = sum(Decimal(value["percent"] or "0") for value in values) if kind == "fiber" else 0
+        conflict = total > 100 or (
+            total == 100 and any(value["percent"] is None for value in values)
         )
         for index, value in enumerate(values or [None]):
             self.facts.append(
@@ -84,59 +95,62 @@ class EvidenceRecord:
                     source_id=source_id,
                     kind=kind,
                     origin=origin,
+                    producer="user"
+                    if origin in {"explicit_note", "profile_row"}
+                    or source_field.removeprefix("tags.") in USER_TAG_KEYS
+                    else "unknown",
                     value=value,
                     status="conflict" if conflict else "known" if value is not None else "unknown",
                 )
             )
 
-    def of_kind(self, kind):
+    def of_kind(self, kind: str) -> list[EvidenceFact]:
         return [fact for fact in self.facts if fact.kind == kind]
 
-    def values(self, kind):
-        return {
-            fact.value.get("normalized", fact.value.get("label"))
-            for fact in self.of_kind(kind)
-            if fact.value is not None and ("normalized" in fact.value or "label" in fact.value)
-        }
+    def values(self, kind: str) -> set[str]:
+        values = set()
+        for fact in self.of_kind(kind):
+            if fact.value is not None:
+                value = fact.value.get("normalized", fact.value.get("label"))
+                if value is not None:
+                    values.add(value)
+        return values
 
-    def composition(self):
+    def fiber_groups(self) -> dict[str, dict[str, str | None]]:
+        groups = {}
+        for fact in self.of_kind("fiber"):
+            if fact.value is not None:
+                groups.setdefault(fact.source_id, {})[fact.value["name"]] = fact.value["percent"]
+        return groups
+
+    def composition(self) -> list[tuple[str, str]] | None:
         facts = self.of_kind("fiber")
         if not facts or any(fact.status != "known" for fact in facts):
             return None
-        components = {
-            fact.value["name"]: fact.value["percent"]
-            for fact in facts
-            if fact.value["percent"] is not None
-        }
-        names = {fact.value["name"] for fact in facts}
-        if set(components) != names or sum(map(Decimal, components.values())) != 100:
-            return None
-        return sorted(components.items())
+        for group in self.fiber_groups().values():
+            complete = {name: percent for name, percent in group.items() if percent is not None}
+            if len(complete) == len(group) and sum(map(Decimal, complete.values())) == 100:
+                return sorted(complete.items())
+        return None
 
-    def resolve(self):
-        for kind in ("brand", "line", "size", "type", "color", "rating", "fiber", "size_rule"):
-            facts = [fact for fact in self.of_kind(kind) if fact.value is not None]
-            conflict = len(self.values(kind)) > 1
+    def resolve(self) -> "EvidenceRecord":
+        for kind in ("brand", "line", "size", "type", "color", "rating", "fiber"):
+            facts = self.of_kind(kind)
+            conflict = len(self.values(kind)) > 1 or (
+                kind != "fiber"
+                and any(fact.value is None for fact in facts)
+                and any(fact.value is not None for fact in facts)
+            )
             if kind == "fiber":
-                groups = {}
-                for fact in facts:
-                    groups.setdefault(fact.source_id, {})[fact.value["name"]] = fact.value[
-                        "percent"
-                    ]
-                for first in groups.values():
-                    for second in groups.values():
-                        conflict |= not bool(first.keys() & second.keys())
-                        conflict |= any(
-                            first[name] is not None
-                            and second[name] is not None
-                            and first[name] != second[name]
-                            for name in first.keys() & second.keys()
-                        )
-                        conflict |= (
-                            sum(Decimal(value or "0") for value in first.values()) == 100
-                            and sum(Decimal(value or "0") for value in second.values()) == 100
-                            and first != second
-                        )
+                for first, second in combinations(self.fiber_groups().values(), 2):
+                    subset = (
+                        all(percent is None for percent in first.values())
+                        and first.keys() <= second.keys()
+                    ) or (
+                        all(percent is None for percent in second.values())
+                        and second.keys() <= first.keys()
+                    )
+                    conflict |= first != second and not subset
             if conflict or any(fact.status == "conflict" for fact in facts):
                 for fact in facts:
                     fact.status = "conflict"
@@ -144,7 +158,7 @@ class EvidenceRecord:
         return self
 
 
-def parse_item(item) -> EvidenceRecord:
+def parse_item(item: ClothingItem) -> EvidenceRecord:
     record = EvidenceRecord(f"item:{item.id}", {"item_id": str(item.id)})
     for name, kind in (
         ("brand", "brand"),
@@ -158,18 +172,24 @@ def parse_item(item) -> EvidenceRecord:
     for name, kind in (
         ("size", "size"),
         ("material", "fiber"),
-        ("material_detail", "fiber"),
         ("fit", "feel"),
     ):
         if name in tags:
             record.add(f"tags.{name}", kind, tags[name], "stored_tag")
     if "material_detail" in tags:
-        record.add("tags.material_detail.excerpt", "feel", tags["material_detail"], "stored_tag")
+        detail = tags["material_detail"]
+        components = fibers(detail) if isinstance(detail, str) else []
+        kind = (
+            "fiber"
+            if components and all(component["percent"] is not None for component in components)
+            else "feel"
+        )
+        record.add("tags.material_detail", kind, detail, "stored_tag")
     notes = item.notes if isinstance(item.notes, str) else ""
     record.notes_truncated = len(notes) > 4096
     scanned = notes[:4096]
     entries = re.split(r"[|;\n]", scanned)
-    if record.notes_truncated:
+    if record.notes_truncated and not (scanned.endswith(("|", ";", "\n")) or notes[4096] in "|;\n"):
         entries = entries[:-1]
     for index, entry in enumerate(entries):
         key, separator, value = entry.partition(":")
@@ -179,13 +199,16 @@ def parse_item(item) -> EvidenceRecord:
     return record.resolve()
 
 
-def parse_row(profile, section, index, row):
+def parse_row(
+    profile: FitProfile, section: str, index: int, row: dict[str, object]
+) -> EvidenceRecord:
     key = f"{section}:{index}"
     record = EvidenceRecord(
         f"profile:{profile.rev}:{key}", {"profile_rev": profile.rev, "row_key": key}
     )
     for name, value in row.items():
-        record.add(
-            name, name if name in {"brand", "line", "size"} else "feel", value, "profile_row"
-        )
+        kind = {"brand": "brand", "line": "line", "size": "size"}.get(name)
+        if section == "brand_sizes" and name == "note":
+            kind = "feel"
+        record.add(name, kind, value, "profile_row")
     return record.resolve()

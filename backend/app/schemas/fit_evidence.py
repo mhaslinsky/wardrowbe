@@ -1,6 +1,10 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
+
+FactKind = Literal["brand", "line", "size", "type", "color", "feel", "size_rule", "rating", "fiber"]
+FactOrigin = Literal["explicit_note", "stored_tag", "profile_row", "unknown"]
+ValueText = Annotated[str, Field(max_length=300)]
 
 
 class EvidenceSource(BaseModel):
@@ -15,11 +19,11 @@ class EvidenceSource(BaseModel):
 class EvidenceFact(BaseModel):
     fact_id: str
     source_id: str
-    kind: Literal["brand", "line", "size", "type", "color", "feel", "size_rule", "rating", "fiber"]
-    origin: Literal["explicit_note", "stored_tag", "profile_row", "unknown"]
+    kind: FactKind
+    origin: FactOrigin
     producer: Literal["user", "ai", "unknown"] = "unknown"
     status: Literal["known", "unknown", "conflict"]
-    value: dict[str, str | None] | None
+    value: dict[str, ValueText | None] | None
     conflict_ids: list[str] = Field(default_factory=list)
 
 
@@ -28,6 +32,7 @@ class FitEvidence(BaseModel):
     rules_version: Literal["fit-evidence-1"] = "fit-evidence-1"
     anchor_id: str
     profile_rev: str
+    notes_truncated: bool = False
     sources: dict[str, EvidenceSource]
     facts: list[EvidenceFact]
     size: dict[str, Any]
