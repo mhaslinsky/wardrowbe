@@ -26,14 +26,14 @@ const labels = [
 it.each(labels)('renders generic Like comments in %s', (locale, label, placeholder) => {
   state.locale = locale;
   const messages = catalogs[`../messages/${locale}/outfits.json`].preview;
-  render(<OutfitPreview outfitId="one" />);
+  render(<OutfitPreview outfitId="one" cardImageIsPreview={false} />);
   fireEvent.click(screen.getByRole('button', { name: messages.like }));
   expect(screen.getByText(label)).toBeVisible();
   expect(screen.getByRole('textbox', { name: label })).toHaveAttribute('placeholder', placeholder);
 });
 
 it('saves mixed feedback unchanged and resets to the saved note on reopening', async () => {
-  render(<OutfitPreview outfitId="one" />);
+  render(<OutfitPreview outfitId="one" cardImageIsPreview={false} />);
   fireEvent.click(screen.getByRole('button', { name: 'Like' }));
   const input = screen.getByRole('textbox', { name: 'Comments' });
   expect(input).toHaveValue('Good color, wrong fit');
@@ -45,7 +45,7 @@ it('saves mixed feedback unchanged and resets to the saved note on reopening', a
 });
 
 it('keeps the Redraw instruction label and no comments placeholder', () => {
-  render(<OutfitPreview outfitId="one" />);
+  render(<OutfitPreview outfitId="one" cardImageIsPreview={false} />);
   fireEvent.click(screen.getByRole('button', { name: 'Redraw' }));
   expect(screen.getByRole('textbox', { name: 'What should change?' })).not.toHaveAttribute('placeholder');
 });
