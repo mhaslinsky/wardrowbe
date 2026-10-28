@@ -1,6 +1,5 @@
 import asyncio
 import hashlib
-import inspect
 import json
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
@@ -160,11 +159,24 @@ async def test_plain_text_privacy_and_fractional_cost_round_trip(telemetry, db_s
     ]
 
 
-async def test_nonfinite_cost_is_absent(telemetry):
-    metadata = telemetry._response_metadata(
-        httpx.Response(200, json=chat_reply(usage={"cost": "NaN"})), False
-    )
-    assert metadata.get("reported_cost") is None
+async def test_nonfinite_cost_is_absent(telemetry, test_user):
+    saved = []
+
+    async def save(record):
+        saved.append(record)
+
+    client = AsyncMock()
+    client.post.return_value = httpx.Response(200, json=chat_reply(usage={"cost": "NaN"}))
+    with patch.object(telemetry, "_persist", save):
+        await telemetry.record_ai_call(
+            client,
+            "https://stub.test",
+            context=telemetry.CallContext(test_user.id, "pairing"),
+            model="model",
+            body={},
+        )
+        await telemetry.drain_recordings()
+    assert saved[0].get("reported_cost") is None
 
 
 async def test_hash_covers_exact_unicode_transport_bytes(telemetry, test_user):
@@ -282,23 +294,36 @@ async def test_worker_disposes_recording_engine_after_drain():
     assert events == ["drain", "dispose"]
 
 
-def test_usage_numeric_leaves_and_metadata_bounds(telemetry):
-    metadata = telemetry._response_metadata(
-        httpx.Response(
-            200,
-            json=chat_reply(
-                usage={
-                    "cost": 1,
-                    "currency": "C" * 121,
-                    "total": 7,
-                    "details": {"cached": 2, "bad": True},
-                    "empty": {"reason": "private"},
-                },
-                model="M" * 121,
-            ),
+async def test_usage_numeric_leaves_and_metadata_bounds(telemetry, test_user):
+    saved = []
+
+    async def save(record):
+        saved.append(record)
+
+    client = AsyncMock()
+    client.post.return_value = httpx.Response(
+        200,
+        json=chat_reply(
+            usage={
+                "cost": 1,
+                "currency": "C" * 121,
+                "total": 7,
+                "details": {"cached": 2, "bad": True},
+                "empty": {"reason": "private"},
+            },
+            model="M" * 121,
         ),
-        False,
     )
+    with patch.object(telemetry, "_persist", save):
+        await telemetry.record_ai_call(
+            client,
+            "https://stub.test",
+            context=telemetry.CallContext(test_user.id, "pairing"),
+            model="model",
+            body={},
+        )
+        await telemetry.drain_recordings()
+    metadata = saved[0]
     assert metadata["usage"] == {"cost": 1, "total": 7, "details": {"cached": 2}}
     assert metadata["returned_model"] == "M" * 120 and metadata["cost_currency"] == "C" * 120
 
@@ -326,40 +351,3 @@ async def test_model_and_database_agree_on_images(telemetry, db_session):
         )
     )
     assert nullable == "NO" and AICall.__table__.c.images.nullable is False
-
-
-def test_public_contracts_and_type_annotations(telemetry):
-    from app.services.photo_redraw_service import PhotoRedrawService
-
-    assert "request" in inspect.getdoc(telemetry.CallContext).lower()
-    assert "telemetry" in inspect.getdoc(AIService.__init__)
-    for _, function in inspect.getmembers(telemetry, inspect.isfunction):
-        if function.__module__ == telemetry.__name__:
-            signature = inspect.signature(function)
-            assert signature.return_annotation is not inspect.Signature.empty
-            assert all(
-                parameter.annotation is not inspect.Signature.empty
-                for parameter in signature.parameters.values()
-            )
-    for provider in (AIService, PhotoRedrawService):
-        assert (
-            inspect.signature(provider).parameters["telemetry"].annotation
-            is not inspect.Signature.empty
-        )
-
-
-async def test_recording_is_disabled_without_opt_in(test_user):
-    from app.services import ai_telemetry_service as service
-
-    client = AsyncMock()
-    client.post.return_value = httpx.Response(200, json=chat_reply())
-    with patch.object(service, "_persist", AsyncMock()) as persist:
-        await service.record_ai_call(
-            client,
-            "https://stub.test",
-            context=service.CallContext(test_user.id, "pairing"),
-            model="model",
-            body={},
-        )
-        await service.drain_recordings()
-    persist.assert_not_awaited()

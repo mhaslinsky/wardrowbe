@@ -10,13 +10,15 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import select
 
+from app.services.ai_telemetry_service import _enqueue
+
 
 @pytest_asyncio.fixture
 async def telemetry(monkeypatch, session_maker):
     from app.services import ai_telemetry_service
 
     monkeypatch.setattr(ai_telemetry_service, "async_session_maker", session_maker)
-    monkeypatch.setattr(ai_telemetry_service, "recording_enabled", True)
+    monkeypatch.setattr(ai_telemetry_service, "_enqueue", _enqueue)
     monkeypatch.setattr(ai_telemetry_service, "_write_slots", asyncio.Semaphore(2))
     yield ai_telemetry_service
     await ai_telemetry_service.drain_recordings(timeout=0)

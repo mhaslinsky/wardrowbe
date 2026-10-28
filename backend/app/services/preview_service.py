@@ -471,6 +471,14 @@ class PreviewService:
             if record is None:
                 record = OutfitPreview(outfit_id=outfit_id, user_id=user_id)
                 self.db.add(record)
+            from app.models.considering import ItemPurchase
+
+            purchase = (
+                await self.db.get(ItemPurchase, outfit.source_item_id)
+                if outfit.source_item_id
+                else None
+            )
+            purchase_state = purchase.state if purchase is not None else None
             claim_id = uuid4().hex
             record.claim_id, record.started_at = claim_id, datetime.now(UTC)
             await self.db.commit()
@@ -559,18 +567,11 @@ class PreviewService:
                     + json.dumps(note).replace("<", "\\u003c").replace(">", "\\u003e")
                     + "\n</change_request>"
                 )
-            from app.models.considering import ItemPurchase
-
-            purchase = (
-                await self.db.get(ItemPurchase, outfit.source_item_id)
-                if outfit.source_item_id
-                else None
-            )
             provider = PhotoRedrawService(
                 telemetry=CallContext(
                     user_id,
                     "considering_preview"
-                    if purchase is not None and purchase.state in {"considering", "passed"}
+                    if purchase_state in {"considering", "passed"}
                     else "preview_redraw"
                     if regenerate
                     else "preview",

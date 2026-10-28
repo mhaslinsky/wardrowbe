@@ -22,7 +22,6 @@ from app.models.ai_call import AICall
 logger = logging.getLogger(__name__)
 MAX_PENDING = 128
 WRITE_TIMEOUT = 3.0
-recording_enabled = True
 recording_failures = 0
 _pending: set[asyncio.Task[None]] = set()
 _write_slots = asyncio.Semaphore(2)
@@ -245,7 +244,7 @@ async def record_ai_call(
     The original response or exception is preserved even if recording fails.
     Health checks must call their HTTP client directly.
     """
-    if context is None or not recording_enabled:
+    if context is None:
         return await client.post(url, headers=headers, json=body)
     request = json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
     record = None
