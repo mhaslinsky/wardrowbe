@@ -8,8 +8,8 @@ from app.models.item import ClothingItem, ItemHistory, WashHistory
 from app.models.learning import OutfitPerformance
 from app.models.outfit import Outfit, OutfitStatus
 from app.models.user import User
-from app.services.item_service import DEFAULT_WASH_INTERVALS
 from app.services.wear_service import WearService
+from app.utils.washing import wash_interval
 
 
 def undo_conflict(code: str, message: str, **details: object) -> HTTPException:
@@ -123,12 +123,10 @@ class UndoWearService:
                         and history.worn_at >= latest.washed_at
                     )
                 )
-                interval = (
-                    item.wash_interval
-                    if item.wash_interval is not None
-                    else DEFAULT_WASH_INTERVALS.get(item.type, 3)
+                interval = wash_interval(item)
+                item.needs_wash = item.manually_needs_wash or (
+                    interval != 999 and item.wears_since_wash >= interval
                 )
-                item.needs_wash = item.manually_needs_wash or item.wears_since_wash >= interval
         for history in target_rows:
             await self.db.delete(history)
         outfit.status = OutfitStatus.skipped

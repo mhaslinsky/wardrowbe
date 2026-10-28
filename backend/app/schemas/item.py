@@ -3,13 +3,22 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_serializer, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_serializer,
+    model_validator,
+)
 
 from app.models.item import ProcessingKind, TaggingStatus
 from app.schemas.color import ColorList, ColorName
 from app.schemas.outfit import Occasion
-from app.utils.garment_vocabulary import DEFAULT_WASH_INTERVALS
+from app.utils.garment_vocabulary import DEFAULT_WASH_INTERVALS as DEFAULT_WASH_INTERVALS
 from app.utils.photo_urls import image_url, optional_image_url
+from app.utils.washing import wash_interval
 
 
 class ItemTags(BaseModel):
@@ -69,6 +78,11 @@ class ItemUpdate(BaseModel):
 
 class ItemResponse(ItemBase):
     model_config = ConfigDict(from_attributes=True)
+    type_wash_interval: int | None = Field(
+        default=None,
+        exclude=True,
+        validation_alias=AliasChoices("loaded_type_wash_interval", "type_wash_interval"),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -175,9 +189,7 @@ class ItemResponse(ItemBase):
     @computed_field
     @property
     def effective_wash_interval(self) -> int:
-        if self.wash_interval is not None:
-            return self.wash_interval
-        return DEFAULT_WASH_INTERVALS.get(self.type, 3)
+        return wash_interval(self)
 
 
 class AnalysisInProgress(BaseModel):

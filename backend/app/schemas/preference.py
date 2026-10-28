@@ -5,6 +5,7 @@ from pydantic import AfterValidator, BaseModel, Field
 from app.data.color_seasons import ColorSeason
 from app.schemas.color import ColorList
 from app.schemas.outfit import Occasion
+from app.utils.garment_vocabulary import DEFAULT_WASH_INTERVALS, TYPES
 from app.utils.preference_defaults import (
     DEFAULT_LAYERING_PREFERENCE,
     DEFAULT_OCCASION,
@@ -37,6 +38,19 @@ StandingRules = Annotated[
     list[Annotated[str, Field(max_length=300)]],
     Field(max_length=20),
     AfterValidator(trim_standing_rules),
+]
+
+
+def validate_wash_intervals(values: dict[str, int]) -> dict[str, int]:
+    if any(kind not in TYPES for kind in values):
+        raise ValueError("Unknown clothing type")
+    if any(value != 999 and not 1 <= value <= 30 for value in values.values()):
+        raise ValueError("Use 1 to 30 wears or 999 for Never")
+    return values
+
+
+WashIntervals = Annotated[
+    dict[str, Annotated[int, Field(strict=True)]], AfterValidator(validate_wash_intervals)
 ]
 
 
@@ -96,6 +110,7 @@ class StyleProfile(BaseModel):
 
 
 class PreferenceBase(BaseModel):
+    wash_intervals: WashIntervals = Field(default_factory=dict)
     color_season: ColorSeason | None = None
     standing_rules: StandingRules = Field(default_factory=list)
 
@@ -168,6 +183,7 @@ class PreferenceCreate(PreferenceBase):
 
 
 class PreferenceUpdate(BaseModel):
+    wash_intervals: WashIntervals = Field(default_factory=dict)
     color_season: ColorSeason | None = None
     preview_preferences: PreviewPreferences | None = None
 
@@ -191,6 +207,9 @@ class PreferenceUpdate(BaseModel):
 
 
 class PreferenceResponse(PreferenceBase):
+    wash_interval_defaults: dict[str, int] = Field(
+        default_factory=lambda: dict(DEFAULT_WASH_INTERVALS)
+    )
     preview_preferences: PreviewPreferences
 
     class Config:

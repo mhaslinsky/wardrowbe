@@ -124,7 +124,9 @@ Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outf
 
 Each item tracks wears since its last wash. At its wash interval, it needs washing and is excluded from normal outfit recommendations.
 
-1. Open an item and edit **Wash Interval** to set the number of wears before washing. Leave it blank and save to use the clothing type's default, including when clearing an existing override.
+In **Settings > Washing**, choose the wears before washing for each clothing type you own: 1 to 30, or **Never**. Select **Reset** beside a type to restore its built-in default, then select **Save**. These settings apply only to your wardrobe, starting with the next wear. Past wear counts and wash status stay as recorded.
+
+1. Open an item and edit **Wash Interval** to override its type setting. Leave it blank and save to use your type setting, including when clearing an existing override. The **Default** placeholder shows that setting.
 2. Use **Put in the wash** if it needs washing earlier.
 3. After washing, filter Wardrobe by **Needs wash**, open the clean items, and select **Mark Washed**. This resets their wash status so they can return to suggestions.
 

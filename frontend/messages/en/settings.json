@@ -1,4 +1,13 @@
 {
+  "washing": {
+    "title": "Washing",
+    "description": "Wears before washing",
+    "never": "Never",
+    "reset": "Reset",
+    "empty": "Add clothes to set washing intervals.",
+    "loading": "Loading clothing types",
+    "error": "Could not load clothing types"
+  },
   "account": {
     "description": "Your profile information",
     "email": "Email",

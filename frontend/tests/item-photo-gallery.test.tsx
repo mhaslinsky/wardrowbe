@@ -5,6 +5,9 @@ import { ItemDetailDialog } from '@/components/item-detail-dialog';
 import type { Item } from '@/lib/types';
 
 const mutations = vi.hoisted(() => ({ deleteImage: vi.fn(), setPrimary: vi.fn() }));
+vi.mock('@/lib/hooks/use-preferences', () => ({
+  usePreferences: () => ({ data: undefined }),
+}));
 vi.mock('next/image', () => ({ default: ({ fill, ...props }: any) => <img {...props} /> }));
 vi.mock('@/components/generate-pairings-dialog', () => ({ GeneratePairingsDialog: () => null }));
 vi.mock('@/lib/hooks/use-features', () => ({ useFeatures: () => ({ data: {} }) }));

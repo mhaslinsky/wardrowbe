@@ -1,4 +1,13 @@
 {
+  "washing": {
+    "title": "洗濯",
+    "description": "洗濯までの着用回数",
+    "never": "なし",
+    "reset": "リセット",
+    "empty": "服を追加して洗濯の間隔を設定してください。",
+    "loading": "服の種類を読み込み中",
+    "error": "服の種類を読み込めませんでした"
+  },
   "account": {
     "description": "プロフィール情報",
     "email": "メールアドレス",

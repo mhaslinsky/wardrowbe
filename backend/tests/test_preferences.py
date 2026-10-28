@@ -6,8 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.preferences import _build_preference_response
 from app.models import User, UserPreference
+from app.utils.garment_vocabulary import DEFAULT_WASH_INTERVALS
 
 DEFAULT_PREFERENCES_RESPONSE = {
+    "wash_intervals": {},
+    "wash_interval_defaults": DEFAULT_WASH_INTERVALS,
     "color_season": None,
     "standing_rules": [],
     "color_favorites": [],

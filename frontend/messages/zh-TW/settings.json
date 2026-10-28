@@ -1,4 +1,13 @@
 {
+  "washing": {
+    "title": "洗滌",
+    "description": "洗滌前穿著次數",
+    "never": "從不",
+    "reset": "重設",
+    "empty": "新增衣物以設定洗滌間隔。",
+    "loading": "正在載入衣物類型",
+    "error": "無法載入衣物類型"
+  },
   "account": {
     "description": "你的個人資料",
     "email": "電子郵件",

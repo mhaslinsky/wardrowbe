@@ -1,4 +1,13 @@
 {
+  "washing": {
+    "title": "Waschen",
+    "description": "Tragen vor dem Waschen",
+    "never": "Nie",
+    "reset": "Zurücksetzen",
+    "empty": "Füge Kleidung hinzu, um Waschintervalle festzulegen.",
+    "loading": "Kleidungsarten werden geladen",
+    "error": "Kleidungsarten konnten nicht geladen werden"
+  },
   "account": {
     "description": "Deine Profilinformationen",
     "email": "E-Mail",

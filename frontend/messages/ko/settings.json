@@ -1,4 +1,13 @@
 {
+  "washing": {
+    "title": "세탁",
+    "description": "세탁 전 착용 횟수",
+    "never": "안 함",
+    "reset": "초기화",
+    "empty": "옷을 추가하여 세탁 주기를 설정하세요.",
+    "loading": "옷 종류 불러오는 중",
+    "error": "옷 종류를 불러올 수 없습니다"
+  },
   "account": {
     "description": "프로필 정보",
     "email": "이메일",

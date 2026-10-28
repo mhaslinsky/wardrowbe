@@ -1,6 +1,7 @@
 'use client';
 
 import { AccessTokenSettings } from '@/components/access-token-settings';
+import { WashingSettings } from '@/components/washing-settings';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PreviewPhotoSettings } from '@/components/preview-photo-settings';
@@ -1026,6 +1027,14 @@ export default function SettingsPage() {
             />
           </CardContent>
         </Card>
+
+        {preferences?.wash_interval_defaults && (
+          <WashingSettings
+            values={formData.wash_intervals ?? {}}
+            defaults={preferences.wash_interval_defaults}
+            onChange={(values) => updateField('wash_intervals', values)}
+          />
+        )}
 
         {/* Recommendation Settings */}
         <Card>

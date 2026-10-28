@@ -1,4 +1,13 @@
 {
+  "washing": {
+    "title": "洗涤",
+    "description": "洗涤前穿着次数",
+    "never": "从不",
+    "reset": "重置",
+    "empty": "添加衣物以设置洗涤间隔。",
+    "loading": "正在加载衣物类型",
+    "error": "无法加载衣物类型"
+  },
   "account": {
     "description": "您的个人资料信息",
     "email": "邮箱",

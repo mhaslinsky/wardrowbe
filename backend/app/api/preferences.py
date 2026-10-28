@@ -37,6 +37,7 @@ router = APIRouter(prefix="/users/me/preferences", tags=["Preferences"])
 
 def _build_preference_response(preferences, preview_preferences) -> PreferenceResponse:
     return PreferenceResponse(
+        wash_intervals=preferences.wash_intervals or {},
         color_season=stored_color_season(preferences.style_profile),
         preview_preferences=preview_preferences,
         standing_rules=preferences.standing_rules if preferences.standing_rules is not None else [],

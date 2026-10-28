@@ -30,6 +30,8 @@ export function useUpdatePreferences() {
     onSuccess: (saved) => {
       queryClient.setQueryData(queryKeys.preferences, saved);
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences });
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.everyItem });
       queryClient.invalidateQueries({ queryKey: queryKeys.outfitPreviews });
     },
   });
@@ -47,6 +49,8 @@ export function useResetPreferences() {
     onSuccess: (saved) => {
       queryClient.setQueryData(queryKeys.preferences, saved);
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences });
+      queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.everyItem });
       queryClient.invalidateQueries({ queryKey: queryKeys.outfitPreviews });
     },
   });
