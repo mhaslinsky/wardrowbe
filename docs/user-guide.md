@@ -214,6 +214,8 @@ Keep **Fit profile** current and record item notes with `Rating:`, `Size:`, `Fab
 
 Each fact cites its item or fit-profile row. Conflicting sizes yield no recommendation. The endpoint makes no AI calls and saves no outfits or wear history. Items return 404 if they are unready, missing, archived, bought, passed, or owned by another user.
 
+Fabric notes without percentages appear as quoted note text in `feel.fiber_notes`. Conflicts read as "can't tell" and leave the composition unresolved.
+
 Source: [fit evidence](../backend/app/services/fit_evidence_service.py).
 
 ## Make suggestions more useful

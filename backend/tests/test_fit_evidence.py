@@ -91,7 +91,7 @@ async def test_acceptance(client, auth_headers, db_session, test_user, case):
         if case == "incomplete_fiber":
             anchor.tags = {}
         if case == "different_fiber":
-            anchor.notes = "Line: Everyday | Fabric: wool"
+            anchor.notes = "Line: Everyday | Fabric: 100% wool"
             anchor.tags = {"material_detail": "100% wool"}
         await db_session.commit()
     result = await evidence(client, auth_headers, anchor)
@@ -202,6 +202,32 @@ async def test_sources_comparisons_reset_and_no_writes(client, auth_headers, db_
     ]
     await db_session.refresh(anchor)
     assert (anchor.wear_count, anchor.last_worn_at, anchor.suggestion_count) == wear
+
+
+@pytest.mark.parametrize("raw", ["cotton", "n/a"])
+@pytest.mark.parametrize("conflicting", [False, True])
+async def test_names_only_fabric_is_quoted_and_conflicts_cannot_tell(
+    client, auth_headers, db_session, test_user, raw, conflicting
+):
+    anchor = await seed(db_session, test_user)
+    anchor.tags = {}
+    anchor.notes = f"Line: Everyday | Fabric: {raw}"
+    if conflicting:
+        anchor.notes += " | Fabric: 100% wool"
+    await db_session.commit()
+    result = await evidence(client, auth_headers, anchor)
+    quoted = result["feel"]["fiber_notes"]
+    assert len(quoted) == 1
+    assert quoted[0]["quote"] == raw
+    assert result["sources"][quoted[0]["source_id"]]["field"] == "notes.fabric:1"
+    assert quoted[0]["status"] == ("unresolved" if conflicting else "known")
+    if conflicting:
+        assert quoted[0]["display"] == "can't tell"
+        assert result["duplicates"]["status"] == "unresolved"
+        assert result["duplicates"]["unresolved"]
+        comparisons = result["duplicates"]["unresolved"][0]["comparisons"]
+        fiber = next(row for row in comparisons if row["field"] == "fiber")
+        assert fiber["status"] == "unresolved" and fiber["display"] == "can't tell"
 
 
 @pytest.mark.parametrize(

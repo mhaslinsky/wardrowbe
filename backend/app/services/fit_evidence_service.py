@@ -33,6 +33,33 @@ def fact_ids(record: EvidenceRecord, kind: str | None = None) -> list[str]:
     return [fact.fact_id for fact in record.facts if kind is None or fact.kind == kind]
 
 
+def quoted_fiber_notes(records: list[EvidenceRecord]) -> list[dict[str, Any]]:
+    notes = []
+    for record in records:
+        source_ids = {
+            fact.source_id
+            for fact in record.of_kind("fiber")
+            if fact.origin == "explicit_note"
+            and fact.value is not None
+            and fact.value["percent"] is None
+        }
+        for source_id in sorted(source_ids):
+            unresolved = any(
+                fact.status != "known"
+                for fact in record.of_kind("fiber")
+                if fact.source_id == source_id
+            )
+            notes.append(
+                {
+                    "source_id": source_id,
+                    "quote": record.sources[source_id].excerpt,
+                    "status": "unresolved" if unresolved else "known",
+                    **({"display": "can't tell"} if unresolved else {}),
+                }
+            )
+    return notes
+
+
 def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> dict[str, Any]:
     if field == "fiber":
         first, second = anchor.composition(), reference.composition()
@@ -53,7 +80,13 @@ def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> di
             )
         )
         status = (
-            "no_match"
+            "unresolved"
+            if any(
+                fact.status == "conflict"
+                for record in (anchor, reference)
+                for fact in record.explicit_fibers()
+            )
+            else "no_match"
             if mismatched
             else "unresolved"
             if first is None or second is None
@@ -119,6 +152,7 @@ def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> di
     return {
         "field": field,
         "status": status,
+        **({"display": "can't tell"} if field == "fiber" and status == "unresolved" else {}),
         "candidate_source_ids": sorted(set(selected(anchor))),
         "reference_source_ids": sorted(set(selected(reference))),
     }
@@ -333,7 +367,11 @@ async def get_fit_evidence(db: AsyncSession, user_id: UUID, item_id: UUID) -> Fi
                 for record in size_eligible[:15]
             ],
         },
-        feel={"status": "known" if references else "unknown", "references": references},
+        feel={
+            "status": "known" if references else "unknown",
+            "references": references,
+            "fiber_notes": quoted_fiber_notes(list(chosen.values())),
+        },
         duplicates={
             "status": "match"
             if any(row["status"] == "match" for row in duplicate_rows)
