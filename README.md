@@ -40,6 +40,8 @@
 
 Self-hosted wardrobe management with AI-powered outfit recommendations. Take photos of your clothes, let AI tag them, and get daily outfit suggestions based on weather and occasion.
 
+[Using Wardrowbe](docs/user-guide.md)
+
 ## Features
 
 - **Photo-based wardrobe** - Upload photos, AI extracts clothing details automatically
