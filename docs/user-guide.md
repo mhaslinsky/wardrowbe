@@ -100,13 +100,25 @@ On a suggestion, **I wore this** logs the wear for the selected day in one step.
 
 1. Open **Outfit selfie** and use **Take or choose a photo**. A full-length mirror photo works best.
 2. Review the wardrobe pieces the AI recognized. Remove an incorrect match, use **Swap** to replace it, or **Add item** to include a missing piece.
-3. Choose **Log outfit** only after the selection is right. **View outfit** opens the logged result.
+3. Choose **Log outfit** only after the selection is right. This saves the photo with the outfit and logs the wear. **View outfit** opens the logged result and its saved photo.
 
 The selfie matches existing wardrobe items; it does not automatically add every visible garment as a new item. If nothing matches, add or correct your wardrobe photos first. If today already has a logged outfit, review that record before trying again.
 
 For just one piece, open it in Wardrobe and choose **Log wear**. Its item dialog shows wear history and total wears.
 
-Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outfits page](../frontend/app/dashboard/outfits/page.tsx), [outfit detail](../frontend/app/dashboard/outfits/[id]/page.tsx), [daily view](../frontend/components/day-outfits.tsx), [wear corrections](../frontend/components/undo-wear-actions.tsx), [history](../frontend/app/dashboard/history/page.tsx), [selfie page](../frontend/app/dashboard/selfie/page.tsx), [feedback dialog](../frontend/components/feedback-dialog.tsx), [History rating action](../frontend/components/outfit-history-card.tsx).
+### Keep a photo with an outfit
+
+Open a saved outfit from **Outfits**. Under **Photo of me wearing it**, use **Add photo** to attach a photo without matching the garments again. If an **AI preview** is saved, the outfit shows both pictures side by side on a computer and one below the other on a phone.
+
+Use **Show on card** to choose the picture shown in the outfit list:
+
+- **Automatic** uses your photo when one exists; otherwise it keeps the garment thumbnails.
+- **My photo** uses the attached outfit photo.
+- **AI preview** uses the saved generated preview.
+
+If the selected picture is unavailable, the card shows garment thumbnails. **Delete photo** removes the attached photo while keeping the outfit and its AI preview. Deleting the outfit also deletes its attached photo.
+
+Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outfits page](../frontend/app/dashboard/outfits/page.tsx), [outfit detail](../frontend/app/dashboard/outfits/[id]/page.tsx), [daily view](../frontend/components/day-outfits.tsx), [wear corrections](../frontend/components/undo-wear-actions.tsx), [history](../frontend/app/dashboard/history/page.tsx), [selfie page](../frontend/app/dashboard/selfie/page.tsx), [outfit photo controls](../frontend/components/outfit-photo.tsx), [outfit photo storage](../backend/app/services/outfit_photo_service.py), [feedback dialog](../frontend/components/feedback-dialog.tsx), [History rating action](../frontend/components/outfit-history-card.tsx).
 
 ## Keep laundry up to date
 
