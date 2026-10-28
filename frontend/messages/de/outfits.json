@@ -244,7 +244,8 @@
     "personChanged": "Deine Fotos oder Maße wurden geändert",
     "preferencesChanged": "Mit älteren Einstellungen erstellt",
     "show": "KI-Vorschau anzeigen",
-    "hide": "KI-Vorschau ausblenden"
+    "hide": "KI-Vorschau ausblenden",
+    "title": "KI-Vorschau"
   },
   "photo": {
     "title": "Foto von mir im Outfit",

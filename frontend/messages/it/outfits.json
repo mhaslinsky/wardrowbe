@@ -244,7 +244,8 @@
     "personChanged": "Le tue foto o misure sono cambiate",
     "preferencesChanged": "Creato con preferenze precedenti",
     "show": "Mostra anteprima IA",
-    "hide": "Nascondi anteprima IA"
+    "hide": "Nascondi anteprima IA",
+    "title": "Anteprima IA"
   },
   "photo": {
     "title": "Foto di me con questo outfit",

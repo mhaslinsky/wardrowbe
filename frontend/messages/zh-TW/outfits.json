@@ -244,7 +244,8 @@
     "personChanged": "你的照片或身體尺寸已變更",
     "preferencesChanged": "使用舊偏好產生",
     "show": "顯示 AI 預覽",
-    "hide": "隱藏 AI 預覽"
+    "hide": "隱藏 AI 預覽",
+    "title": "AI 預覽"
   },
   "photo": {
     "title": "我的穿搭照片",

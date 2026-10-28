@@ -6,7 +6,7 @@ import type { Outfit } from '@/lib/hooks/use-outfits';
 
 const fixture = vi.hoisted(() => ({
   id: 'look', source: 'manual', occasion: 'casual', status: 'accepted', name: 'Look',
-  card_image_choice: 'photo', card_image_url: '/photo.jpg',
+  card_image_choice: 'photo', card_image_url: '/photo.jpg' as string | null,
   selfie_photo: { image_url: '/photo.jpg' },
   items: [{ id: 'shirt', type: 'shirt', name: 'Blue shirt', thumbnail_url: '/shirt.jpg' }],
 }));
@@ -19,9 +19,10 @@ vi.mock('@/lib/hooks/use-outfits', () => ({
 }));
 vi.mock('@/lib/hooks/use-studio', () => ({ useWearToday: () => ({ mutateAsync: vi.fn() }) }));
 vi.mock('@/lib/hooks/use-user', () => ({ useUserToday: () => () => '2026-10-28' }));
-vi.mock('@/lib/hooks/use-outfit-title', () => ({ useOutfitTitle: () => () => 'Look' }));
-vi.mock('@/lib/hooks/use-translated-constants', () => ({ useTypeLabel: () => (value: string) => value, useOccasionLabel: () => (value: string) => value }));
-vi.mock('@/lib/hooks/use-outfit-preview', () => ({ useOutfitPreview: () => ({ preview: { image_url: '/preview.jpg' }, pending: false, draw: vi.fn(), remove: vi.fn(), like: vi.fn() }) }));
+vi.mock('@/lib/hooks/use-outfit-preview', async () => {
+  const { outfitPreviewNetworkFake } = await import('./outfit-preview-network-fake');
+  return { useOutfitPreview: () => outfitPreviewNetworkFake };
+});
 vi.mock('@/components/shared/lineage-card', () => ({ LineageCard: () => null }));
 vi.mock('@/components/shared/clone-to-lookbook-dialog', () => ({ CloneToLookbookDialog: () => null }));
 vi.mock('@/components/outfit-photo', () => ({ OutfitPhoto: () => <p>Photo controls</p> }));
@@ -42,4 +43,15 @@ it('detail shows the selected picture and pieces with a collapsed preview', () =
   expect(screen.queryByRole('img', { name: 'see' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'show' }));
   expect(screen.getByRole('button', { name: 'like' })).toBeVisible();
+});
+
+it('detail keeps photo controls inline when no card picture is selected', () => {
+  fixture.card_image_url = null;
+  try {
+    render(<OutfitDetailPage />);
+    expect(screen.getByText('Photo controls')).toBeVisible();
+    expect(screen.getByText('Photo controls').closest('details')).toBeNull();
+  } finally {
+    fixture.card_image_url = '/photo.jpg';
+  }
 });

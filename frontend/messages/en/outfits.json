@@ -244,7 +244,8 @@
     "personChanged": "Your photos or measurements changed",
     "preferencesChanged": "Made with older preferences",
     "show": "Show AI preview",
-    "hide": "Hide AI preview"
+    "hide": "Hide AI preview",
+    "title": "AI preview"
   },
   "photo": {
     "title": "Photo of me wearing it",

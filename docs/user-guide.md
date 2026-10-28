@@ -108,7 +108,7 @@ For just one piece, open it in Wardrobe and choose **Log wear**. Its item dialog
 
 ### Keep a photo with an outfit
 
-Open a saved outfit from **Outfits**. Under **Photo of me wearing it**, use **Add photo** to attach a photo without matching the garments again. The selected card picture appears above the outfit’s pieces on phones and computers. The source badge sits beside the outfit details. Use **Show AI preview** to open the preview and its **Redraw**, **Like**, and **Delete preview** controls. When the preview is the selected picture, opening its controls does not repeat the image. On the outfit page, expand **Photo of me wearing it** to manage the attached photo.
+Open a saved outfit from **Outfits**. Under **Photo of me wearing it**, use **Add photo** to attach a photo without matching the garments again. The selected card picture appears above the outfit’s pieces on phones and computers. The source badge sits beside the outfit details. Use **Show AI preview** to open the preview and its **Redraw**, **Like**, and **Delete preview** controls. Before a preview is saved, use **AI preview** to open its creation controls. When the preview is the selected picture, opening its controls does not repeat the image. On the outfit page, expand **Photo of me wearing it** to manage the attached photo.
 
 Use **Show on card** to choose the picture shown in the outfit list:
 

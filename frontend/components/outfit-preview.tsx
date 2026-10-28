@@ -9,11 +9,11 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { useOutfitPreview } from '@/lib/hooks/use-outfit-preview';
 
-export function OutfitPreview(props: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview?: boolean }) {
+export function OutfitPreview(props: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview: boolean }) {
   return <PreviewContent key={`${props.outfitId}:${props.cardImageUrl ? props.cardImageIsPreview ? 'preview' : 'photo' : 'none'}`} {...props} />;
 }
 
-function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, cardImageIsPreview }: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview?: boolean }) {
+function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, cardImageIsPreview }: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview: boolean }) {
   const t = useTranslations('outfits.preview');
   const { preview, pending, error, conflict, missingPhoto, likeConflict, draw, remove, like } = useOutfitPreview(outfitId);
   const started = useRef(false);
@@ -26,11 +26,11 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
   const [note, setNote] = useState('');
   const [expanded, setExpanded] = useState(false);
   const collapsed = Boolean(cardImageUrl) && !expanded;
-  const selectedPreview = Boolean(cardImageUrl && (cardImageIsPreview ?? (preview && [preview.image_url, preview.medium_url].includes(cardImageUrl))));
+  const selectedPreview = Boolean(cardImageUrl && cardImageIsPreview);
   const tc = useTranslations('common');
   return <div className={children && preview && detail && !cardImageUrl ? "grid min-w-0 items-start gap-4 sm:grid-cols-2" : "min-w-0 space-y-3"}>
     {children}
-    {cardImageUrl && <Button variant="outline" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{t(expanded ? 'hide' : 'show')}</Button>}
+    {cardImageUrl && <Button variant="outline" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{t(expanded ? 'hide' : preview ? 'show' : 'title')}</Button>}
     <div className="space-y-2 min-w-0" hidden={collapsed}>
     {!preview && <Button variant="outline" disabled={pending} onClick={() => draw()}>{pending ? t('drawing') : t('see')}</Button>}
     {pending && <p role="status" className="text-sm text-muted-foreground">{t('drawing')}</p>}
