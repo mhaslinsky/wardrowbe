@@ -210,7 +210,7 @@ Sources: [Considering page](../frontend/app/dashboard/considering/page.tsx), [li
 
 ### Preferences and fit information
 
-In **Settings**, review these sections. Use **Save** for general preference changes; location, measurements, fit profile, and preview preferences have their own save controls:
+In **Settings**, review these sections. Use **Save** for general preference changes; location, measurements, and preview preferences have their own save controls:
 
 - **Location**: use **Use My Location** or enter coordinates, review the timezone, then **Save Location**. Browser permission can be denied; manual entry remains available.
 - **Style Profile**, **Favorite Colors**, and **Colors to Avoid**: describe the styles and colors you want.
@@ -218,7 +218,7 @@ In **Settings**, review these sections. Use **Save** for general preference chan
 - **Recommendation Settings**: choose a default occasion, variety, repeat avoidance, and whether to prefer underused items.
 - **Standing rules**: add one instruction per line, up to 20 rules of 300 characters each.
 - **Body Measurements**: choose metric or imperial units, enter the measurements you know and usual clothing sizes, then **Save Measurements**.
-- **Fit profile**: use **Add brand size** under **Brand sizes** to record a brand, optional line, actual size, and note. Use **Add skip entry** under **Skip list** for brands or lines that do not work for you, with a reason. Add neck, sleeve, and thigh measurements in centimeters if useful. Describe a well-fitting piece under **Reference garment**, then save.
+Open **Fit profile** from the left menu or the link in **Settings**. Use **Add brand size** under **Brand sizes** to record a brand, optional line, actual size, and note. Use **Add skip entry** under **Skip list** for brands or lines that do not work for you, with a reason. Add neck, sleeve, and thigh measurements in centimeters if useful. Describe a well-fitting piece under **Reference garment**, then save.
 
 Also correct individual clothing details and notes in Wardrobe. Personal measurements, brand sizes, and garment notes serve different purposes; a usual shirt size does not describe every brand's fit.
 
@@ -250,7 +250,7 @@ If there is no learning data yet, give feedback first, then use **Compute Now** 
 
 These summaries reflect recorded feedback. A blank section can mean there is not enough feedback yet.
 
-Sources: [settings page](../frontend/app/dashboard/settings/page.tsx), [fit profile form](../frontend/components/fit-profile-settings.tsx), [access tokens](../frontend/components/access-token-settings.tsx), [learning page](../frontend/app/dashboard/learning/page.tsx), [English settings](../frontend/messages/en/settings.json).
+Sources: [settings page](../frontend/app/dashboard/settings/page.tsx), [fit profile page](../frontend/app/dashboard/fit-profile/page.tsx), [fit profile form](../frontend/components/fit-profile-settings.tsx), [access tokens](../frontend/components/access-token-settings.tsx), [learning page](../frontend/app/dashboard/learning/page.tsx), [English settings](../frontend/messages/en/settings.json).
 
 ## Share with a family
 

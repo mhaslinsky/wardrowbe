@@ -1,7 +1,8 @@
 'use client';
 
 import { AccessTokenSettings } from '@/components/access-token-settings';
-import { FitProfileSettings } from '@/components/fit-profile-settings';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PreviewPhotoSettings } from '@/components/preview-photo-settings';
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
@@ -174,6 +175,16 @@ function StyleSlider({
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const navigation = useTranslations('nav');
+  useEffect(() => {
+    const redirectFitProfile = () => {
+      if (window.location.hash === '#fit-profile') router.replace('/dashboard/fit-profile');
+    };
+    redirectFitProfile();
+    window.addEventListener('hashchange', redirectFitProfile);
+    return () => window.removeEventListener('hashchange', redirectFitProfile);
+  }, [router]);
   const t = useTranslations('settings');
   const tc = useTranslations('common');
   const tConst = useTranslations('constants');
@@ -604,7 +615,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6">
-        <FitProfileSettings />
+        <Link href="/dashboard/fit-profile" className="text-sm text-primary underline underline-offset-4">{navigation('fitProfile')}</Link>
         <AccessTokenSettings />
         {/* Account Section */}
         <Card>
