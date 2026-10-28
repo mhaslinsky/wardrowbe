@@ -235,6 +235,11 @@ class StudioService:
             status=OutfitStatus.pending,
             cloned_from_outfit_id=source.id,
             source_item_id=source.source_item_id,
+            ai_raw_response=(
+                {"_ai_call_id": source.ai_raw_response["_ai_call_id"]}
+                if source.ai_raw_response and source.ai_raw_response.get("_ai_call_id")
+                else None
+            ),
             name=name,
         )
         self.db.add(clone)

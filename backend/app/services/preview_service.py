@@ -17,6 +17,7 @@ from app.models.outfit import Outfit, OutfitItem
 from app.models.preference import UserPreference
 from app.models.preview import OutfitPreview, PreviewFeedback, PreviewPhoto, delete_preview_files
 from app.models.user import User
+from app.services.ai_call_query_service import linked_call_id
 from app.services.ai_telemetry_service import CallContext
 from app.services.image_service import ImageService, ImageVariant
 from app.services.photo_redraw_service import (
@@ -358,6 +359,7 @@ class PreviewService:
                 kind="like",
                 preview_created_at=record.created_at,
                 paths=dict(record.paths),
+                ai_call_id=linked_call_id(record.usage),
             )
             self.db.add(feedback)
         feedback.note = note.strip()
@@ -625,6 +627,8 @@ class PreviewService:
             )
             retained = {path for saved_paths in retained_paths for path in saved_paths.values()}
             old_paths = {name: path for name, path in record.paths.items() if path not in retained}
+            previous_call_id = linked_call_id(record.usage)
+            previous_created_at = record.created_at
             record.paths, record.cache_key = paths, key
             record.clothes_key, record.person_key = clothes_key, person_key
             record.preferences_key = preferences_key
@@ -640,7 +644,14 @@ class PreviewService:
             record.claim_id, record.started_at = None, None
             if regenerate and note:
                 self.db.add(
-                    PreviewFeedback(user_id=user_id, outfit_id=outfit_id, kind="fix", note=note)
+                    PreviewFeedback(
+                        user_id=user_id,
+                        outfit_id=outfit_id,
+                        kind="fix",
+                        note=note,
+                        ai_call_id=previous_call_id,
+                        preview_created_at=previous_created_at,
+                    )
                 )
             result = await self.response(
                 record,
