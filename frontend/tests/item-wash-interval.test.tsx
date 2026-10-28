@@ -102,4 +102,29 @@ describe('wash interval editing', () => {
     fireEvent.click(save)
     expect(api.patch).not.toHaveBeenCalled()
   })
+
+  it.each(['-', '1e'])('blocks browser-reported incomplete input %s until corrected', async () => {
+    const input = await openEditor({ ...baseItem, wash_interval: 8 })
+    let badInput = true
+    Object.defineProperty(input, 'validity', {
+      configurable: true,
+      get: () => ({ badInput }),
+    })
+    fireEvent.change(input, { target: { value: '' } })
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save).toBeDisabled()
+    fireEvent.click(save)
+    expect(api.patch).not.toHaveBeenCalled()
+    badInput = false
+    fireEvent.change(input, { target: { value: '4' } })
+    expect(save).toBeEnabled()
+    await saveInterval(4)
+  })
+
+  it('allows other edits with an unchanged unlimited interval', async () => {
+    await openEditor({ ...baseItem, wash_interval: 999, effective_wash_interval: 999 })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    await saveInterval(999)
+  })
+
 })
