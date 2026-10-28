@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from app.database import async_session_maker, engine
-from app.services.ai_call_query_service import AICallQueryService
+from app.services.ai_call_query_service import AICallQueryService, parse_cursor
 
 
 async def export_calls(output: Path) -> int:
@@ -34,7 +34,7 @@ async def export_calls(output: Path) -> int:
                         count += 1
                     if page.next_cursor is None:
                         break
-                    cursor = page.next_cursor
+                    cursor = parse_cursor(page.next_cursor)
         return count
     except BaseException:
         if created:

@@ -20,6 +20,20 @@ def linked_call_id(metadata: dict | None) -> UUID | None:
         return None
 
 
+def parse_cursor(cursor: str | None) -> tuple[datetime, UUID] | None:
+    """Parse an API or export cursor into a UTC timestamp and call ID."""
+    if not cursor:
+        return None
+    timestamp, identifier = cursor.split(",", 1)
+    try:
+        created_at = datetime.fromisoformat(timestamp)
+        if created_at.utcoffset() is None:
+            raise ValueError("Cursor requires timezone")
+        return created_at.astimezone(UTC), UUID(identifier)
+    except OverflowError as error:
+        raise ValueError("Cursor timestamp out of range") from error
+
+
 class AICallQueryService:
     """Read calls with current feedback, scoped to the call owner's records."""
 
@@ -34,24 +48,14 @@ class AICallQueryService:
         return (await self._enrich([call], user_id))[0] if call else None
 
     async def page(
-        self, user_id: UUID | None, limit: int = 100, cursor: str | None = None
+        self, user_id: UUID | None, limit: int = 100, cursor: tuple[datetime, UUID] | None = None
     ) -> AICallPage:
         """Page in creation order; None selects the server-only all-user export."""
         query = select(AICall)
         if user_id is not None:
             query = query.where(AICall.user_id == user_id)
         if cursor:
-            timestamp, identifier = cursor.split(",", 1)
-            try:
-                created_at = datetime.fromisoformat(timestamp)
-                if created_at.utcoffset() is None:
-                    raise ValueError("Cursor requires timezone")
-                created_at = created_at.astimezone(UTC)
-            except OverflowError as error:
-                raise ValueError("Cursor timestamp out of range") from error
-            query = query.where(
-                tuple_(AICall.created_at, AICall.id) > (created_at, UUID(identifier))
-            )
+            query = query.where(tuple_(AICall.created_at, AICall.id) > cursor)
         rows = list(
             await self.db.scalars(query.order_by(AICall.created_at, AICall.id).limit(limit + 1))
         )
@@ -174,6 +178,7 @@ class AICallQueryService:
             .join(ItemPurchase, ItemPurchase.item_id == ClothingItem.id)
             .where(
                 AICall.user_id.in_({call.user_id for call in calls}),
+                AICall.outcome == "success",
                 AICall.created_at < ItemPurchase.updated_at,
             )
             .subquery()

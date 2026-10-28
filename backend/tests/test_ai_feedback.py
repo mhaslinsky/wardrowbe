@@ -152,6 +152,60 @@ async def test_overflow_cursor_returns_422(client, auth_headers):
     assert response.status_code == 422
 
 
+async def test_cursor_errors_do_not_mask_invalid_stored_rows(
+    client, auth_headers, db_session, test_user
+):
+    malformed = await client.get(
+        "/api/v1/ai-calls", headers=auth_headers, params={"cursor": "invalid"}
+    )
+    assert malformed.status_code == 422
+    call = await add_call(db_session, test_user)
+    original_answer = call.answer
+    call.answer = ["invalid stored answer"]
+    await db_session.commit()
+    try:
+        response = await client.get("/api/v1/ai-calls", headers=auth_headers)
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Validation error"
+        assert response.json()["errors"][0]["field"] == "answer"
+    finally:
+        call.answer = original_answer
+        await db_session.commit()
+
+
+async def test_failed_pairing_retry_does_not_take_purchase_feedback(db_session, test_user):
+    from app.models.considering import ItemPurchase
+    from app.services.ai_call_query_service import AICallQueryService
+    from tests.test_image_undo_replace import _make_item
+
+    item = await _make_item(db_session, test_user)
+    decision_time = datetime(2026, 1, 2, tzinfo=UTC)
+    good = await add_call(
+        db_session,
+        test_user,
+        feature="pairing",
+        resource_type="item",
+        resource_id=item.id,
+        created_at=decision_time - timedelta(hours=2),
+    )
+    failed = await add_call(
+        db_session,
+        test_user,
+        feature="pairing",
+        resource_type="item",
+        resource_id=item.id,
+        created_at=decision_time - timedelta(hours=1),
+    )
+    failed.outcome = "error"
+    db_session.add(ItemPurchase(item_id=item.id, state="bought", updated_at=decision_time))
+    await db_session.commit()
+    query = AICallQueryService(db_session)
+    assert [feedback.kind for feedback in (await query.get(test_user.id, good.id)).feedback] == [
+        "purchase"
+    ]
+    assert not (await query.get(test_user.id, failed.id)).feedback
+
+
 @pytest.mark.parametrize(
     "feature,resource", [("pairing", "item"), ("considering_preview", "outfit")]
 )

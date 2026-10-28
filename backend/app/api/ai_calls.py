@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.database import DbSession
 from app.schemas.ai_call import AICallPage, AICallRead
-from app.services.ai_call_query_service import AICallQueryService
+from app.services.ai_call_query_service import AICallQueryService, parse_cursor
 from app.utils.auth import CurrentUser
 
 router = APIRouter(prefix="/ai-calls", tags=["AI calls"])
@@ -21,9 +21,10 @@ async def list_calls(
 ) -> AICallPage:
     response.headers["Cache-Control"] = "no-store"
     try:
-        return await AICallQueryService(db).page(user.id, limit, cursor)
+        parsed_cursor = parse_cursor(cursor)
     except ValueError as error:
         raise HTTPException(422, "Invalid cursor") from error
+    return await AICallQueryService(db).page(user.id, limit, parsed_cursor)
 
 
 @router.get("/{call_id}", response_model=AICallRead)
