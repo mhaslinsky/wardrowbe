@@ -21,9 +21,11 @@ from app.schemas.considering import (
     PassRequest,
     PurchaseFields,
 )
+from app.schemas.fit_evidence import FitEvidence
 from app.services.ai_service import AIDisabledError
 from app.services.considering_preview_service import ConsideringPreviewService
 from app.services.considering_service import ConsideringService, download_image
+from app.services.fit_evidence_service import get_fit_evidence
 from app.services.recommendation_service import (
     AIRecommendationError,
     InsufficientWardrobeError,
@@ -35,6 +37,11 @@ from app.utils.rate_limit import rate_limit_by_user
 router = APIRouter(prefix="/considering", tags=["Considering"])
 router.include_router(product_import_router)
 ShelfUser = Annotated[User, Depends(get_current_user)]
+
+
+@router.get("/{item_id}/fit-evidence", response_model=FitEvidence)
+async def fit_evidence(item_id: UUID, db: DbSession, current_user: ShelfUser) -> FitEvidence:
+    return await get_fit_evidence(db, current_user.id, item_id)
 
 
 @router.get("", response_model=list[ConsideringResponse])
