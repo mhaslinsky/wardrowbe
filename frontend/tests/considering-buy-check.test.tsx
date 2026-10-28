@@ -1,9 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import ConsideringPage from '@/app/dashboard/considering/page';
 import { createQueryClient } from '@/lib/query-client';
 import { sessionMock, translationMock } from './setup';
+
+vi.mock('next-intl', () => ({
+  useTranslations: (namespace: string) => (name: string, values?: { item?: string }) =>
+    name === 'checkItem' ? `Check: ${values?.item}` : `${namespace}.${name}`,
+}));
 
 const original = { state: 'considering', source_url: null, passed_reason: null, price: null, currency: 'USD', planned_size: 'M', item: { id: 'candidate', name: 'Linen shirt', status: 'ready', brand: 'Acme' } };
 let entry = structuredClone(original);
@@ -43,17 +48,18 @@ beforeEach(() => {
 });
 afterEach(() => { client.clear(); translationMock.includeNamespace = false; sessionMock.data = null; sessionMock.status = 'unauthenticated'; });
 async function open() {
-  render(<QueryClientProvider client={client}><ConsideringPage /></QueryClientProvider>);
+  const view = render(<QueryClientProvider client={client}><ConsideringPage /></QueryClientProvider>);
   await screen.findByText('Linen shirt');
+  return view;
 }
-async function check() { fireEvent.click(screen.getByRole('button', { name: key('check') })); }
+async function check() { fireEvent.click(screen.getByRole('button', { name: 'Check: Linen shirt' })); }
 
 it('makes no request before a click or on a shelf refetch; shows loading and blocks repeat clicks', async () => {
   hold = true; await open(); expect(checks()).toHaveLength(0);
   await client.refetchQueries(); expect(checks()).toHaveLength(0);
   await check();
   expect(await screen.findByText(key('loading'))).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: key('check') })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Check: Linen shirt' })).toBeDisabled();
   expect(checks()).toHaveLength(1);
   expect(checks()[0][1]?.method).toBe('POST');
   finish?.(); await screen.findByText(key('scored'));
@@ -120,4 +126,28 @@ it('distinguishes empty outfit options from unknown and not applicable', async (
   await open(); await check(); await screen.findByText(key('outfitCount'));
   result.outfits = { status: 'unknown' }; await check(); await screen.findByText(key('outfitsUnknown'));
   result.outfits = { status: 'not_applicable' }; await check(); await screen.findByText(key('outfitsNotApplicable'));
+});
+
+it('sends one paid request for two clicks before a render and aborts it on unmount', async () => {
+  hold = true;
+  const view = await open();
+  const button = screen.getByRole('button', { name: 'Check: Linen shirt' });
+  act(() => { fireEvent.click(button); fireEvent.click(button); });
+  await screen.findByText(key('loading'));
+  const signals = checks().map(([, options]) => options!.signal!);
+  view.unmount();
+  expect(signals).toHaveLength(1);
+  expect(signals.every(signal => signal.aborted)).toBe(true);
+  finish?.();
+});
+it('renders anchor citations and outfit entries as plain item names', async () => {
+  result.minuses = [{ kind: 'few_outfits', citations: [{ source_id: 'closet:outfits', item_id: 'candidate', field: 'closet.outfits_completed.count', value: 1 }] }];
+  await open(); await check(); await screen.findByText(key('few_outfits'));
+  expect(screen.getAllByText('Linen shirt').length).toBeGreaterThan(1);
+  expect(document.querySelector('a[href="/dashboard/wardrobe?item=candidate"]')).toBeNull();
+  expect(screen.getAllByRole('link', { name: 'Buck Mason tee' }).length).toBeGreaterThan(0);
+});
+it('names the Check button with its item while keeping the visible label short', async () => {
+  await open();
+  expect(screen.getByRole('button', { name: 'Check: Linen shirt' })).toHaveTextContent(key('check'));
 });

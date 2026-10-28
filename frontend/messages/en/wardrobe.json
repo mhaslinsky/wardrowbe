@@ -378,7 +378,8 @@
       "outfitsNotApplicable": "Outfits don’t apply to this item.",
       "skipReason": "Skip-list match",
       "wrongSizeReason": "Wrong size",
-      "duplicateReason": "Exact duplicate"
+      "duplicateReason": "Exact duplicate",
+      "checkItem": "Check: {item}"
     }
   },
   "import": {

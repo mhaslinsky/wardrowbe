@@ -71,7 +71,7 @@ export default function ConsideringPage() {
               {state === 'passed' && <p className="whitespace-pre-wrap break-words text-sm">{entry.passed_reason}</p>}
               {state === 'considering' && <ConsideringBuyCheck
                 key={JSON.stringify([entry.item, entry.planned_size, entry.price, entry.currency])}
-                itemId={entry.item.id} disabled={busy || entry.item.status !== 'ready'} />}
+                itemId={entry.item.id} itemName={entry.item.name || t('unnamed')} disabled={busy || entry.item.status !== 'ready'} />}
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" disabled={busy} onClick={(event) => openDialog(entry, 'edit', event.currentTarget)}>{common('edit')}</Button>
                 {state === 'considering' ? <>

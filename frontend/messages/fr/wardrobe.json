@@ -378,7 +378,8 @@
       "outfitsNotApplicable": "Les tenues ne concernent pas cet article.",
       "skipReason": "Dans la liste d’exclusions",
       "wrongSizeReason": "Mauvaise taille",
-      "duplicateReason": "Doublon exact"
+      "duplicateReason": "Doublon exact",
+      "checkItem": "Vérifier : {item}"
     }
   },
   "import": {

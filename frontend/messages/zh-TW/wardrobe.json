@@ -378,7 +378,8 @@
       "outfitsNotApplicable": "搭配不適用於此單品。",
       "skipReason": "符合排除清單",
       "wrongSizeReason": "尺寸不符",
-      "duplicateReason": "完全重複"
+      "duplicateReason": "完全重複",
+      "checkItem": "檢查：{item}"
     }
   },
   "import": {

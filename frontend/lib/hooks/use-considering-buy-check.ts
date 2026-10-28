@@ -42,12 +42,12 @@ export function useConsideringBuyCheck(itemId: string) {
   });
 }
 
-export function useBuyCheckItems(result: BuyCheckResult | undefined) {
+export function useBuyCheckItems(result: BuyCheckResult | undefined, itemId: string) {
   const { data: session } = useSession();
   const ids = Array.from(new Set([
     ...(result ? [...result.pluses, ...result.minuses, ...result.unknowns].flatMap(reason => reason.citations.flatMap(citation => citation.item_id ? [citation.item_id] : [])) : []),
     ...(result?.outfits.ideas?.flatMap(idea => idea.item_ids) ?? []),
-  ]));
+  ])).filter(id => id !== itemId);
   const items = useQueries({ queries: ids.map(id => ({
     queryKey: queryKeys.item(id),
     queryFn: () => { applySessionToken(session); return api.get<Item>(`/items/${encodeURIComponent(id)}`); },

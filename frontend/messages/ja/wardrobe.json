@@ -378,7 +378,8 @@
       "outfitsNotApplicable": "このアイテムはコーデの対象外です。",
       "skipReason": "除外リストに一致",
       "wrongSizeReason": "サイズが不適合",
-      "duplicateReason": "完全な重複"
+      "duplicateReason": "完全な重複",
+      "checkItem": "チェック：{item}"
     }
   },
   "import": {
