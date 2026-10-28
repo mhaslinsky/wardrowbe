@@ -69,31 +69,6 @@ COLOR_SEASONS = {
     },
 }
 
-NEAR_FACE_TYPES = frozenset(
-    {
-        "shirt",
-        "t-shirt",
-        "top",
-        "dress",
-        "jumpsuit",
-        "jacket",
-        "coat",
-        "sweater",
-        "hoodie",
-        "blazer",
-        "suit",
-        "vest",
-        "cardigan",
-        "overshirt",
-        "polo",
-        "blouse",
-        "tank-top",
-        "tie",
-        "hat",
-        "scarf",
-    }
-)
-
 
 def stored_color_season(style_profile: dict | None) -> str | None:
     season = (style_profile or {}).get("color_season")

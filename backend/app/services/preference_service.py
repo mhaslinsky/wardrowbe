@@ -1,7 +1,8 @@
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import cast, func, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -67,6 +68,9 @@ class PreferenceService:
 
         update_data = data.model_dump(include=data.model_fields_set, exclude_unset=True)
         color_season = update_data.pop("color_season", None)
+        style_profile = update_data.pop("style_profile", None)
+        if "style_profile" in data.model_fields_set and style_profile is None:
+            raise HTTPException(422, "Style profile required")
         preview = update_data.pop("preview_preferences", None)
         if "preview_preferences" in data.model_fields_set:
             if preview is None:
@@ -75,13 +79,7 @@ class PreferenceService:
         update_data = self._strip_color_overlaps(update_data, preferences)
 
         for field, value in update_data.items():
-            if field == "style_profile" and value is not None:
-                current_profile = dict(preferences.style_profile or {})
-                update_value = value.model_dump() if hasattr(value, "model_dump") else value
-                current_profile.update(update_value)
-                preferences.style_profile = current_profile
-                flag_modified(preferences, "style_profile")
-            elif field in (
+            if field in (
                 "color_favorites",
                 "color_avoid",
                 "excluded_item_ids",
@@ -92,12 +90,25 @@ class PreferenceService:
             else:
                 setattr(preferences, field, value)
 
-        if "color_season" in data.model_fields_set:
-            preferences.style_profile = {
-                **(preferences.style_profile or {}),
-                "color_season": color_season,
-            }
-            flag_modified(preferences, "style_profile")
+        if style_profile is not None or "color_season" in data.model_fields_set:
+            merged_profile = func.coalesce(
+                func.nullif(UserPreference.style_profile, cast(JSONB.NULL, JSONB)), cast({}, JSONB)
+            )
+            if style_profile is not None:
+                merged_profile = merged_profile.op("||")(cast(style_profile, JSONB))
+            if "color_season" in data.model_fields_set:
+                if color_season is None:
+                    merged_profile = merged_profile.op("-")("color_season")
+                else:
+                    merged_profile = merged_profile.op("||")(
+                        cast({"color_season": color_season}, JSONB)
+                    )
+            await self.db.execute(
+                update(UserPreference)
+                .where(UserPreference.user_id == user_id)
+                .values(style_profile=merged_profile)
+                .execution_options(synchronize_session=False)
+            )
 
         await self.db.commit()
         await self.db.refresh(preferences)

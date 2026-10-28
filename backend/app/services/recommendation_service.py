@@ -12,7 +12,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.data.color_seasons import COLOR_SEASONS, NEAR_FACE_TYPES, stored_color_season
+from app.data.color_seasons import COLOR_SEASONS, stored_color_season
 from app.models.considering import owned_item, owned_outfit
 from app.models.item import ClothingItem, ItemStatus
 from app.models.learning import ItemPairScore, UserLearningProfile
@@ -51,7 +51,7 @@ from app.utils.clothing import (
     remove_legwear,
     repair_top_layers,
 )
-from app.utils.garment_vocabulary import is_outfit_type, render_outfit_prompt
+from app.utils.garment_vocabulary import NEAR_FACE_TYPES, is_outfit_type, render_outfit_prompt
 from app.utils.preference_defaults import (
     DEFAULT_LAYERING_PREFERENCE,
     DEFAULT_TEMPERATURE_SENSITIVITY,
@@ -634,7 +634,8 @@ class RecommendationService:
                 palette = COLOR_SEASONS[season]
                 explicit_colors = {
                     color.lower()
-                    for color in (preferences.color_favorites or []) + (preferences.color_avoid or [])
+                    for color in (preferences.color_favorites or [])
+                    + (preferences.color_avoid or [])
                 }
                 best = [color for color in palette["best"] if color not in explicit_colors]
                 avoid = [color for color in palette["avoid"] if color not in explicit_colors]
@@ -646,7 +647,11 @@ class RecommendationService:
                     "Learned color adjustments combine with the season (+0.05 best, -0.05 avoid)."
                 )
             if preferences.style_profile:
-                profile = preferences.style_profile
+                profile = {
+                    key: value
+                    for key, value in preferences.style_profile.items()
+                    if key != "color_season"
+                }
                 strong = sorted(
                     [(k, v) for k, v in profile.items() if isinstance(v, (int, float)) and v > 60],
                     key=lambda x: x[1],
