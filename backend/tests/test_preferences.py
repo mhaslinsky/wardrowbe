@@ -11,7 +11,7 @@ DEFAULT_PREFERENCES_RESPONSE = {
     "standing_rules": [],
     "color_favorites": [],
     "color_avoid": [],
-    "style_profile": {"casual": 50, "formal": 50, "sporty": 50, "minimalist": 50, "bold": 50},
+    "style_profile": {"casual": 50, "formal": 50, "sporty": 50, "minimalist": 50, "bold": 50, "color_season": None},
     "default_occasion": "casual",
     "temperature_unit": "celsius",
     "temperature_sensitivity": "normal",
