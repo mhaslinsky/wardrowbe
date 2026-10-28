@@ -1,5 +1,6 @@
 'use client';
 
+import { OutfitPhoto } from '@/components/outfit-photo';
 import { OutfitPreview } from '@/components/outfit-preview';
 
 import { useState } from 'react';
@@ -106,6 +107,39 @@ export default function OutfitDetailPage() {
   };
 
   const title = getTitle(outfit);
+  const itemGrid = (
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+      {outfit.items.map((item) => (
+        <Link
+          key={item.id}
+          href={`/dashboard/wardrobe?item=${item.id}`}
+          className="group"
+        >
+          <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+            {garmentImageUrl(item, 'card') ? (
+              <Image
+                src={garmentImageUrl(item, 'card')!}
+                alt={item.name || typeLabel(item.type)}
+                fill
+                className="object-contain"
+                sizes="(max-width: 640px) 33vw, 20vw"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <span className="text-xs text-muted-foreground">
+                  {typeLabel(item.type)}
+                </span>
+              </div>
+            )}
+          </div>
+          {item.needs_wash && <Badge>{t('cards.inTheWash')}</Badge>}
+          <p className="text-xs text-muted-foreground mt-1 truncate">
+            {item.name || typeLabel(item.type)}
+          </p>
+        </Link>
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -171,39 +205,16 @@ export default function OutfitDetailPage() {
           <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
             {t('detail.items', { count: outfit.items.length })}
           </h2>
-          <OutfitPreview key={outfit.id} outfitId={outfit.id} detail>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-            {outfit.items.map((item) => (
-              <Link
-                key={item.id}
-                href={`/dashboard/wardrobe?item=${item.id}`}
-                className="group"
-              >
-                <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
-                  {garmentImageUrl(item, 'card') ? (
-                    <Image
-                      src={garmentImageUrl(item, 'card')!}
-                      alt={item.name || typeLabel(item.type)}
-                      fill
-                      className="object-contain"
-                      sizes="(max-width: 640px) 33vw, 20vw"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <span className="text-xs text-muted-foreground">
-                        {typeLabel(item.type)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {item.needs_wash && <Badge>{t('cards.inTheWash')}</Badge>}
-                <p className="text-xs text-muted-foreground mt-1 truncate">
-                  {item.name || typeLabel(item.type)}
-                </p>
-              </Link>
-            ))}
-          </div>
-          </OutfitPreview>
+          {outfit.selfie_photo ? <>
+            {itemGrid}
+            <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2">
+              <OutfitPreview key={outfit.id} outfitId={outfit.id} detail />
+              <OutfitPhoto outfit={outfit} />
+            </div>
+          </> : <>
+            <OutfitPreview key={outfit.id} outfitId={outfit.id} detail>{itemGrid}</OutfitPreview>
+            <OutfitPhoto outfit={outfit} />
+          </>}
         </CardContent>
       </Card>
 

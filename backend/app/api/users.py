@@ -201,6 +201,7 @@ async def delete_preview_photo(
 async def get_preview_file(user_id: UUID, filename: str, expires: str, sig: str, db: DbSession):
     from sqlalchemy import select
 
+    from app.models.outfit import Outfit
     from app.models.preview import OutfitPreview, PreviewPhoto, preview_file_paths
     from app.services.image_service import ImageService
     from app.utils.signed_urls import verify_signature
@@ -214,8 +215,15 @@ async def get_preview_file(user_id: UUID, filename: str, expires: str, sig: str,
         await db.get(PreviewPhoto, user_id),
         *(await db.scalars(select(OutfitPreview).where(OutfitPreview.user_id == user_id))).all(),
     ]
+    selfie_paths = await db.scalars(
+        select(Outfit.selfie_paths).where(
+            Outfit.user_id == user_id, Outfit.selfie_paths.is_not(None)
+        )
+    )
     if not any(
         record is not None and path in preview_file_paths(record.paths) for record in records
+    ) and not any(
+        paths is not None and path in preview_file_paths(paths) for paths in selfie_paths
     ):
         raise HTTPException(404, "Image not found")
     target = ImageService().get_image_path(path)

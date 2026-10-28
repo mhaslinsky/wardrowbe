@@ -11,7 +11,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import select, text
 
 from app.models.item import ClothingItem, ItemStatus
-from app.models.outfit import Outfit, UserFeedback
+from app.models.outfit import UserFeedback
 from app.services.recommendation_service import AIRecommendationError, RecommendationService
 from tests.migration_helpers import migration_downgrade
 from tests.test_outfit_notes import save_note
@@ -190,16 +190,21 @@ async def test_comment_timestamp_migration_backfills_and_round_trips(db_session,
         )
         assert columns.scalar_one_or_none() is None
         for comment in ("Existing correction", " \n\t "):
-            outfit = Outfit(user_id=user_id, occasion="casual")
-            db_session.add(outfit)
-            await db_session.flush()
+            outfit_id = uuid4()
+            await db_session.execute(
+                text(
+                    "INSERT INTO outfits (id, user_id, occasion, source, status) "
+                    "VALUES (:id, :user, 'casual', 'scheduled', 'pending')"
+                ),
+                {"id": outfit_id, "user": user_id},
+            )
             feedback_id = uuid4()
             feedback_ids.append(feedback_id)
             await db_session.execute(
                 text(
                     "INSERT INTO user_feedback (id, outfit_id, comment, created_at) VALUES (:id, :outfit, :comment, :created)"
                 ),
-                {"id": feedback_id, "outfit": outfit.id, "comment": comment, "created": old_time},
+                {"id": feedback_id, "outfit": outfit_id, "comment": comment, "created": old_time},
             )
         await db_session.commit()
     for feedback_id, expected in zip(feedback_ids, (old_time, None), strict=True):

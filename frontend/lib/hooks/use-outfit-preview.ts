@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { api, ApiError, API_BASE_PATH, getAccessToken } from '@/lib/api';
 import { useSetTokenIfAvailable } from '@/lib/hooks/use-session-token';
 import { queryKeys } from '@/lib/hooks/query-keys';
+import { invalidateOutfitCaches } from '@/lib/hooks/cache-invalidation';
 
 export type PreviewAngle = 'front' | 'quarter' | 'side';
 export const previewAngles: PreviewAngle[] = ['front', 'quarter', 'side'];
@@ -143,7 +144,7 @@ export function useOutfitPreview(outfitId: string) {
       }
       throw new Error('Preview timed out');
     },
-    onSuccess: (preview, { signal }) => { if (!signal.aborted) client.setQueryData(key, preview); },
+    onSuccess: (preview, { signal }) => { if (!signal.aborted) { client.setQueryData(key, preview); invalidateOutfitCaches(client, outfitId); } },
   });
   const feedback = useMutation({
     meta: { toastsOwnErrors: true },
@@ -162,6 +163,7 @@ export function useOutfitPreview(outfitId: string) {
     onSuccess: async () => {
       await client.cancelQueries({ queryKey: key });
       client.setQueryData(key, null);
+      invalidateOutfitCaches(client, outfitId);
     },
   });
   const remove = async () => {

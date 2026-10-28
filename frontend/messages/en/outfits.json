@@ -243,5 +243,15 @@
     "clothesChanged": "Clothes changed",
     "personChanged": "Your photos or measurements changed",
     "preferencesChanged": "Made with older preferences"
+  },
+  "photo": {
+    "title": "Photo of me wearing it",
+    "add": "Add photo",
+    "remove": "Delete photo",
+    "choice": "Show on card",
+    "automatic": "Automatic",
+    "photo": "My photo",
+    "preview": "AI preview",
+    "failed": "Photo update failed"
   }
 }

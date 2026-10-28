@@ -243,5 +243,15 @@
     "clothesChanged": "Vestiti modificati",
     "personChanged": "Le tue foto o misure sono cambiate",
     "preferencesChanged": "Creato con preferenze precedenti"
+  },
+  "photo": {
+    "title": "Foto di me con questo outfit",
+    "add": "Aggiungi foto",
+    "remove": "Elimina foto",
+    "choice": "Mostra sulla scheda",
+    "automatic": "Automatico",
+    "photo": "La mia foto",
+    "preview": "Anteprima IA",
+    "failed": "Aggiornamento foto non riuscito"
   }
 }

@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { OutfitCard } from '@/components/outfits/outfit-card'
 import OutfitDetailPage from '@/app/dashboard/outfits/[id]/page'
 
+vi.mock('@/components/outfit-photo', () => ({ OutfitPhoto: () => null }))
+
 vi.unmock('next-intl')
 
 vi.mock('next/navigation', () => ({

@@ -118,6 +118,8 @@ def collect_deleted_preview_files(session, _context, _instances):
                 if stored is not None:
                     paths.update({path: path for path in preview_file_paths(stored)})
     for record in session.deleted:
+        if isinstance(record, Outfit) and record.selfie_paths:
+            paths.update({path: path for path in preview_file_paths(record.selfie_paths)})
         if isinstance(record, (PreviewPhoto, OutfitPreview, PreviewFeedback)):
             paths.update(
                 {

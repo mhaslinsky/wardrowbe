@@ -15,7 +15,7 @@ const wardrobe = [
   { id: 'other-shirt', name: 'White shirt', type: 'shirt', status: 'ready' },
   { id: 'pants', name: 'Jeans', type: 'jeans', status: 'ready' },
 ];
-const confirmBodies = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/selfie/confirm')).map(([, options]) => JSON.parse(String(options?.body)));
+const confirmBodies = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/selfie/confirm-photo')).map(([, options]) => ({ request_id: (options?.body as FormData).get('request_id'), item_ids: JSON.parse(String((options?.body as FormData).get('item_ids'))) }));
 let revoke: ReturnType<typeof vi.fn<(url: string) => void>>;
 function mount(client = createQueryClient()) {
   return render(<QueryClientProvider client={client}><SelfiePage /></QueryClientProvider>);
@@ -148,4 +148,16 @@ describe('selfie confirmation', () => {
     if (code === 'DAY_LOGGED') expect(screen.getByRole('link', { name: 'viewOutfit' })).toHaveAttribute('href', '/dashboard/outfits/existing');
     expect(toast.error).not.toHaveBeenCalled();
   });
+});
+
+it('keeps the selected file for photo confirmation', async () => {
+  requestMock.mockResolvedValueOnce(reply({ matches: [{ id: 'shirt', name: 'Blue shirt' }], considered: 1 }))
+    .mockResolvedValueOnce(reply({ id: 'logged' }));
+  mount(); const file = choose();
+  await screen.findByText('Blue shirt');
+  fireEvent.click(screen.getByRole('button', { name: 'confirm' }));
+  await screen.findByText('logged');
+  const call = requestMock.mock.calls.find(([url]) => String(url).endsWith('/selfie/confirm-photo'));
+  expect(call).toBeDefined();
+  expect((call![1].body as FormData).get('image')).toBe(file);
 });

@@ -142,7 +142,9 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect, hi
               />
             </div>
           )}
-          <div className="absolute inset-0 grid gap-0.5 p-2" style={{ gridTemplateColumns: `repeat(${Math.min(outfit.items.length || 1, 4)}, minmax(0, 1fr))`, gridTemplateRows: outfit.items.length > 4 ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)' }}>
+          {outfit.card_image_url ? (
+            <Image unoptimized src={outfit.card_image_url} alt={getTitle(outfit)} fill className="object-contain" sizes="(max-width: 640px) 100vw, 33vw" />
+          ) : <div className="absolute inset-0 grid gap-0.5 p-2" style={{ gridTemplateColumns: `repeat(${Math.min(outfit.items.length || 1, 4)}, minmax(0, 1fr))`, gridTemplateRows: outfit.items.length > 4 ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)' }}>
             {visibleItems.map((item, idx) => (
               <div
                 key={`${item.id}-${idx}`}
@@ -179,7 +181,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect, hi
                 </span>
               </div>
             )}
-          </div>
+          </div>}
           {badge && (
             <div
               className={cn(

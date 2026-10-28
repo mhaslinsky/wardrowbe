@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -151,6 +151,9 @@ class FamilyRatingResponse(BaseModel):
 
 
 class OutfitResponse(BaseModel):
+    selfie_photo: dict[str, str] | None = None
+    card_image_choice: str = "automatic"
+    card_image_url: str | None = None
     unowned_item_ids: list[UUID] = Field(default_factory=list)
     group_size: int = 1
     wear_count: int | None = None
@@ -398,7 +401,10 @@ def outfit_to_response(
                 sum(r.rating for r in outfit.family_ratings) / family_rating_count
             )
 
+    from app.services.outfit_photo_service import photo_fields
+
     return OutfitResponse(
+        **photo_fields(outfit),
         id=outfit.id,
         occasion=outfit.occasion,
         scheduled_for=outfit.scheduled_for,
@@ -449,6 +455,14 @@ async def outfit_response(
     if unowned_ids is None:
         unowned_ids = await _unowned_ids(db, [outfit])
     response = outfit_to_response(outfit, wore_instead_items_map, is_starter_suggestion)
+    if outfit.card_image_choice == "preview":
+        from app.models.preview import OutfitPreview
+        from app.services.outfit_photo_service import photo_fields
+
+        preview = await db.get(OutfitPreview, outfit.id)
+        response.card_image_url = photo_fields(outfit, preview.paths if preview else None)[
+            "card_image_url"
+        ]
     response.unowned_item_ids = [item.id for item in response.items if item.id in unowned_ids]
     return response
 
@@ -1608,3 +1622,52 @@ async def create_outfit_preview(
     return await PreviewService(db).generate(
         outfit_id, current_user.id, regenerate, body.note if body else None
     )
+
+
+@router.put("/{outfit_id}/photo")
+async def attach_outfit_photo(
+    outfit_id: UUID,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    image: UploadFile,
+):
+    from app.services.outfit_photo_service import OutfitPhotoService, photo_fields, read_photo
+
+    service = OutfitPhotoService(db)
+    outfit = await service.owned(outfit_id, current_user.id)
+    data = await read_photo(image)
+    await service.save(outfit, data, image.filename)
+    return photo_fields(outfit)
+
+
+@router.delete("/{outfit_id}/photo", status_code=204)
+async def delete_outfit_photo(
+    outfit_id: UUID, db: DbSession, current_user: Annotated[User, Depends(get_current_user)]
+):
+    from app.services.outfit_photo_service import OutfitPhotoService
+
+    service = OutfitPhotoService(db)
+    outfit = await service.owned(outfit_id, current_user.id)
+    service.clear(outfit)
+    await db.commit()
+
+
+class PhotoChoiceRequest(BaseModel):
+    choice: Literal["automatic", "photo", "preview"]
+
+
+@router.patch("/{outfit_id}/photo-choice")
+async def choose_outfit_photo(
+    outfit_id: UUID,
+    request: PhotoChoiceRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    from app.models.preview import OutfitPreview
+    from app.services.outfit_photo_service import OutfitPhotoService, photo_fields
+
+    outfit = await OutfitPhotoService(db).owned(outfit_id, current_user.id)
+    outfit.card_image_choice = request.choice
+    preview = await db.get(OutfitPreview, outfit.id) if request.choice == "preview" else None
+    await db.commit()
+    return photo_fields(outfit, preview.paths if preview else None)

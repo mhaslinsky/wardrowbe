@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import tempfile
 from io import BytesIO
@@ -6,7 +7,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from PIL import Image
 from pillow_heif import register_heif_opener
 from pydantic import BaseModel
@@ -149,17 +150,20 @@ class SelfieConfirmRequest(BaseModel):
     item_ids: list[UUID]
 
 
-@router.post("/confirm", response_model=OutfitResponse)
-@wear_http()
-async def confirm_outfit(
+async def _confirm_outfit(
     request: SelfieConfirmRequest,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
+    photo: tuple[bytes, str] | None = None,
 ) -> OutfitResponse:
     try:
         outfit, created = await SelfieConfirmService(db).confirm(
             current_user, request.request_id, request.item_ids
         )
+        if photo is not None and created:
+            from app.services.outfit_photo_service import OutfitPhotoService
+
+            await OutfitPhotoService(db).save(outfit, *photo)
         response = outfit_to_response(outfit)
         outfit_id, user_id, occasion = outfit.id, current_user.id, outfit.occasion
         await db.commit()
@@ -177,3 +181,34 @@ async def confirm_outfit(
         except Exception:
             logger.exception("Selfie suggestion cache clear failed for user %s", user_id)
     return response
+
+
+@router.post("/confirm-photo", response_model=OutfitResponse)
+@wear_http()
+async def confirm_photo(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    request_id: Annotated[UUID, Form()],
+    item_ids: Annotated[str, Form()],
+    image: UploadFile = File(...),
+):
+    from pydantic import ValidationError
+
+    from app.services.outfit_photo_service import read_photo
+
+    try:
+        request = SelfieConfirmRequest(request_id=request_id, item_ids=json.loads(item_ids))
+    except (ValidationError, ValueError, TypeError):
+        raise HTTPException(422, "Invalid items") from None
+    data = await read_photo(image)
+    return await _confirm_outfit(request, db, current_user, photo=(data, image.filename))
+
+
+@router.post("/confirm", response_model=OutfitResponse)
+@wear_http()
+async def confirm_outfit(
+    request: SelfieConfirmRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return await _confirm_outfit(request, db, current_user)

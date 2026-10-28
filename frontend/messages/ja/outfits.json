@@ -243,5 +243,15 @@
     "clothesChanged": "服が変更されました",
     "personChanged": "写真またはサイズが変更されました",
     "preferencesChanged": "以前の設定で作成"
+  },
+  "photo": {
+    "title": "着用写真",
+    "add": "写真を追加",
+    "remove": "写真を削除",
+    "choice": "カードに表示",
+    "automatic": "自動",
+    "photo": "自分の写真",
+    "preview": "AIプレビュー",
+    "failed": "写真を更新できませんでした"
   }
 }
