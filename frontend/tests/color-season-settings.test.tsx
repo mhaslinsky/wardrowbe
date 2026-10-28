@@ -59,3 +59,43 @@ it('loads the saved season from the preferences field', () => {
     expect(screen.getByLabelText('colorSeason.label')).toHaveValue('cool-winter')
   } finally { state.preferences = original }
 })
+
+it.each(['cool-winter', null] as const)('omits an unchanged season when saving a slider (%s)', async (season) => {
+  const original = state.preferences
+  try {
+    state.preferences = { standing_rules: [], color_season: season }
+    render(<SettingsPage />)
+    fireEvent.keyDown(screen.getAllByRole('slider')[0], { key: 'ArrowRight' })
+    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
+    await waitFor(() => expect(state.save).toHaveBeenCalled())
+    expect(state.save.mock.calls[0][0]).not.toHaveProperty('color_season')
+    expect(state.save.mock.calls[0][0]).toHaveProperty('style_profile')
+  } finally { state.preferences = original }
+})
+
+it('omits an untouched season when a refetch arrives during a style edit', async () => {
+  const original = state.preferences
+  try {
+    state.preferences = { standing_rules: [], color_season: null }
+    const { rerender } = render(<SettingsPage />)
+    fireEvent.keyDown(screen.getAllByRole('slider')[0], { key: 'ArrowRight' })
+    state.preferences = { standing_rules: [], color_season: 'cool-winter' }
+    rerender(<SettingsPage />)
+    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
+    await waitFor(() => expect(state.save).toHaveBeenCalled())
+    expect(state.save.mock.calls[0][0]).not.toHaveProperty('color_season')
+  } finally { state.preferences = original }
+})
+
+it('clears the season dirty flag after a successful save', async () => {
+  render(<SettingsPage />)
+  const save = screen.getAllByText('save', { selector: 'button' })[0]
+  fireEvent.change(screen.getByLabelText('colorSeason.label'), { target: { value: 'cool-winter' } })
+  fireEvent.click(save)
+  await waitFor(() => expect(save).toBeDisabled())
+  state.save.mockClear()
+  fireEvent.keyDown(screen.getAllByRole('slider')[0], { key: 'ArrowRight' })
+  fireEvent.click(save)
+  await waitFor(() => expect(state.save).toHaveBeenCalled())
+  expect(state.save.mock.calls[0][0]).not.toHaveProperty('color_season')
+})

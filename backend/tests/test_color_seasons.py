@@ -6,7 +6,7 @@ from app.models.preference import UserPreference
 from app.schemas.preference import PreferenceUpdate
 from app.services.item_scorer import _preference_score, score_items
 from app.services.recommendation_service import RecommendationService
-from app.utils.garment_vocabulary import COLORS, NEAR_FACE_TYPES, TYPES
+from app.utils.garment_vocabulary import COLORS, TYPES
 
 SEASONS = [
     "deep-winter",
@@ -46,14 +46,6 @@ def test_palette_shape(season):
     assert palette["best"] and palette["avoid"]
     assert set(palette["best"]).isdisjoint(palette["avoid"])
     assert set(palette["best"] + palette["avoid"]) <= set(COLORS)
-
-
-@pytest.mark.parametrize("item_type", TYPES)
-def test_only_near_face_types_receive_season_scores(item_type):
-    for color, adjustment in [("navy", 0.05), ("orange", -0.05)]:
-        item = ClothingItem(type=item_type, primary_color=color)
-        expected = 1 + adjustment if item_type in NEAR_FACE_TYPES else 1
-        assert _preference_score(item, preferences("cool-winter"), None) == pytest.approx(expected)
 
 
 @pytest.mark.parametrize(
@@ -168,18 +160,25 @@ def test_prompt_filters_explicit_colors_out_of_actual_palette_lists():
     assert "avoid: brown, tan, gold, cream." in rendered
 
 
-def test_near_face_types_come_from_vocabulary_flags():
-    import json
-    from pathlib import Path
-
-    from app.utils import garment_vocabulary
-
-    vocabulary = json.loads(
-        (Path(__file__).parents[1] / "app/data/garment_vocabulary.json").read_text()
-    )
-    flagged = {entry["value"] for entry in vocabulary["types"] if entry.get("near_face")}
-    assert flagged
-    assert garment_vocabulary.NEAR_FACE_TYPES == flagged
+@pytest.mark.parametrize(
+    "item_type,expected",
+    [
+        ("shirt", 1.05),
+        ("scarf", 1.05),
+        ("hat", 1.05),
+        ("dress", 1.05),
+        ("coat", 1.05),
+        ("pants", 1.0),
+        ("shoes", 1.0),
+        ("socks", 1.0),
+        ("jeans", 1.0),
+        ("sneakers", 1.0),
+    ],
+)
+def test_near_face_scope_matches_clothing_worn_near_the_face(item_type, expected):
+    assert _preference_score(
+        ClothingItem(type=item_type, primary_color="navy"), preferences("cool-winter"), None
+    ) == pytest.approx(expected)
 
 
 @pytest.mark.parametrize("item_type", ["Shirt", " t-shirt ", "SCARF"])
@@ -248,22 +247,6 @@ async def test_season_persists_per_user_and_clears(client, test_user, auth_heade
         "/api/v1/users/me/preferences", headers=auth_headers, json={"style_profile": {"casual": 90}}
     )
     assert numeric_only.json()["color_season"] == "cool-winter"
-    from uuid import uuid4
-
-    from app.models.user import User
-    from app.services.preference_service import PreferenceService
-    from tests.identity_helpers import add_users_with_identities
-
-    other = User(
-        id=uuid4(),
-        external_id=f"season-{uuid4()}",
-        email=f"season-{uuid4()}@example.com",
-        display_name="Other",
-    )
-    await add_users_with_identities(db_session, other)
-    await db_session.commit()
-    other_prefs = await PreferenceService(db_session).get_or_create_preferences(other.id)
-    assert not (other_prefs.style_profile or {}).get("color_season")
     cleared = await client.patch(
         "/api/v1/users/me/preferences",
         headers=auth_headers,
@@ -398,3 +381,61 @@ async def test_season_save_handles_legacy_null_profile(client, test_user, auth_h
     )
     assert response.status_code == 200
     assert response.json()["color_season"] == "cool-winter"
+
+
+async def test_combined_style_and_clear_payload_removes_stored_season(
+    client,
+    test_user,
+    auth_headers,
+    db_session,
+):
+    user_id = test_user.id
+    url = "/api/v1/users/me/preferences"
+    selected = await client.patch(url, headers=auth_headers, json={"color_season": "cool-winter"})
+    assert selected.status_code == 200
+    cleared = await client.patch(
+        url,
+        headers=auth_headers,
+        json={"style_profile": {"casual": 90}, "color_season": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["color_season"] is None
+    assert cleared.json()["style_profile"]["casual"] == 90
+    db_session.expire_all()
+    stored = await db_session.get(UserPreference, user_id)
+    assert "color_season" not in stored.style_profile
+    reloaded = await client.get(url, headers=auth_headers)
+    assert reloaded.status_code == 200
+    assert reloaded.json()["color_season"] is None
+
+
+async def test_season_set_and_clear_leave_existing_other_user_unchanged(
+    client,
+    test_user,
+    auth_headers,
+    db_session,
+):
+    from uuid import uuid4
+
+    from app.models.user import User
+    from tests.identity_helpers import add_users_with_identities
+
+    other = User(
+        id=uuid4(),
+        external_id=f"season-{uuid4()}",
+        email=f"season-{uuid4()}@example.com",
+        display_name="Other",
+    )
+    await add_users_with_identities(db_session, other)
+    original = {"casual": 35, "formal": 80, "color_season": "warm-autumn"}
+    other_preferences = UserPreference(user_id=other.id, style_profile=dict(original))
+    db_session.add(other_preferences)
+    await db_session.commit()
+    for season in ["cool-winter", None]:
+        response = await client.patch(
+            "/api/v1/users/me/preferences", headers=auth_headers, json={"color_season": season}
+        )
+        assert response.status_code == 200
+        assert response.json()["color_season"] == season
+        await db_session.refresh(other_preferences)
+        assert other_preferences.style_profile == original
