@@ -216,6 +216,8 @@ Each fact cites its item or fit-profile row. Conflicting sizes yield no recommen
 
 Fabric notes without percentages appear as quoted note text in `feel.fiber_notes`. Conflicts read as "can't tell" and leave the composition unresolved.
 
+Fiber comparisons require complete explicit compositions; stored material is context only. Outfit results separate `pool_truncated` from `idea_limit_truncated`.
+
 Source: [fit evidence](../backend/app/services/fit_evidence_service.py).
 
 ## Make suggestions more useful

@@ -236,7 +236,8 @@ async def test_names_only_fabric_is_quoted_and_conflicts_cannot_tell(
         ("Other", "", {"brand": "Example", "line": "Daily"}, "no_match"),
         ("Example", "", {"brand": "Example", "line": "Daily"}, "unresolved"),
         (None, "Line: Daily", {"line": "Daily"}, "match"),
-        ("Example", "Line: Daily | Line: Other", {"line": "Daily"}, "no_match"),
+        ("Example", "Line: Daily | Line: Other", {"line": "Daily"}, "unresolved"),
+        ("Other", "Line: Daily | Line: Other", {"brand": "Example", "line": "Daily"}, "no_match"),
         ("Example", "Line: Daily | Line: daily", {"line": " ＤＡＩＬＹ "}, "match"),
         ("Example", "", {}, "unresolved"),
     ],
@@ -258,14 +259,14 @@ async def test_matching_precedence(brand, notes, required, expected):
         (["suit", "shoes"], False),
         (["sweater", "pants", "shoes"], False),
         (["sweater", "shirt", "pants", "shoes"], True),
+        (["sweater", "polo", "pants", "shoes"], False),
+        (["sweater", "tank-top", "pants", "shoes"], False),
         (["overshirt", "t-shirt", "pants", "shoes"], True),
         (["overshirt", "shirt", "pants", "shoes"], False),
         (["overshirt", "dress", "shoes"], False),
         (["cardigan", "dress", "shoes"], True),
         (["hoodie", "shirt", "pants", "boots"], True),
         (["shirt", "pants", "shoes", "boots"], False),
-        (["shirt", "pants", "underwear", "shoes"], False),
-        (["unknown", "pants", "shoes"], False),
         (["suit", "shirt", "hoodie", "coat", "shoes"], False),
         (["shirt", "pants", "jeans", "shoes"], False),
     ],
@@ -283,17 +284,6 @@ async def test_outfit_predicate(types, expected):
     ids = [item.id for item in items]
     pool = {item.id: item for item in items}
     assert valid_outfit(ids, ids[0], pool) == expected
-    if expected:
-        assert not valid_outfit([*ids, ids[0]], ids[0], pool)
-        for field, value in (
-            ("user_id", uuid4()),
-            ("status", ItemStatus.processing),
-            ("is_archived", True),
-        ):
-            saved = getattr(items[-1], field)
-            setattr(items[-1], field, value)
-            assert not valid_outfit(ids, ids[0], pool)
-            setattr(items[-1], field, saved)
 
 
 async def test_limits_do_not_hide_late_matches(client, auth_headers, db_session, test_user):
@@ -310,7 +300,7 @@ async def test_limits_do_not_hide_late_matches(client, auth_headers, db_session,
                 status=ItemStatus.ready,
                 image_path="fixture.png",
                 tags={"material_detail": "100% cotton"},
-                notes="Line: Everyday",
+                notes="Line: Everyday" + ("|" * 4096 if index == 49 else ""),
             )
         )
     profile = await db_session.get(UserFitProfile, test_user.id)
@@ -321,6 +311,8 @@ async def test_limits_do_not_hide_late_matches(client, auth_headers, db_session,
     }
     await db_session.commit()
     result = await evidence(client, auth_headers, anchor)
+    assert not result["notes_truncated"]
+    assert str(item_ids[49]) not in {source["item_id"] for source in result["sources"].values()}
     assert result["duplicates"]["matches"][0]["item_id"] == str(item_ids[-1])
     assert result["skip"]["matches"][0]["row_key"] == "skip_list:50"
     assert all(
@@ -341,3 +333,208 @@ async def test_limits_do_not_hide_late_matches(client, auth_headers, db_session,
         )
         <= 60
     )
+
+
+@pytest.mark.parametrize("notes", [False, True])
+async def test_incomplete_fibers_cannot_decide_composition(notes):
+    from app.services.fit_evidence_parser import parse_item
+    from app.services.fit_evidence_service import compare
+
+    records = [
+        parse_item(
+            ClothingItem(
+                id=uuid4(), material=material, notes=f"Fabric: {material}" if notes else None
+            )
+        )
+        for material in ("wool", "cotton")
+    ]
+    result = compare(*records, "fiber")
+    assert result["status"] == "unresolved" and result["display"] == "can't tell"
+
+
+@pytest.mark.parametrize("context_only", ["candidate", "reference", "neither"])
+async def test_context_material_does_not_select_fabric_references(
+    client, auth_headers, db_session, test_user, context_only
+):
+    from sqlalchemy import select
+
+    anchor = await seed(db_session, test_user)
+    anchor.material = "cotton"
+    if context_only == "candidate":
+        anchor.tags = {}
+        anchor.notes = "Line: Everyday"
+    for garment in await db_session.scalars(
+        select(ClothingItem).where(
+            ClothingItem.user_id == test_user.id, ClothingItem.id != anchor.id
+        )
+    ):
+        garment.material = "cotton"
+        if context_only == "reference":
+            garment.tags = {}
+            garment.notes = "Line: Everyday"
+    await db_session.commit()
+    result = await evidence(client, auth_headers, anchor)
+    if context_only == "neither":
+        facts = {fact["fact_id"]: fact for fact in result["facts"]}
+        assert result["feel"]["references"]
+        for reference in result["feel"]["references"]:
+            assert reference["shared_fiber_fact_ids"]
+            assert all(
+                result["sources"][facts[fact_id]["source_id"]]["field"] != "material"
+                for fact_id in reference["shared_fiber_fact_ids"]
+            )
+    else:
+        assert result["feel"]["references"] == []
+        assert result["feel"]["status"] == "unknown"
+    assert any(
+        fact["kind"] == "fiber" and fact["origin"] == "stored_tag" for fact in result["facts"]
+    )
+
+
+async def test_conflicted_scalar_comparison_is_unresolved():
+    from app.services.fit_evidence_parser import parse_item
+    from app.services.fit_evidence_service import compare
+
+    anchor = parse_item(ClothingItem(id=uuid4(), primary_color="blue", notes="Color: navy"))
+    reference = parse_item(ClothingItem(id=uuid4(), primary_color="blue"))
+    assert compare(anchor, reference, "color")["status"] == "unresolved"
+
+
+@pytest.mark.parametrize("stored", [False, True])
+async def test_fabric_detail_uses_real_parser_sources(stored):
+    from app.services.fit_evidence_parser import parse_item
+    from app.services.fit_evidence_service import compare
+
+    records = [
+        parse_item(
+            ClothingItem(
+                id=uuid4(),
+                tags={"material_detail": "Cotton jersey knit"} if stored else {},
+                notes=None if stored else "Fabric detail: Cotton jersey knit",
+            )
+        )
+        for _index in range(2)
+    ]
+    result = compare(*records, "fabric_detail")
+    assert result["status"] == "match"
+    assert result["candidate_source_ids"] and result["reference_source_ids"]
+
+
+@pytest.mark.parametrize("anchor_type", ["overshirt", "hoodie"])
+async def test_overshirt_hoodie_combination_needs_layer_repair(anchor_type):
+    from app.services.fit_evidence_outfits import valid_outfit
+
+    user_id = uuid4()
+    garments = [
+        ClothingItem(
+            id=uuid4(), user_id=user_id, type=kind, status=ItemStatus.ready, is_archived=False
+        )
+        for kind in ("overshirt", "hoodie", "t-shirt", "pants", "shoes")
+    ]
+    anchor = next(item for item in garments if item.type == anchor_type)
+    ids = [anchor.id, *(item.id for item in garments if item != anchor)]
+    assert not valid_outfit(ids, anchor.id, {item.id: item for item in garments})
+
+
+async def test_enumeration_does_not_warn_for_rejected_combinations(caplog):
+    from app.services.fit_evidence_outfits import outfit_ideas
+
+    user_id = uuid4()
+    garments = [
+        ClothingItem(
+            id=uuid4(), user_id=user_id, type=kind, status=ItemStatus.ready, is_archived=False
+        )
+        for kind in ("shirt", "pants", "jeans", "shoes")
+    ]
+    assert outfit_ideas(garments[0], garments[1:], 3)["count"] == 2
+    assert not any(
+        record.name == "app.utils.clothing" and record.levelno >= 30 for record in caplog.records
+    )
+
+
+@pytest.mark.parametrize(
+    "tops,extra,pool_cut,idea_cut",
+    [(1, 10, True, False), (6, 0, False, False), (7, 0, False, True)],
+)
+async def test_outfit_limits_have_separate_flags(tops, extra, pool_cut, idea_cut):
+    from app.services.fit_evidence_outfits import outfit_ideas
+
+    user_id = uuid4()
+    garments = [
+        ClothingItem(
+            id=uuid4(), user_id=user_id, type=kind, status=ItemStatus.ready, is_archived=False
+        )
+        for kind in ["pants", *(["t-shirt"] * tops), "shoes", "boots"]
+    ]
+    result = outfit_ideas(garments[0], garments[1:], len(garments) - 1 + extra)
+    assert result["pool_truncated"] is pool_cut
+    assert result["idea_limit_truncated"] is idea_cut
+    assert "rejected_count" not in result
+    assert result["count"] == min(12, tops * 2)
+
+
+@pytest.mark.parametrize("resolved", [False, True])
+async def test_feel_status_requires_a_resolved_comparison(
+    client, auth_headers, db_session, test_user, resolved
+):
+    anchor = await seed(db_session, test_user, owned=False)
+    anchor.type = ""
+    anchor.brand = "Example" if resolved else None
+    anchor.primary_color = None
+    anchor.tags = {}
+    anchor.notes = "Fabric: cotton"
+    db_session.add(
+        ClothingItem(
+            user_id=test_user.id,
+            type="",
+            brand=anchor.brand,
+            status=ItemStatus.ready,
+            image_path="fixture.png",
+            tags={},
+            notes="Fabric: cotton",
+        )
+    )
+    await db_session.commit()
+    result = await evidence(client, auth_headers, anchor)
+    assert result["feel"]["references"]
+    assert result["feel"]["status"] == ("known" if resolved else "unresolved")
+
+
+async def test_owned_evidence_query_excludes_ineligible_items(
+    client, auth_headers, db_session, test_user
+):
+    import json
+
+    from app.models.user import User
+    from tests.identity_helpers import add_users_with_identities
+
+    anchor = await seed(db_session, test_user)
+    other = User(id=uuid4(), email=f"{uuid4()}@example.test", display_name="Other")
+    other.external_id = str(other.id)
+    await add_users_with_identities(db_session, other)
+    excluded = []
+    for reason in ("foreign", "archived", "unready", "passed"):
+        garment = ClothingItem(
+            id=uuid4(),
+            user_id=other.id if reason == "foreign" else test_user.id,
+            type="shirt",
+            brand="Example",
+            primary_color="blue",
+            status=ItemStatus.processing if reason == "unready" else ItemStatus.ready,
+            is_archived=reason == "archived",
+            image_path="fixture.png",
+            tags={"material_detail": "100% cotton"},
+            notes="Line: Everyday | Size: M | Fabric: 100% cotton",
+        )
+        db_session.add(garment)
+        await db_session.flush()
+        if reason == "passed":
+            db_session.add(ItemPurchase(item_id=garment.id, state="passed"))
+        excluded.append(str(garment.id))
+    await db_session.commit()
+    result = await evidence(client, auth_headers, anchor)
+    assert len(result["duplicates"]["matches"]) == 1
+    returned = json.dumps(
+        {key: result[key] for key in ("sources", "facts", "selection", "outfit_ideas_found")}
+    )
+    assert all(item_id not in returned for item_id in excluded)

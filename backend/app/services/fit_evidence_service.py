@@ -14,9 +14,17 @@ from app.services.fit_evidence_parser import EvidenceRecord, normalize, parse_it
 from app.services.fit_profile_service import FitProfileService
 
 
+def known_values(record: EvidenceRecord, kind: str) -> set[str]:
+    return {
+        fact.value["normalized"]
+        for fact in record.of_kind(kind)
+        if fact.status == "known" and fact.value is not None
+    }
+
+
 def match_fields(record: EvidenceRecord, required: dict[str, str]) -> str:
     for kind, wanted in required.items():
-        if any(value != normalize(wanted) for value in record.values(kind)):
+        if any(value != normalize(wanted) for value in known_values(record, kind)):
             return "no_match"
     if (
         any(
@@ -63,32 +71,8 @@ def quoted_fiber_notes(records: list[EvidenceRecord]) -> list[dict[str, Any]]:
 def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> dict[str, Any]:
     if field == "fiber":
         first, second = anchor.composition(), reference.composition()
-        first_fibers = [fact.value for fact in anchor.of_kind("fiber") if fact.value is not None]
-        second_fibers = [
-            fact.value for fact in reference.of_kind("fiber") if fact.value is not None
-        ]
-        mismatched = bool(first_fibers and second_fibers) and (
-            not {value["name"] for value in first_fibers}
-            & {value["name"] for value in second_fibers}
-            or any(
-                left["name"] == right["name"]
-                and left["percent"] is not None
-                and right["percent"] is not None
-                and left["percent"] != right["percent"]
-                for left in first_fibers
-                for right in second_fibers
-            )
-        )
         status = (
             "unresolved"
-            if any(
-                fact.status == "conflict"
-                for record in (anchor, reference)
-                for fact in record.explicit_fibers()
-            )
-            else "no_match"
-            if mismatched
-            else "unresolved"
             if first is None or second is None
             else "match"
             if first == second
@@ -108,10 +92,17 @@ def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> di
                 if source.field == field
                 or source.field == f"tags.{field}"
                 or source.field.startswith(f"notes.{field.replace('_', ' ')}:")
+                or (
+                    field == "fabric_detail"
+                    and source.field == "tags.material_detail"
+                    and any(
+                        fact.kind == "feel" and fact.source_id == source_id for fact in record.facts
+                    )
+                )
             ]
 
         first = (
-            anchor.values(field)
+            known_values(anchor, field)
             if field in {"brand", "line", "size", "type", "color"}
             else {
                 normalize(anchor.sources[source_id].excerpt)
@@ -120,7 +111,7 @@ def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> di
             }
         )
         second = (
-            reference.values(field)
+            known_values(reference, field)
             if field in {"brand", "line", "size", "type", "color"}
             else {
                 normalize(reference.sources[source_id].excerpt)
@@ -242,19 +233,23 @@ async def get_fit_evidence(db: AsyncSession, user_id: UUID, item_id: UUID) -> Fi
         and match_fields(record, {"brand": brand, **({"line": line} if line else {})}) == "match"
     ]
     candidate_fibers = {
-        fact.value["name"] for fact in candidate.of_kind("fiber") if fact.status == "known"
+        fact.value["name"] for fact in candidate.explicit_fibers() if fact.status == "known"
     }
     fabric_eligible = [
         record
         for record in records
         if candidate_fibers
-        & {fact.value["name"] for fact in record.of_kind("fiber") if fact.status == "known"}
+        & {fact.value["name"] for fact in record.explicit_fibers() if fact.status == "known"}
     ]
     fabric_eligible.sort(
         key=lambda record: (
             -len(
                 candidate_fibers
-                & {fact.value["name"] for fact in record.of_kind("fiber") if fact.status == "known"}
+                & {
+                    fact.value["name"]
+                    for fact in record.explicit_fibers()
+                    if fact.status == "known"
+                }
             ),
             record.key,
         )
@@ -326,7 +321,7 @@ async def get_fit_evidence(db: AsyncSession, user_id: UUID, item_id: UUID) -> Fi
             "item_id": record.locator["item_id"],
             "shared_fiber_fact_ids": [
                 fact.fact_id
-                for fact in record.of_kind("fiber")
+                for fact in record.explicit_fibers()
                 if fact.status == "known" and fact.value["name"] in candidate_fibers
             ],
             "rating_fact_ids": fact_ids(record, "rating"),
@@ -353,7 +348,7 @@ async def get_fit_evidence(db: AsyncSession, user_id: UUID, item_id: UUID) -> Fi
     return FitEvidence(
         anchor_id=str(item_id),
         profile_rev=profile.rev,
-        notes_truncated=any(record.notes_truncated for record in [candidate, *records]),
+        notes_truncated=any(record.notes_truncated for record in chosen.values()),
         sources=sources,
         facts=facts,
         size={
@@ -368,7 +363,15 @@ async def get_fit_evidence(db: AsyncSession, user_id: UUID, item_id: UUID) -> Fi
             ],
         },
         feel={
-            "status": "known" if references else "unknown",
+            "status": "known"
+            if any(
+                comparison["status"] in {"match", "no_match"}
+                for reference in references
+                for comparison in reference["comparisons"]
+            )
+            else "unresolved"
+            if references
+            else "unknown",
             "references": references,
             "fiber_notes": quoted_fiber_notes(list(chosen.values())),
         },
