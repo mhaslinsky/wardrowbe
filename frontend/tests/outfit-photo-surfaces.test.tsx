@@ -42,7 +42,7 @@ it('detail shows the selected picture and pieces with a collapsed preview', () =
   expect(screen.getByText('Blue shirt')).toBeVisible();
   expect(screen.queryByRole('img', { name: 'see' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'show' }));
-  expect(screen.getByRole('button', { name: 'like' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'comment' })).toBeVisible();
 });
 
 it('detail keeps photo controls inline when no card picture is selected', () => {

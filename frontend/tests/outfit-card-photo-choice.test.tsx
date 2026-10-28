@@ -25,7 +25,7 @@ it('opens preview controls from one collapsed control when a card picture is pre
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'show' }));
   expect(screen.getByRole('img')).toBeVisible();
-  for (const label of ['redraw', 'like', 'delete']) expect(screen.getByRole('button', { name: label })).toBeVisible();
+  for (const label of ['redraw', 'comment', 'delete']) expect(screen.getByRole('button', { name: label })).toBeVisible();
 });
 
 it('does not repeat the selected preview image', () => {

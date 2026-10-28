@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ThumbsUp } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
@@ -16,14 +16,14 @@ export function OutfitPreview(props: { outfitId: string; children?: ReactNode; d
 
 function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, cardImageIsPreview, hasRealPhoto }: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview: boolean; hasRealPhoto?: boolean }) {
   const t = useTranslations('outfits.preview');
-  const { preview, pending, error, comparisonPending, comparisonError, conflict, missingPhoto, likeConflict, draw, remove, like, compare } = useOutfitPreview(outfitId);
+  const { preview, pending, error, comparisonPending, comparisonError, conflict, missingPhoto, commentConflict, draw, remove, saveComment, compare } = useOutfitPreview(outfitId);
   const started = useRef(false);
   useEffect(() => {
     let disposed = false;
     queueMicrotask(() => { if (!disposed && autoDraw && !started.current) { started.current = true; void draw(); } });
     return () => { disposed = true; };
   }, [autoDraw, draw]);
-  const [action, setAction] = useState<'redraw' | 'delete' | 'like' | null>(null);
+  const [action, setAction] = useState<'redraw' | 'delete' | 'comment' | null>(null);
   const [note, setNote] = useState('');
   const [comparisonCallId, setComparisonCallId] = useState<string>();
   const [comparisonNotice, setComparisonNotice] = useState(false);
@@ -53,9 +53,10 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
       </div>}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setComparisonCallId(undefined); setComparisonNotice(false); setAction('redraw'); }}>{t('redraw')}</Button>
-        <Button size="sm" variant={preview.liked ? 'default' : 'outline'} aria-pressed={Boolean(preview.liked)} disabled={pending} onClick={() => { setNote(preview.like_note ?? ''); setAction('like'); }}><ThumbsUp className="mr-1 h-4 w-4" />{t(preview.liked ? 'liked' : 'like')}</Button>
+        <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(preview.comment ?? ''); setAction('comment'); }}><MessageSquare className="mr-1 h-4 w-4" />{t('comment')}</Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => setAction('delete')}>{t('delete')}</Button>
       </div>
+      {preview.comment && <p className="truncate text-sm text-muted-foreground" title={preview.comment}>{preview.comment}</p>}
     </>}
     </div>
     <RedrawConfirmation title={t('compare')} description={t('comparePaid')} open={compareConfirm} onOpenChange={setCompareConfirm} paidRetry={false} onConfirm={() => {
@@ -66,12 +67,12 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
     }} />
     <Dialog open={action !== null} onOpenChange={(open) => { if (!open) setAction(null); }}>
       <DialogContent aria-describedby={undefined} className="max-w-sm">
-        <DialogTitle>{t(action === 'delete' ? 'deleteConfirm' : action === 'like' ? 'like' : 'redraw')}</DialogTitle>
-        {(action === 'redraw' || action === 'like') && <label className="space-y-2">
-          <span>{t(action === 'like' ? 'likeNote' : 'changeNote')}</span>
-          <Textarea placeholder={action === 'like' ? t('likeNotePlaceholder') : undefined} aria-label={t(action === 'like' ? 'likeNote' : 'changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
+        <DialogTitle>{t(action === 'delete' ? 'deleteConfirm' : action === 'comment' ? 'comment' : 'redraw')}</DialogTitle>
+        {(action === 'redraw' || action === 'comment') && <label className="space-y-2">
+          <span>{t(action === 'comment' ? 'commentNote' : 'changeNote')}</span>
+          <Textarea placeholder={action === 'comment' ? t('commentNotePlaceholder') : undefined} aria-label={t(action === 'comment' ? 'commentNote' : 'changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
         </label>}
-        {action === 'like' && likeConflict && <p role="alert" className="text-sm text-destructive">{t('likeChanged')}</p>}
+        {action === 'comment' && commentConflict && <p role="alert" className="text-sm text-destructive">{t('commentChanged')}</p>}
         {action === 'redraw' && comparisonNotice && <p role="alert" className="text-sm text-destructive">{t('comparisonChanged')}</p>}
         {action === 'redraw' && conflict && <p role="alert" className="text-sm text-destructive">{t('redrawConflict')}</p>}
         {action === 'redraw' && error && <p role="alert" className="text-sm text-destructive">{t('failed')}</p>}
@@ -81,14 +82,14 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
             const selected = action;
             setAction(null);
             if (selected === 'delete') void remove();
-            else if (selected === 'like') {
-              if (preview && !await like(note, preview.created_at)) setAction('like');
+            else if (selected === 'comment') {
+              if (preview && !await saveComment(note, preview.created_at)) setAction('comment');
             } else {
               const success = await draw(true, note, note.trim() ? comparisonCallId : undefined);
               if (!success && comparisonCallId) { setComparisonCallId(undefined); setComparisonNotice(true); }
               if (!success && note.trim()) setAction('redraw');
             }
-          }}>{t(action === 'delete' ? 'delete' : action === 'like' ? 'like' : 'redraw')}</Button>
+          }}>{action === 'comment' ? tc('save') : t(action === 'delete' ? 'delete' : 'redraw')}</Button>
         </div>
       </DialogContent>
     </Dialog>
