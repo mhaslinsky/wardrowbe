@@ -2,6 +2,8 @@ import runpy
 
 import pytest
 from fastapi import APIRouter, Depends, FastAPI
+
+# FastAPI internals (_IncludedRouter, effective_route_contexts, low-priority routes) must fail loudly if changed.
 from fastapi.routing import APIRoute, _IncludedRouter
 from starlette.routing import BaseRoute, Mount, Route
 
@@ -37,6 +39,7 @@ DOCS_ROUTES = [
 def _effective_routes(routes):
     for route in routes:
         if type(route) is _IncludedRouter:
+            assert not route.effective_low_priority_routes(), "Unsupported low-priority routes"
             # Validate originals first: FastAPI silently skips unsupported route classes.
             list(_effective_routes(route.original_router.routes))
             contexts = list(route.effective_route_contexts())
@@ -59,6 +62,7 @@ def _signed_in(dependant):
 
 
 def _assert_inventory(application, exemptions, docs):
+    assert not application.router._low_priority_routes, "Unsupported low-priority routes"
     observed_public = set()
     observed_docs = set()
     for route in _effective_routes(application.routes):
@@ -76,8 +80,15 @@ def _assert_inventory(application, exemptions, docs):
     assert observed_docs == expected_docs, f"Docs routes differ: {observed_docs ^ expected_docs}"
 
 
-def test_real_app_route_inventory():
-    _assert_inventory(main.app, PUBLIC_ROUTES, DOCS_ROUTES)
+def test_real_app_route_inventory(monkeypatch):
+    monkeypatch.delenv("FORWARD_AUTH_SECRET", raising=False)
+    settings = Settings()
+    assert settings.dev_mode
+    monkeypatch.setattr(config, "get_settings", lambda: settings)
+    development_app = runpy.run_path(main.__file__)["app"]
+    _assert_inventory(development_app, PUBLIC_ROUTES, DOCS_ROUTES)
+    routes = list(_effective_routes(development_app.routes))
+    print(f"Inventory covers {len(routes)} routes including development docs")
 
 
 def test_production_has_no_docs(monkeypatch):
@@ -145,6 +156,23 @@ def test_unknown_route_classes_fail(nested, route_class):
 
 def test_missing_traversal_support_fails(monkeypatch):
     application = _control_app()
-    monkeypatch.setattr(_IncludedRouter, "effective_route_contexts", None)
-    with pytest.raises(TypeError):
+    monkeypatch.delattr(_IncludedRouter, "effective_route_contexts")
+    with pytest.raises(AttributeError, match="effective_route_contexts"):
+        _assert_inventory(application, [], [])
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_frontend_routes_fail(nested, tmp_path):
+    application = _control_app()
+    _assert_inventory(application, [], [])
+    if nested:
+        router = APIRouter()
+        router.add_api_route("/private", _endpoint, dependencies=[Depends(get_current_user)])
+        router.frontend("/files", directory=tmp_path, fallback=None)
+        parent = APIRouter()
+        parent.include_router(router, prefix="/nested")
+        application.include_router(parent, prefix="/api")
+    else:
+        application.frontend("/files", directory=tmp_path, fallback=None)
+    with pytest.raises(AssertionError, match="Unsupported low-priority routes"):
         _assert_inventory(application, [], [])
