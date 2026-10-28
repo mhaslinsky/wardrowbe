@@ -15,6 +15,7 @@ from app.schemas.preference import (
     PreferenceUpdate,
     PreviewPreferenceReset,
     StyleProfile,
+    stored_wash_intervals,
 )
 from app.services.fit_profile_service import FitProfileService
 from app.services.preference_service import PreferenceService
@@ -37,6 +38,7 @@ router = APIRouter(prefix="/users/me/preferences", tags=["Preferences"])
 
 def _build_preference_response(preferences, preview_preferences) -> PreferenceResponse:
     return PreferenceResponse(
+        wash_intervals=stored_wash_intervals(preferences.wash_intervals),
         color_season=stored_color_season(preferences.style_profile),
         preview_preferences=preview_preferences,
         standing_rules=preferences.standing_rules if preferences.standing_rules is not None else [],

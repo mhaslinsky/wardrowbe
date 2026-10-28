@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 class UserPreference(Base):
     __tablename__ = "user_preferences"
 
+    wash_intervals: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),

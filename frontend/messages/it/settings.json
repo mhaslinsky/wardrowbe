@@ -1,4 +1,13 @@
 {
+  "washing": {
+    "title": "Lavaggio",
+    "description": "Utilizzi prima del lavaggio",
+    "never": "Mai",
+    "reset": "Ripristina",
+    "empty": "Aggiungi vestiti per impostare gli intervalli di lavaggio.",
+    "loading": "Caricamento dei tipi di abbigliamento",
+    "error": "Impossibile caricare i tipi di abbigliamento"
+  },
   "account": {
     "description": "Le informazioni del tuo profilo",
     "email": "Email",

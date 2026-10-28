@@ -14,12 +14,15 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    case,
     func,
+    select,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from app.database import Base
+from app.models.preference import UserPreference
 
 if TYPE_CHECKING:
     from app.models.outfit import Outfit
@@ -75,6 +78,30 @@ class ClothingItem(Base):
 
     # Classification
     type: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Bound the text before casting so invalid or oversized stored values cannot break item reads.
+    type_wash_interval: Mapped[int | None] = column_property(
+        select(
+            case(
+                (
+                    (func.jsonb_typeof(UserPreference.wash_intervals[type]) == "number")
+                    & UserPreference.wash_intervals[type].astext.in_(
+                        [str(interval) for interval in (*range(1, 31), 999)]
+                    ),
+                    UserPreference.wash_intervals[type].astext.cast(Integer),
+                ),
+                else_=None,
+            )
+        )
+        .where(UserPreference.user_id == user_id)
+        .correlate_except(UserPreference)
+        .scalar_subquery(),
+        expire_on_flush=False,
+    )
+
+    @property
+    def loaded_type_wash_interval(self) -> int | None:
+        return self.__dict__.get("type_wash_interval")
+
     subtype: Mapped[str | None] = mapped_column(String(50))
 
     # Tags and attributes

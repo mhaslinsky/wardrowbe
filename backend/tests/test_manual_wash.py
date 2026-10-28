@@ -112,7 +112,7 @@ async def test_manual_flags_survive_migration_rollback(client, db_session, test_
     await flag(client, item)
     item_id = item.id
     async with migration_downgrade(db_session, "e189a1b2c3d4"):
-        await db_session.refresh(item)
+        await db_session.refresh(item, ["manually_needs_wash"])
         assert item.manually_needs_wash is True
         another = await _item(db_session, test_user, "jeans")
         assert another.manually_needs_wash is False

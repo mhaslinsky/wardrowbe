@@ -3,8 +3,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ItemDetailDialog } from '@/components/item-detail-dialog';
 import type { Item } from '@/lib/types';
+import * as intl from 'next-intl';
 
 const mutations = vi.hoisted(() => ({ deleteImage: vi.fn(), setPrimary: vi.fn() }));
+const preferenceState = vi.hoisted(() => ({ data: undefined as { wash_intervals: Record<string, number> } | undefined }));
+vi.mock('@/lib/hooks/use-preferences', () => ({
+  usePreferences: () => ({ data: preferenceState.data }),
+}));
 vi.mock('next/image', () => ({ default: ({ fill, ...props }: any) => <img {...props} /> }));
 vi.mock('@/components/generate-pairings-dialog', () => ({ GeneratePairingsDialog: () => null }));
 vi.mock('@/lib/hooks/use-features', () => ({ useFeatures: () => ({ data: {} }) }));
@@ -14,8 +19,30 @@ vi.mock('@/lib/hooks/use-items', async (importOriginal) => {
     () => ({ data: undefined, isPending: false, mutateAsync: vi.fn(), mutate: key === 'useDeleteItemImage' ? mutations.deleteImage : mutations.setPrimary }),
   ]));
 });
-beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); });
+beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); preferenceState.data = undefined; });
 afterEach(() => { cleanup(); vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it.each([[2, 'Default: 2'], [999, 'Default: Never']] as const)('labels the type default %s in the item editor', async (interval, placeholder) => {
+  preferenceState.data = { wash_intervals: { [item.type]: interval } };
+  const original = intl.useTranslations;
+  const translation = vi.spyOn(intl, 'useTranslations').mockImplementation((namespace) => {
+    const translate = original(namespace);
+    return Object.assign((key: string, values?: { count?: string | number }) => {
+      if (key === 'placeholders.washIntervalDefault') return `Default: ${values?.count}`;
+      if (key === 'view.never') return 'Never';
+      return translate(key, values);
+    }, translate) as ReturnType<typeof intl.useTranslations>;
+  });
+  try {
+    render(<QueryClientProvider client={new QueryClient()}>
+      <ItemDetailDialog item={item} open onOpenChange={vi.fn()} />
+    </QueryClientProvider>);
+    await interact(() => { fireEvent.click(screen.getByTitle('actions.editItem')); });
+    expect(screen.getByPlaceholderText(placeholder)).toBeInTheDocument();
+  } finally {
+    translation.mockRestore();
+  }
+});
 
 function comparisonButton(name: string) {
   const button = screen.getByText(name).closest('button')!;

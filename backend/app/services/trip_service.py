@@ -22,27 +22,23 @@ from app.services.weather_service import WeatherData, WeatherService, WeatherSer
 from app.utils.clothing import BODY_SLOTS, OVER_LAYER_SUBTYPES, covered_body_slots
 from app.utils.garment_vocabulary import (
     BASE_UNDER_LAYER_TYPES,
-    DEFAULT_WASH_INTERVALS,
     ITEM_ROLE,
     NEEDS_BASE_TOP_TYPES,
 )
 from app.utils.timezone import get_user_today
+from app.utils.washing import wash_interval
 
 
 def reuse_limit(item) -> float:
     kind = (item.type or "").lower()
     role = ITEM_ROLE.get(kind)
     single_wear = role == "full_body" or (role == "base_top" and kind not in NEEDS_BASE_TOP_TYPES)
-    if item.wash_interval == 999:
+    interval = wash_interval(item)
+    if interval == 999:
         return 1 if single_wear else float("inf")
     remaining = max(
         0,
-        (
-            item.wash_interval
-            if item.wash_interval is not None
-            else DEFAULT_WASH_INTERVALS.get(kind, 3)
-        )
-        - (item.wears_since_wash or 0),
+        interval - (item.wears_since_wash or 0),
     )
     return min(1, remaining) if single_wear else remaining
 

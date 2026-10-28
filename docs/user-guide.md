@@ -124,7 +124,9 @@ Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outf
 
 Each item tracks wears since its last wash. At its wash interval, it needs washing and is excluded from normal outfit recommendations.
 
-1. Open an item and edit **Wash Interval** to set the number of wears before washing. Leave it blank and save to use the clothing type's default, including when clearing an existing override.
+In **Settings > Washing**, choose the wears before washing for each clothing type you own: 1 to 30, or **Never**. Select **Reset** beside a type to restore its built-in default, then select **Save**. These settings apply only to your wardrobe, starting with the next wear. Past wear counts and wash status stay as recorded.
+
+1. Open an item and edit **Wash Interval** to override its type setting. Leave it blank and save to use your type setting, including when clearing an existing override. The **Default** placeholder shows that setting.
 2. Use **Put in the wash** if it needs washing earlier.
 3. After washing, filter Wardrobe by **Needs wash**, open the clean items, and select **Mark Washed**. This resets their wash status so they can return to suggestions.
 
@@ -231,6 +233,7 @@ In **Settings**, review these sections. Use **Save** for general preference chan
 - **Location**: use **Use My Location** or enter coordinates, review the timezone, then **Save Location**. Browser permission can be denied; manual entry remains available.
 - **Style Profile**, **Favorite Colors**, and **Colors to Avoid**: describe the styles and colors you want.
 - **Temperature & Comfort**: choose temperature units, sensitivity, layering, and your hot and cold thresholds.
+- **Washing**: set wears before washing by clothing type; see [laundry](#keep-laundry-up-to-date).
 - **Recommendation Settings**: choose a default occasion, variety, repeat avoidance, and whether to prefer underused items.
 - **Standing rules**: add one instruction per line, up to 20 rules of 300 characters each.
 - **Body Measurements**: choose metric or imperial units, enter the measurements you know and usual clothing sizes, then **Save Measurements**.

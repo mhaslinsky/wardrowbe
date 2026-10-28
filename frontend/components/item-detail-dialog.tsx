@@ -65,6 +65,7 @@ import { toast } from 'sonner';
 import { useUpdateItem, useDeleteItem, useReanalyzeItem, useRotateImage, useRemoveBackground, useRestoreOriginal, useReplaceItemImage, useLogWear, useLogWash, usePutInWash, useWashHistory, useItemWearStats, useItemWearHistory, useAddItemImage, useDeleteItemImage, useSetPrimaryImage } from '@/lib/hooks/use-items';
 import { CLOTHING_SUBTYPES, Item } from '@/lib/types';
 import { ITEM_ROLE } from '@/lib/generated/garment-vocabulary';
+import { usePreferences } from '@/lib/hooks/use-preferences';
 import {
   useClothingTypes,
   useClothingColors,
@@ -124,6 +125,7 @@ function editFormFromItem(item: Item): EditForm {
 
 export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogProps) {
   const typeLabel = useTypeLabel();
+  const { data: preferences } = usePreferences();
   const t = useTranslations('wardrobe.itemDetail');
   const tc = useTranslations('common');
   const tw = useTranslations('wardrobe');
@@ -191,6 +193,9 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
   useEffect(() => { setActiveImageIndex(0); }, [comparisonCount]);
 
   if (!item) return null;
+  const defaultWashInterval = preferences?.wash_intervals?.[editForm.type]
+    ?? preferences?.wash_interval_defaults?.[editForm.type]
+    ?? item.effective_wash_interval;
 
   const handleSave = async () => {
     try {
@@ -792,7 +797,9 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                         wash_interval: event.target.value ? Number(event.target.value) : null,
                         wash_interval_bad_input: event.target.validity.badInput,
                       })}
-                      placeholder={t('placeholders.washIntervalDefault', { count: item.effective_wash_interval })}
+                      placeholder={t('placeholders.washIntervalDefault', {
+                        count: defaultWashInterval === 999 ? t('view.never') : defaultWashInterval,
+                      })}
                     />
                     <p className="text-xs text-muted-foreground">
                       {t('view.washIntervalHint')}

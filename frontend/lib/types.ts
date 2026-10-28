@@ -162,6 +162,8 @@ export interface AIEndpoint {
 }
 
 export interface Preferences {
+  wash_intervals?: Record<string, number>;
+  wash_interval_defaults?: Record<string, number>;
   color_season?: 'deep-winter' | 'cool-winter' | 'clear-winter'
     | 'deep-autumn' | 'warm-autumn' | 'soft-autumn'
     | 'light-spring' | 'warm-spring' | 'clear-spring'

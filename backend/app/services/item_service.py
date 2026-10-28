@@ -16,7 +16,8 @@ from app.models.item import (
     TaggingStatus,
     WashHistory,
 )
-from app.schemas.item import DEFAULT_WASH_INTERVALS, ItemCreate, ItemFilter, ItemUpdate
+from app.schemas.item import ItemCreate, ItemFilter, ItemUpdate
+from app.utils.washing import wash_interval
 
 
 class ItemService:
@@ -221,7 +222,7 @@ class ItemService:
 
         self.db.add(item)
         await self.db.flush()
-        await self.db.refresh(item, ["additional_images"])
+        await self.db.refresh(item, ["additional_images", "type_wash_interval"])
         return item
 
     async def update(self, item: ClothingItem, item_data: ItemUpdate) -> ClothingItem:
@@ -261,6 +262,8 @@ class ItemService:
                     setattr(item, column, incoming[column])
 
         await self.db.flush()
+        if "type" in update_data:
+            await self.db.refresh(item, ["type_wash_interval"])
         # Re-fetch with eager loading to ensure relationships are properly loaded
         result = await self.get_by_id(item.id, item.user_id)
         return result  # type: ignore[return-value]
@@ -462,11 +465,7 @@ class ItemService:
         items = list(result.scalars().all())
         histories = []
         for item in items:
-            effective_interval = (
-                item.wash_interval
-                if item.wash_interval is not None
-                else DEFAULT_WASH_INTERVALS.get(item.type, 3)
-            )
+            effective_interval = wash_interval(item)
             # Updated in SQL so that concurrent wears both count, and last_worn_at only moves
             # forward when an older wear is logged late.
             await self.db.execute(
@@ -485,7 +484,8 @@ class ItemService:
                         (ClothingItem.last_washed_at > worn_at, ClothingItem.needs_wash),
                         else_=or_(
                             ClothingItem.manually_needs_wash,
-                            ClothingItem.wears_since_wash + 1 >= effective_interval,
+                            (ClothingItem.wears_since_wash + 1 >= effective_interval)
+                            & (effective_interval != 999),
                         ),
                     ),
                 )

@@ -1,4 +1,13 @@
 {
+  "washing": {
+    "title": "Lavage",
+    "description": "Ports avant lavage",
+    "never": "Jamais",
+    "reset": "Réinitialiser",
+    "empty": "Ajoutez des vêtements pour définir les intervalles de lavage.",
+    "loading": "Chargement des types de vêtements",
+    "error": "Impossible de charger les types de vêtements"
+  },
   "account": {
     "description": "Vos informations de profil",
     "email": "E-mail",
