@@ -286,6 +286,7 @@ class TripService:
                 bind=connection, join_transaction_mode="create_savepoint", expire_on_commit=False
             ) as planning:
                 service = RecommendationService(planning)
+                service.telemetry_feature = "trip_suggestion"
                 wardrobe = list(
                     (
                         await planning.execute(

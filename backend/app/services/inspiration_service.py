@@ -12,6 +12,7 @@ from app.models.item import ClothingItem
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
 from app.services.ai_service import AIService, require_internal_ai
+from app.services.ai_telemetry_service import CallContext
 from app.services.image_service import ImageService
 from app.services.item_scorer import get_season, score_items
 from app.services.preference_service import PreferenceService
@@ -160,7 +161,11 @@ class InspirationService:
             + "\n</WARDROBE>"
         )
         prompt += "\n" + recommendations._format_wearer_preferences(preferences, notes)
-        ai = AIService(endpoints=preferences.ai_endpoints if preferences else None)
+        call_context = CallContext(user.id, "inspiration")
+        ai = AIService(
+            endpoints=preferences.ai_endpoints if preferences else None,
+            telemetry=call_context,
+        )
         path = self.image_path(user.id, uuid4())
         path.parent.mkdir(parents=True, exist_ok=True)
         image.save(path, format="JPEG", quality=90)
@@ -200,6 +205,9 @@ class InspirationService:
             for position, item_id in enumerate(item_ids):
                 self.db.add(OutfitItem(outfit_id=outfit.id, item_id=item_id, position=position))
             outfit.ai_raw_response = {
+                "_ai_call_id": str(call_context.last_call_id)
+                if call_context.last_call_id
+                else None,
                 "inspiration": {
                     "slots": [slot.model_dump(mode="json") for slot in slots],
                     "items": [
@@ -212,7 +220,7 @@ class InspirationService:
                         for item in candidates
                         if item.id == item_id
                     ],
-                }
+                },
             }
             target = self.image_path(user.id, outfit.id)
             path.rename(target)

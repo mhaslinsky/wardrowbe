@@ -1,10 +1,12 @@
 import asyncio
 import json
 import re
+from copy import copy
 from pathlib import Path
 
 from app.models.item import ClothingItem
 from app.services.ai_service import AIService
+from app.services.ai_telemetry_service import CallContext
 
 MAX_CANDIDATES = 150
 
@@ -96,7 +98,9 @@ async def match_selfie(ai: AIService, photo: Path, items: list[ClothingItem]) ->
             ],
         },
     ]
-    content, error, _ = await ai._call_with_fallback(messages, "selfie")
+    request_ai = copy(ai)
+    request_ai.telemetry = CallContext(candidates[0].user_id, "selfie")
+    content, error, _ = await request_ai._call_with_fallback(messages, "selfie")
     if content is None:
         raise error or RuntimeError("The AI did not answer")
     return [candidates[index] for index in parse_matches(content, len(candidates))]

@@ -12,6 +12,7 @@ from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import FamilyOutfitRating, Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
+from app.services.ai_telemetry_service import CallContext
 from app.utils.clothing import covered_body_slots, deduplicate_by_body_slot, repair_top_layers
 from app.utils.garment_vocabulary import is_outfit_type, render_outfit_prompt
 from app.utils.prompts import load_prompt
@@ -207,7 +208,8 @@ class PairingService:
         ai_endpoints = None
         if preferences and preferences.ai_endpoints:
             ai_endpoints = preferences.ai_endpoints
-        ai_service = AIService(endpoints=ai_endpoints)
+        call_context = CallContext(user.id, "pairing", "item", source_item_id)
+        ai_service = AIService(endpoints=ai_endpoints, telemetry=call_context)
 
         # Format items for prompt
         source_desc, items_text, source_num, number_map = self._format_items_for_prompt(
@@ -230,6 +232,7 @@ class PairingService:
         # Call AI
         try:
             result = await ai_service.generate_text(prompt, return_metadata=True)
+            call_id = str(call_context.last_call_id) if call_context.last_call_id else None
             logger.info(f"AI pairings generated (model: {result.model})")
             logger.debug(f"AI raw response: {result.content[:500]}")
             pairings_data = self._parse_ai_response(result.content)
@@ -309,7 +312,7 @@ class PairingService:
                 status=OutfitStatus.pending,
                 reasoning=pairing.get("headline"),
                 style_notes=pairing.get("styling_tip"),
-                ai_raw_response=pairing,
+                ai_raw_response={**pairing, "_ai_call_id": call_id},
             )
             self.db.add(outfit)
             await self.db.flush()

@@ -28,6 +28,7 @@ from app.models.outfit import (
 from app.models.preference import UserPreference
 from app.models.user import User
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
+from app.services.ai_telemetry_service import CallContext
 from app.services.item_scorer import (
     get_season,
     rain_likely,
@@ -160,6 +161,7 @@ class RecommendationService:
         self.db = db
         self.weather_service = WeatherService()
         self._defer_commit = False
+        self.telemetry_feature = "outfit_suggestion"
 
     async def _day_suggestions(self, user_id: UUID, day: date) -> list[Outfit]:
         result = await self.db.execute(
@@ -300,6 +302,7 @@ class RecommendationService:
             raise
         finally:
             self._defer_commit = False
+            self.telemetry_feature = "outfit_suggestion"
 
     async def get_candidate_items(
         self,
@@ -1110,7 +1113,8 @@ class RecommendationService:
         ai_endpoints = None
         if preferences and preferences.ai_endpoints:
             ai_endpoints = preferences.ai_endpoints
-        ai_service = AIService(endpoints=ai_endpoints)
+        call_context = CallContext(user.id, self.telemetry_feature)
+        ai_service = AIService(endpoints=ai_endpoints, telemetry=call_context)
 
         # Get candidate items (hard exclusions only)
         candidates = await self.get_candidate_items(
@@ -1292,6 +1296,7 @@ class RecommendationService:
 
         try:
             result = await ai_service.generate_text(prompt, return_metadata=True)
+            call_id = str(call_context.last_call_id) if call_context.last_call_id else None
             logger.info(
                 f"AI recommendation generated (model: {result.model}, endpoint: {result.endpoint})"
             )
@@ -1305,6 +1310,7 @@ class RecommendationService:
                     raise ValueError(f"Expected dict, got {type(outfit_data)}")
                 outfit_data["_ai_model"] = result.model
                 outfit_data["_ai_endpoint"] = result.endpoint
+                outfit_data["_ai_call_id"] = call_id
                 outfit = await self._materialize_outfit(
                     outfit_data,
                     user,
@@ -1330,6 +1336,7 @@ class RecommendationService:
                 consumed += 1
                 od["_ai_model"] = result.model
                 od["_ai_endpoint"] = result.endpoint
+                od["_ai_call_id"] = call_id
                 try:
                     outfit = await self._materialize_outfit(
                         od,
@@ -1359,6 +1366,7 @@ class RecommendationService:
                     od["_context"] = context
                     od["_ai_model"] = result.model
                     od["_ai_endpoint"] = result.endpoint
+                    od["_ai_call_id"] = call_id
                     to_cache.append(od)
                 await push_suggestions(user.id, occasion, to_cache, include_items=include_items)
                 logger.info(f"Cached {len(to_cache)} additional suggestions for user {user.id}")

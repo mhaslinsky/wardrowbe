@@ -350,8 +350,15 @@ async def test_cleanup(action, client, auth_headers, preview_setup, provider, db
 
 
 async def test_inflight_across_sessions(
-    client, auth_headers, preview_setup, provider_gate, session_maker
+    client, auth_headers, preview_setup, provider_gate, session_maker, db_session
 ):
+    from app.models.considering import ItemPurchase
+
+    source_item_id = preview_setup["items"][0]
+    outfit = await db_session.get(Outfit, preview_setup["outfit"])
+    outfit.source_item_id = source_item_id
+    db_session.add(ItemPurchase(item_id=source_item_id, state="bought"))
+    await db_session.commit()
     await upload(client, auth_headers)
     entered, release = provider_gate
     async with session_maker() as first, session_maker() as second:
