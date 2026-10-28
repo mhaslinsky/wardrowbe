@@ -228,6 +228,10 @@ Source: [fit evidence](../backend/app/services/fit_evidence_service.py).
 
 ### Request a buying check through the API
 
+On **Considering**, press **Check** under **Should I buy this?** on an item card. The check runs only when you press the button. It shows the model's estimated chance you will like the item, followed by **Pluses**, **Minuses**, **Unknowns**, and **Outfits it completes**. Each reason names its dimension and links to the cited owned item or **Fit profile**, with your quoted note. The item under consideration appears by name without a wardrobe link. Outfit ideas link to owned items. A notice identifies sampled results.
+
+A skip-list match, wrong size, or exact duplicate shows a reason instead of a percentage. A near-duplicate warning appears above the estimate. **Not enough to go on yet.** means there is too little evidence for an estimate. **Check is not set up.** means the service is disabled or lacks its key. If you see **Try again later.**, press **Check** again later. Editing the item or planned size clears the result; press **Check** for a new estimate.
+
 Signed-in integrations can also request `POST /api/v1/considering/{id}/buy-check`. The response gives the decision model's estimated percentage, cited pluses and minuses, unknowns, sampled outfits, the model used, and any fallback reason. Skip-list matches, known-wrong sizes, and exact duplicates replace the percentage with a reason. Too few close rated items or conflicting experience produces no estimate. Price is excluded from the request.
 
 The operator configures `WARDROWBE_OPENROUTER_API_KEY`, `BUY_CHECK_PRIMARY_MODEL` (default `baseten/elephant-1:free`), and `BUY_CHECK_FALLBACK_MODEL` (default `typesafe/jev-1.14`). Unavailable or invalid primary answers trigger the fallback. Each attempt is recorded in AI calls. Fallback notices use your enabled ntfy channel, at most once per day; failed notices can retry on the next check.
