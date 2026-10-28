@@ -14,6 +14,7 @@ from app.services.item_service import ItemService
 from app.services.undo_wear_service import UndoWearService
 from app.services.wear_service import WearService
 from app.utils.auth import get_current_user
+from app.utils.garment_vocabulary import DEFAULT_WASH_INTERVALS
 from app.utils.washing import wash_interval
 from tests.test_items import _make_test_image_bytes
 from tests.test_wear_service import source
@@ -22,10 +23,10 @@ PREFERENCES = "/api/v1/users/me/preferences"
 ITEMS = "/api/v1/items"
 
 
-async def garment(db_session, user, interval=None, wears=0):
+async def garment(db_session, user, interval=None, wears=0, kind="socks"):
     item = ClothingItem(
         user_id=user.id,
-        type="socks",
+        type=kind,
         image_path="test.jpg",
         status=ItemStatus.ready,
         wash_interval=interval,
@@ -175,6 +176,10 @@ async def test_missing_and_reset_preferences(client, test_user):
 
 async def test_stored_invalid_type_settings_are_ignored(client, db_session, test_user):
     app.dependency_overrides[get_current_user] = lambda: test_user
+    items = {}
+    for kind in ("shirt", "coat", "underwear", "jacket", "pants"):
+        item = await garment(db_session, test_user, kind=kind)
+        items[kind] = item.id
     db_session.add(
         UserPreference(
             user_id=test_user.id,
@@ -184,6 +189,7 @@ async def test_stored_invalid_type_settings_are_ignored(client, db_session, test
                 "shirt": True,
                 "coat": 31,
                 "jacket": "2",
+                "pants": 2.5,
                 "underwear": 0,
                 "dress": 999,
             },
@@ -193,6 +199,16 @@ async def test_stored_invalid_type_settings_are_ignored(client, db_session, test
     response = await client.get(PREFERENCES)
     assert response.status_code == 200, response.text
     assert response.json()["wash_intervals"] == {"socks": 2, "dress": 999}
+    db_session.expunge_all()
+    listing = await client.get(ITEMS)
+    assert listing.status_code == 200, listing.text
+    assert {item["type"]: item["effective_wash_interval"] for item in listing.json()["items"]} == {
+        kind: DEFAULT_WASH_INTERVALS[kind] for kind in items
+    }
+    for kind, item_id in items.items():
+        detail = await client.get(f"{ITEMS}/{item_id}")
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["effective_wash_interval"] == DEFAULT_WASH_INTERVALS[kind]
 
 
 async def test_list_has_no_per_item_preference_queries(client, db_session, test_user):

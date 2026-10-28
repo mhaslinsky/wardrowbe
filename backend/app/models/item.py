@@ -14,6 +14,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    case,
     func,
     select,
 )
@@ -77,8 +78,20 @@ class ClothingItem(Base):
 
     # Classification
     type: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Bound the text before casting so invalid or oversized stored values cannot break item reads.
     type_wash_interval: Mapped[int | None] = column_property(
-        select(UserPreference.wash_intervals[type].astext.cast(Integer))
+        select(
+            case(
+                (
+                    (func.jsonb_typeof(UserPreference.wash_intervals[type]) == "number")
+                    & UserPreference.wash_intervals[type].astext.in_(
+                        [str(interval) for interval in (*range(1, 31), 999)]
+                    ),
+                    UserPreference.wash_intervals[type].astext.cast(Integer),
+                ),
+                else_=None,
+            )
+        )
         .where(UserPreference.user_id == user_id)
         .correlate_except(UserPreference)
         .scalar_subquery(),
