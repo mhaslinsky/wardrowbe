@@ -6,19 +6,19 @@ This guide uses the English interface names. Open your Wardrowbe address in your
 
 ## Sign in and get started
 
-1. Follow the sign-in screen at your Wardrowbe address. Depending on the server, this opens a sign-in provider or continues through a sign-in proxy. Follow that provider's instructions; an email code is not required on every installation.
-2. The welcome setup walks through location, style, family, and a first clothing photo. Use **Skip for now** for optional steps you want to return to later.
+1. Follow the sign-in screen at your Wardrowbe address. Depending on the server, this opens a sign-in provider or continues through a sign-in proxy. Follow that provider's instructions; an email code is not required on every installation. A development installation instead asks for an email and display name.
+2. The setup runs in this order: Welcome, Family, Location, Style, First Item. Use **Skip for now** for optional steps you want to return to later.
 3. Set your location for weather-aware suggestions. Choose favorite colors, colors to avoid, and how strongly you prefer different styles. Family setup is optional.
 4. Add a first item, then choose **Go to Dashboard**. You can change your preferences in **Settings**.
 
-Sources: [sign-in page](../frontend/app/login/page.tsx), [onboarding](../frontend/messages/en/onboarding.json).
+Sources: [sign-in page](../frontend/app/login/page.tsx), [onboarding page](../frontend/app/onboarding/page.tsx).
 
 ## Add and organize your clothes
 
 ### Upload photos
 
 1. Open **Wardrobe**, then **Add Item**.
-2. Use **Single Item** for one piece or **Bulk Upload** for several photos. Photograph one garment at a time, with its shape and color visible. The upload dialog accepts PNG, JPG, and HEIC.
+2. Use **Single Item** for one piece or **Bulk Upload** for several photos. Photograph one garment at a time, with its shape and color visible. Uploads accept JPEG, PNG, WebP, and HEIC/HEIF.
 3. For a single item, you can enter its name, brand, notes, type, and primary color. Leave the type empty to let AI detect it.
 4. Keep the browser tab open until uploads finish. Uploading and AI analysis are separate steps: after upload, items can still be queued or analyzing.
 5. Open **View queue** to see analysis progress and failures. If an upload fails, use **Retry** or **Retry all**. AI analysis needs a working service configured by the operator.
@@ -29,7 +29,7 @@ Bulk upload also offers a checkbox to skip AI analysis. Those items start with p
 
 Search by name, filter by clothing type or favorites, and change the sort order to find recently added or less-worn pieces. **Clear filters** restores the unfiltered view.
 
-Open an item, choose **Edit item**, correct its details, then save. Add useful fit information to **Notes**, such as “roomy through the waist” or “sleeves run short.” Correcting an incorrect type, color, or brand improves future suggestions and previews. Record garment sizing information in Notes.
+Open an item, choose **Edit item**, correct its details, then save. Add useful fit information to **Notes**, such as “roomy through the waist” or “sleeves run short.” Correcting an incorrect type, color, or brand improves future suggestions and previews. For previews to read a garment size, put it on a separate line in Notes as `Size: M` (using the actual size).
 
 The item dialog also lets you rotate or replace photos, remove a background, choose a primary image, retry AI analysis, toggle a favorite, and delete an item. Deletion asks for confirmation and cannot be undone.
 
@@ -37,11 +37,11 @@ The item dialog also lets you rotate or replace photos, remove a background, cho
 
 **Remove background** cuts out the garment. **Undo background removal** restores the original. Background removal needs the server's local image model or a configured HTTP provider.
 
-**Redraw photo** generates a new garment image instead of just cutting out the background. Compare the versions, check the colors and garment details, then choose **Use redrawn** or **Use original**. The original remains available. If a redraw fails, check the item before using **Retry redraw**.
+**Redraw photo** generates a new garment image and selects it automatically on success. Compare the versions in the photo gallery and check the colors and garment details. Tap **Redrawn** to switch back to the original; **Use redrawn** then selects the saved redraw again. **Use original** appears after other photo edits when the original is available. If a redraw fails, check the item before using **Retry redraw**.
 
-You can select several wardrobe items for bulk actions, including redraw. The confirmation warns that each selected photo may incur an AI charge. Paid retries can incur another charge; include them only when you intend to retry those photos. Redraw requires an image model and API key configured by the operator.
+You can select several wardrobe items for bulk actions, including redraw. The confirmation warns that each selected photo may incur an AI charge. Paid retries can incur another charge; include them only when you intend to retry those photos. Redraw requires an image model, an API key, and background removal configured by the operator.
 
-Sources: [wardrobe page](../frontend/app/dashboard/wardrobe/page.tsx), [item dialog](../frontend/components/item-detail-dialog.tsx), [English wardrobe labels](../frontend/messages/en/wardrobe.json), [redraw controls](../frontend/components/photo-redraw-controls.tsx), [redraw service](../backend/app/services/photo_redraw_service.py).
+Sources: [upload form](../frontend/components/add-item-dialog.tsx), [accepted image types](../frontend/lib/image-types.ts), [wardrobe page](../frontend/app/dashboard/wardrobe/page.tsx), [item dialog](../frontend/components/item-detail-dialog.tsx), [English wardrobe labels](../frontend/messages/en/wardrobe.json), [redraw controls](../frontend/components/photo-redraw-controls.tsx), [redraw service](../backend/app/services/photo_redraw_service.py).
 
 ## Get outfit ideas
 
@@ -58,18 +58,18 @@ You can use **Override weather** to try a different temperature or condition. **
 
 Open a wardrobe item and choose **Find matching outfits**. Set **Number of outfits**, then **Generate Outfits**. **View Pairings** opens the results.
 
-The **Pairings** page collects outfits built around source pieces. Filter by the source item's type to narrow the list. Open an outfit to inspect its pieces, and use **Rate This Pairing** to give feedback; **Update Rating** changes an existing rating. You can also delete a pairing you no longer need.
+The **Pairings** page collects outfits built around source pieces. Filter by the source item's type to narrow the list, and tap its garment thumbnails to inspect the outfit. Accepted pairings show **Rate This Pairing** or **Update Rating**. The feedback dialog offers notes; a rating is available only when the outfit has a logged wear. You can also delete a pairing you no longer need.
 
 ### Recreate an inspiration photo
 
-1. Open **Inspiration** and choose a **Photo or screenshot** of a look you like.
-2. Select **Recreate and save**. Wardrowbe matches the look against your clothes and saves the result.
+1. Set your location in **Settings** first. Open **Inspiration** and choose a **Photo or screenshot** of a look you like: JPEG, PNG, or WebP under 10 MB.
+2. Select **Recreate and save**. This requires working vision AI and current weather at your location. Wardrowbe matches the look against your clothes and saves the result.
 3. Inspect the matched pieces and match percentages. **No match** means a part of the inspiration had no match; an **Added base layer** is shown separately.
 4. Use **Open outfit** to inspect the saved outfit. You can delete a saved inspiration look after confirming.
 
 Inspiration uses what is already in your wardrobe. Review missing matches before using the outfit.
 
-Sources: [suggest page](../frontend/app/dashboard/suggest/page.tsx), [pairings page](../frontend/app/dashboard/pairings/page.tsx), [pairing dialog](../frontend/components/generate-pairings-dialog.tsx), [inspiration page](../frontend/app/dashboard/inspiration/page.tsx).
+Sources: [suggest page](../frontend/app/dashboard/suggest/page.tsx), [pairings page](../frontend/app/dashboard/pairings/page.tsx), [pairing dialog](../frontend/components/generate-pairings-dialog.tsx), [pairing card](../frontend/components/pairing-card.tsx), [inspiration page](../frontend/app/dashboard/inspiration/page.tsx), [inspiration service](../backend/app/services/inspiration_service.py).
 
 ## Save looks and record what you wore
 
@@ -77,12 +77,12 @@ Sources: [suggest page](../frontend/app/dashboard/suggest/page.tsx), [pairings p
 
 1. In **Outfits**, choose **New Outfit**.
 2. Select pieces from **Your Wardrobe**. Use the clothing slots and search to find them; review the selected pieces on **Canvas**.
-3. Under **Details**, choose an occasion and give the look a name. With at least one piece and an occasion selected, **Let AI finish this** can suggest additions.
+3. Under **Details**, choose an occasion and give the look a name. With an occasion and at least one piece other than underwear selected, **Let AI finish this** can suggest additions.
 4. Choose **Save to Lookbook** to keep a reusable look, or **Wear Today** to save and log it as worn.
 
-Use the **Lookbook**, **Worn**, **AI**, **Pairings**, and **Replacements** filters to browse your outfits. **Ready to wear** narrows results to available outfits. Search the lookbook by name. Switch between **List** and **Calendar** to browse by date.
+Use the **Lookbook**, **Worn**, **AI**, **Pairings**, and **Replacements** filters to browse your outfits. **Ready to wear** shows outfits made of owned pieces that do not need washing. Search the lookbook by name. Switch between **List** and **Calendar** to browse by date.
 
-On a saved outfit, **Wear today** logs a wear. **Save to lookbook** keeps a reusable copy where offered. An outfit that has been worn cannot be edited in place; use **Save as new** to make another version.
+On a saved lookbook outfit, choose **Wear on…**, pick the **Wear date** (today or a past day), then select **Log wear**. For a dated or worn outfit, **Save to lookbook** creates a reusable copy. Worn outfit details hide the edit action. **Save as new** appears only if the editor detects that the outfit has been worn.
 
 ### Use the daily view
 
@@ -90,9 +90,9 @@ On the dashboard and Suggest page, **Your day** groups suggestions, saved outfit
 
 Choose **I wore this** to log the selected outfit, or **Swap a piece** to replace a garment before logging. You can record today or a past day, but not a future wear. If that day is already logged, review the existing outfit rather than repeatedly submitting it. **Undo** and **Replace** let you correct a logged day; check **Washed since?** when the correction asks about intervening laundry.
 
-When a feedback dialog asks **Did you wear this outfit?**, choose **Yes, I wore it** or **No, I wore something else**. For the latter, select the pieces you actually wore. Add a rating and optional notes to explain what worked.
+On a suggestion, **I wore this** logs the wear for the selected day in one step. There is no separate acceptance or yes/no feedback step. To rate a worn outfit, open **History**, select its day, and choose **Rate** (or **Update** for an existing rating). Set **Overall Rating**, add optional notes, and choose **Submit**. The outfit detail page's **Add note** opens a notes-only dialog, even for worn outfits.
 
-**History** provides a calendar of past recommendations with occasion and status filters. It distinguishes accepted suggestions from wear records. Accepting an idea and recording that you wore it are different actions.
+**History** provides a calendar of past recommendations with occasion and status filters. The rating dialog changes feedback, not which garments or date were logged. Use the daily view to correct a wear.
 
 ### Log from an outfit selfie
 
@@ -104,23 +104,23 @@ The selfie matches existing wardrobe items; it does not automatically add every 
 
 For just one piece, open it in Wardrobe and choose **Log wear**. Its item dialog shows wear history and total wears.
 
-Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outfits page](../frontend/app/dashboard/outfits/page.tsx), [outfit detail](../frontend/app/dashboard/outfits/[id]/page.tsx), [daily view](../frontend/components/day-outfits.tsx), [wear corrections](../frontend/components/undo-wear-actions.tsx), [history](../frontend/app/dashboard/history/page.tsx), [selfie page](../frontend/app/dashboard/selfie/page.tsx), [feedback labels](../frontend/messages/en/suggest.json).
+Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outfits page](../frontend/app/dashboard/outfits/page.tsx), [outfit detail](../frontend/app/dashboard/outfits/[id]/page.tsx), [daily view](../frontend/components/day-outfits.tsx), [wear corrections](../frontend/components/undo-wear-actions.tsx), [history](../frontend/app/dashboard/history/page.tsx), [selfie page](../frontend/app/dashboard/selfie/page.tsx), [feedback dialog](../frontend/components/feedback-dialog.tsx), [History rating action](../frontend/components/outfit-history-card.tsx).
 
 ## Keep laundry up to date
 
 Each item tracks wears since its last wash. At its wash interval, it needs washing and is excluded from normal outfit recommendations.
 
-1. Open an item and edit **Wash Interval** to set the number of wears before washing. Leave it blank for the clothing type's default.
+1. Open an item and edit **Wash Interval** to set the number of wears before washing. A blank field uses the clothing type's default only when no override is already stored. Clearing an existing override and saving does not reset it; the stored interval remains. To change that interval, enter a number.
 2. Use **Put in the wash** if it needs washing earlier.
 3. After washing, filter Wardrobe by **Needs wash**, open the clean items, and select **Mark Washed**. This resets their wash status so they can return to suggestions.
 
 Use the item's wash and wear history to check a surprising status. Logging what you actually wore keeps this count useful.
 
-Sources: [item dialog](../frontend/components/item-detail-dialog.tsx), [recommendation eligibility](../backend/app/services/recommendation_service.py), [wardrobe labels](../frontend/messages/en/wardrobe.json).
+Sources: [item dialog](../frontend/components/item-detail-dialog.tsx), [item updates and wash records](../backend/app/services/item_service.py), [recommendation eligibility](../backend/app/services/recommendation_service.py), [wardrobe labels](../frontend/messages/en/wardrobe.json).
 
 ## Plan a trip
 
-1. Open **Trips**. Enter **Destination**, **Departure**, and **Return**.
+1. Open **Trips**. Enter **Destination**, **Departure**, and **Return**. Departure must be today or later.
 2. Select **Occasions** for the trip. The selected occasions repeat in order across the days. The form allows up to 14 days.
 3. Choose **Plan trip**. Open a day's date to inspect its outfit.
 4. Review the **Packing list**, including quantities and how many days each item is worn. Open a piece to inspect it in Wardrobe.
@@ -129,7 +129,7 @@ Each day identifies whether its weather comes from a forecast or a climate avera
 
 Trip planning needs available clothes, working AI planning, and destination weather. If it fails, check the dates and wardrobe, then ask the operator if AI or weather is unavailable.
 
-Source: [trips page](../frontend/app/dashboard/trips/page.tsx), [trip labels](../frontend/messages/en/trips.json).
+Sources: [trip planning service](../backend/app/services/trip_service.py), [trips page](../frontend/app/dashboard/trips/page.tsx), [trip labels](../frontend/messages/en/trips.json).
 
 ## Schedule outfits and notifications
 
@@ -138,7 +138,7 @@ Source: [trips page](../frontend/app/dashboard/trips/page.tsx), [trip labels](..
 1. Open **Notifications** and choose **Add Schedule**.
 2. Pick **Day**, **Time**, and **Occasion**. Check your **Timezone** in Settings first.
 3. Enable **Send notification** if you want delivery through a notification channel. You can switch notification delivery on or off for a schedule.
-4. Enable **Notify day before** for an evening-before notification using tomorrow's forecast. Review the displayed notification day and time.
+4. Enable **Notify day before** to deliver on the previous day at the configured **Time**, using tomorrow's forecast when available. Choose an evening time if you prefer. Review the displayed notification day and time.
 
 Review generated outfits in the daily view. Schedules can be enabled, disabled, or deleted independently of channels.
 
@@ -152,19 +152,19 @@ Under **Notification Channels**, choose **Add Channel** and a channel type:
 
 Use **Test** to check delivery when you are ready to receive a notification. A saved channel alone does not prove delivery works. You can enable, disable, or delete channels. A channel marked **Invalid settings** must be deleted and added again.
 
-The operator must provide a reachable ntfy server for ntfy delivery. Email delivery, including family invitation emails, requires the server's `SMTP_*` configuration. Mobile push registrations come from the mobile app. Scheduled generation also depends on the server's background jobs running.
+The operator must provide a reachable ntfy server for ntfy delivery. Email delivery, including family invitation emails, requires the server's `SMTP_*` configuration. Scheduled generation also depends on the server's background jobs running.
 
-Sources: [notifications page](../frontend/app/dashboard/notifications/page.tsx), [notification labels](../frontend/messages/en/notifications.json), [server configuration](../backend/app/config.py), [worker jobs](../backend/app/workers).
+Sources: [notifications page](../frontend/app/dashboard/notifications/page.tsx), [notification labels](../frontend/messages/en/notifications.json), [channel form](../frontend/components/notifications/add-channel-dialog.tsx), [delivery providers](../backend/app/services/notification_providers.py), [server configuration](../backend/app/config.py), [worker jobs](../backend/app/workers).
 
 ## See clothes on yourself
 
 ### Add reference photos
 
-In Settings, open **Preview photo** and **Show photos**. Add up to three full-length views: **Front**, **Quarter turn**, and **Side**, in even light. Face the camera for the front view.
+In Settings, open **Preview photo** and **Show photos**. Start with **Front**, which is required for previews. You can also add **Quarter turn** and **Side**, for up to three full-length views in even light. Face the camera for the front view.
 
 Wear fitted clothes that show your shape clearly. A swimsuit or underwear is also an option if you are comfortable using those photos. Loose clothes hide your proportions and give the image generator less information. The generator uses the build and proportions visible in your photos and any measurements you supply.
 
-Replace or remove an angle when needed, reading the removal confirmation before continuing. Use photos you are comfortable sending to the image-generation provider configured by the operator.
+Replace or remove an angle when needed, reading the removal confirmation before continuing. Removing the front photo also removes saved outfit previews. Use photos you are comfortable sending to the image-generation provider configured by the operator.
 
 ### Generate and improve a preview
 
@@ -186,6 +186,8 @@ Sources: [photo and preference settings](../frontend/components/preview-photo-se
 
 Edit shelf entries to correct the name, price, currency, or planned size. **View source** returns to the product page when a source link is available.
 
+The optional Send to Wardrowbe browser extension can capture a product from its store page. Ask the operator for an installation built from this fork and follow the [extension setup instructions](../extension/INSTALL.md); it needs an access token and sign-in in the same browser.
+
 If a save partly succeeds, use **Retry details** to finish it. If the save status is unknown, check the Considering shelf before continuing, so you do not create a duplicate.
 
 Sources: [Considering page](../frontend/app/dashboard/considering/page.tsx), [link and image entry](../frontend/components/considering-fallback.tsx), [product confirmation](../frontend/components/considering-import.tsx), [preview action](../frontend/components/considering-preview-action.tsx), [suggestions action](../frontend/components/considering-suggestions-action.tsx).
@@ -194,7 +196,7 @@ Sources: [Considering page](../frontend/app/dashboard/considering/page.tsx), [li
 
 ### Preferences and fit information
 
-In **Settings**, review these sections:
+In **Settings**, review these sections. Use **Save** for general preference changes; location, measurements, fit profile, and preview preferences have their own save controls:
 
 - **Location**: use **Use My Location** or enter coordinates, review the timezone, then **Save Location**. Browser permission can be denied; manual entry remains available.
 - **Style Profile**, **Favorite Colors**, and **Colors to Avoid**: describe the styles and colors you want.
@@ -214,9 +216,9 @@ If Fit profile reports **Profile changed**, another save has changed the stored 
 
 ### Review AI Learning
 
-Open **AI Learning** after accepting or rejecting suggestions and rating outfits. It shows feedback totals, acceptance rate, style ratings, learned color and style preferences, occasion patterns, weather preferences, and combinations you tend to like.
+Open **AI Learning** after logging wears, dismissing suggestions, and rating outfits. It shows feedback totals, acceptance rate, style ratings, learned color and style preferences, occasion patterns, weather preferences, and combinations you tend to like.
 
-If there is no learning data yet, give feedback first, then use **Compute Now** to process it. **Recompute** refreshes an existing profile. **New Insights** requests fresh style insights; **Dismiss** hides an insight. Review **Suggested Preference Updates**, then choose **Update Preferences** to open Settings and make the changes you want.
+If there is no learning data yet, give feedback first, then use **Compute Now** to process it. **Recompute** refreshes an existing profile. When existing insights are shown, **New Insights** requests fresh style insights; **Dismiss** hides an insight. Review **Suggested Preference Updates**, then choose **Update Preferences** to open Settings and make the changes you want.
 
 These summaries reflect recorded feedback. A blank section can mean there is not enough feedback yet.
 
@@ -229,10 +231,10 @@ Family membership is optional. It enables shared outfit browsing and ratings; co
 1. Open **Family** and choose **Create Family**, or use **Join Family** with an **Invite Code** supplied by an existing family.
 2. A family admin can share the code or use **Send Invite** for an email invitation. If the invitation is saved but email cannot be sent, share the code instead.
 3. Admins can edit the family name, regenerate the invite code, manage member roles, remove members, and cancel pending invitations. Review confirmations before removing someone.
-4. Use **Open Family Feed** to browse other members' outfits and lookbooks. Choose a rating and optional comment, then **Submit Rating**. **Update Rating** changes your feedback; you can also remove your rating.
-5. Choose **Leave Family** if you no longer want membership. You can join again later with an invite code.
+4. Use **Open Family Feed** to browse other members' dated outfits. Undated lookbook templates are not included. Choose a rating and optional comment, then **Submit Rating**. **Update Rating** changes your feedback; you can also remove your rating.
+5. Before choosing **Leave Family**, a sole admin with other members must make another member an admin or remove all other members. Then confirm leaving. You can join again later with an invite code.
 
-Sources: [family management](../frontend/app/dashboard/family/page.tsx), [family feed](../frontend/app/dashboard/family/feed/page.tsx), [family labels](../frontend/messages/en/family.json).
+Sources: [family leave endpoint](../backend/app/api/families.py), [outfit filtering](../backend/app/services/outfit_service.py), [family management](../frontend/app/dashboard/family/page.tsx), [family feed](../frontend/app/dashboard/family/feed/page.tsx), [family labels](../frontend/messages/en/family.json).
 
 ## Read your wardrobe statistics
 
