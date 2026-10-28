@@ -1,10 +1,12 @@
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import event, select
 
+from app.api import items as items_api
 from app.main import app
 from app.models.item import ClothingItem, ItemStatus
 from app.models.preference import UserPreference
@@ -15,6 +17,7 @@ from app.services.undo_wear_service import UndoWearService
 from app.services.wear_service import WearService
 from app.utils.auth import get_current_user
 from app.utils.washing import wash_interval
+from tests.test_items import _make_test_image_bytes
 from tests.test_wear_service import source
 
 PREFERENCES = "/api/v1/users/me/preferences"
@@ -40,6 +43,45 @@ async def setting(client, values):
     response = await client.patch(PREFERENCES, json={"wash_intervals": values})
     assert response.status_code == 200, response.text
     assert response.json()["wash_intervals"] == values
+
+
+@pytest.mark.parametrize("bulk", [False, True])
+async def test_auto_tag_create_response_uses_type_setting(client, test_user, monkeypatch, bulk):
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    await setting(client, {"socks": 2})
+    original_create = ItemService.create
+
+    async def create_socks(service, *, item_data, **kwargs):
+        return await original_create(
+            service, item_data=item_data.model_copy(update={"type": "socks"}), **kwargs
+        )
+
+    if bulk:
+        monkeypatch.setattr(ItemService, "create", create_socks)
+    queue = AsyncMock()
+    queue.enqueue_job.return_value.job_id = "test-washing-job"
+    with (
+        patch.object(
+            items_api,
+            "settings",
+            items_api.settings.model_copy(
+                update={"ai_internal_enabled": True, "ai_vision_enabled": True}
+            ),
+        ),
+        patch.object(items_api, "create_pool", AsyncMock(return_value=queue)),
+    ):
+        response = await client.post(
+            f"{ITEMS}/bulk" if bulk else ITEMS,
+            data={"type": "socks"},
+            files={
+                "images" if bulk else "image": ("socks.jpg", _make_test_image_bytes(), "image/jpeg")
+            },
+        )
+    assert response.status_code == 201, response.text
+    payload = response.json()["results"][0]["item"] if bulk else response.json()
+    assert payload["type"] == "socks"
+    assert payload["effective_wash_interval"] == 2
+    queue.enqueue_job.assert_awaited_once()
 
 
 @pytest.mark.parametrize("interval", [2, 999])
