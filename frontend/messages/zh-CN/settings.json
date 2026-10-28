@@ -213,5 +213,22 @@
     "actions": "操作",
     "never": "从未使用",
     "revoke": "撤销"
+  },
+  "colorSeason": {
+    "label": "色彩季型",
+    "notSet": "未设置",
+    "help": "在 ColorWise 上查找你的季型。",
+    "deep-winter": "深冬型",
+    "cool-winter": "冷冬型",
+    "clear-winter": "净冬型",
+    "deep-autumn": "深秋型",
+    "warm-autumn": "暖秋型",
+    "soft-autumn": "柔秋型",
+    "light-spring": "浅春型",
+    "warm-spring": "暖春型",
+    "clear-spring": "净春型",
+    "light-summer": "浅夏型",
+    "cool-summer": "冷夏型",
+    "soft-summer": "柔夏型"
   }
 }

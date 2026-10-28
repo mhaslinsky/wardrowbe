@@ -213,5 +213,22 @@
     "actions": "작업",
     "never": "사용한 적 없음",
     "revoke": "폐기"
+  },
+  "colorSeason": {
+    "label": "퍼스널 컬러",
+    "notSet": "설정 안 함",
+    "help": "ColorWise에서 내 컬러 유형을 찾아보세요.",
+    "deep-winter": "딥 겨울",
+    "cool-winter": "쿨 겨울",
+    "clear-winter": "클리어 겨울",
+    "deep-autumn": "딥 가을",
+    "warm-autumn": "웜 가을",
+    "soft-autumn": "소프트 가을",
+    "light-spring": "라이트 봄",
+    "warm-spring": "웜 봄",
+    "clear-spring": "클리어 봄",
+    "light-summer": "라이트 여름",
+    "cool-summer": "쿨 여름",
+    "soft-summer": "소프트 여름"
   }
 }

@@ -2,6 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field
 
+from app.data.color_seasons import ColorSeason
 from app.schemas.color import ColorList
 from app.schemas.outfit import Occasion
 from app.utils.preference_defaults import (
@@ -95,6 +96,7 @@ class StyleProfile(BaseModel):
 
 
 class PreferenceBase(BaseModel):
+    color_season: ColorSeason | None = None
     standing_rules: StandingRules = Field(default_factory=list)
 
     # Color preferences
@@ -166,6 +168,7 @@ class PreferenceCreate(PreferenceBase):
 
 
 class PreferenceUpdate(BaseModel):
+    color_season: ColorSeason | None = None
     preview_preferences: PreviewPreferences | None = None
 
     standing_rules: StandingRules = Field(default_factory=list)

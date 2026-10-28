@@ -190,6 +190,8 @@ export default function SettingsPage() {
   const [standingRulesText, setStandingRulesText] = useState('');
   const [standingRulesReady, setStandingRulesReady] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [colorSeasonDirty, setColorSeasonDirty] = useState(false);
+  const colorSeasonRevision = useRef(0);
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
   const [endpointTests, setEndpointTests] = useState<Record<number, EndpointTestResult>>({});
@@ -493,11 +495,16 @@ export default function SettingsPage() {
       setFormData(preferences);
       setStandingRulesText((preferences.standing_rules || []).join('\n'));
       setStandingRulesReady(true);
+      setColorSeasonDirty(false);
       setHasChanges(false);
     }
   }, [preferences]);
 
   const updateField = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+    if (key === 'color_season') {
+      colorSeasonRevision.current += 1;
+      setColorSeasonDirty(true);
+    }
     setFormData((prev) => {
       const next = { ...prev, [key]: value };
       if (key === 'color_favorites' && Array.isArray(value)) {
@@ -534,10 +541,15 @@ export default function SettingsPage() {
       }
       const settings = { ...formData };
       delete settings.preview_preferences;
+      if (!colorSeasonDirty) delete settings.color_season;
       if (standingRulesReady) settings.standing_rules = rules;
       else delete settings.standing_rules;
+      const submittedSeason = 'color_season' in settings;
+      const submittedSeasonRevision = colorSeasonRevision.current;
       await updatePreferences.mutateAsync(settings);
-      setHasChanges(false);
+      const seasonChangedDuringSave = colorSeasonRevision.current !== submittedSeasonRevision;
+      if (submittedSeason && !seasonChangedDuringSave) setColorSeasonDirty(false);
+      setHasChanges(seasonChangedDuringSave);
     } catch (error) {
       console.error('Failed to save preferences:', error);
     }
@@ -550,6 +562,7 @@ export default function SettingsPage() {
         setFormData(saved);
         setStandingRulesText(saved.standing_rules.join('\n'));
         setStandingRulesReady(true);
+        setColorSeasonDirty(false);
         setHasChanges(false);
       } catch (error) {
         console.error('Failed to reset preferences:', error);
@@ -814,6 +827,30 @@ export default function SettingsPage() {
               selected={formData.color_avoid || []}
               onChange={(colors) => updateField('color_avoid', colors)}
             />
+            <div className="space-y-2">
+              <Label htmlFor="color-season">{t('colorSeason.label')}</Label>
+              <select
+                id="color-season"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={formData.color_season || ''}
+                onChange={(event) => updateField(
+                  'color_season', event.target.value as Preferences['color_season'] || null,
+                )}
+              >
+                <option value="">{t('colorSeason.notSet')}</option>
+                {([
+                  'deep-winter', 'cool-winter', 'clear-winter',
+                  'deep-autumn', 'warm-autumn', 'soft-autumn',
+                  'light-spring', 'warm-spring', 'clear-spring',
+                  'light-summer', 'cool-summer', 'soft-summer',
+                ] as const).map((season) => (
+                  <option key={season} value={season}>{t(`colorSeason.${season}`)}</option>
+                ))}
+              </select>
+              <a className="block text-sm text-muted-foreground underline" href="https://colorwise.me/" target="_blank" rel="noopener noreferrer">
+                {t('colorSeason.help')}
+              </a>
+            </div>
           </CardContent>
         </Card>
 

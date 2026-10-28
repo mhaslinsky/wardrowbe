@@ -213,5 +213,22 @@
     "actions": "Aktionen",
     "never": "Nie",
     "revoke": "Widerrufen"
+  },
+  "colorSeason": {
+    "label": "Farbtyp",
+    "notSet": "Nicht festgelegt",
+    "help": "Finde deinen Farbtyp auf ColorWise.",
+    "deep-winter": "Dunkler Winter",
+    "cool-winter": "Kühler Winter",
+    "clear-winter": "Klarer Winter",
+    "deep-autumn": "Dunkler Herbst",
+    "warm-autumn": "Warmer Herbst",
+    "soft-autumn": "Sanfter Herbst",
+    "light-spring": "Heller Frühling",
+    "warm-spring": "Warmer Frühling",
+    "clear-spring": "Klarer Frühling",
+    "light-summer": "Heller Sommer",
+    "cool-summer": "Kühler Sommer",
+    "soft-summer": "Sanfter Sommer"
   }
 }

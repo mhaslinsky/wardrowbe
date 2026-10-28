@@ -5,6 +5,7 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.data.color_seasons import stored_color_season
 from app.database import DbSession
 from app.models.user import User
 from app.schemas.fit_profile import FitProfile
@@ -36,6 +37,7 @@ router = APIRouter(prefix="/users/me/preferences", tags=["Preferences"])
 
 def _build_preference_response(preferences, preview_preferences) -> PreferenceResponse:
     return PreferenceResponse(
+        color_season=stored_color_season(preferences.style_profile),
         preview_preferences=preview_preferences,
         standing_rules=preferences.standing_rules if preferences.standing_rules is not None else [],
         color_favorites=preferences.color_favorites

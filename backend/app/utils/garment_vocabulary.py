@@ -9,6 +9,9 @@ _DATA = json.loads(_VOCABULARY_PATH.read_text())
 ROLES: tuple[str, ...] = tuple(_DATA["roles"])
 TYPES: tuple[str, ...] = tuple(entry["value"] for entry in _DATA["types"])
 ITEM_ROLE: dict[str, str] = {entry["value"]: entry["role"] for entry in _DATA["types"]}
+NEAR_FACE_TYPES: frozenset[str] = frozenset(
+    entry["value"] for entry in _DATA["types"] if entry.get("near_face")
+)
 # Tops and layers that can also go in the middle: an open shirt over a tee, a sweater over a
 # shirt, a hoodie under a jacket.
 CAN_BE_MID_LAYER_TYPES: frozenset[str] = frozenset(

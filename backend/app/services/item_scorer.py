@@ -3,11 +3,17 @@ from datetime import date
 from statistics import median
 from uuid import UUID
 
+from app.data.color_seasons import COLOR_SEASONS, stored_color_season
 from app.models.item import ClothingItem
 from app.models.preference import UserPreference
 from app.services.weather_service import WeatherData
 from app.utils.clothing import ITEM_ROLE
-from app.utils.garment_vocabulary import FORMALITY, OCCASION_FORMALITY, is_outfit_type
+from app.utils.garment_vocabulary import (
+    FORMALITY,
+    NEAR_FACE_TYPES,
+    OCCASION_FORMALITY,
+    is_outfit_type,
+)
 from app.utils.preference_defaults import DEFAULT_PREFER_UNDERUSED_ITEMS
 from app.utils.scales import (
     DEFAULT_AVOID_REPEAT_DAYS,
@@ -308,6 +314,27 @@ def _recency_score(
     return min(1.0, 0.1 + 0.9 * (days_since / avoid_days))
 
 
+def _season_color_delta(item: ClothingItem, preferences: UserPreference | None) -> float:
+    if not preferences or (item.type or "").strip().lower() not in NEAR_FACE_TYPES:
+        return 0.0
+    season = stored_color_season(preferences.style_profile)
+    if not season:
+        return 0.0
+    color = (item.primary_color or "").lower()
+    explicit = [
+        entry.lower()
+        for entry in (preferences.color_favorites or []) + (preferences.color_avoid or [])
+    ]
+    if color in explicit:
+        return 0.0
+    palette = COLOR_SEASONS[season]
+    if color in palette["best"]:
+        return 0.05
+    if color in palette["avoid"]:
+        return -0.05
+    return 0.0
+
+
 def _preference_score(
     item: ClothingItem,
     preferences: UserPreference | None,
@@ -324,6 +351,8 @@ def _preference_score(
             score += 0.1
         if color and color in avoid_colors:
             score -= 0.3
+
+        score += _season_color_delta(item, preferences)
 
     if learned:
         learned_favs = [c.lower() for c in learned.get("learned_favorite_colors", [])]
@@ -438,6 +467,12 @@ def score_items(
     items = [item for item in items if is_outfit_type(item.type)]
     if len(items) < MIN_ITEMS_FOR_SCORING:
         scored = [ScoredItem(item=item) for item in items]
+        if preferences and stored_color_season(preferences.style_profile):
+            for entry in scored:
+                delta = _season_color_delta(entry.item, preferences)
+                entry.preference_score += delta
+                entry.score += delta
+            scored.sort(key=lambda entry: entry.score, reverse=True)
         return _sort_mandatory_first(scored, mandatory_item_ids)
 
     avoid_days = DEFAULT_AVOID_REPEAT_DAYS
