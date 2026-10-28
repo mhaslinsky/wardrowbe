@@ -232,7 +232,7 @@ The operator configures `WARDROWBE_OPENROUTER_API_KEY`, `BUY_CHECK_PRIMARY_MODEL
 
 The response names the requested model separately from the returned model ID, which is limited to 120 characters. Disabling internal AI or text AI returns `error: disabled` without a percentage or provider request.
 
-Feel and quality reasons use Fabric detail and Warmth notes. Pluses cite liked or loved garments; minuses cite mixed or disliked garments, or a Doesnt note for fit. A model direction without supporting experience stays unknown. A low-outfit-count minus cites the count as structured evidence.
+Feel and quality reasons use Fabric detail and Warmth notes. Pluses cite liked or loved garments; minuses cite mixed or disliked garments, or a Doesnt note for fit. Only notes with text support these reasons. A model direction without supporting experience stays unknown. A low-outfit-count minus cites the count as structured evidence.
 
 ## Make suggestions more useful
 

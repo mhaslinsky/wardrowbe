@@ -204,6 +204,8 @@ def reasons(
                     source_id
                     for source_id in source_ids
                     if record.sources[source_id].field.startswith("notes.")
+                    and isinstance(record.sources[source_id].excerpt, str)
+                    and record.sources[source_id].excerpt.strip()
                 ]
                 if not notes:
                     continue
@@ -214,6 +216,8 @@ def reasons(
                 evidence_reason["citations"] += [
                     citation(candidate, source_id)
                     for source_id in comparison["candidate_source_ids"]
+                    if isinstance(candidate.sources[source_id].excerpt, str)
+                    and candidate.sources[source_id].excerpt.strip()
                 ]
                 (pluses if positive else minuses).append(evidence_reason)
                 supported = True

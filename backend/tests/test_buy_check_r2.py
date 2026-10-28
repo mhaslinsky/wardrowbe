@@ -136,3 +136,32 @@ async def test_doesnt_note_does_not_become_style_reason():
     )
     assert [reason["kind"] for reason in minuses] == ["fit_and_cut"]
     assert any(reason["kind"] == "style_and_look" for reason in unknowns)
+
+
+@pytest.mark.parametrize("excerpt", ["", "   ", "pinches"])
+async def test_doesnt_requires_text_for_fit_minus(
+    client, auth_headers, shelf, provider, db_session, test_user, excerpt
+):
+    shelf.notes = "Line: New | Size: M | Doesnt:"
+    for garment in await db_session.scalars(
+        select(ClothingItem).where(
+            ClothingItem.user_id == test_user.id, ClothingItem.id != shelf.id
+        )
+    ):
+        garment.notes = f"Rating: love | Doesnt: {excerpt}"
+    await db_session.commit()
+    payload = copy.deepcopy(FIXTURE)
+    payload["answers"]["fit_and_cut"]["noul"] = 0.2
+    provider[2].append((200, payload))
+    result = await check(client, auth_headers, shelf)
+    assert result["status"] == "scored"
+    assert any(reason["kind"] == "fit_and_cut" for reason in result["minuses"]) == bool(
+        excerpt.strip()
+    )
+    assert any(reason["kind"] == "fit_and_cut" for reason in result["unknowns"]) == (
+        not excerpt.strip()
+    )
+    for reason in result["pluses"] + result["minuses"]:
+        for citation in reason["citations"]:
+            if citation["field"].startswith("notes."):
+                assert isinstance(citation["quote"], str) and citation["quote"].strip()
