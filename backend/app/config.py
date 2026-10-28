@@ -127,6 +127,9 @@ class Settings(BaseSettings):
     ai_text_enabled: bool | None = Field(default=None)
 
     # AI Service (OpenAI-compatible API - supports Ollama, OpenAI, etc.)
+    wardrowbe_openrouter_api_key: str | None = Field(default=None, repr=False)
+    buy_check_primary_model: str = "baseten/elephant-1:free"
+    buy_check_fallback_model: str = "typesafe/jev-1.14"
     ai_base_url: str = Field(default="")
     ai_api_key: str | None = Field(default=None)
     ai_image_model: str = Field(default="")
