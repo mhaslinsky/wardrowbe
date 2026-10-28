@@ -263,6 +263,97 @@ async def test_purchase_feedback_uses_reacted_to_call(db_session, test_user, fea
     assert (await query.get(test_user.id, call.id)).feedback[0].data["state"] == "bought"
 
 
+@pytest.mark.parametrize("state", ["bought", "passed"])
+@pytest.mark.parametrize(
+    "feature,resource", [("pairing", "item"), ("considering_preview", "outfit")]
+)
+async def test_buy_check_purchase_links_are_independent_and_owner_only(
+    db_session, test_user, client, auth_headers, tmp_path, state, feature, resource
+):
+    from app.models.considering import ItemPurchase
+    from app.services.ai_call_query_service import AICallQueryService
+    from tests.test_image_undo_replace import _make_item
+
+    item = await _make_item(db_session, test_user)
+    other, other_headers = await add_other(db_session)
+    other_item = await _make_item(db_session, other)
+    outfit = Outfit(user_id=test_user.id, occasion="casual", source_item_id=item.id)
+    db_session.add(outfit)
+    await db_session.commit()
+    decision_time = datetime(2026, 1, 2, tzinfo=UTC)
+    prior = await add_call(
+        db_session,
+        test_user,
+        feature=feature,
+        resource_type=resource,
+        resource_id=item.id if resource == "item" else outfit.id,
+        created_at=decision_time - timedelta(hours=4),
+    )
+    checks = {}
+    for name, owner, item_id, offset in (
+        ("older", test_user, item.id, -3),
+        ("latest", test_user, item.id, -2),
+        ("failed", test_user, item.id, -1),
+        ("at_decision", test_user, item.id, 0),
+        ("future", test_user, item.id, 1),
+        ("foreign_call", other, item.id, -1),
+        ("foreign_item", test_user, other_item.id, -1),
+    ):
+        checks[name] = await add_call(
+            db_session,
+            owner,
+            feature="buy_check",
+            resource_type="item",
+            resource_id=item_id,
+            created_at=decision_time + timedelta(hours=offset),
+        )
+    checks["failed"].outcome = "error"
+    purchase = ItemPurchase(
+        item_id=item.id,
+        state=state,
+        passed_reason="Too warm" if state == "passed" else None,
+        updated_at=decision_time,
+    )
+    db_session.add_all(
+        [
+            purchase,
+            ItemPurchase(item_id=other_item.id, state=state, updated_at=decision_time),
+        ]
+    )
+    await db_session.commit()
+
+    detail = await client.get(f"/api/v1/ai-calls/{checks['latest'].id}", headers=auth_headers)
+    assert detail.status_code == 200, detail.text
+    feedback = detail.json()["feedback"]
+    assert len(feedback) == 1
+    assert feedback[0]["kind"] == "purchase" and feedback[0]["data"]["state"] == state
+    assert feedback[0]["user_id"] == str(test_user.id)
+    assert feedback[0]["data"]["passed_reason"] == purchase.passed_reason
+    assert (
+        await client.get(f"/api/v1/ai-calls/{checks['latest'].id}", headers=other_headers)
+    ).status_code == 404
+
+    query = AICallQueryService(db_session)
+    assert (await query.get(test_user.id, prior.id)).feedback[0].data["state"] == state
+    for name, call in checks.items():
+        if name != "latest":
+            assert not (await query.get(call.user_id, call.id)).feedback, name
+
+    path = tmp_path / "buy-checks.jsonl"
+    result = export(path)
+    assert result.returncode == 0, result.stderr
+    rows = {row["id"]: row for row in map(json.loads, path.read_text().splitlines())}
+    assert rows[str(checks["latest"].id)]["feedback"] == feedback
+    assert rows[str(prior.id)]["feedback"][0]["data"]["state"] == state
+    assert all(
+        not rows[str(call.id)]["feedback"] for name, call in checks.items() if name != "latest"
+    )
+
+    await db_session.delete(purchase)
+    await db_session.commit()
+    assert not (await query.get(test_user.id, checks["latest"].id)).feedback
+
+
 @pytest.mark.parametrize("link", ["recorded", "dropped", "legacy"])
 async def test_preview_feedback_keeps_replaced_version(
     db_session, test_user, client, auth_headers, preview_setup, provider, link

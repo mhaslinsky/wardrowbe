@@ -288,7 +288,7 @@ docker compose exec backend python -m app.cli.export_ai_calls --output /data/war
 
 Choose a new path in an existing directory. The command creates a mode-0600 JSON Lines file, reports an explicit row count, and fails without overwriting an existing file. Each line has `schema_version: 1`. Export includes family ratings with their author's ID; owner API responses exclude feedback authored by other people.
 
-Purchase feedback links only to the latest successful `pairing` or `considering_preview` call for the owned item created before the purchase decision's update; tagging, redraws, older calls and calls made after the decision receive none.
+**Bought it** and **Passed** feedback links to the latest successful `pairing` or `considering_preview` call and, independently, the latest successful `buy_check` call for the owned item. Each call must precede the decision's last update. Failed attempts, tagging, redraws, older calls and calls made at or after the decision receive none. Both the owner API and the export include these links.
 
 Saving or wearing a copy of a suggested outfit adds feedback to the original call, so one call can carry several outfit feedback rows.
 
