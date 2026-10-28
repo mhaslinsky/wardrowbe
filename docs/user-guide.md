@@ -216,6 +216,16 @@ If Fit profile reports **Profile changed**, another save has changed the stored 
 
 **Access tokens** supports integrations that need account access. Create a named token only for an integration you intend to use, copy it when shown, and keep it private. It is shown only once. **Revoke** removes its access when you no longer need it.
 
+### Choose a color season
+
+In **Settings**, find **Color season** beside **Favorite Colors** and **Colors to Avoid**. Use **Find your season on ColorWise.** to take the ColorWise analysis, then return, select the matching choice, such as **Cool Winter**, and choose **Save**. Each person sets their own season.
+
+Suggestions gently favor your season's colors for pieces worn near your face, such as tops, layers, coats, dresses, hats, and scarves. Bottoms and shoes are unaffected. Your explicit favorite and avoid colors take priority over the season; learned color preferences still contribute when scoring applies.
+
+Choose **Not set** and **Save** to stop applying a color season.
+
+Sources: [Settings](../frontend/app/dashboard/settings/page.tsx), [season palettes](../backend/app/data/color_seasons.py), [item scoring](../backend/app/services/item_scorer.py), [suggestion preferences](../backend/app/services/recommendation_service.py).
+
 ### Review AI Learning
 
 Open **AI Learning** after logging wears, dismissing suggestions, and rating outfits. It shows feedback totals, acceptance rate, style ratings, learned color and style preferences, occasion patterns, weather preferences, and combinations you tend to like.
