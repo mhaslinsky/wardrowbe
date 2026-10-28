@@ -176,7 +176,7 @@ Sources: [notifications page](../frontend/app/dashboard/notifications/page.tsx),
 
 In Settings, open **Preview photo** and **Show photos**. Start with **Front**, which is required for previews. You can also add **Quarter turn** and **Side**, for up to three full-length views in even light. Face the camera for the front view.
 
-Wear fitted clothes that show your shape clearly. A swimsuit or underwear is also an option if you are comfortable using those photos. Loose clothes hide your proportions and give the image generator less information. The generator uses the build and proportions visible in your photos and any measurements you supply.
+Wear fitted clothes that show your shape clearly. A swimsuit or underwear is also an option if you are comfortable using those photos. Loose clothes hide your proportions and give the image generator less information. The generator uses the build and proportions visible in your photos, plus your height, inseam, and usual shirt, pants, and shoe sizes.
 
 Replacing or removing the front photo deletes saved outfit previews. Replacing it happens as soon as you choose a file, with no confirmation. Removal asks for confirmation before proceeding. Use photos you are comfortable sending to the image-generation provider configured by the operator.
 
