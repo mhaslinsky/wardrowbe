@@ -224,6 +224,8 @@ Suggestions gently favor your season's colors for pieces worn near your face, su
 
 Choose **Not set** and **Save** to stop applying a color season.
 
+Changing style sliders keeps your saved color season. Only changing **Color season** updates that preference.
+
 Sources: [Settings](../frontend/app/dashboard/settings/page.tsx), [season palettes](../backend/app/data/color_seasons.py), [item scoring](../backend/app/services/item_scorer.py), [suggestion preferences](../backend/app/services/recommendation_service.py).
 
 ### Review AI Learning

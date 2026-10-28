@@ -94,12 +94,12 @@ class PreferenceService:
             merged_profile = func.coalesce(
                 func.nullif(UserPreference.style_profile, cast(JSONB.NULL, JSONB)), cast({}, JSONB)
             )
+            if "color_season" in data.model_fields_set and color_season is None:
+                merged_profile = merged_profile.op("-")("color_season")
             if style_profile is not None:
                 merged_profile = merged_profile.op("||")(cast(style_profile, JSONB))
             if "color_season" in data.model_fields_set:
-                if color_season is None:
-                    merged_profile = merged_profile.op("-")("color_season")
-                else:
+                if color_season is not None:
                     merged_profile = merged_profile.op("||")(
                         cast({"color_season": color_season}, JSONB)
                     )
