@@ -26,6 +26,7 @@ it('links to the active fit page from the desktop menu', () => {
 it('links from the phone menu and closes it', () => {
   const close = vi.fn();
   render(<MobileSidebar open onClose={close} />);
+  expect(screen.getByRole('link', { name: 'fitProfile' })).toHaveClass('bg-primary');
   fireEvent.click(screen.getByRole('link', { name: 'fitProfile' }));
   expect(close).toHaveBeenCalled();
 });
@@ -40,6 +41,9 @@ it('redirects an old fit section link, including hash navigation', async () => {
   await waitFor(() => expect(state.replace).toHaveBeenCalledWith('/dashboard/fit-profile'));
   state.replace.mockClear();
   window.history.replaceState(null, '', '/dashboard/settings');
+  fireEvent(window, new HashChangeEvent('hashchange'));
+  expect(state.replace).not.toHaveBeenCalled();
+  window.history.replaceState(null, '', '/dashboard/settings#other');
   fireEvent(window, new HashChangeEvent('hashchange'));
   expect(state.replace).not.toHaveBeenCalled();
   window.history.replaceState(null, '', '/dashboard/settings#fit-profile');
