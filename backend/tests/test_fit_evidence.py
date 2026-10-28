@@ -383,6 +383,13 @@ async def test_context_material_does_not_select_fabric_references(
                 result["sources"][facts[fact_id]["source_id"]]["field"] != "material"
                 for fact_id in reference["shared_fiber_fact_ids"]
             )
+            fiber = next(row for row in reference["comparisons"] if row["field"] == "fiber")
+            for key in ("candidate_source_ids", "reference_source_ids"):
+                assert fiber[key]
+                assert all(
+                    result["sources"][source_id]["field"] not in {"material", "tags.material"}
+                    for source_id in fiber[key]
+                )
     else:
         assert result["feel"]["references"] == []
         assert result["feel"]["status"] == "unknown"
@@ -479,10 +486,10 @@ async def test_feel_status_requires_a_resolved_comparison(
 ):
     anchor = await seed(db_session, test_user, owned=False)
     anchor.type = ""
-    anchor.brand = "Example" if resolved else None
+    anchor.brand = "Example"
     anchor.primary_color = None
     anchor.tags = {}
-    anchor.notes = "Fabric: cotton"
+    anchor.notes = "Fabric: cotton" + (" | Fit: regular" if resolved else "")
     db_session.add(
         ClothingItem(
             user_id=test_user.id,
@@ -491,13 +498,30 @@ async def test_feel_status_requires_a_resolved_comparison(
             status=ItemStatus.ready,
             image_path="fixture.png",
             tags={},
-            notes="Fabric: cotton",
+            notes=anchor.notes,
         )
     )
     await db_session.commit()
     result = await evidence(client, auth_headers, anchor)
     assert result["feel"]["references"]
     assert result["feel"]["status"] == ("known" if resolved else "unresolved")
+
+
+@pytest.mark.parametrize(
+    "first,second,field,expected",
+    [
+        ("Fit: regular | Fit: slim", "Fit: regular", "fit", "unresolved"),
+        ("Works: soft", "Works: soft | Works: breathable", "works", "unresolved"),
+        ("Fit: regular", "Fit: regular", "fit", "match"),
+    ],
+)
+async def test_free_text_feel_requires_equal_excerpt_sets(first, second, field, expected):
+    from app.services.fit_evidence_parser import parse_item
+    from app.services.fit_evidence_service import compare
+
+    anchor = parse_item(ClothingItem(id=uuid4(), notes=first))
+    reference = parse_item(ClothingItem(id=uuid4(), notes=second))
+    assert compare(anchor, reference, field)["status"] == expected
 
 
 async def test_owned_evidence_query_excludes_ineligible_items(

@@ -13,6 +13,8 @@ from app.services.fit_evidence_outfits import outfit_ideas, outfit_pool
 from app.services.fit_evidence_parser import EvidenceRecord, normalize, parse_item, parse_row
 from app.services.fit_profile_service import FitProfileService
 
+FEEL_FIELDS = frozenset({"fiber", "fit", "style", "fabric_detail", "warmth", "works", "doesnt"})
+
 
 def known_values(record: EvidenceRecord, kind: str) -> set[str]:
     return {
@@ -80,7 +82,7 @@ def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> di
         )
 
         def selected(record: EvidenceRecord) -> list[str]:
-            return [fact.source_id for fact in record.of_kind("fiber")]
+            return [fact.source_id for fact in record.explicit_fibers()]
     else:
 
         def selected(record: EvidenceRecord) -> list[str]:
@@ -105,7 +107,9 @@ def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> di
             known_values(anchor, field)
             if field in {"brand", "line", "size", "type", "color"}
             else {
-                normalize(anchor.sources[source_id].excerpt)
+                anchor.sources[source_id].excerpt
+                if field in FEEL_FIELDS
+                else normalize(anchor.sources[source_id].excerpt)
                 for source_id in selected(anchor)
                 if anchor.sources[source_id].excerpt is not None
             }
@@ -114,7 +118,9 @@ def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> di
             known_values(reference, field)
             if field in {"brand", "line", "size", "type", "color"}
             else {
-                normalize(reference.sources[source_id].excerpt)
+                reference.sources[source_id].excerpt
+                if field in FEEL_FIELDS
+                else normalize(reference.sources[source_id].excerpt)
                 for source_id in selected(reference)
                 if reference.sources[source_id].excerpt is not None
             }
@@ -130,6 +136,8 @@ def compare(anchor: EvidenceRecord, reference: EvidenceRecord, field: str) -> di
             )
             else "match"
         )
+        if field in FEEL_FIELDS:
+            status = "match" if first and first == second else "unresolved"
         supporting = [
             fact
             for record in (anchor, reference)
@@ -368,6 +376,7 @@ async def get_fit_evidence(db: AsyncSession, user_id: UUID, item_id: UUID) -> Fi
                 comparison["status"] in {"match", "no_match"}
                 for reference in references
                 for comparison in reference["comparisons"]
+                if comparison["field"] in FEEL_FIELDS
             )
             else "unresolved"
             if references

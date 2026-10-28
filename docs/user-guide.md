@@ -218,6 +218,8 @@ Fabric notes without percentages appear as quoted note text in `feel.fiber_notes
 
 Fiber comparisons require complete explicit compositions; stored material is context only. Outfit results separate `pool_truncated` from `idea_limit_truncated`.
 
+Feel excerpts match only when their sets are identical and nonempty; other prose comparisons stay unresolved. Feel status excludes brand, line, type, and subtype comparisons.
+
 Source: [fit evidence](../backend/app/services/fit_evidence_service.py).
 
 ## Make suggestions more useful
