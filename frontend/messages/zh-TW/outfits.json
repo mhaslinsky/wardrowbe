@@ -226,7 +226,11 @@
     "replaceFailedStale": "替換失敗，推薦可能延遲更新"
   },
   "preview": {
-    "comparePaid": "使用一次付費 AI 呼叫。",
+    "comparisonChanged": "比較已變更。請檢查備註或重新比較。",
+    "comparing": "正在比較照片…",
+    "comparisonFailed": "比較失敗",
+
+    "comparePaid": "將你的照片和預覽傳送給 AI。使用一次付費 AI 呼叫。",
     "compare": "與我的照片比較",
     "likeChanged": "預覽已變更。請重新整理後再按喜歡。",
     "like": "喜歡",

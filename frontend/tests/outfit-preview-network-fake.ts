@@ -7,6 +7,8 @@ function previewNetworkState(): ReturnType<typeof useOutfitPreview> {
     pending: false,
     error: false,
     conflict: false,
+    comparisonPending: false,
+    comparisonError: false,
     missingPhoto: false,
     likeConflict: false,
     draw: vi.fn(async () => true),

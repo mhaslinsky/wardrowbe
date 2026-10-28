@@ -226,7 +226,11 @@
     "replaceFailedStale": "교체 실패로 추천 반영이 늦을 수 있어요"
   },
   "preview": {
-    "comparePaid": "유료 AI 호출을 한 번 사용합니다.",
+    "comparisonChanged": "비교가 변경되었습니다. 메모를 확인하거나 다시 비교하세요.",
+    "comparing": "사진 비교 중…",
+    "comparisonFailed": "비교 실패",
+
+    "comparePaid": "내 사진과 미리보기를 AI로 전송합니다. 유료 AI 호출을 한 번 사용합니다.",
     "compare": "내 사진과 비교",
     "likeChanged": "미리보기가 변경되었습니다. 새로고침 후 좋아요를 눌러 주세요.",
     "like": "좋아요",

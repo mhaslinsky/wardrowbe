@@ -226,7 +226,11 @@
     "replaceFailedStale": "Ersetzen fehlgeschlagen; Vorschläge können verzögert sein"
   },
   "preview": {
-    "comparePaid": "Verwendet einen kostenpflichtigen KI-Aufruf.",
+    "comparisonChanged": "Vergleich geändert. Prüfe die Notiz oder vergleiche erneut.",
+    "comparing": "Fotos werden verglichen…",
+    "comparisonFailed": "Vergleich fehlgeschlagen",
+
+    "comparePaid": "Sendet dein Foto und die Vorschau an die KI. Verwendet einen kostenpflichtigen KI-Aufruf.",
     "compare": "Mit meinem Foto vergleichen",
     "likeChanged": "Die Vorschau wurde geändert. Lade sie neu, um sie zu liken.",
     "like": "Gefällt mir",

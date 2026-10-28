@@ -808,7 +808,7 @@ it('leaves no note on comparison failure and resets provenance for an ordinary r
   render(<OutfitPreview outfitId="one" hasRealPhoto />);
   fireEvent.click(await screen.findByRole('button', { name: 'compare' }));
   fireEvent.click(screen.getByRole('button', { name: 'confirm' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('failed');
+  expect(await screen.findByRole('alert')).toHaveTextContent('comparisonFailed');
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   failComparison = false;
   fireEvent.click(screen.getByRole('button', { name: 'compare' }));
@@ -820,4 +820,29 @@ it('leaves no note on comparison failure and resets provenance for an ordinary r
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Different collar' } });
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'redraw' }));
   await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/v1/outfits/one/preview?regenerate=true', expect.objectContaining({ body: JSON.stringify({ note: 'Different collar' }) })));
+});
+
+it('shows a failed comparison beside the collapsed control', async () => {
+  vi.mocked(fetch).mockImplementation(async (url) => response(String(url).endsWith('/compare') ? { detail: 'COMPARISON_FAILED' } : saved, String(url).endsWith('/compare') ? 502 : 200) as Response);
+  render(<OutfitPreview outfitId="one" hasRealPhoto cardImageUrl="/real.jpg" cardImageIsPreview={false} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'compare' }));
+  fireEvent.click(screen.getByRole('button', { name: 'confirm' }));
+  expect(await screen.findByRole('alert')).toBeVisible();
+});
+
+it('clears comparison provenance after a failed redraw', async () => {
+  let redraws = 0;
+  vi.mocked(fetch).mockImplementation(async (url, options) => {
+    if (String(url).endsWith('/compare')) return response({ note: 'Shorten the hem', call_id: 'comparison-id' }) as Response;
+    if (options?.method === 'POST') { redraws++; return response(redraws === 1 ? { detail: 'COMPARISON_CHANGED' } : saved, redraws === 1 ? 409 : 200) as Response; }
+    return response(saved) as Response;
+  });
+  render(<OutfitPreview outfitId="one" hasRealPhoto />);
+  fireEvent.click(await screen.findByRole('button', { name: 'compare' }));
+  fireEvent.click(screen.getByRole('button', { name: 'confirm' }));
+  await screen.findByRole('textbox');
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'redraw' }));
+  expect(await screen.findByText('comparisonChanged')).toBeVisible();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'redraw' }));
+  await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/v1/outfits/one/preview?regenerate=true', expect.objectContaining({ body: JSON.stringify({ note: 'Shorten the hem' }) })));
 });

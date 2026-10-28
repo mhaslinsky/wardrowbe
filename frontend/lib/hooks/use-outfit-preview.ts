@@ -167,7 +167,7 @@ export function useOutfitPreview(outfitId: string) {
   });
   const remove = async () => {
     if (active.current) return false;
-    mutation.reset(); removal.reset();
+    mutation.reset(); removal.reset(); comparison.reset();
     try { await removal.mutateAsync(); return true; }
     catch { return false; }
   };
@@ -177,6 +177,7 @@ export function useOutfitPreview(outfitId: string) {
   });
   const compare = async () => {
     if (active.current || comparison.isPending || removal.isPending || feedback.isPending) return null;
+    comparison.reset();
     try { return await comparison.mutateAsync(); }
     catch { return null; }
   };
@@ -192,7 +193,7 @@ export function useOutfitPreview(outfitId: string) {
     catch { return false; }
     finally { clearTimeout(timeout); controller.signal.removeEventListener('abort', cancelRead); if (active.current === controller) active.current = null; }
   };
-  return { preview: query.data, pending: mutation.isPending || removal.isPending || feedback.isPending || comparison.isPending, error: (comparison.isError || query.isError || mutation.isError || removal.isError || (feedback.isError && !(feedback.error instanceof ApiError && feedback.error.status === 409))) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
+  return { preview: query.data, pending: mutation.isPending || removal.isPending || feedback.isPending || comparison.isPending, comparisonPending: comparison.isPending, comparisonError: comparison.isError, error: (query.isError || mutation.isError || removal.isError || (feedback.isError && !(feedback.error instanceof ApiError && feedback.error.status === 409))) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
     conflict: mutation.isError && previewErrorCode(mutation.error) === 'PREVIEW_IN_PROGRESS',
     likeConflict: feedback.isError && previewErrorCode(feedback.error) === 'PREVIEW_CHANGED',
     missingPhoto: previewErrorCode(mutation.error) === 'NO_PREVIEW_PHOTO', draw, remove, like, compare };

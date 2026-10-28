@@ -1,23 +1,34 @@
 import asyncio
 import json
 import re
+from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.preview import OutfitPreview, PreviewFeedback
 from app.services.ai_telemetry_service import CallContext
-from app.services.photo_redraw_service import PhotoRedrawService, response_parts
+from app.services.photo_redraw_service import (
+    PhotoRedrawService,
+    photo_redraw_enabled,
+    response_parts,
+)
 from app.services.preview_service import PreviewService, jpeg
 from app.utils.prompts import load_prompt
 from app.utils.rate_limit import rate_limit_by_user
 
 
-def parse_comparison(payload):
+def parse_comparison(payload: dict[str, Any]) -> str:
+    """Parse bounded correction lines from a vision response."""
     try:
         reply = "".join(part.get("text", "") for part in response_parts(payload))
         if len(reply) > 2048:
             raise ValueError("Oversized comparison")
+        reply = reply.strip()
+        if reply.startswith("```") and reply.endswith("```"):
+            reply = reply.split("\n", 1)[1].rsplit("```", 1)[0]
         lines = json.loads(reply)
         if not isinstance(lines, list) or not 1 <= len(lines) <= 4:
             raise ValueError("Invalid comparison count")
@@ -33,25 +44,26 @@ def parse_comparison(payload):
                 raise ValueError("Empty comparison line")
             cleaned.append(line)
         return "\n".join(cleaned)
-    except (ValueError, TypeError, AttributeError, KeyError) as error:
+    except (ValueError, TypeError, AttributeError, KeyError, IndexError) as error:
         raise HTTPException(502, "COMPARISON_FAILED") from error
 
 
-async def compare_preview(db, outfit_id, user_id):
+async def compare_preview(db: AsyncSession, outfit_id: UUID, user_id: UUID) -> dict[str, str]:
+    """Compare an owner's saved images and record the returned corrections."""
     service = PreviewService(db)
     outfit = await service.outfit(outfit_id, user_id)
     preview = await db.get(OutfitPreview, outfit_id, populate_existing=True)
     if not preview or not preview.paths or not outfit.selfie_paths:
         raise HTTPException(409, "COMPARISON_IMAGES_REQUIRED")
+    if not photo_redraw_enabled():
+        raise HTTPException(503, "Preview is disabled")
     preview_paths, photo_paths = dict(preview.paths), dict(outfit.selfie_paths)
     created_at = preview.created_at
+    await db.commit()
     await rate_limit_by_user(user_id, "preview_photo_compare", max_requests=5, window_seconds=60)
     try:
         images = await asyncio.to_thread(
-            lambda: [
-                jpeg(paths.get("medium_path") or paths["image_path"], 1200)
-                for paths in (preview_paths, photo_paths)
-            ]
+            lambda: [jpeg(paths["image_path"], 1200) for paths in (preview_paths, photo_paths)]
         )
         provider = PhotoRedrawService(
             telemetry=CallContext(user_id, "preview_photo_compare", "outfit", outfit_id)
@@ -93,7 +105,14 @@ async def compare_preview(db, outfit_id, user_id):
         raise HTTPException(502, "COMPARISON_FAILED") from error
 
 
-async def validate_comparison(db, outfit_id, user_id, preview, call_id):
+async def validate_comparison(
+    db: AsyncSession,
+    outfit_id: UUID,
+    user_id: UUID,
+    preview: OutfitPreview | None,
+    call_id: UUID | None,
+) -> None:
+    """Require comparison feedback for this owner, outfit, and preview."""
     if call_id is None:
         return
     comparison = await db.scalar(

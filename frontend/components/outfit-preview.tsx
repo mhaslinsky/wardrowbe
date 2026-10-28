@@ -16,7 +16,7 @@ export function OutfitPreview(props: { outfitId: string; children?: ReactNode; d
 
 function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, cardImageIsPreview, hasRealPhoto }: { outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; cardImageUrl?: string | null; cardImageIsPreview: boolean; hasRealPhoto?: boolean }) {
   const t = useTranslations('outfits.preview');
-  const { preview, pending, error, conflict, missingPhoto, likeConflict, draw, remove, like, compare } = useOutfitPreview(outfitId);
+  const { preview, pending, error, comparisonPending, comparisonError, conflict, missingPhoto, likeConflict, draw, remove, like, compare } = useOutfitPreview(outfitId);
   const started = useRef(false);
   useEffect(() => {
     let disposed = false;
@@ -26,6 +26,7 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
   const [action, setAction] = useState<'redraw' | 'delete' | 'like' | null>(null);
   const [note, setNote] = useState('');
   const [comparisonCallId, setComparisonCallId] = useState<string>();
+  const [comparisonNotice, setComparisonNotice] = useState(false);
   const [compareConfirm, setCompareConfirm] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const collapsed = Boolean(cardImageUrl) && !expanded;
@@ -35,9 +36,11 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
     {children}
     {cardImageUrl && <Button variant="outline" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{t(expanded ? 'hide' : preview ? 'show' : 'title')}</Button>}
     {preview && hasRealPhoto && <Button size="sm" variant="outline" disabled={pending} onClick={() => setCompareConfirm(true)}>{t('compare')}</Button>}
+    {comparisonPending && <p role="status" className="text-sm text-muted-foreground">{t('comparing')}</p>}
+    {comparisonError && <p role="alert" className="text-sm text-destructive">{t('comparisonFailed')}</p>}
     <div className="space-y-2 min-w-0" hidden={collapsed}>
     {!preview && <Button variant="outline" disabled={pending} onClick={() => draw()}>{pending ? t('drawing') : t('see')}</Button>}
-    {pending && <p role="status" className="text-sm text-muted-foreground">{t('drawing')}</p>}
+    {pending && !comparisonPending && <p role="status" className="text-sm text-muted-foreground">{t('drawing')}</p>}
     {missingPhoto && <Link className="block text-sm underline" href="/dashboard/settings#preview-photo">{t('addPhoto')}</Link>}
     {error && <p role="alert" className="text-sm text-destructive">{t('failed')}</p>}
     {preview && <>
@@ -49,14 +52,14 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
         {(preview.stale_reasons?.length ? preview.stale_reasons : ['unknown'] as const).map((reason) => <p key={reason}>{t(reason === 'clothes' ? 'clothesChanged' : reason === 'person' ? 'personChanged' : reason === 'preferences' ? 'preferencesChanged' : 'changed')}</p>)}
       </div>}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setComparisonCallId(undefined); setAction('redraw'); }}>{t('redraw')}</Button>
+        <Button size="sm" variant="outline" disabled={pending} onClick={() => { setNote(''); setComparisonCallId(undefined); setComparisonNotice(false); setAction('redraw'); }}>{t('redraw')}</Button>
         <Button size="sm" variant={preview.liked ? 'default' : 'outline'} aria-pressed={Boolean(preview.liked)} disabled={pending} onClick={() => { setNote(preview.like_note ?? ''); setAction('like'); }}><ThumbsUp className="mr-1 h-4 w-4" />{t(preview.liked ? 'liked' : 'like')}</Button>
         <Button size="sm" variant="outline" disabled={pending} onClick={() => setAction('delete')}>{t('delete')}</Button>
       </div>
     </>}
     </div>
     <RedrawConfirmation title={t('compare')} description={t('comparePaid')} open={compareConfirm} onOpenChange={setCompareConfirm} paidRetry={false} onConfirm={() => {
-      setCompareConfirm(false);
+      setCompareConfirm(false); setComparisonNotice(false);
       void compare().then((result) => {
         if (result) { setNote(result.note); setComparisonCallId(result.call_id); setAction('redraw'); }
       });
@@ -69,6 +72,7 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
           <Textarea placeholder={action === 'like' ? t('likeNotePlaceholder') : undefined} aria-label={t(action === 'like' ? 'likeNote' : 'changeNote')} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} />
         </label>}
         {action === 'like' && likeConflict && <p role="alert" className="text-sm text-destructive">{t('likeChanged')}</p>}
+        {action === 'redraw' && comparisonNotice && <p role="alert" className="text-sm text-destructive">{t('comparisonChanged')}</p>}
         {action === 'redraw' && conflict && <p role="alert" className="text-sm text-destructive">{t('redrawConflict')}</p>}
         {action === 'redraw' && error && <p role="alert" className="text-sm text-destructive">{t('failed')}</p>}
         <div className="flex justify-end gap-2">
@@ -81,6 +85,7 @@ function PreviewContent({ outfitId, children, detail, autoDraw, cardImageUrl, ca
               if (preview && !await like(note, preview.created_at)) setAction('like');
             } else {
               const success = await draw(true, note, note.trim() ? comparisonCallId : undefined);
+              if (!success && comparisonCallId) { setComparisonCallId(undefined); setComparisonNotice(true); }
               if (!success && note.trim()) setAction('redraw');
             }
           }}>{t(action === 'delete' ? 'delete' : action === 'like' ? 'like' : 'redraw')}</Button>
