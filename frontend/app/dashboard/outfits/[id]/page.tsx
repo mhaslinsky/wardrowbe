@@ -205,16 +205,15 @@ export default function OutfitDetailPage() {
           <h2 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
             {t('detail.items', { count: outfit.items.length })}
           </h2>
-          {outfit.selfie_photo ? <>
-            {itemGrid}
-            <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2">
-              <OutfitPreview key={outfit.id} outfitId={outfit.id} detail />
-              <OutfitPhoto outfit={outfit} />
-            </div>
-          </> : <>
-            <OutfitPreview key={outfit.id} outfitId={outfit.id} detail>{itemGrid}</OutfitPreview>
+          {outfit.card_image_url && <div className="mb-4 rounded-lg bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={outfit.card_image_url} alt={getTitle(outfit)} className="max-h-96 w-full object-contain" />
+          </div>}
+          <OutfitPreview key={outfit.id} outfitId={outfit.id} detail cardImageUrl={outfit.card_image_url} cardImageIsPreview={outfit.card_image_choice === 'preview'}>{itemGrid}</OutfitPreview>
+          {outfit.card_image_url ? <details className="mt-4">
+            <summary className="cursor-pointer text-sm">{t('photo.title')}</summary>
             <OutfitPhoto outfit={outfit} />
-          </>}
+          </details> : <OutfitPhoto outfit={outfit} />}
         </CardContent>
       </Card>
 

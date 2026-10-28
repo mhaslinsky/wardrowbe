@@ -242,7 +242,9 @@
     "redrawConflict": "Un autre aperçu est en cours. Réessayez dans un instant.",
     "clothesChanged": "Vêtements modifiés",
     "personChanged": "Vos photos ou mensurations ont changé",
-    "preferencesChanged": "Créé avec d’anciennes préférences"
+    "preferencesChanged": "Créé avec d’anciennes préférences",
+    "show": "Afficher l’aperçu IA",
+    "hide": "Masquer l’aperçu IA"
   },
   "photo": {
     "title": "Photo de moi en tenue",

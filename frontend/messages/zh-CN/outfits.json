@@ -242,7 +242,9 @@
     "redrawConflict": "另一个预览正在生成，请稍后重试。",
     "clothesChanged": "服装已更改",
     "personChanged": "你的照片或身体尺寸已更改",
-    "preferencesChanged": "使用旧偏好生成"
+    "preferencesChanged": "使用旧偏好生成",
+    "show": "显示 AI 预览",
+    "hide": "隐藏 AI 预览"
   },
   "photo": {
     "title": "我的穿搭照片",

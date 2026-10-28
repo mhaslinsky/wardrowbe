@@ -13,7 +13,8 @@
     "tip": "Conseil :",
     "update": "Mettre à jour",
     "viewItemDetails": "Voir les détails de l'article",
-    "woreInstead": "Porté à la place :"
+    "woreInstead": "Porté à la place :",
+    "outfitPicture": "Photo de la tenue"
   },
   "empty": {
     "description": "Votre historique de recommandations de tenues apparaîtra ici une fois que vous commencerez à recevoir des suggestions.",

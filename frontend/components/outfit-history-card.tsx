@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { OutfitPreview } from '@/components/outfit-preview';
 import { OutfitStatusIcon } from '@/components/outfit-status';
 import { useRejectOutfit, type Outfit, type WoreInsteadItem } from '@/lib/hooks/use-outfits';
 import { useOccasionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
@@ -61,16 +62,18 @@ export function OutfitHistoryCard({ outfit, onFeedback, onPreview }: OutfitHisto
           </div>
         </div>
 
-        {/* Item thumbnails - clickable to preview */}
+        {outfit.card_image_url && <div className="relative aspect-[5/4] mb-2 bg-muted rounded-lg">
+          <Image unoptimized src={outfit.card_image_url} alt={t('outfitPicture')} fill className="object-contain" sizes="(max-width: 640px) 100vw, 33vw" />
+        </div>}
         <button
           type="button"
           onClick={onPreview}
-          className="flex gap-2 text-left w-full group"
+          className="flex flex-wrap gap-2 text-left w-full group"
         >
           {outfit.items.map((item) => (
             <div
               key={item.id}
-              className="w-16 h-16 rounded-lg bg-muted overflow-hidden relative border shadow-sm group-hover:shadow-md transition-shadow"
+              className="w-16 h-16 shrink-0 rounded-lg bg-muted overflow-hidden relative border shadow-sm group-hover:shadow-md transition-shadow"
             >
               {garmentImageUrl(item, 'small') ? (
                 <Image
@@ -89,6 +92,8 @@ export function OutfitHistoryCard({ outfit, onFeedback, onPreview }: OutfitHisto
             </div>
           ))}
         </button>
+
+        {outfit.card_image_url && <OutfitPreview outfitId={outfit.id} cardImageUrl={outfit.card_image_url} cardImageIsPreview={outfit.card_image_choice === 'preview'} />}
 
         {/* Inline feedback display */}
         {outfit.feedback && (outfit.feedback.rating || outfit.feedback.comment) && (

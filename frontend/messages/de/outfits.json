@@ -242,7 +242,9 @@
     "redrawConflict": "Eine Vorschau wird bereits erstellt. Bitte gleich erneut versuchen.",
     "clothesChanged": "Kleidung geändert",
     "personChanged": "Deine Fotos oder Maße wurden geändert",
-    "preferencesChanged": "Mit älteren Einstellungen erstellt"
+    "preferencesChanged": "Mit älteren Einstellungen erstellt",
+    "show": "KI-Vorschau anzeigen",
+    "hide": "KI-Vorschau ausblenden"
   },
   "photo": {
     "title": "Foto von mir im Outfit",
