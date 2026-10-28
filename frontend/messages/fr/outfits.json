@@ -243,5 +243,15 @@
     "clothesChanged": "Vêtements modifiés",
     "personChanged": "Vos photos ou mensurations ont changé",
     "preferencesChanged": "Créé avec d’anciennes préférences"
+  },
+  "photo": {
+    "title": "Photo de moi en tenue",
+    "add": "Ajouter une photo",
+    "remove": "Supprimer la photo",
+    "choice": "Afficher sur la carte",
+    "automatic": "Automatique",
+    "photo": "Ma photo",
+    "preview": "Aperçu IA",
+    "failed": "Échec de la mise à jour"
   }
 }

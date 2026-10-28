@@ -154,7 +154,7 @@ async def create_considering_preview(
         str(current_user.id), "considering_preview", max_requests=20, window_seconds=60
     )
     outfit = await ConsideringPreviewService(db).create(current_user, item_id, data.companion_ids)
-    return await outfit_response(db, outfit)
+    return await outfit_response(db, outfit, viewer_id=current_user.id)
 
 
 @router.post("/{item_id}/suggestions", response_model=list[OutfitResponse], status_code=201)
@@ -177,4 +177,4 @@ async def suggest_considering_outfits(
         raise HTTPException(400, str(error)) from None
     except AIRecommendationError as error:
         raise HTTPException(503, str(error)) from None
-    return [await outfit_response(db, outfit) for outfit in outfits]
+    return [await outfit_response(db, outfit, viewer_id=current_user.id) for outfit in outfits]

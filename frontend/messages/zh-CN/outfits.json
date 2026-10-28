@@ -243,5 +243,15 @@
     "clothesChanged": "服装已更改",
     "personChanged": "你的照片或身体尺寸已更改",
     "preferencesChanged": "使用旧偏好生成"
+  },
+  "photo": {
+    "title": "我的穿搭照片",
+    "add": "添加照片",
+    "remove": "删除照片",
+    "choice": "卡片显示",
+    "automatic": "自动",
+    "photo": "我的照片",
+    "preview": "AI预览",
+    "failed": "照片更新失败"
   }
 }

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Enum,
@@ -54,6 +55,17 @@ class OutfitSource(enum.StrEnum):
 
 class Outfit(Base):
     __tablename__ = "outfits"
+    __table_args__ = (
+        CheckConstraint(
+            "card_image_choice IN ('automatic', 'photo', 'preview')",
+            name="ck_outfit_card_image_choice",
+        ),
+    )
+
+    selfie_paths: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    card_image_choice: Mapped[str] = mapped_column(
+        Text, default="automatic", server_default="automatic"
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(

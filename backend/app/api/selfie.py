@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import tempfile
 from io import BytesIO
@@ -6,14 +7,14 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from PIL import Image
 from pillow_heif import register_heif_opener
 from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.orm import selectinload
 
-from app.api.outfits import OutfitResponse, outfit_to_response
+from app.api.outfits import OutfitResponse, outfit_response
 from app.config import get_settings
 from app.database import DbSession
 from app.models.considering import owned_item
@@ -149,22 +150,31 @@ class SelfieConfirmRequest(BaseModel):
     item_ids: list[UUID]
 
 
-@router.post("/confirm", response_model=OutfitResponse)
-@wear_http()
-async def confirm_outfit(
+async def _confirm_outfit(
     request: SelfieConfirmRequest,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
+    photo: tuple[bytes, str] | None = None,
 ) -> OutfitResponse:
+    from app.services.preview_service import delete_preview_files
+
+    new_paths = {}
     try:
         outfit, created = await SelfieConfirmService(db).confirm(
             current_user, request.request_id, request.item_ids
         )
-        response = outfit_to_response(outfit)
+        if photo is not None and created:
+            from app.services.outfit_photo_service import OutfitPhotoService
+
+            new_paths = await OutfitPhotoService(db).save(outfit, *photo)
+        response = await outfit_response(db, outfit, viewer_id=current_user.id)
         outfit_id, user_id, occasion = outfit.id, current_user.id, outfit.occasion
         await db.commit()
-    except Exception:
-        await db.rollback()
+    except BaseException:
+        try:
+            await db.rollback()
+        finally:
+            delete_preview_files(new_paths)
         raise
     if created:
         try:
@@ -177,3 +187,34 @@ async def confirm_outfit(
         except Exception:
             logger.exception("Selfie suggestion cache clear failed for user %s", user_id)
     return response
+
+
+@router.post("/confirm-photo", response_model=OutfitResponse)
+@wear_http()
+async def confirm_photo(
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+    request_id: Annotated[UUID, Form()],
+    item_ids: Annotated[str, Form()],
+    image: UploadFile = File(...),
+):
+    from pydantic import ValidationError
+
+    from app.services.outfit_photo_service import read_photo
+
+    try:
+        request = SelfieConfirmRequest(request_id=request_id, item_ids=json.loads(item_ids))
+    except (ValidationError, ValueError, TypeError):
+        raise HTTPException(422, "Invalid items") from None
+    data = await read_photo(image)
+    return await _confirm_outfit(request, db, current_user, photo=(data, image.filename))
+
+
+@router.post("/confirm", response_model=OutfitResponse)
+@wear_http()
+async def confirm_outfit(
+    request: SelfieConfirmRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    return await _confirm_outfit(request, db, current_user)

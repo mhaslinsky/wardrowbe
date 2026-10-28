@@ -163,6 +163,8 @@ export function useOutfit(outfitId: string | undefined) {
     queryKey: queryKeys.outfit(outfitId ?? ''),
     queryFn: () => api.get<Outfit>(`/outfits/${outfitId}`),
     enabled: !!outfitId && status !== 'loading',
+    refetchInterval: (query) => query.state.data?.selfie_photo ? 9 * 60_000 : false,
+    refetchIntervalInBackground: true,
   });
 }
 

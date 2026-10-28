@@ -363,7 +363,13 @@ export type OutfitStatus = (typeof OUTFIT_STATUSES)[number];
 
 export type OutfitSource = 'scheduled' | 'on_demand' | 'manual' | 'pairing' | 'external';
 
-export interface Outfit {
+export interface OutfitPhotoFields {
+  selfie_photo?: { image_url: string; medium_url?: string } | null;
+  card_image_choice?: 'automatic' | 'photo' | 'preview';
+  card_image_url?: string | null;
+}
+
+export interface Outfit extends OutfitPhotoFields {
   unowned_item_ids?: string[];
   id: string;
   occasion: string;

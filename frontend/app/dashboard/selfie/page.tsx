@@ -33,12 +33,14 @@ export default function SelfiePage() {
     setRequestId(crypto.randomUUID());
     confirm.reset();
   };
+  const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   useEffect(() => () => {
     if (preview) URL.revokeObjectURL(preview);
   }, [preview]);
 
   const choose = (next: File | null) => {
+    setPhoto(next);
     setPreview(next ? URL.createObjectURL(next) : null);
     recognise.reset();
     confirm.reset();
@@ -174,7 +176,7 @@ export default function SelfiePage() {
               </div>
             )}
             <Button disabled={locked || !selected.length || !requestId} onClick={() => {
-              if (requestId) confirm.mutate({ request_id: requestId, item_ids: selected.map((item) => item.id) });
+              if (requestId && photo) confirm.mutate({ request_id: requestId, item_ids: selected.map((item) => item.id), image: photo });
             }}>{confirm.isPending ? t('logging') : t('confirm')}</Button>
             {confirm.isSuccess && <p role="status">{t('logged')}</p>}
             {confirm.isError && <p role="alert">{t(confirmCode === 'DAY_LOGGED' ? 'dayLogged' : confirmCode === 'REQUEST_REUSED' ? 'requestReused' : confirmCode === 'CONFIRM_RESULT_DELETED' ? 'resultDeleted' : 'confirmError')}</p>}

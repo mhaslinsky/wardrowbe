@@ -243,5 +243,15 @@
     "clothesChanged": "Kleidung geändert",
     "personChanged": "Deine Fotos oder Maße wurden geändert",
     "preferencesChanged": "Mit älteren Einstellungen erstellt"
+  },
+  "photo": {
+    "title": "Foto von mir im Outfit",
+    "add": "Foto hinzufügen",
+    "remove": "Foto löschen",
+    "choice": "Auf Karte zeigen",
+    "automatic": "Automatisch",
+    "photo": "Mein Foto",
+    "preview": "KI-Vorschau",
+    "failed": "Foto konnte nicht aktualisiert werden"
   }
 }

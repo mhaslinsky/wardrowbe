@@ -7,6 +7,8 @@ import { OutfitCard } from '@/components/outfits/outfit-card'
 import type { Outfit } from '@/lib/hooks/use-outfits'
 import OutfitDetailPage from '@/app/dashboard/outfits/[id]/page'
 
+vi.mock('@/components/outfit-photo', () => ({ OutfitPhoto: () => null }))
+
 vi.unmock('next-intl')
 
 vi.mock('next/navigation', () => ({
