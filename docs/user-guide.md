@@ -184,7 +184,7 @@ Replacing or removing the front photo deletes saved outfit previews. Replacing i
 
 Open an outfit and select **See it on me**. Preview generation requires reference photos and an image model with an API key configured by the operator. A generated picture is an illustration of a look; it cannot establish how an actual garment will fit.
 
-Use **Like** and a note to say what a preview got right. Use **Redraw** and **What should change?** to request a correction, such as a longer hem or a different shade. If the interface says **Preview is out of date**, your clothes, photos, measurements, or preferences have changed since it was made. Generate a current preview before judging the result.
+Use **Like** and the **Comments** field to say what worked and what did not. Use **Redraw** and **What should change?** to request a correction, such as a longer hem or a different shade. If the interface says **Preview is out of date**, your clothes, photos, measurements, or preferences have changed since it was made. Generate a current preview before judging the result.
 
 Under **Preview preferences**, save up to 10 lines of 120 characters each, such as “show the whole shoe.” Set **Shirts** separately to **Tucked**, **Untucked**, or **Let each outfit decide**, then choose **Save preview preferences**.
 
