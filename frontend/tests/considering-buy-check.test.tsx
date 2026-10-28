@@ -159,6 +159,17 @@ it('lists three outfit ideas without the candidate until Show all is pressed', a
   fireEvent.click(screen.getByRole('button', { name: key('showFewerOutfits') }));
   expect(within(list).getAllByRole('listitem')).toHaveLength(3);
 });
+it('shows the sample note for a short sampled list and only after Show all for a long one', async () => {
+  result.outfits = { status: 'known', count: 2, ideas: [{ item_ids: ['candidate', 'owned-0'] }, { item_ids: ['candidate', 'owned-1'] }], pool_truncated: true };
+  await open(); await check();
+  expect(await screen.findByText(key('sampled'))).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: key('showAllOutfits') })).toBeNull();
+  result.outfits = { status: 'known', count: 5, ideas: Array.from({ length: 5 }, (_, index) => ({ item_ids: ['candidate', `owned-${index}`] })), pool_truncated: true };
+  await check(); await screen.findByRole('button', { name: key('showAllOutfits') });
+  expect(screen.queryByText(key('sampled'))).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: key('showAllOutfits') }));
+  expect(screen.getByText(key('sampled'))).toBeInTheDocument();
+});
 it('names the Check button with its item while keeping the visible label short', async () => {
   await open();
   expect(screen.getByRole('button', { name: 'Check: Linen shirt' })).toHaveTextContent(key('check'));
