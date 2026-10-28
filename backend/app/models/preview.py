@@ -53,6 +53,7 @@ class PreviewFeedback(Base):
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    ai_call_id: Mapped[UUID | None] = mapped_column(index=True, nullable=True)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     outfit_id: Mapped[UUID | None] = mapped_column(ForeignKey("outfits.id", ondelete="SET NULL"))
     preview_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

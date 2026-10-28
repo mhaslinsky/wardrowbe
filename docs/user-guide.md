@@ -264,7 +264,17 @@ Sources: [Settings](../frontend/app/dashboard/settings/page.tsx), [season palett
 
 ### AI call records
 
-AI results are recorded to improve the app. These records keep prompt and image sizes and hashes, structured answers, and provider usage when available. Plain-text answers are kept only as sizes and hashes. Call records are deleted with your account.
+AI results and feedback are recorded to improve the app. These records keep prompt and image sizes and hashes, structured answers, and provider usage when available. Plain-text answers are kept only as sizes and hashes. Preview likes and redraw notes refer to the image you judged; outfit ratings and comments follow the source AI call. Older results and dropped recordings can have no linked call. Call records are deleted with your account.
+
+Signed-in integrations can read their own records with `GET /api/v1/ai-calls` and `GET /api/v1/ai-calls/{id}`. The list accepts `limit` (1 to 100) and returns `next_cursor` for the next page. Pass it back as `cursor`. Family membership does not grant access to another person's call records or private feedback.
+
+Operators can export all users' call records and linked feedback on the server:
+
+```sh
+docker compose exec backend python -m app.cli.export_ai_calls --output /data/wardrobe/ai-calls.jsonl
+```
+
+Choose a new path in an existing directory. The command creates a mode-0600 JSON Lines file, reports an explicit row count, and fails without overwriting an existing file. Each line has `schema_version: 1`. Export includes family ratings with their author's ID; owner API responses exclude feedback authored by other people.
 
 Operator note: graceful shutdown allows five seconds for writes and one for cleanup; an abrupt stop can lose pending records.
 
