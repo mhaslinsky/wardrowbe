@@ -36,7 +36,7 @@ async def export_calls(output: Path) -> int:
                         break
                     cursor = page.next_cursor
         return count
-    except Exception:
+    except BaseException:
         if created:
             output.unlink(missing_ok=True)
         raise

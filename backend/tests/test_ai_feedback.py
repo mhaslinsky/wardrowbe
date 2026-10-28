@@ -1,9 +1,10 @@
+import asyncio
 import json
 import os
 import stat
 import subprocess
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -29,11 +30,11 @@ from tests.test_studio_service import wardrobe_items as wardrobe_items
 from tests.test_wear_service import source
 
 
-async def add_call(db, user, **values):
+async def add_call(db, user, *, feature="outfit_suggestion", **values):
     call = AICall(
         id=uuid4(),
         user_id=user.id,
-        feature="outfit_suggestion",
+        feature=feature,
         provider="stub.test",
         requested_model="stub",
         request_bytes=2,
@@ -142,8 +143,19 @@ async def test_feedback_joins_owner_and_export_authors(db_session, test_user):
     )
 
 
-@pytest.mark.parametrize("resource", ["item", "outfit"])
-async def test_purchase_feedback_uses_owned_resource(db_session, test_user, resource):
+async def test_overflow_cursor_returns_422(client, auth_headers):
+    response = await client.get(
+        "/api/v1/ai-calls",
+        headers=auth_headers,
+        params={"cursor": "0001-01-01T00:00:00+01:00,00000000-0000-0000-0000-000000000001"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "feature,resource", [("pairing", "item"), ("considering_preview", "outfit")]
+)
+async def test_purchase_feedback_uses_reacted_to_call(db_session, test_user, feature, resource):
     from app.models.considering import ItemPurchase
     from app.services.ai_call_query_service import AICallQueryService
     from tests.test_image_undo_replace import _make_item
@@ -151,19 +163,48 @@ async def test_purchase_feedback_uses_owned_resource(db_session, test_user, reso
     item = await _make_item(db_session, test_user)
     outfit = Outfit(user_id=test_user.id, occasion="casual", source_item_id=item.id)
     db_session.add(outfit)
-    purchase = ItemPurchase(item_id=item.id, state="passed", passed_reason="Too warm")
+    decision_time = datetime(2026, 1, 2, tzinfo=UTC)
+    purchase = ItemPurchase(
+        item_id=item.id, state="passed", passed_reason="Too warm", updated_at=decision_time
+    )
     db_session.add(purchase)
     await db_session.commit()
     call = await add_call(
         db_session,
         test_user,
+        feature=feature,
+        created_at=decision_time - timedelta(hours=1),
         resource_type=resource,
         resource_id=item.id if resource == "item" else outfit.id,
+    )
+    unrelated = [
+        await add_call(
+            db_session,
+            test_user,
+            feature=name,
+            resource_type="item",
+            resource_id=item.id,
+            created_at=decision_time - timedelta(hours=2),
+        )
+        for name in ("item_tagging", "photo_redraw", "pairing")
+    ]
+    future = await add_call(
+        db_session,
+        test_user,
+        feature="pairing",
+        resource_type="item",
+        resource_id=item.id,
+        created_at=decision_time + timedelta(hours=1),
     )
     query = AICallQueryService(db_session)
     feedback = (await query.get(test_user.id, call.id)).feedback
     assert feedback[0].kind == "purchase" and feedback[0].data["state"] == "passed"
+    for other in [*unrelated, future]:
+        assert not any(
+            entry.kind == "purchase" for entry in (await query.get(test_user.id, other.id)).feedback
+        )
     purchase.state = "bought"
+    purchase.updated_at = decision_time + timedelta(minutes=1)
     await db_session.commit()
     assert (await query.get(test_user.id, call.id)).feedback[0].data["state"] == "bought"
 
@@ -234,8 +275,88 @@ def export(path, **environment):
     )
 
 
+async def test_cancelled_export_removes_partial_file(
+    db_session, test_user, session_maker, async_engine, tmp_path, monkeypatch
+):
+    from app.cli import export_ai_calls
+    from app.services.ai_call_query_service import AICallQueryService
+
+    await add_call(db_session, test_user)
+    await add_call(db_session, test_user)
+    entered, release = asyncio.Event(), asyncio.Event()
+    original = AICallQueryService.page
+
+    async def next_page(service, user_id, limit, cursor):
+        if cursor:
+            entered.set()
+            await release.wait()
+        return await original(service, user_id, 1, cursor)
+
+    monkeypatch.setattr(AICallQueryService, "page", next_page)
+    monkeypatch.setattr(export_ai_calls, "async_session_maker", session_maker)
+    monkeypatch.setattr(export_ai_calls, "engine", async_engine)
+    path = tmp_path / "cancelled.jsonl"
+    task = asyncio.create_task(export_ai_calls.export_calls(path))
+    try:
+        await entered.wait()
+        assert path.exists()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert not path.exists()
+    finally:
+        release.set()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
 async def test_export_all_users_permissions_and_exclusive_create(db_session, test_user, tmp_path):
-    own = await add_call(db_session, test_user)
+    from app.models.considering import ItemPurchase
+    from tests.test_image_undo_replace import _make_item
+
+    decision_time = datetime(2026, 1, 2, tzinfo=UTC)
+    item = await _make_item(db_session, test_user)
+    own = await add_call(
+        db_session,
+        test_user,
+        feature="pairing",
+        resource_type="item",
+        resource_id=item.id,
+        created_at=decision_time - timedelta(hours=1),
+    )
+    outfit = Outfit(
+        user_id=test_user.id,
+        occasion="casual",
+        source_item_id=item.id,
+        ai_raw_response={"_ai_call_id": str(own.id)},
+    )
+    db_session.add(outfit)
+    await db_session.flush()
+    preview = await add_call(
+        db_session,
+        test_user,
+        feature="considering_preview",
+        resource_type="outfit",
+        resource_id=outfit.id,
+        created_at=decision_time - timedelta(minutes=30),
+    )
+    db_session.add_all(
+        [
+            UserFeedback(
+                outfit_id=outfit.id, rating=4, comment="Good fit", worn_at=date(2026, 1, 1)
+            ),
+            PreviewFeedback(
+                user_id=test_user.id,
+                outfit_id=outfit.id,
+                kind="like",
+                note="Keep",
+                ai_call_id=preview.id,
+                preview_created_at=preview.created_at,
+            ),
+            ItemPurchase(item_id=item.id, state="bought", updated_at=decision_time),
+        ]
+    )
+    await db_session.commit()
     other, _ = await add_other(db_session)
     foreign = await add_call(db_session, other)
     for _ in range(100):
@@ -248,6 +369,19 @@ async def test_export_all_users_permissions_and_exclusive_create(db_session, tes
     assert json.loads(result.stdout)["count"] == expected == len(rows)
     assert {str(own.id), str(foreign.id)} <= {row["id"] for row in rows}
     assert all(row["schema_version"] == 1 for row in rows)
+    by_id = {row["id"]: row for row in rows}
+    outfit_data = by_id[str(own.id)]["feedback"][0]["data"]
+    assert outfit_data["rating"] == 4 and date.fromisoformat(outfit_data["worn_at"]) == date(
+        2026, 1, 1
+    )
+    preview_data = {entry["kind"]: entry["data"] for entry in by_id[str(preview.id)]["feedback"]}
+    assert preview_data["preview_like"]["note"] == "Keep"
+    assert (
+        datetime.fromisoformat(preview_data["preview_like"]["preview_created_at"])
+        == preview.created_at
+    )
+    assert preview_data["purchase"]["state"] == "bought"
+    assert datetime.fromisoformat(preview_data["purchase"]["updated_at"]) == decision_time
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     before = path.read_bytes()
     again = export(path)

@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import Text, and_, cast, or_, select, tuple_
+from sqlalchemy import Text, and_, cast, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ai_call import AICall
@@ -42,9 +42,13 @@ class AICallQueryService:
             query = query.where(AICall.user_id == user_id)
         if cursor:
             timestamp, identifier = cursor.split(",", 1)
-            created_at = datetime.fromisoformat(timestamp)
-            if created_at.utcoffset() is None:
-                raise ValueError("Cursor requires timezone")
+            try:
+                created_at = datetime.fromisoformat(timestamp)
+                if created_at.utcoffset() is None:
+                    raise ValueError("Cursor requires timezone")
+                created_at = created_at.astimezone(UTC)
+            except OverflowError as error:
+                raise ValueError("Cursor timestamp out of range") from error
             query = query.where(
                 tuple_(AICall.created_at, AICall.id) > (created_at, UUID(identifier))
             )
@@ -131,16 +135,30 @@ class AICallQueryService:
                     data={"note": feedback.note, "preview_created_at": feedback.preview_created_at},
                 )
             )
-        query = (
-            select(AICall.id, ItemPurchase)
+        purchase_calls = (
+            select(
+                AICall.id.label("call_id"),
+                ItemPurchase.item_id.label("item_id"),
+                func.row_number()
+                .over(
+                    partition_by=ItemPurchase.item_id,
+                    order_by=(AICall.created_at.desc(), AICall.id.desc()),
+                )
+                .label("position"),
+            )
             .select_from(AICall)
             .join(
                 ClothingItem,
                 and_(
                     ClothingItem.user_id == AICall.user_id,
                     or_(
-                        and_(AICall.resource_type == "item", AICall.resource_id == ClothingItem.id),
                         and_(
+                            AICall.feature == "pairing",
+                            AICall.resource_type == "item",
+                            AICall.resource_id == ClothingItem.id,
+                        ),
+                        and_(
+                            AICall.feature == "considering_preview",
                             AICall.resource_type == "outfit",
                             select(Outfit.id)
                             .where(
@@ -154,7 +172,17 @@ class AICallQueryService:
                 ),
             )
             .join(ItemPurchase, ItemPurchase.item_id == ClothingItem.id)
-            .where(AICall.id.in_(results))
+            .where(
+                AICall.user_id.in_({call.user_id for call in calls}),
+                AICall.created_at < ItemPurchase.updated_at,
+            )
+            .subquery()
+        )
+        query = (
+            select(purchase_calls.c.call_id, ItemPurchase)
+            .select_from(purchase_calls)
+            .join(ItemPurchase, ItemPurchase.item_id == purchase_calls.c.item_id)
+            .where(purchase_calls.c.position == 1, purchase_calls.c.call_id.in_(results))
         )
         for call_id, purchase in await self.db.execute(query):
             results[call_id].feedback.append(
