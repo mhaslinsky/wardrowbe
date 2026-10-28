@@ -49,6 +49,26 @@ def test_palette_shape(season):
 
 
 @pytest.mark.parametrize(
+    "group,expected",
+    [
+        ("best", {"gray", "light-blue", "pink", "purple", "navy", "olive"}),
+        ("avoid", {"black", "white", "orange", "yellow", "gold", "red", "brown"}),
+    ],
+)
+def test_soft_summer_palette_matches_colorwise(group, expected):
+    from app.data.color_seasons import COLOR_SEASONS
+
+    assert set(COLOR_SEASONS["soft-summer"][group]) == expected
+
+
+@pytest.mark.parametrize("color,expected", [("olive", 1.05), ("red", 0.95), ("brown", 0.95)])
+def test_soft_summer_scores_colorwise_tops(color, expected):
+    item = ClothingItem(type="shirt", primary_color=color)
+    assert _preference_score(item, preferences(), None) == pytest.approx(1.0)
+    assert _preference_score(item, preferences("soft-summer"), None) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
     "favorites,avoid,color,expected",
     [
         (["orange"], [], "orange", 1.1),
