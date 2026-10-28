@@ -182,7 +182,7 @@ Replacing or removing the front photo deletes saved outfit previews. Replacing i
 
 ### Generate and improve a preview
 
-Open an outfit and select **See it on me**. Preview generation requires reference photos and an image model with an API key configured by the operator. A generated picture is an illustration of a look; it cannot establish how an actual garment will fit.
+Open an outfit and select **See it on me**. Preview generation requires reference photos and an image model with an API key configured by the operator. The preview uses your reference photos for your build, along with your height, inseam, and shirt, pants, and shoe sizes. Other measurements help with fit checks and suggestions. Use **Redraw** to adjust the build to better match your photos. A generated picture is an illustration of a look; it cannot establish how an actual garment will fit.
 
 Use **Like** and the **Comments** field to say what worked and what did not. Use **Redraw** and **What should change?** to request a correction, such as a longer hem or a different shade. If the interface says **Preview is out of date**, your clothes, photos, measurements, or preferences have changed since it was made. Generate a current preview before judging the result.
 

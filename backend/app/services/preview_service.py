@@ -558,10 +558,17 @@ class PreviewService:
                     + json.dumps(outfit.style_notes).replace("<", "\\u003c").replace(">", "\\u003e")
                     + "\n</style_notes>"
                 )
-            if measurements:
+            drawing_measurements = {
+                field: value
+                for field, value in (measurements or {}).items()
+                if field in ("height", "inseam", "shirt_size", "pants_size", "shoe_size")
+            }
+            if drawing_measurements:
                 prompt += (
                     "\n<body_measurements>\n"
-                    + json.dumps(measurements).replace("<", "\\u003c").replace(">", "\\u003e")
+                    + json.dumps(drawing_measurements)
+                    .replace("<", "\\u003c")
+                    .replace(">", "\\u003e")
                     + "\n</body_measurements>"
                 )
             if note:
