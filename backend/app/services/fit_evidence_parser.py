@@ -2,7 +2,6 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from decimal import Decimal
-from itertools import combinations
 
 from app.models.item import ClothingItem
 from app.schemas.fit_evidence import EvidenceFact, EvidenceSource, FactKind, FactOrigin
@@ -77,11 +76,13 @@ class EvidenceRecord:
         valid = bounded and bool(normalized)
         if kind == "rating":
             valid &= normalized in {"love", "like", "mixed", "dislike"}
-        if kind == "size":
+        if kind == "size" and origin != "profile_row":
             valid &= len(text) <= 32 and len(normalized) <= 32
         if kind == "type":
             valid &= normalized in ITEM_ROLE
         values = fibers(text) if kind == "fiber" and valid else []
+        if kind == "fiber" and source_field in {"material", "tags.material"} and valid:
+            values = [{"name": normalized, "percent": None}]
         if kind != "fiber" and valid:
             values = [{"label" if kind == "rating" else "normalized": normalized}]
         total = sum(Decimal(value["percent"] or "0") for value in values) if kind == "fiber" else 0
@@ -108,6 +109,8 @@ class EvidenceRecord:
         return [fact for fact in self.facts if fact.kind == kind]
 
     def values(self, kind: str) -> set[str]:
+        if kind == "fiber":
+            raise ValueError("Use of_kind or composition for fiber facts")
         values = set()
         for fact in self.of_kind(kind):
             if fact.value is not None:
@@ -116,41 +119,44 @@ class EvidenceRecord:
                     values.add(value)
         return values
 
+    def explicit_fibers(self) -> list[EvidenceFact]:
+        return [
+            fact
+            for fact in self.of_kind("fiber")
+            if fact.origin == "explicit_note"
+            or self.sources[fact.source_id].field == "tags.material_detail"
+        ]
+
     def fiber_groups(self) -> dict[str, dict[str, str | None]]:
         groups = {}
-        for fact in self.of_kind("fiber"):
+        for fact in self.explicit_fibers():
             if fact.value is not None:
                 groups.setdefault(fact.source_id, {})[fact.value["name"]] = fact.value["percent"]
         return groups
 
     def composition(self) -> list[tuple[str, str]] | None:
-        facts = self.of_kind("fiber")
+        facts = self.explicit_fibers()
         if not facts or any(fact.status != "known" for fact in facts):
             return None
-        for group in self.fiber_groups().values():
-            complete = {name: percent for name, percent in group.items() if percent is not None}
-            if len(complete) == len(group) and sum(map(Decimal, complete.values())) == 100:
-                return sorted(complete.items())
+        groups = list(self.fiber_groups().values())
+        if not groups or any(group != groups[0] for group in groups):
+            return None
+        complete = {name: percent for name, percent in groups[0].items() if percent is not None}
+        if len(complete) == len(groups[0]) and sum(map(Decimal, complete.values())) == 100:
+            return sorted(complete.items())
         return None
 
     def resolve(self) -> "EvidenceRecord":
         for kind in ("brand", "line", "size", "type", "color", "rating", "fiber"):
-            facts = self.of_kind(kind)
-            conflict = len(self.values(kind)) > 1 or (
-                kind != "fiber"
-                and any(fact.value is None for fact in facts)
-                and any(fact.value is not None for fact in facts)
+            facts = self.explicit_fibers() if kind == "fiber" else self.of_kind(kind)
+            conflict = any(fact.value is None for fact in facts) and any(
+                fact.value is not None for fact in facts
             )
             if kind == "fiber":
-                for first, second in combinations(self.fiber_groups().values(), 2):
-                    subset = (
-                        all(percent is None for percent in first.values())
-                        and first.keys() <= second.keys()
-                    ) or (
-                        all(percent is None for percent in second.values())
-                        and second.keys() <= first.keys()
-                    )
-                    conflict |= first != second and not subset
+                groups = list(self.fiber_groups().values())
+                conflict |= any(group != groups[0] for group in groups)
+            else:
+                conflict |= len(self.values(kind)) > 1
             if conflict or any(fact.status == "conflict" for fact in facts):
                 for fact in facts:
                     fact.status = "conflict"
@@ -164,14 +170,16 @@ def parse_item(item: ClothingItem) -> EvidenceRecord:
         ("brand", "brand"),
         ("type", "type"),
         ("primary_color", "color"),
-        ("material", "fiber"),
         ("subtype", None),
     ):
         record.add(name, kind, getattr(item, name, None), "stored_tag")
     tags = item.tags if isinstance(item.tags, dict) else {}
+    if item.material:
+        record.add("material", "fiber", item.material, "stored_tag")
+    elif "material" in tags:
+        record.add("tags.material", "fiber", tags["material"], "stored_tag")
     for name, kind in (
         ("size", "size"),
-        ("material", "fiber"),
         ("fit", "feel"),
     ):
         if name in tags:

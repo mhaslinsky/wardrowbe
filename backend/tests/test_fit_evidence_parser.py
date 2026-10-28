@@ -104,8 +104,16 @@ def test_profile_row_locators():
         FitProfile(rev="revision"),
         "brand_sizes",
         2,
-        {"brand": "Example", "size": "M", "note": "Runs small"},
+        {"brand": "Example", "line": "Everyday", "size": "M", "note": "Runs small"},
     )
+    assert {(fact.kind, record.sources[fact.source_id].field) for fact in record.facts} == {
+        ("brand", "brand"),
+        ("line", "line"),
+        ("size", "size"),
+        ("feel", "note"),
+    }
+    assert len(record.facts) == 4
+    assert record.of_kind("feel")[0].value == {"normalized": "runs small"}
     assert all(
         source.row_key == "brand_sizes:2"
         and source.profile_rev == "revision"
@@ -180,12 +188,14 @@ def test_normalized_values_cannot_expand_past_bounds(key, count):
 
 
 def test_padding_is_stripped_before_bounds():
-    from app.services.fit_evidence_parser import EvidenceRecord
+    from app.schemas.fit_profile import FitProfile
 
-    record = EvidenceRecord("item:one", {"item_id": "one"})
-    record.add("notes.rating:0", "rating", " " * 300 + "love", "explicit_note")
-    assert record.of_kind("rating")[0].status == "known"
-    assert record.sources["item:one:notes.rating:0"].excerpt == "love"
+    record = parse_row(
+        FitProfile(rev="revision"), "brand_sizes", 0, {"brand": " " * 300 + "Example"}
+    )
+    assert record.values("brand") == {"example"}
+    assert record.of_kind("brand")[0].status == "known"
+    assert record.sources[record.of_kind("brand")[0].source_id].excerpt == "Example"
 
 
 def test_schema_bounds_normalized_values():
@@ -216,12 +226,6 @@ def test_cut_keeps_complete_entry_and_discards_partial_entry():
     assert all(fact.value is None for fact in oversized.of_kind("size"))
 
 
-def test_schema_exposes_note_truncation():
-    from app.schemas.fit_evidence import FitEvidence
-
-    assert FitEvidence.model_fields["notes_truncated"].annotation is bool
-
-
 def test_skip_reasons_and_measurements_are_sources_only():
     from app.schemas.fit_profile import FitProfile
 
@@ -231,7 +235,7 @@ def test_skip_reasons_and_measurements_are_sources_only():
         0,
         {"brand": "Example", "reason": "No pockets", "neck": "40"},
     )
-    assert record.of_kind("feel") == []
+    assert [fact.kind for fact in record.facts] == ["brand"]
     assert {source.field for source in record.sources.values()} == {"brand", "reason", "neck"}
 
 
@@ -272,4 +276,64 @@ def test_producers_follow_user_owned_fields():
         0,
         {"brand": "Example", "size": "M", "note": "Runs small"},
     )
-    assert all(fact.producer == "user" for fact in profile.facts)
+    assert profile.facts and all(fact.producer == "user" for fact in profile.facts)
+
+
+@pytest.mark.parametrize(
+    "material,composition,expected",
+    [
+        ("denim", "98% cotton, 2% elastane", [("cotton", "98"), ("elastane", "2")]),
+        ("wool", "100% merino wool", [("merino wool", "100")]),
+    ],
+)
+def test_stored_material_is_context_only(material, composition, expected):
+    record = parse_item(item(material=material, notes=f"Fabric: {composition}"))
+    assert all(fact.status == "known" for fact in record.of_kind("fiber"))
+    context = [fact for fact in record.of_kind("fiber") if fact.origin == "stored_tag"]
+    assert len(context) == 1 and context[0].value == {"name": material, "percent": None}
+    assert record.composition() == expected
+
+
+@pytest.mark.parametrize(
+    "column,tag,field", [("cotton", "cotton", "material"), (None, "cotton", "tags.material")]
+)
+def test_stored_material_is_read_once(column, tag, field):
+    garment = item(material=column)
+    garment.tags = {"material": tag}
+    record = parse_item(garment)
+    assert len(record.of_kind("fiber")) == 1
+    fact = record.of_kind("fiber")[0]
+    assert fact.value == {"name": "cotton", "percent": None} and fact.status == "known"
+    assert record.sources[fact.source_id].field == field
+    assert record.composition() is None
+
+
+@pytest.mark.parametrize(
+    "first,second",
+    [
+        ("cotton", "80% wool / 20% polyester"),
+        ("100% cotton", "cotton 80%"),
+        ("cotton", "100% cotton"),
+    ],
+)
+def test_explicit_compositions_must_agree_exactly(first, second):
+    record = parse_item(item(material="denim", notes=f"Fabric: {first} | Fabric: {second}"))
+    explicit = [fact for fact in record.of_kind("fiber") if fact.origin == "explicit_note"]
+    assert explicit and all(fact.status == "conflict" and fact.conflict_ids for fact in explicit)
+    assert record.of_kind("fiber")[0].status == "known"
+    assert record.composition() is None
+
+
+def test_profile_size_uses_profile_text_bound():
+    from app.schemas.fit_profile import BrandSize, FitProfile
+
+    row = BrandSize(brand="Example", size="M" * 40)
+    record = parse_row(FitProfile(rev="revision"), "brand_sizes", 0, row.model_dump())
+    assert record.values("size") == {"m" * 40}
+    assert record.of_kind("size")[0].status == "known"
+
+
+def test_fibers_require_their_own_accessor():
+    record = parse_item(item(notes="Fabric: 100% cotton"))
+    with pytest.raises(ValueError, match="fiber"):
+        record.values("fiber")
