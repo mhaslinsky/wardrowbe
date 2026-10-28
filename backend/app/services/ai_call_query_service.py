@@ -151,7 +151,8 @@ class AICallQueryService:
                 ItemPurchase.item_id.label("item_id"),
                 func.row_number()
                 .over(
-                    partition_by=ItemPurchase.item_id,
+                    # Keep the buy-check outcome independent of pairing and preview feedback.
+                    partition_by=(ItemPurchase.item_id, AICall.feature == "buy_check"),
                     order_by=(AICall.created_at.desc(), AICall.id.desc()),
                 )
                 .label("position"),
@@ -163,7 +164,7 @@ class AICallQueryService:
                     ClothingItem.user_id == AICall.user_id,
                     or_(
                         and_(
-                            AICall.feature == "pairing",
+                            AICall.feature.in_(("pairing", "buy_check")),
                             AICall.resource_type == "item",
                             AICall.resource_id == ClothingItem.id,
                         ),
