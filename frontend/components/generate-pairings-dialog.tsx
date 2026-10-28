@@ -28,7 +28,6 @@ interface GeneratePairingsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Images now use signed URLs from backend (item.image_url, item.thumbnail_url)
 
 export function GeneratePairingsDialog({
   item,

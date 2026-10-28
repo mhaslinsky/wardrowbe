@@ -394,7 +394,7 @@ class TestProtectedRoutes:
         ("is_active", "expected"),
         [
             pytest.param(True, (200, 404), id="active-reaches-the-file-lookup"),
-            pytest.param(False, (403, 401), id="inactive-is-refused-everywhere"),
+            pytest.param(False, (403, 403), id="inactive-is-refused-everywhere"),
         ],
     )
     async def test_deactivated_account_token_is_refused_on_every_route(

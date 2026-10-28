@@ -34,8 +34,8 @@ from app.models.outfit import Outfit, OutfitItem, OutfitStatus, UserFeedback
 from app.models.preference import UserPreference
 from app.utils.clothing import ITEM_ROLE
 from app.utils.garment_vocabulary import canonical_primary_color
+from app.utils.photo_urls import optional_image_url
 from app.utils.scales import rating_to_signed, rating_to_unit
-from app.utils.signed_urls import sign_optional
 
 logger = logging.getLogger(__name__)
 
@@ -924,7 +924,7 @@ class LearningService:
                     "name": p.item1.name,
                     "primary_color": p.item1.primary_color,
                     "thumbnail_path": p.item1.thumbnail_path,
-                    "thumbnail_url": sign_optional(p.item1.thumbnail_path),
+                    "thumbnail_url": optional_image_url(p.item1.thumbnail_path),
                 },
                 "item2": {
                     "id": str(p.item2.id),
@@ -932,7 +932,7 @@ class LearningService:
                     "name": p.item2.name,
                     "primary_color": p.item2.primary_color,
                     "thumbnail_path": p.item2.thumbnail_path,
-                    "thumbnail_url": sign_optional(p.item2.thumbnail_path),
+                    "thumbnail_url": optional_image_url(p.item2.thumbnail_path),
                 },
                 "compatibility_score": float(p.compatibility_score),
                 "times_paired": p.times_paired,

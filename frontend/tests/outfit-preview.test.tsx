@@ -328,7 +328,7 @@ it('cancels polling on unmount before another GET', async () => {
   expect(fetch).toHaveBeenCalledTimes(3);
 });
 
-it('refreshes displayed signed URLs after nine minutes without a POST', async () => {
+it('keeps stable photo URLs without an expiry refresh', async () => {
   vi.useFakeTimers();
   vi.mocked(fetch).mockResolvedValueOnce(response(saved) as Response)
     .mockResolvedValue(response({ ...saved, medium_url: '/renewed-url' }) as Response);
@@ -336,8 +336,8 @@ it('refreshes displayed signed URLs after nine minutes without a POST', async ()
   await act(async () => { fireEvent.click(screen.getByText('see')); await vi.advanceTimersByTimeAsync(1); });
   expect(screen.getByRole('img')).toHaveAttribute('src', saved.medium_url);
   await act(async () => { await vi.advanceTimersByTimeAsync(9 * 60_000 + 1); });
-  expect(screen.getByRole('img')).toHaveAttribute('src', '/renewed-url');
-  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('img')).toHaveAttribute('src', saved.medium_url);
+  expect(fetch).toHaveBeenCalledTimes(1);
   expect(vi.mocked(fetch).mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true);
 });
 

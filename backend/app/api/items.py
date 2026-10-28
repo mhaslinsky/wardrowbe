@@ -67,8 +67,8 @@ from app.services import photo_redraw_service as photos
 from app.services.image_service import ImageService
 from app.services.item_service import ItemService
 from app.utils.auth import get_current_user
+from app.utils.photo_urls import optional_image_url
 from app.utils.rate_limit import rate_limit_by_user
-from app.utils.signed_urls import sign_optional
 from app.utils.timezone import get_user_today
 from app.utils.uploads import UploadTooLargeError, read_upload_within_limit
 from app.workers.queues import IMAGE_QUEUE, TAGGING_QUEUE, queue_for_kind
@@ -1193,7 +1193,7 @@ async def _items_being_analyzed(
             item_id=row.id,
             name=row.name,
             type=row.type,
-            image_url=sign_optional(row.thumbnail_path, fallback=row.image_path),
+            image_url=optional_image_url(row.thumbnail_path, fallback=row.image_path),
             started_at=row.ai_started_at,
         )
         for row in result
@@ -1521,7 +1521,7 @@ async def get_item_history(
                         "id": str(oi.item.id),
                         "type": oi.item.type,
                         "name": oi.item.name,
-                        "thumbnail_url": sign_optional(oi.item.thumbnail_path),
+                        "thumbnail_url": optional_image_url(oi.item.thumbnail_path),
                     }
                     for oi in sorted(h.outfit.items, key=lambda x: x.position)
                 ],

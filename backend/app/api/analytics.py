@@ -13,7 +13,7 @@ from app.models.outfit import Outfit, OutfitStatus, UserFeedback
 from app.models.user import User
 from app.utils.auth import get_current_user
 from app.utils.clothing import WardrobeComposition, count_composition
-from app.utils.signed_urls import sign_optional
+from app.utils.photo_urls import optional_image_url
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -42,7 +42,7 @@ class WearStats(BaseModel):
     @computed_field
     @property
     def thumbnail_url(self) -> str | None:
-        return sign_optional(self.thumbnail_path)
+        return optional_image_url(self.thumbnail_path)
 
 
 class AcceptanceRateTrend(BaseModel):

@@ -198,18 +198,20 @@ async def delete_preview_photo(
 
 
 @router.get("/preview-photo/files/{user_id}/previews/{filename}")
-async def get_preview_file(user_id: UUID, filename: str, expires: str, sig: str, db: DbSession):
+async def get_preview_file(
+    user_id: UUID,
+    filename: str,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+):
     from sqlalchemy import select
 
     from app.models.outfit import Outfit
     from app.models.preview import OutfitPreview, PreviewPhoto, preview_file_paths
     from app.services.image_service import ImageService
-    from app.utils.signed_urls import verify_signature
 
     path = f"{user_id}/previews/{filename}"
-    if not re.fullmatch(r"[a-f0-9]{32}(?:_medium)?\.jpg", filename) or not verify_signature(
-        path, expires, sig
-    ):
+    if current_user.id != user_id or not re.fullmatch(r"[a-f0-9]{32}(?:_medium)?\.jpg", filename):
         raise HTTPException(401, "Access denied")
     records = [
         await db.get(PreviewPhoto, user_id),

@@ -50,9 +50,9 @@ from app.services.undo_wear_service import UndoWearService, undo_conflict
 from app.services.wear_service import AlreadyThis, WearService, require_wear, wear_http
 from app.services.weather_service import WeatherData
 from app.utils.auth import get_current_user
+from app.utils.photo_urls import optional_image_url
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.scales import RATING_MAX, RATING_MIN
-from app.utils.signed_urls import sign_optional
 
 logger = logging.getLogger(__name__)
 
@@ -102,17 +102,17 @@ class OutfitItemResponse(BaseModel):
     @computed_field
     @property
     def image_url(self) -> str | None:
-        return sign_optional(self.image_path)
+        return optional_image_url(self.image_path)
 
     @computed_field
     @property
     def thumbnail_url(self) -> str | None:
-        return sign_optional(self.thumbnail_path)
+        return optional_image_url(self.thumbnail_path)
 
     @computed_field
     @property
     def medium_url(self) -> str | None:
-        return sign_optional(self.medium_path)
+        return optional_image_url(self.medium_path)
 
 
 class WoreInsteadItem(BaseModel):
@@ -124,7 +124,7 @@ class WoreInsteadItem(BaseModel):
     @computed_field
     @property
     def thumbnail_url(self) -> str | None:
-        return sign_optional(self.thumbnail_path)
+        return optional_image_url(self.thumbnail_path)
 
 
 class FeedbackSummary(BaseModel):
