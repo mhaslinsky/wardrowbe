@@ -374,6 +374,8 @@
       "thisItem": "このアイテム",
       "outfitItem": "アイテム{number}",
       "sampled": "ワードローブの一部を表示しています。",
+      "showAllOutfits": "すべて表示",
+      "showFewerOutfits": "表示を減らす",
       "outfitsUnknown": "コーデの選択肢は不明です。",
       "outfitsNotApplicable": "このアイテムはコーデの対象外です。",
       "skipReason": "除外リストに一致",

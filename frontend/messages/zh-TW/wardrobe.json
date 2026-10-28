@@ -374,6 +374,8 @@
       "thisItem": "這件單品",
       "outfitItem": "單品{number}",
       "sampled": "顯示衣櫥中的部分樣本。",
+      "showAllOutfits": "顯示全部",
+      "showFewerOutfits": "收合",
       "outfitsUnknown": "搭配選擇未知。",
       "outfitsNotApplicable": "搭配不適用於此單品。",
       "skipReason": "符合排除清單",

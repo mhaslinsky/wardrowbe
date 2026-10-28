@@ -374,6 +374,8 @@
       "thisItem": "Cet article",
       "outfitItem": "Article {number}",
       "sampled": "Un échantillon de ta garde-robe est affiché.",
+      "showAllOutfits": "Tout afficher",
+      "showFewerOutfits": "Afficher moins",
       "outfitsUnknown": "Les tenues possibles sont inconnues.",
       "outfitsNotApplicable": "Les tenues ne concernent pas cet article.",
       "skipReason": "Dans la liste d’exclusions",

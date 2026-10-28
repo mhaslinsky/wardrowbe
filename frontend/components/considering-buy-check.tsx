@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useConsideringBuyCheck, useBuyCheckItems, type BuyCheckReason } from '@/lib/hooks/use-considering-buy-check';
 import { Button } from '@/components/ui/button';
+
+const OUTFIT_PREVIEW = 3;
 
 export function ConsideringBuyCheck({ itemId, itemName, disabled }: { itemId: string; itemName: string; disabled?: boolean }) {
   const t = useTranslations('wardrobe.considering.buyCheck');
@@ -13,6 +15,8 @@ export function ConsideringBuyCheck({ itemId, itemName, disabled }: { itemId: st
   useEffect(() => () => request.current?.abort(), []);
   const result = check.data;
   const itemNames = useBuyCheckItems(result, itemId);
+  const [showAll, setShowAll] = useState(false);
+  const ideas = result?.outfits.ideas ?? [];
   const error = check.isError ? 'unavailable' : result?.status === 'error'
     ? result.error === 'missing_key' || result.error === 'disabled' ? 'notConfigured' : 'unavailable'
     : null;
@@ -54,10 +58,11 @@ export function ConsideringBuyCheck({ itemId, itemName, disabled }: { itemId: st
       <div className="space-y-2 text-sm"><h4 className="font-medium">{t('outfits')}</h4>
         {result.outfits.status === 'known' ? <>
           <p>{t('outfitCount', { count: result.outfits.count! })}</p>
-          <ul className="space-y-2">{result.outfits.ideas?.map((idea, ideaIndex) => <li key={ideaIndex} className="flex flex-wrap gap-x-2 gap-y-1">
-            {idea.item_ids.map((id, itemIndex) => id === itemId ? <span key={id}>{itemName}</span> : <Link key={id} className="underline" href={`/dashboard/wardrobe?item=${encodeURIComponent(id)}`}>{itemNames.get(id) || t(id === itemId ? 'thisItem' : 'outfitItem', { number: itemIndex + 1 })}</Link>)}
+          <ul className="space-y-1" aria-label={t('outfits')}>{ideas.slice(0, showAll ? undefined : OUTFIT_PREVIEW).map((idea, ideaIndex) => <li key={ideaIndex}>
+            {idea.item_ids.filter((id) => id !== itemId).map((id, itemIndex) => <span key={id}>{itemIndex > 0 && ' + '}<Link className="underline" href={`/dashboard/wardrobe?item=${encodeURIComponent(id)}`}>{itemNames.get(id) || t('outfitItem', { number: itemIndex + 1 })}</Link></span>)}
           </li>)}</ul>
-          {(result.outfits.pool_truncated || result.outfits.idea_limit_truncated) && <p className="text-muted-foreground">{t('sampled')}</p>}
+          {ideas.length > OUTFIT_PREVIEW && <Button variant="link" className="h-auto p-0" onClick={() => setShowAll(!showAll)}>{t(showAll ? 'showFewerOutfits' : 'showAllOutfits')}</Button>}
+          {showAll && (result.outfits.pool_truncated || result.outfits.idea_limit_truncated) && <p className="text-muted-foreground">{t('sampled')}</p>}
         </> : <p>{t(result.outfits.status === 'not_applicable' ? 'outfitsNotApplicable' : 'outfitsUnknown')}</p>}
       </div>
     </div>}

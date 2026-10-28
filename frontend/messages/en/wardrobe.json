@@ -374,6 +374,8 @@
       "thisItem": "This item",
       "outfitItem": "Item {number}",
       "sampled": "Showing a sample of your closet.",
+      "showAllOutfits": "Show all",
+      "showFewerOutfits": "Show fewer",
       "outfitsUnknown": "Outfit options are unknown.",
       "outfitsNotApplicable": "Outfits don’t apply to this item.",
       "skipReason": "Skip-list match",
