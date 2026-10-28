@@ -260,7 +260,7 @@ async def test_comparison_missing_and_cross_user_never_calls(
     provider.assert_not_called()
 
 
-async def test_comparison_links_both_calls_and_preserves_like_state(
+async def test_comparison_links_both_calls_and_preserves_comment_state(
     client, auth_headers, comparison_setup, provider, db_session, telemetry, test_user
 ):
     setup = comparison_setup
@@ -313,17 +313,17 @@ async def test_comparison_links_both_calls_and_preserves_like_state(
     assert exported.json()["feedback"][0]["kind"] == "preview_comparison"
     assert exported.json()["feedback"][0]["data"]["real_photo_informed"] is True
     saved = await client.get(setup["url"], headers=auth_headers)
-    assert saved.json()["liked"] is False
-    liked = await client.post(
+    assert saved.json()["comment"] == ""
+    commented = await client.post(
         setup["url"] + "/feedback",
         headers=auth_headers,
         json={
-            "kind": "like",
+            "kind": "comment",
             "note": "Good color",
             "preview_created_at": saved.json()["created_at"],
         },
     )
-    assert liked.status_code == 200, liked.text
+    assert commented.status_code == 200, commented.text
     invalid = await client.post(
         setup["url"] + "?regenerate=true",
         headers=auth_headers,
@@ -349,8 +349,10 @@ async def test_comparison_links_both_calls_and_preserves_like_state(
     fix = next(row for row in exported_fix.json()["feedback"] if row["kind"] == "preview_fix")
     assert fix["data"]["comparison_call_id"] == str(comparison_id)
     assert fix["data"]["real_photo_informed"] is True
-    like = next(row for row in exported_fix.json()["feedback"] if row["kind"] == "preview_like")
-    assert like["data"]["real_photo_informed"] is False
-    assert like["data"]["comparison_call_id"] is None
+    comment = next(
+        row for row in exported_fix.json()["feedback"] if row["kind"] == "preview_comment"
+    )
+    assert comment["data"]["real_photo_informed"] is False
+    assert comment["data"]["comparison_call_id"] is None
     assert "Shorten the shirt hem" not in provider.call_args.args[1]
     assert "Edited hem" in provider.call_args.args[1]

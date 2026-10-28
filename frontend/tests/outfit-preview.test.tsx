@@ -40,7 +40,7 @@ const modules = import.meta.glob('../components/{outfit-preview,preview-photo-se
 const OutfitPreview = (modules['../components/outfit-preview.tsx'] as { OutfitPreview?: ComponentType<{ outfitId: string; children?: ReactNode; detail?: boolean; autoDraw?: boolean; hasRealPhoto?: boolean; cardImageUrl?: string; cardImageIsPreview?: boolean }> } | undefined)?.OutfitPreview ?? (() => null);
 const PreviewPhotoSettings = (modules['../components/preview-photo-settings.tsx'] as { PreviewPhotoSettings?: ComponentType } | undefined)?.PreviewPhotoSettings ?? (() => null);
 
-const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24' };
+const saved = { image_url: '/full.jpg', medium_url: '/medium.jpg', stale: false, created_at: '2026-10-24', comment: '' };
 const response = (data: unknown, status = 200) => ({ ok: status < 400, status, json: async () => data });
 beforeEach(() => { translation.locale = null; vi.mocked(toast.error).mockClear(); vi.mocked(fetch).mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); });
 afterEach(() => { client.clear(); vi.useRealTimers(); window.history.replaceState(null, '', window.location.pathname); });
@@ -487,55 +487,57 @@ it('restores the note dialog after a conflict and retries the same note', async 
   expect(screen.getByRole('img')).toHaveAttribute('src', '/another.jpg');
 });
 
-it.each(['', 'Great fit'])('likes a saved preview with optional note %s', async (note) => {
+it.each(['', 'Great fit'])('saves or clears a preview comment %s', async (note) => {
   vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
   render(<OutfitPreview outfitId="one" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'like' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'comment' }));
   const dialog = screen.getByRole('dialog');
-  const input = within(dialog).getByRole('textbox', { name: 'likeNote' });
+  const input = within(dialog).getByRole('textbox', { name: 'commentNote' });
   expect(input).toHaveAttribute('maxlength', '500');
   fireEvent.change(input, { target: { value: note } });
-  vi.mocked(fetch).mockResolvedValue(response({ ...saved, liked: true, like_note: note }) as Response);
-  fireEvent.click(within(dialog).getByRole('button', { name: 'like' }));
-  expect(await screen.findByRole('button', { name: 'liked' })).toHaveAttribute('aria-pressed', 'true');
-  expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview/feedback', expect.objectContaining({ method: 'POST', body: JSON.stringify({ kind: 'like', note, preview_created_at: saved.created_at }) }));
-  fireEvent.click(screen.getByRole('button', { name: 'liked' }));
-  expect(screen.getByRole('textbox', { name: 'likeNote' })).toHaveValue(note);
+  vi.mocked(fetch).mockResolvedValue(response({ ...saved, comment: note }) as Response);
+  fireEvent.click(within(dialog).getByRole('button', { name: 'save' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByRole('button', { name: 'comment' })).not.toHaveAttribute('aria-pressed');
+  if (note) expect(screen.getByText(note)).toBeVisible();
+  expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview/feedback', expect.objectContaining({ method: 'POST', body: JSON.stringify({ kind: 'comment', note, preview_created_at: saved.created_at }) }));
+  fireEvent.click(screen.getByRole('button', { name: 'comment' }));
+  expect(screen.getByRole('textbox', { name: 'commentNote' })).toHaveValue(note);
 });
 
-it('keeps the like note after a failed save', async () => {
+it('keeps the comment after a failed save', async () => {
   vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
   render(<OutfitPreview outfitId="one" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'like' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'comment' }));
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Good fit' } });
   vi.mocked(fetch).mockResolvedValue(response({ detail: 'Failed' }, 500) as Response);
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'like' }));
-  expect(await screen.findByRole('textbox', { name: 'likeNote' })).toHaveValue('Good fit');
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'save' }));
+  expect(await screen.findByRole('textbox', { name: 'commentNote' })).toHaveValue('Good fit');
   expect(await screen.findByText('failed')).toBeVisible();
 });
 
 
-it('retains the note and reports a stale preview when liking from an older tab', async () => {
+it('retains the note and reports a stale preview when commenting from an older tab', async () => {
   vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
   render(<OutfitPreview outfitId="one" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'like' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'comment' }));
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Good fit' } });
   vi.mocked(fetch).mockResolvedValue(response({ detail: 'PREVIEW_CHANGED' }, 409) as Response);
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'like' }));
-  expect(await screen.findByText('likeChanged')).toBeVisible();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'save' }));
+  expect(await screen.findByText('commentChanged')).toBeVisible();
   expect(screen.queryByText('failed')).not.toBeInTheDocument();
   expect(screen.getByRole('textbox')).toHaveValue('Good fit');
-  expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview/feedback', expect.objectContaining({ body: JSON.stringify({ kind: 'like', note: 'Good fit', preview_created_at: saved.created_at }) }));
+  expect(fetch).toHaveBeenCalledWith('/api/v1/outfits/one/preview/feedback', expect.objectContaining({ body: JSON.stringify({ kind: 'comment', note: 'Good fit', preview_created_at: saved.created_at }) }));
 });
 
 
-it.each(['PREVIEW_CHANGED', 'PREVIEW_IN_PROGRESS', undefined])('keeps like 409 outside the generic preview error: %s', async (detail) => {
+it.each(['PREVIEW_CHANGED', 'PREVIEW_IN_PROGRESS', undefined])('keeps comment 409 outside the generic preview error: %s', async (detail) => {
   vi.mocked(fetch).mockResolvedValue(response(saved) as Response);
   render(<OutfitPreview outfitId="one" />);
-  fireEvent.click(await screen.findByRole('button', { name: 'like' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'comment' }));
   vi.mocked(fetch).mockResolvedValue(response({ detail }, 409) as Response);
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'like' }));
-  expect(await screen.findByRole('textbox', { name: 'likeNote' })).toBeVisible();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'save' }));
+  expect(await screen.findByRole('textbox', { name: 'commentNote' })).toBeVisible();
   expect(screen.queryByText('failed')).not.toBeInTheDocument();
 });
 

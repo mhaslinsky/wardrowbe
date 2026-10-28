@@ -117,7 +117,7 @@ async def test_feedback_joins_owner_and_export_authors(db_session, test_user):
             PreviewFeedback(
                 user_id=test_user.id,
                 outfit_id=outfit.id,
-                kind="like",
+                kind="comment",
                 note="Nice",
                 ai_call_id=call.id,
             ),
@@ -126,7 +126,7 @@ async def test_feedback_joins_owner_and_export_authors(db_session, test_user):
     await db_session.commit()
     service = AICallQueryService(db_session)
     own = await service.get(test_user.id, call.id)
-    assert {feedback.kind for feedback in own.feedback} == {"outfit", "preview_like"}
+    assert {feedback.kind for feedback in own.feedback} == {"outfit", "preview_comment"}
     assert (
         next(feedback.data for feedback in own.feedback if feedback.kind == "outfit")["comment"]
         == "Good fit"
@@ -372,14 +372,14 @@ async def test_preview_feedback_keeps_replaced_version(
     record.usage = {"_ai_call_id": str(call_id)} if call_id else {}
     previous_time = record.created_at
     await db_session.commit()
-    await service.like(record.outfit_id, test_user.id, "Keep it", previous_time)
+    await service.comment(record.outfit_id, test_user.id, "Keep it", previous_time)
     await service.generate(record.outfit_id, test_user.id, True, "Wrong sleeves")
     feedback = list(
         await db_session.scalars(
             select(PreviewFeedback).where(PreviewFeedback.outfit_id == record.outfit_id)
         )
     )
-    assert {row.kind for row in feedback} == {"like", "fix"}
+    assert {row.kind for row in feedback} == {"comment", "fix"}
     assert all(
         row.ai_call_id == call_id and row.preview_created_at == previous_time for row in feedback
     )
@@ -493,7 +493,7 @@ async def test_export_all_users_permissions_and_exclusive_create(db_session, tes
             PreviewFeedback(
                 user_id=test_user.id,
                 outfit_id=outfit.id,
-                kind="like",
+                kind="comment",
                 note="Keep",
                 ai_call_id=preview.id,
                 preview_created_at=preview.created_at,
@@ -520,9 +520,9 @@ async def test_export_all_users_permissions_and_exclusive_create(db_session, tes
         2026, 1, 1
     )
     preview_data = {entry["kind"]: entry["data"] for entry in by_id[str(preview.id)]["feedback"]}
-    assert preview_data["preview_like"]["note"] == "Keep"
+    assert preview_data["preview_comment"]["note"] == "Keep"
     assert (
-        datetime.fromisoformat(preview_data["preview_like"]["preview_created_at"])
+        datetime.fromisoformat(preview_data["preview_comment"]["preview_created_at"])
         == preview.created_at
     )
     assert preview_data["purchase"]["state"] == "bought"

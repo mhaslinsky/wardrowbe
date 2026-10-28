@@ -43,12 +43,12 @@ class PreviewFeedback(Base):
     __tablename__ = "preview_feedback"
     __table_args__ = (
         Index(
-            "uq_preview_like",
+            "uq_preview_comment",
             "user_id",
             "outfit_id",
             "preview_created_at",
             unique=True,
-            postgresql_where=text("kind = 'like'"),
+            postgresql_where=text("kind = 'comment'"),
         ),
     )
 
@@ -92,7 +92,7 @@ def collect_deleted_preview_files(session, _context, _instances):
             path
             for feedback in session.scalars(
                 select(PreviewFeedback).where(
-                    PreviewFeedback.kind == "like", PreviewFeedback.user_id.in_(owners)
+                    PreviewFeedback.kind == "comment", PreviewFeedback.user_id.in_(owners)
                 )
             )
             if feedback not in deleted_feedback

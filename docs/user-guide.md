@@ -108,7 +108,7 @@ For just one piece, open it in Wardrobe and choose **Log wear**. Its item dialog
 
 ### Keep a photo with an outfit
 
-Open a saved outfit from **Outfits**. Under **Photo of me wearing it**, use **Add photo** to attach a photo without matching the garments again. The selected card picture appears above the outfit’s pieces on phones and computers. The source badge sits beside the outfit details. Use **Show AI preview** to open the preview and its **Redraw**, **Like**, and **Delete preview** controls. Before a preview is saved, use **AI preview** to open its creation controls. When the preview is the selected picture, opening its controls does not repeat the image. On the outfit page, expand **Photo of me wearing it** to manage the attached photo.
+Open a saved outfit from **Outfits**. Under **Photo of me wearing it**, use **Add photo** to attach a photo without matching the garments again. The selected card picture appears above the outfit’s pieces on phones and computers. The source badge sits beside the outfit details. Use **Show AI preview** to open the preview and its **Redraw**, **Comment**, and **Delete preview** controls. Before a preview is saved, use **AI preview** to open its creation controls. When the preview is the selected picture, opening its controls does not repeat the image. On the outfit page, expand **Photo of me wearing it** to manage the attached photo.
 
 Use **Show on card** to choose the picture shown in the outfit list:
 
@@ -186,9 +186,9 @@ Replacing or removing the front photo deletes saved outfit previews. Replacing i
 
 Open an outfit and select **See it on me**. Preview generation requires reference photos and an image model with an API key configured by the operator. The preview uses your reference photos for your build, along with your height, inseam, and shirt, pants, and shoe sizes. Other measurements help with fit checks and suggestions. Use **Redraw** to adjust the build to better match your photos. A generated picture is an illustration of a look; it cannot establish how an actual garment will fit.
 
-When the outfit has a real photo and an AI preview, select **Compare with my photo** and confirm the paid call. The visible differences fill **What should change?**. Edit the note, then select **Redraw**. Comparison never runs automatically. The photo-informed flag belongs to each feedback entry; a later Like on the same AI call does not carry it.
+When the outfit has a real photo and an AI preview, select **Compare with my photo** and confirm the paid call. The visible differences fill **What should change?**. Edit the note, then select **Redraw**. Comparison never runs automatically. The photo-informed flag belongs to each feedback entry; a later comment on the same AI call does not carry it.
 
-Use **Like** and the **Comments** field to say what worked and what did not. Use **Redraw** and **What should change?** to request a correction, such as a longer hem or a different shade. If the interface says **Preview is out of date**, your clothes, photos, measurements, or preferences have changed since it was made. Generate a current preview before judging the result.
+Use **Comment** and the **Comments** field to say what worked and what did not, then press **Save**. The comment appears below the preview controls. Clear the field and save to remove it. Use **Redraw** and **What should change?** to request a correction, such as a longer hem or a different shade. If the interface says **Preview is out of date**, your clothes, photos, measurements, or preferences have changed since it was made. Generate a current preview before judging the result.
 
 Under **Preview preferences**, save up to 10 lines of 120 characters each, such as “show the whole shoe.” Set **Shirts** separately to **Tucked**, **Untucked**, or **Let each outfit decide**, then choose **Save preview preferences**.
 
@@ -280,7 +280,7 @@ Sources: [Settings](../frontend/app/dashboard/settings/page.tsx), [season palett
 
 ### AI call records
 
-AI results and feedback are recorded to improve the app. These records keep prompt and image sizes and hashes, structured answers, and provider usage when available. Plain-text answers are kept only as sizes and hashes. Preview likes and redraw notes refer to the image you judged; outfit ratings and comments follow the source AI call. Older results and dropped recordings can have no linked call. Call records are deleted with your account.
+AI results and feedback are recorded to improve the app. These records keep prompt and image sizes and hashes, structured answers, and provider usage when available. Plain-text answers are kept only as sizes and hashes. Preview comments and redraw notes refer to the image you judged; outfit ratings and comments follow the source AI call. Older results and dropped recordings can have no linked call. Call records are deleted with your account.
 
 Signed-in integrations can read their own records with `GET /api/v1/ai-calls` and `GET /api/v1/ai-calls/{id}`. The list accepts `limit` (1 to 100) and returns `next_cursor` for the next page. Pass it back as `cursor`. Family membership does not grant access to another person's call records or private feedback.
 

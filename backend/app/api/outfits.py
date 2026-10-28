@@ -1609,22 +1609,22 @@ class PreviewDrawRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
-class PreviewLikeRequest(BaseModel):
+class PreviewCommentRequest(BaseModel):
     preview_created_at: datetime
-    kind: Literal["like"]
+    kind: Literal["comment"]
     note: str = Field(default="", max_length=500)
 
 
 @router.post("/{outfit_id}/preview/feedback")
-async def like_outfit_preview(
+async def comment_outfit_preview(
     outfit_id: UUID,
-    body: PreviewLikeRequest,
+    body: PreviewCommentRequest,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     from app.services.preview_service import PreviewService
 
-    return await PreviewService(db).like(
+    return await PreviewService(db).comment(
         outfit_id, current_user.id, body.note, body.preview_created_at
     )
 

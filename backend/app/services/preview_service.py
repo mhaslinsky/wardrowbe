@@ -268,7 +268,7 @@ class PreviewService:
             select(PreviewFeedback).where(
                 PreviewFeedback.user_id == record.user_id,
                 PreviewFeedback.outfit_id == record.outfit_id,
-                PreviewFeedback.kind == "like",
+                PreviewFeedback.kind == "comment",
                 PreviewFeedback.preview_created_at == record.created_at,
             )
         )
@@ -277,8 +277,7 @@ class PreviewService:
             "created_at": record.created_at,
             "stale": bool(reasons),
             "stale_reasons": reasons,
-            "liked": feedback is not None,
-            "like_note": feedback.note if feedback else "",
+            "comment": feedback.note if feedback else "",
         }
 
     async def person_inputs(
@@ -326,7 +325,7 @@ class PreviewService:
         preferences_key = preferences_hash(await self.preview_preferences(user_id))
         return await self.response(record, combined_key, key, person_key, preferences_key)
 
-    async def like(self, outfit_id, user_id, note, preview_created_at):
+    async def comment(self, outfit_id, user_id, note, preview_created_at):
         await self.outfit(outfit_id, user_id)
         await self.lock_user(user_id)
         await self.db.execute(select(Outfit.id).where(Outfit.id == outfit_id).with_for_update())
@@ -348,21 +347,27 @@ class PreviewService:
             select(PreviewFeedback).where(
                 PreviewFeedback.user_id == user_id,
                 PreviewFeedback.outfit_id == outfit_id,
-                PreviewFeedback.kind == "like",
+                PreviewFeedback.kind == "comment",
                 PreviewFeedback.preview_created_at == record.created_at,
             )
         )
+        note = note.strip()
+        if not note:
+            if feedback is not None:
+                await self.db.delete(feedback)
+            await self.db.commit()
+            return await self.saved(outfit_id, user_id)
         if feedback is None:
             feedback = PreviewFeedback(
                 user_id=user_id,
                 outfit_id=outfit_id,
-                kind="like",
+                kind="comment",
                 preview_created_at=record.created_at,
                 paths=dict(record.paths),
                 ai_call_id=linked_call_id(record.usage),
             )
             self.db.add(feedback)
-        feedback.note = note.strip()
+        feedback.note = note
         await self.db.commit()
         return await self.saved(outfit_id, user_id)
 
@@ -628,7 +633,7 @@ class PreviewService:
             )
             retained_paths = await self.db.scalars(
                 select(PreviewFeedback.paths).where(
-                    PreviewFeedback.user_id == user_id, PreviewFeedback.kind == "like"
+                    PreviewFeedback.user_id == user_id, PreviewFeedback.kind == "comment"
                 )
             )
             retained = {path for saved_paths in retained_paths for path in saved_paths.values()}
