@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Home,
   Shirt,
+  Ruler,
   ShoppingBag,
   Sparkles,
   Layers,
@@ -39,6 +40,7 @@ export function Sidebar() {
     { name: t('analytics'), href: '/dashboard/analytics', icon: BarChart3 },
     { name: t('aiLearning'), href: '/dashboard/learning', icon: Brain },
     { name: t('trips'), href: '/dashboard/trips', icon: Layers },
+    { name: t('fitProfile'), href: '/dashboard/fit-profile', icon: Ruler },
     { name: t('selfie'), href: '/dashboard/selfie', icon: Camera },
   ];
 
