@@ -19,7 +19,7 @@ async def seed(db, user, *, owned=True, profile=True):
         image_path="fixture.png",
         status=ItemStatus.ready,
         tags={"material_detail": "100% cotton", "fit": "regular"},
-        notes="Line: Everyday | Size: M | Fabric: cotton",
+        notes="Line: Everyday | Size: M | Fabric: 100% cotton",
     )
     db.add(anchor)
     await db.flush()
@@ -35,7 +35,7 @@ async def seed(db, user, *, owned=True, profile=True):
                     image_path="fixture.png",
                     status=ItemStatus.ready,
                     tags={"material_detail": "100% cotton", "fit": "regular"},
-                    notes="Line: Everyday | Size: M | Fabric: cotton | Rating: love | Works: soft",
+                    notes="Line: Everyday | Size: M | Fabric: 100% cotton | Rating: love | Works: soft",
                 )
                 for kind in ("shirt", "pants", "shoes")
             ]
