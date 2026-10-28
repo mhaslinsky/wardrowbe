@@ -337,3 +337,14 @@ def test_fibers_require_their_own_accessor():
     record = parse_item(item(notes="Fabric: 100% cotton"))
     with pytest.raises(ValueError, match="fiber"):
         record.values("fiber")
+
+
+@pytest.mark.parametrize("material", ["80% cotton", "cotton/polyester"])
+def test_stored_material_free_text_remains_one_names_only_fact(material):
+    record = parse_item(item(material=material))
+    facts = record.of_kind("fiber")
+    assert len(facts) == 1
+    assert facts[0].value == {"name": material, "percent": None}
+    assert facts[0].origin == "stored_tag" and facts[0].status == "known"
+    assert record.sources[facts[0].source_id].field == "material"
+    assert record.composition() is None
