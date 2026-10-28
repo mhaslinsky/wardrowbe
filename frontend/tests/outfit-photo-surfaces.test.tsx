@@ -6,9 +6,9 @@ import type { Outfit } from '@/lib/hooks/use-outfits';
 
 const fixture = vi.hoisted(() => ({
   id: 'look', source: 'manual', occasion: 'casual', status: 'accepted', name: 'Look',
-  card_image_choice: 'photo', card_image_url: '/photo.jpg' as string | null,
-  selfie_photo: { image_url: '/photo.jpg' },
-  items: [{ id: 'shirt', type: 'shirt', name: 'Blue shirt', thumbnail_url: '/shirt.jpg' }],
+  card_image_choice: 'photo', card_image_url: '/photos/users/me/preview-photo/files/11111111-1111-4111-8111-111111111111/previews/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_medium.jpg' as string | null,
+  selfie_photo: { image_url: '/photos/users/me/preview-photo/files/11111111-1111-4111-8111-111111111111/previews/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg' },
+  items: [{ id: 'shirt', type: 'shirt', name: 'Blue shirt', thumbnail_url: '/photos/images/11111111-1111-4111-8111-111111111111/shirt_thumb.jpg' }],
 }));
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'look' }), useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/hooks/use-outfits', () => ({
@@ -29,7 +29,7 @@ vi.mock('@/components/outfit-photo', () => ({ OutfitPhoto: () => <p>Photo contro
 
 it('history keeps its selected picture and pieces with reachable preview controls', () => {
   render(<OutfitHistoryCard outfit={fixture as Outfit} onFeedback={vi.fn()} />);
-  expect(screen.getByAltText('outfitPicture')).toHaveAttribute('src', '/photo.jpg');
+  expect(screen.getByAltText('outfitPicture')).toHaveAttribute('src', '/photos/users/me/preview-photo/files/11111111-1111-4111-8111-111111111111/previews/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_medium.jpg');
   expect(screen.getByAltText('Blue shirt')).toBeVisible();
   expect(screen.queryByRole('img', { name: 'see' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'show' }));
@@ -38,7 +38,7 @@ it('history keeps its selected picture and pieces with reachable preview control
 
 it('detail shows the selected picture and pieces with a collapsed preview', () => {
   render(<OutfitDetailPage />);
-  expect(screen.getByAltText('Look')).toHaveAttribute('src', '/photo.jpg');
+  expect(screen.getByAltText('Look')).toHaveAttribute('src', '/photos/users/me/preview-photo/files/11111111-1111-4111-8111-111111111111/previews/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_medium.jpg');
   expect(screen.getByText('Blue shirt')).toBeVisible();
   expect(screen.queryByRole('img', { name: 'see' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'show' }));
@@ -52,6 +52,6 @@ it('detail keeps photo controls inline when no card picture is selected', () => 
     expect(screen.getByText('Photo controls')).toBeVisible();
     expect(screen.getByText('Photo controls').closest('details')).toBeNull();
   } finally {
-    fixture.card_image_url = '/photo.jpg';
+    fixture.card_image_url = '/photos/users/me/preview-photo/files/11111111-1111-4111-8111-111111111111/previews/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_medium.jpg';
   }
 });
