@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConsideringSuggestionsAction } from '@/components/considering-suggestions-action';
 import { ConsideringPreviewAction } from '@/components/considering-preview-action';
+import { ConsideringBuyCheck } from '@/components/considering-buy-check';
 import { Label } from '@/components/ui/label';
 
 export default function ConsideringPage() {
@@ -68,6 +69,9 @@ export default function ConsideringPage() {
               {entry.planned_size && <p><span className="text-muted-foreground">{t('size')}: </span>{entry.planned_size}</p>}
               {source && <a className="block underline" href={source} target="_blank" rel="noopener noreferrer">{t('source')}</a>}
               {state === 'passed' && <p className="whitespace-pre-wrap break-words text-sm">{entry.passed_reason}</p>}
+              {state === 'considering' && <ConsideringBuyCheck
+                key={JSON.stringify([entry.item, entry.planned_size, entry.price, entry.currency])}
+                itemId={entry.item.id} disabled={busy || entry.item.status !== 'ready'} />}
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" disabled={busy} onClick={(event) => openDialog(entry, 'edit', event.currentTarget)}>{common('edit')}</Button>
                 {state === 'considering' ? <>
