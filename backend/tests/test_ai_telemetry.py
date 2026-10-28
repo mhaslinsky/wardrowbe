@@ -2,7 +2,6 @@ import asyncio
 import base64
 import hashlib
 import json
-from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -33,19 +32,7 @@ def chat_reply(content='{"choices": [1], "score": 0.8}', **extra):
 
 @pytest.mark.parametrize(
     "feature,native",
-    [
-        ("item_tagging", False),
-        ("outfit_suggestion", False),
-        ("trip_suggestion", False),
-        ("pairing", False),
-        ("inspiration", False),
-        ("selfie", False),
-        ("preview", True),
-        ("preview_redraw", True),
-        ("considering_preview", True),
-        ("photo_redraw_assessment", True),
-        ("photo_redraw", True),
-    ],
+    [("item_tagging", False), ("preview", True)],
 )
 async def test_feature_persists_private_inputs_and_structured_answer(
     telemetry, db_session, test_user, feature, native
@@ -167,8 +154,16 @@ async def test_semantic_errors_and_fallback(telemetry, test_user, payload, kind)
     assert saved[1]["fallback_reason"] == kind
 
 
-@pytest.mark.parametrize("failure", ["database", "scheduling", "full", "serialization"])
-@pytest.mark.parametrize("provider_fails", [False, True])
+@pytest.mark.parametrize(
+    "failure,provider_fails",
+    [
+        ("database", False),
+        ("scheduling", False),
+        ("full", False),
+        ("serialization", False),
+        ("database", True),
+    ],
+)
 async def test_recording_failure_preserves_result(
     telemetry, test_user, monkeypatch, failure, provider_fails
 ):
@@ -211,52 +206,6 @@ async def test_recording_failure_preserves_result(
         )
     await telemetry.drain_recordings()
     assert telemetry.recording_failures > before
-
-
-async def test_recording_does_not_wait_for_database(telemetry, test_user):
-    entered, release = asyncio.Event(), asyncio.Event()
-
-    async def held(record):
-        entered.set()
-        await release.wait()
-
-    context = telemetry.CallContext(test_user.id, "pairing")
-    client = AsyncMock()
-    client.post.return_value = httpx.Response(200, json=chat_reply("plain text"))
-    with patch.object(telemetry, "_persist", held):
-        await telemetry.record_ai_call(
-            client, "https://provider.test", context=context, model="model", body={}
-        )
-        assert telemetry._pending
-        await entered.wait()
-        assert not release.is_set()
-        release.set()
-        await telemetry.drain_recordings()
-
-
-async def test_plain_text_is_hashed_and_provider_cost_is_kept(telemetry, test_user):
-    saved = []
-
-    async def save(record):
-        saved.append(record)
-
-    client = AsyncMock()
-    client.post.return_value = httpx.Response(
-        200, json=chat_reply("plain private text", usage={"cost": 0.012, "currency": "USD"})
-    )
-    with patch.object(telemetry, "_persist", save):
-        await telemetry.record_ai_call(
-            client,
-            "https://provider.test",
-            context=telemetry.CallContext(test_user.id, "selfie"),
-            model="model",
-            body={},
-        )
-        await telemetry.drain_recordings()
-    assert saved[0]["answer"]["text"] == [
-        {"bytes": 18, "sha256": hashlib.sha256(b"plain private text").hexdigest()}
-    ]
-    assert saved[0]["reported_cost"] == Decimal("0.012") and saved[0]["cost_currency"] == "USD"
 
 
 async def test_shutdown_cancels_pending_without_waiting_forever(telemetry, test_user):

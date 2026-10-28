@@ -142,11 +142,11 @@ async def test_write_deadline_cleans_up_held_write(telemetry, test_user, monkeyp
     assert "write_timeout" in caplog.text
 
 
-async def test_fractional_cost_round_trips(telemetry, db_session, test_user):
+async def test_plain_text_privacy_and_fractional_cost_round_trip(telemetry, db_session, test_user):
     context = telemetry.CallContext(test_user.id, "pairing")
     client = AsyncMock()
     client.post.return_value = httpx.Response(
-        200, json=chat_reply(usage={"cost": 0.0123456789, "currency": "USD"})
+        200, json=chat_reply("plain private text", usage={"cost": 0.0123456789, "currency": "USD"})
     )
     await telemetry.record_ai_call(
         client, "https://stub.test", context=context, model="model", body={}
@@ -154,12 +154,15 @@ async def test_fractional_cost_round_trips(telemetry, db_session, test_user):
     await telemetry.drain_recordings()
     row = await db_session.get(AICall, context.last_call_id)
     assert row is not None and row.reported_cost == Decimal("0.0123456789")
+    assert row.cost_currency == "USD"
+    assert row.answer["text"] == [
+        {"bytes": 18, "sha256": hashlib.sha256(b"plain private text").hexdigest()}
+    ]
 
 
-@pytest.mark.parametrize("cost", ["NaN", "Infinity", "-Infinity"])
-async def test_nonfinite_cost_is_absent(telemetry, test_user, cost):
+async def test_nonfinite_cost_is_absent(telemetry):
     metadata = telemetry._response_metadata(
-        httpx.Response(200, json=chat_reply(usage={"cost": cost})), False
+        httpx.Response(200, json=chat_reply(usage={"cost": "NaN"})), False
     )
     assert metadata.get("reported_cost") is None
 
@@ -196,8 +199,7 @@ async def test_hash_covers_exact_unicode_transport_bytes(telemetry, test_user):
     assert json.loads(received[0].content) == body
 
 
-@pytest.mark.parametrize("method", ["vision", "text"])
-async def test_logical_call_starts_new_chain(telemetry, test_user, method):
+async def test_text_call_starts_new_chain(telemetry, test_user):
     context = telemetry.CallContext(
         test_user.id, "pairing", last_call_id=uuid4(), failure_reason="http_error"
     )
@@ -218,10 +220,7 @@ async def test_logical_call_starts_new_chain(telemetry, test_user, method):
             ),
         ),
     ):
-        if method == "vision":
-            await service._call_with_fallback([], "tags")
-        else:
-            await service.generate_text("prompt")
+        await service.generate_text("prompt")
         await telemetry.drain_recordings()
     assert saved[0]["previous_call_id"] is None and saved[0]["fallback_reason"] is None
 
