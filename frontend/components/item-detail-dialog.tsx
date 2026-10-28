@@ -102,7 +102,7 @@ interface EditForm {
   primary_color: string;
   notes: string;
   favorite: boolean;
-  wash_interval: number | undefined;
+  wash_interval: number | null;
 }
 
 function editFormFromItem(item: Item): EditForm {
@@ -116,7 +116,7 @@ function editFormFromItem(item: Item): EditForm {
     primary_color: item.primary_color || '',
     notes: item.notes || '',
     favorite: item.favorite,
-    wash_interval: item.wash_interval ?? undefined,
+    wash_interval: item.wash_interval ?? null,
   };
 }
 
@@ -150,7 +150,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     primary_color: '',
     notes: '',
     favorite: false,
-    wash_interval: undefined,
+    wash_interval: null,
   });
   const [showWashHistory, setShowWashHistory] = useState(false);
   const [showWearHistory, setShowWearHistory] = useState(false);
@@ -202,6 +202,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           primary_color: editForm.primary_color || undefined,
           notes: editForm.notes || undefined,
           favorite: editForm.favorite,
+          // A blank interval must reach the server as null to remove the override.
           wash_interval: editForm.wash_interval,
         },
       });
@@ -783,7 +784,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       min={1}
                       max={100}
                       value={editForm.wash_interval ?? ''}
-                      onChange={(e) => setEditForm({ ...editForm, wash_interval: e.target.value ? parseInt(e.target.value) : undefined })}
+                      onChange={(e) => setEditForm({ ...editForm, wash_interval: e.target.value ? Number(e.target.value) : null })}
                       placeholder={t('placeholders.washIntervalDefault', { count: item.effective_wash_interval })}
                     />
                     <p className="text-xs text-muted-foreground">
@@ -801,7 +802,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     <Button
                       className="flex-1"
                       onClick={handleSave}
-                      disabled={updateItem.isPending}
+                      disabled={updateItem.isPending || (editForm.wash_interval !== null && (!Number.isInteger(editForm.wash_interval) || editForm.wash_interval < 1 || editForm.wash_interval > 100))}
                     >
                       {updateItem.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
