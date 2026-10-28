@@ -213,5 +213,22 @@
     "actions": "Actions",
     "never": "Never",
     "revoke": "Revoke"
+  },
+  "colorSeason": {
+    "label": "Color season",
+    "notSet": "Not set",
+    "help": "Find your season on ColorWise.",
+    "deep-winter": "Deep Winter",
+    "cool-winter": "Cool Winter",
+    "clear-winter": "Clear Winter",
+    "deep-autumn": "Deep Autumn",
+    "warm-autumn": "Warm Autumn",
+    "soft-autumn": "Soft Autumn",
+    "light-spring": "Light Spring",
+    "warm-spring": "Warm Spring",
+    "clear-spring": "Clear Spring",
+    "light-summer": "Light Summer",
+    "cool-summer": "Cool Summer",
+    "soft-summer": "Soft Summer"
   }
 }

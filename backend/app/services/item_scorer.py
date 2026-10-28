@@ -3,6 +3,7 @@ from datetime import date
 from statistics import median
 from uuid import UUID
 
+from app.data.color_seasons import COLOR_SEASONS, NEAR_FACE_TYPES, stored_color_season
 from app.models.item import ClothingItem
 from app.models.preference import UserPreference
 from app.services.weather_service import WeatherData
@@ -325,6 +326,14 @@ def _preference_score(
         if color and color in avoid_colors:
             score -= 0.3
 
+        season = stored_color_season(preferences.style_profile)
+        if season and item.type in NEAR_FACE_TYPES and color not in fav_colors + avoid_colors:
+            palette = COLOR_SEASONS[season]
+            if color in palette["best"]:
+                score += 0.05
+            elif color in palette["avoid"]:
+                score -= 0.05
+
     if learned:
         learned_favs = [c.lower() for c in learned.get("learned_favorite_colors", [])]
         learned_avoids = [c.lower() for c in learned.get("learned_avoid_colors", [])]
@@ -438,6 +447,12 @@ def score_items(
     items = [item for item in items if is_outfit_type(item.type)]
     if len(items) < MIN_ITEMS_FOR_SCORING:
         scored = [ScoredItem(item=item) for item in items]
+        if preferences and stored_color_season(preferences.style_profile):
+            for entry in scored:
+                if entry.item.type in NEAR_FACE_TYPES:
+                    entry.preference_score = _preference_score(entry.item, preferences, learned_prefs)
+                    entry.score = entry.preference_score
+            scored.sort(key=lambda entry: entry.score, reverse=True)
         return _sort_mandatory_first(scored, mandatory_item_ids)
 
     avoid_days = DEFAULT_AVOID_REPEAT_DAYS

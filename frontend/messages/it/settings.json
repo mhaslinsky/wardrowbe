@@ -213,5 +213,22 @@
     "actions": "Azioni",
     "never": "Mai",
     "revoke": "Revoca"
+  },
+  "colorSeason": {
+    "label": "Stagione cromatica",
+    "notSet": "Non impostata",
+    "help": "Trova la tua stagione su ColorWise.",
+    "deep-winter": "Inverno profondo",
+    "cool-winter": "Inverno freddo",
+    "clear-winter": "Inverno brillante",
+    "deep-autumn": "Autunno profondo",
+    "warm-autumn": "Autunno caldo",
+    "soft-autumn": "Autunno tenue",
+    "light-spring": "Primavera chiara",
+    "warm-spring": "Primavera calda",
+    "clear-spring": "Primavera brillante",
+    "light-summer": "Estate chiara",
+    "cool-summer": "Estate fredda",
+    "soft-summer": "Estate tenue"
   }
 }

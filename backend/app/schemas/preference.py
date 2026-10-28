@@ -2,6 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field
 
+from app.data.color_seasons import ColorSeason
 from app.schemas.color import ColorList
 from app.schemas.outfit import Occasion
 from app.utils.preference_defaults import (
@@ -62,6 +63,8 @@ class AIEndpoint(BaseModel):
 
 
 class StyleProfile(BaseModel):
+    color_season: ColorSeason | None = None
+
     casual: int = Field(
         default=DEFAULT_STYLE_SCORE,
         ge=STYLE_SCORE_MIN,

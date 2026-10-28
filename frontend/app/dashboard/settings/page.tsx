@@ -514,7 +514,7 @@ export default function SettingsPage() {
     setHasChanges(true);
   };
 
-  const updateStyleProfile = (key: keyof StyleProfile, value: number) => {
+  const updateStyleProfile = (key: keyof StyleProfile, value: number | StyleProfile['color_season']) => {
     setFormData((prev) => ({
       ...prev,
       style_profile: {
@@ -814,6 +814,30 @@ export default function SettingsPage() {
               selected={formData.color_avoid || []}
               onChange={(colors) => updateField('color_avoid', colors)}
             />
+            <div className="space-y-2">
+              <Label htmlFor="color-season">{t('colorSeason.label')}</Label>
+              <select
+                id="color-season"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={formData.style_profile?.color_season || ''}
+                onChange={(event) => updateStyleProfile(
+                  'color_season', event.target.value as StyleProfile['color_season'] || null,
+                )}
+              >
+                <option value="">{t('colorSeason.notSet')}</option>
+                {([
+                  'deep-winter', 'cool-winter', 'clear-winter',
+                  'deep-autumn', 'warm-autumn', 'soft-autumn',
+                  'light-spring', 'warm-spring', 'clear-spring',
+                  'light-summer', 'cool-summer', 'soft-summer',
+                ] as const).map((season) => (
+                  <option key={season} value={season}>{t(`colorSeason.${season}`)}</option>
+                ))}
+              </select>
+              <a className="block text-sm text-muted-foreground underline" href="https://colorwise.me/" target="_blank" rel="noopener noreferrer">
+                {t('colorSeason.help')}
+              </a>
+            </div>
           </CardContent>
         </Card>
 

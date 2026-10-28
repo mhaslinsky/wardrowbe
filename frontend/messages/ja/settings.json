@@ -213,5 +213,22 @@
     "actions": "操作",
     "never": "未使用",
     "revoke": "無効化"
+  },
+  "colorSeason": {
+    "label": "パーソナルカラー",
+    "notSet": "未設定",
+    "help": "ColorWiseで自分のシーズンを調べる。",
+    "deep-winter": "ディープウィンター",
+    "cool-winter": "クールウィンター",
+    "clear-winter": "クリアウィンター",
+    "deep-autumn": "ディープオータム",
+    "warm-autumn": "ウォームオータム",
+    "soft-autumn": "ソフトオータム",
+    "light-spring": "ライトスプリング",
+    "warm-spring": "ウォームスプリング",
+    "clear-spring": "クリアスプリング",
+    "light-summer": "ライトサマー",
+    "cool-summer": "クールサマー",
+    "soft-summer": "ソフトサマー"
   }
 }
