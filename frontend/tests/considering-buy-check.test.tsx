@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import ConsideringPage from '@/app/dashboard/considering/page';
@@ -140,12 +140,24 @@ it('sends one paid request for two clicks before a render and aborts it on unmou
   expect(signals.every(signal => signal.aborted)).toBe(true);
   finish?.();
 });
-it('renders anchor citations and outfit entries as plain item names', async () => {
+it('renders anchor citations as plain item names and outfit entries as owned-item links', async () => {
   result.minuses = [{ kind: 'few_outfits', citations: [{ source_id: 'closet:outfits', item_id: 'candidate', field: 'closet.outfits_completed.count', value: 1 }] }];
   await open(); await check(); await screen.findByText(key('few_outfits'));
-  expect(screen.getAllByText('Linen shirt').length).toBeGreaterThan(1);
+  expect(screen.getByText((_, element) => element?.tagName === 'SPAN' && element.textContent === 'Linen shirt: 1')).toBeInTheDocument();
   expect(document.querySelector('a[href="/dashboard/wardrobe?item=candidate"]')).toBeNull();
   expect(screen.getAllByRole('link', { name: 'Buck Mason tee' }).length).toBeGreaterThan(0);
+});
+it('lists three outfit ideas without the candidate until Show all is pressed', async () => {
+  const ideas = Array.from({ length: 5 }, (_, index) => ({ item_ids: ['candidate', `owned-${index}`] }));
+  result.outfits = { status: 'known', count: 5, ideas };
+  await open(); await check();
+  const list = await screen.findByRole('list', { name: key('outfits') });
+  expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+  expect(within(list).queryByText('Linen shirt')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: key('showAllOutfits') }));
+  expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+  fireEvent.click(screen.getByRole('button', { name: key('showFewerOutfits') }));
+  expect(within(list).getAllByRole('listitem')).toHaveLength(3);
 });
 it('names the Check button with its item while keeping the visible label short', async () => {
   await open();
