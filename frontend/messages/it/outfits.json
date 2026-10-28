@@ -242,7 +242,10 @@
     "redrawConflict": "Un’altra anteprima è in corso. Riprova tra poco.",
     "clothesChanged": "Vestiti modificati",
     "personChanged": "Le tue foto o misure sono cambiate",
-    "preferencesChanged": "Creato con preferenze precedenti"
+    "preferencesChanged": "Creato con preferenze precedenti",
+    "show": "Mostra anteprima IA",
+    "hide": "Nascondi anteprima IA",
+    "title": "Anteprima IA"
   },
   "photo": {
     "title": "Foto di me con questo outfit",

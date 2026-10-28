@@ -13,7 +13,8 @@
     "tip": "Tipp:",
     "update": "Aktualisieren",
     "viewItemDetails": "Stückdetails ansehen",
-    "woreInstead": "Stattdessen getragen:"
+    "woreInstead": "Stattdessen getragen:",
+    "outfitPicture": "Outfitbild"
   },
   "empty": {
     "description": "Dein Outfit-Empfehlungsverlauf erscheint hier, sobald du Vorschläge erhältst.",

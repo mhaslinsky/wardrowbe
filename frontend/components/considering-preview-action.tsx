@@ -57,7 +57,7 @@ function PreviewPicker({ itemId, close, saved }: { itemId: string; close: () => 
   const available = items.data?.items.filter(item => item.status === 'ready') ?? [];
   return <div className="space-y-4">
     {outfitId ? <>
-      <OutfitPreview outfitId={outfitId} autoDraw />
+      <OutfitPreview outfitId={outfitId} cardImageIsPreview={false} autoDraw />
       <Link className="block underline" href={`/dashboard/outfits/${outfitId}`}>{t('savedPreview')}</Link>
       <Button variant="outline" onClick={() => { setOutfitId(null); create.reset(); }}>{t('chooseAgain')}</Button>
     </> : <>

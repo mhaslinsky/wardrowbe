@@ -111,8 +111,8 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect, hi
   const dirtyCount = outfit.items.filter(item => item.needs_wash).length;
   const overflow = outfit.items.length - visibleItems.length;
 
-  const handleCheckboxClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCheckboxClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
   };
 
   const handleCardClick = selectMode
@@ -129,7 +129,10 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect, hi
       onClick={handleCardClick}
     >
       <CardContent className="p-0">
-        <div className="relative aspect-[5/4] bg-muted">
+        {outfit.card_image_url && <div className="relative aspect-[5/4] bg-muted">
+          <Image unoptimized src={outfit.card_image_url} alt={getTitle(outfit)} fill className="object-contain" sizes="(max-width: 640px) 100vw, 33vw" />
+        </div>}
+        <div className={cn('relative bg-muted', outfit.card_image_url ? 'h-24' : 'aspect-[5/4]')}>
           {selectMode && (
             <div
               className="absolute top-2 left-2 z-10"
@@ -142,9 +145,7 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect, hi
               />
             </div>
           )}
-          {outfit.card_image_url ? (
-            <Image unoptimized src={outfit.card_image_url} alt={getTitle(outfit)} fill className="object-contain" sizes="(max-width: 640px) 100vw, 33vw" />
-          ) : <div className="absolute inset-0 grid gap-0.5 p-2" style={{ gridTemplateColumns: `repeat(${Math.min(outfit.items.length || 1, 4)}, minmax(0, 1fr))`, gridTemplateRows: outfit.items.length > 4 ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)' }}>
+          <div className="absolute inset-0 grid gap-0.5 p-2" style={{ gridTemplateColumns: `repeat(${Math.min(outfit.items.length || 1, 4)}, minmax(0, 1fr))`, gridTemplateRows: outfit.items.length > 4 ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)' }}>
             {visibleItems.map((item, idx) => (
               <div
                 key={`${item.id}-${idx}`}
@@ -181,11 +182,13 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect, hi
                 </span>
               </div>
             )}
-          </div>}
+          </div>
+        </div>
+        <div className="p-3 space-y-1">
           {badge && (
             <div
               className={cn(
-                'absolute top-2 right-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium',
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium',
                 badge.className
               )}
             >
@@ -193,8 +196,6 @@ export function OutfitCard({ outfit, onClick, selectMode, selected, onSelect, hi
               <span>{badge.label}</span>
             </div>
           )}
-        </div>
-        <div className="p-3 space-y-1">
           {!hideWashWarnings && dirtyCount > 0 && <p className="text-xs text-amber-700">{t('piecesInWash', { count: dirtyCount })}</p>}
           {outfit.wear_count != null && outfit.wear_count > 0 && (
             <p className="text-xs text-muted-foreground">{t('wearCount', { count: outfit.wear_count })}</p>

@@ -13,7 +13,8 @@
     "tip": "팁:",
     "update": "수정",
     "viewItemDetails": "아이템 상세보기",
-    "woreInstead": "대신 입은 옷:"
+    "woreInstead": "대신 입은 옷:",
+    "outfitPicture": "코디 사진"
   },
   "empty": {
     "description": "코디 추천을 받기 시작하면 여기에 기록이 표시돼요.",

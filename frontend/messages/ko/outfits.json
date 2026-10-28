@@ -242,7 +242,10 @@
     "redrawConflict": "다른 미리보기를 생성 중입니다. 잠시 후 다시 시도하세요.",
     "clothesChanged": "옷이 변경되었습니다",
     "personChanged": "사진 또는 신체 치수가 변경되었습니다",
-    "preferencesChanged": "이전 설정으로 생성됨"
+    "preferencesChanged": "이전 설정으로 생성됨",
+    "show": "AI 미리보기 표시",
+    "hide": "AI 미리보기 숨기기",
+    "title": "AI 미리보기"
   },
   "photo": {
     "title": "착용 사진",

@@ -13,7 +13,8 @@
     "tip": "ヒント：",
     "update": "更新",
     "viewItemDetails": "アイテム詳細を見る",
-    "woreInstead": "代わりに着たもの："
+    "woreInstead": "代わりに着たもの：",
+    "outfitPicture": "コーディネートの画像"
   },
   "empty": {
     "description": "コーデの提案を受け始めると、ここに推薦履歴が表示されます。",

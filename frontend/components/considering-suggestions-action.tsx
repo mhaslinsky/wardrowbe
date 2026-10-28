@@ -34,7 +34,7 @@ function Suggestions({ itemId, close }: { itemId: string; close: () => void }) {
     {generation.isPending && <p role="status">{common('loading')}</p>}
     {generation.isError && <p role="alert">{t(aiDisabled ? 'aiDisabled' : 'failed')}</p>}
     <div className="grid gap-4 sm:grid-cols-3">
-      {generation.data?.map(outfit => <OutfitPreview key={outfit.id} outfitId={outfit.id}>
+      {generation.data?.map(outfit => <OutfitPreview key={outfit.id} outfitId={outfit.id} cardImageIsPreview={false}>
         <OutfitCard outfit={outfit} />
       </OutfitPreview>)}
     </div>

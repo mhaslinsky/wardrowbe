@@ -13,7 +13,8 @@
     "tip": "Tip:",
     "update": "Update",
     "viewItemDetails": "View item details",
-    "woreInstead": "Wore instead:"
+    "woreInstead": "Wore instead:",
+    "outfitPicture": "Outfit picture"
   },
   "empty": {
     "description": "Your outfit recommendation history will appear here once you start receiving suggestions.",

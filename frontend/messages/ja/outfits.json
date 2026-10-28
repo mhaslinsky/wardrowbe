@@ -242,7 +242,10 @@
     "redrawConflict": "別のプレビューを生成中です。少し待って再試行してください。",
     "clothesChanged": "服が変更されました",
     "personChanged": "写真またはサイズが変更されました",
-    "preferencesChanged": "以前の設定で作成"
+    "preferencesChanged": "以前の設定で作成",
+    "show": "AIプレビューを表示",
+    "hide": "AIプレビューを非表示",
+    "title": "AIプレビュー"
   },
   "photo": {
     "title": "着用写真",
