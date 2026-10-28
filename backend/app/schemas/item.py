@@ -9,7 +9,7 @@ from app.models.item import ProcessingKind, TaggingStatus
 from app.schemas.color import ColorList, ColorName
 from app.schemas.outfit import Occasion
 from app.utils.garment_vocabulary import DEFAULT_WASH_INTERVALS
-from app.utils.signed_urls import sign_image_url, sign_optional
+from app.utils.photo_urls import image_url, optional_image_url
 
 
 class ItemTags(BaseModel):
@@ -152,7 +152,7 @@ class ItemResponse(ItemBase):
     @property
     def photo_choices(self) -> dict[str, str]:
         return {
-            name: sign_image_url(paths["image_path"])
+            name: image_url(paths["image_path"])
             for name in ("original", "redrawn")
             if (paths := (self.photo_redraw or {}).get(name))
         }
@@ -160,17 +160,17 @@ class ItemResponse(ItemBase):
     @computed_field
     @property
     def image_url(self) -> str:
-        return sign_image_url(self.image_path)
+        return image_url(self.image_path)
 
     @computed_field
     @property
     def thumbnail_url(self) -> str | None:
-        return sign_optional(self.thumbnail_path)
+        return optional_image_url(self.thumbnail_path)
 
     @computed_field
     @property
     def medium_url(self) -> str | None:
-        return sign_optional(self.medium_path)
+        return optional_image_url(self.medium_path)
 
     @computed_field
     @property
@@ -392,17 +392,17 @@ class ItemImageResponse(BaseModel):
     @computed_field
     @property
     def image_url(self) -> str:
-        return sign_image_url(self.image_path)
+        return image_url(self.image_path)
 
     @computed_field
     @property
     def thumbnail_url(self) -> str | None:
-        return sign_optional(self.thumbnail_path)
+        return optional_image_url(self.thumbnail_path)
 
     @computed_field
     @property
     def medium_url(self) -> str | None:
-        return sign_optional(self.medium_path)
+        return optional_image_url(self.medium_path)
 
 
 class ReorderImagesRequest(BaseModel):

@@ -7,7 +7,7 @@ import { createQueryClient } from '@/lib/query-client';
 import { translationMock } from './setup';
 import savedLook from './fixtures/inspiration-look.json';
 
-// Captured from the PER-184 CT107 browser upload, with signed image queries removed.
+// Captured inspiration response with image query strings removed.
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 let client: ReturnType<typeof createQueryClient>;
 let looks: typeof savedLook[];

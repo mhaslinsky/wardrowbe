@@ -22,8 +22,8 @@ from app.services.pairing_service import (
 )
 from app.services.studio_service import ItemOwnershipError
 from app.utils.auth import get_current_user
+from app.utils.photo_urls import image_url, optional_image_url
 from app.utils.rate_limit import rate_limit_by_user
-from app.utils.signed_urls import sign_image_url, sign_optional
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +47,12 @@ class SourceItemResponse(BaseModel):
     @computed_field
     @property
     def image_url(self) -> str:
-        return sign_image_url(self.image_path)
+        return image_url(self.image_path)
 
     @computed_field
     @property
     def thumbnail_url(self) -> str | None:
-        return sign_optional(self.thumbnail_path)
+        return optional_image_url(self.thumbnail_path)
 
 
 class PairingItemResponse(BaseModel):
@@ -70,12 +70,12 @@ class PairingItemResponse(BaseModel):
     @computed_field
     @property
     def image_url(self) -> str:
-        return sign_image_url(self.image_path)
+        return image_url(self.image_path)
 
     @computed_field
     @property
     def thumbnail_url(self) -> str | None:
-        return sign_optional(self.thumbnail_path)
+        return optional_image_url(self.thumbnail_path)
 
 
 class FeedbackSummary(BaseModel):

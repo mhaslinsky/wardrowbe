@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
@@ -24,6 +24,7 @@ from app.services.image_service import ImageService
 from app.services.photo_redraw_service import PhotoRedrawService
 from app.services.preview_service import PreviewService
 from tests.migration_helpers import migration_downgrade
+from tests.photo_helpers import backend_url
 from tests.test_image_undo_replace import _jpeg_bytes, _make_item
 
 PHOTO = "/api/v1/users/me/preview-photo"
@@ -128,22 +129,23 @@ async def test_overshirt_preview_keeps_the_mid_layer_over_a_base_top(
 async def test_reference_roundtrip_private_and_delete(
     client, auth_headers, preview_setup, monkeypatch
 ):
-    monkeypatch.setattr("app.utils.signed_urls.time.time", lambda: 1000)
     assert (await client.get(PHOTO, headers=auth_headers)).json() == {"detail": "NO_PREVIEW_PHOTO"}
     photo = await upload(client, auth_headers)
-    assert parse_qs(urlsplit(photo["image_url"]).query)["expires"] == ["1600"]
+    assert photo["image_url"].startswith("/photos/users/me/preview-photo/files/")
     assert stable_response(
         (await client.get(PHOTO, headers=auth_headers)).json()
     ) == stable_response(photo)
-    medium = await client.get(photo["medium_url"])
+    medium = await client.get(backend_url(photo["medium_url"]), headers=auth_headers)
     assert medium.status_code == 200
     assert medium.headers["content-type"] == "image/jpeg"
     assert max(Image.open(BytesIO(medium.content)).size) == 800
-    assert (await client.get(photo["medium_url"].replace("sig=", "sig=invalid"))).status_code == 401
+    assert (await client.get(backend_url(photo["medium_url"]))).status_code == 401
     generic_url = photo["image_url"].replace("users/me/preview-photo/files", "images")
-    assert (await client.get(generic_url, headers=auth_headers)).status_code == 404
+    assert (await client.get(backend_url(generic_url), headers=auth_headers)).status_code == 404
     assert (await client.delete(PHOTO, headers=auth_headers)).status_code == 204
-    assert (await client.get(photo["image_url"])).status_code == 404
+    assert (
+        await client.get(backend_url(photo["image_url"]), headers=auth_headers)
+    ).status_code == 404
     assert (await client.get(PHOTO, headers=auth_headers)).status_code == 404
 
 
@@ -197,7 +199,9 @@ async def test_cache_regenerate_stale_and_prompt(
     regenerated = await client.post(url + "?regenerate=true", headers=auth_headers)
     assert regenerated.status_code == 200 and provider.await_count == 2
     assert regenerated.json()["image_url"] != first.json()["image_url"]
-    assert (await client.get(first.json()["image_url"])).status_code == 404
+    assert (
+        await client.get(backend_url(first.json()["image_url"]), headers=auth_headers)
+    ).status_code == 404
     await db_session.execute(
         text("UPDATE outfit_items SET layer_type = 'outer' WHERE outfit_id = :id"),
         {"id": preview_setup["outfit"]},
@@ -275,7 +279,9 @@ async def test_failure_keeps_previous(
     assert stable_response(
         (await client.get(preview_setup["url"], headers=auth_headers)).json()
     ) == stable_response(first.json())
-    assert (await client.get(first.json()["image_url"])).status_code == 200
+    assert (
+        await client.get(backend_url(first.json()["image_url"]), headers=auth_headers)
+    ).status_code == 200
     if failure == "http":
         assert "Preview failed: HTTPStatusError status=503" in caplog.text
         assert "private body" not in caplog.text
@@ -329,13 +335,18 @@ async def test_cleanup(action, client, auth_headers, preview_setup, provider, db
     else:
         await db_session.delete(await db_session.get(User, preview_setup["user"]))
         await db_session.commit()
-    assert (await client.get(saved["image_url"])).status_code == 404
+    expected_status = 401 if action == "user-delete" else 404
+    assert (
+        await client.get(backend_url(saved["image_url"]), headers=auth_headers)
+    ).status_code == expected_status
     if action == "outfit-delete":
         assert sum(path.exists() for path in files) == 2
     else:
         assert all(not path.exists() for path in files)
     if action != "outfit-delete":
-        assert (await client.get(photo["image_url"])).status_code == 404
+        assert (
+            await client.get(backend_url(photo["image_url"]), headers=auth_headers)
+        ).status_code == expected_status
 
 
 async def test_inflight_across_sessions(
@@ -601,7 +612,9 @@ async def test_r1_failed_commit_keeps_old_files(
         )
     assert response.status_code == 502
     assert set(folder.glob("*.jpg")) == before
-    assert (await client.get(old["image_url"])).status_code == 200
+    assert (
+        await client.get(backend_url(old["image_url"]), headers=auth_headers)
+    ).status_code == 200
     assert "Preview failed: RuntimeError status=None" in caplog.text
     assert "private request body" not in caplog.text
 
@@ -707,24 +720,26 @@ async def upload_angle(client, headers, angle, color):
 async def test_angles_front_only_and_migrated_reference(
     client, auth_headers, preview_setup, db_session, provider, monkeypatch
 ):
-    signing_clock = SimpleNamespace(time=lambda: 1000)
-    monkeypatch.setattr("app.utils.signed_urls.time", signing_clock)
     photo = await upload(client, auth_headers)
-    signing_clock.time = lambda: 1001
     response = (await client.get(PHOTO, headers=auth_headers)).json()
     assert set(response["photos"]) == {"front"}
     uploaded_url = urlsplit(photo["image_url"])
     fetched_url = urlsplit(response["photos"]["front"]["image_url"])
-    assert parse_qs(uploaded_url.query)["expires"] == ["1600"]
-    assert parse_qs(fetched_url.query)["expires"] == ["1601"]
+    assert uploaded_url.query == fetched_url.query == ""
     assert fetched_url.path == uploaded_url.path
-    assert (await client.get(response["photos"]["front"]["image_url"])).status_code == 200
+    assert (
+        await client.get(
+            backend_url(response["photos"]["front"]["image_url"]), headers=auth_headers
+        )
+    ).status_code == 200
     async with migration_downgrade(db_session, "e187a1b2c3d4"):
         paths = await db_session.scalar(text("SELECT paths FROM preview_photos"))
         assert "image_path" in paths and "front" not in paths
     paths = await db_session.scalar(text("SELECT paths FROM preview_photos"))
     assert set(paths) == {"front"}
-    assert (await client.get(photo["image_url"])).status_code == 200
+    assert (
+        await client.get(backend_url(photo["image_url"]), headers=auth_headers)
+    ).status_code == 200
     assert (await client.post(preview_setup["url"], headers=auth_headers)).status_code == 200
     assert provider.await_count == 1
 
@@ -753,7 +768,9 @@ async def test_angles_optional_changes_stale_once(
     url = preview_setup["url"]
     first = (await client.post(url, headers=auth_headers)).json()
     await upload_angle(client, auth_headers, angle, "blue")
-    assert (await client.get(first["image_url"])).status_code == 200
+    assert (
+        await client.get(backend_url(first["image_url"]), headers=auth_headers)
+    ).status_code == 200
     assert (await client.get(url, headers=auth_headers)).json()["stale"] is True
     assert (await client.post(url, headers=auth_headers)).json()["stale"] is False
     assert provider.await_count == 2
@@ -764,8 +781,12 @@ async def test_angles_optional_changes_stale_once(
     saved = (await client.get(url, headers=auth_headers)).json()
     removed = (await client.get(PHOTO, headers=auth_headers)).json()["photos"][angle]
     assert (await client.delete(PHOTO + "?angle=" + angle, headers=auth_headers)).status_code == 204
-    assert (await client.get(removed["image_url"])).status_code == 404
-    assert (await client.get(saved["image_url"])).status_code == 200
+    assert (
+        await client.get(backend_url(removed["image_url"]), headers=auth_headers)
+    ).status_code == 404
+    assert (
+        await client.get(backend_url(saved["image_url"]), headers=auth_headers)
+    ).status_code == 200
     assert (await client.get(url, headers=auth_headers)).json()["stale"] is True
     assert (await client.post(url, headers=auth_headers)).json()["stale"] is False
     assert (await client.post(url, headers=auth_headers)).status_code == 200
@@ -777,11 +798,15 @@ async def test_angles_front_delete_clears_previews(client, auth_headers, preview
     await upload_angle(client, auth_headers, "side", "blue")
     saved = (await client.post(preview_setup["url"], headers=auth_headers)).json()
     assert (await client.delete(PHOTO, headers=auth_headers)).status_code == 204
-    assert (await client.get(saved["image_url"])).status_code == 404
+    assert (
+        await client.get(backend_url(saved["image_url"]), headers=auth_headers)
+    ).status_code == 404
     assert (await client.get(preview_setup["url"], headers=auth_headers)).status_code == 404
     photos = (await client.get(PHOTO, headers=auth_headers)).json()["photos"]
     assert set(photos) == {"side"}
-    assert (await client.get(photos["side"]["image_url"])).status_code == 200
+    assert (
+        await client.get(backend_url(photos["side"]["image_url"]), headers=auth_headers)
+    ).status_code == 200
     assert (await client.post(preview_setup["url"], headers=auth_headers)).json() == {
         "detail": "NO_PREVIEW_PHOTO"
     }
@@ -868,7 +893,9 @@ async def test_angles_failed_reference_commit_restores_files(
     assert set(preview_setup["folder"].glob("*.jpg")) == files
     photos = (await client.get(PHOTO, headers=auth_headers)).json()["photos"]
     assert set(photos) == {"front", "quarter", "side"}
-    assert (await client.get(photos[angle]["image_url"])).status_code == 200
+    assert (
+        await client.get(backend_url(photos[angle]["image_url"]), headers=auth_headers)
+    ).status_code == 200
 
 
 @pytest.fixture(autouse=True)

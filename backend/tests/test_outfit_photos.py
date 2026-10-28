@@ -7,6 +7,7 @@ from app.models.outfit import Outfit
 from app.models.preview import OutfitPreview
 from app.models.user import User
 from app.services.image_service import ImageService
+from tests.photo_helpers import backend_url
 from tests.test_image_undo_replace import _jpeg_bytes
 from tests.test_outfit_preview import preview_setup as preview_setup
 from tests.test_outfit_wear_history import _items
@@ -31,8 +32,8 @@ async def test_attach_choice_reset_and_delete(client, auth_headers, preview_setu
     assert saved["card_image_choice"] == "automatic"
     assert saved["card_image_url"] == saved["selfie_photo"]["medium_url"]
     image_url = saved["selfie_photo"]["image_url"]
-    assert "sig=" in image_url
-    served = await client.get(image_url)
+    assert image_url.startswith("/photos/users/me/preview-photo/files/")
+    served = await client.get(backend_url(image_url), headers=auth_headers)
     assert served.status_code == 200
     assert served.headers["cache-control"] == "private, no-store"
     for choice in ("preview", "photo", "automatic"):
@@ -43,7 +44,7 @@ async def test_attach_choice_reset_and_delete(client, auth_headers, preview_setu
         assert response.json()["card_image_choice"] == choice
         assert bool(response.json()["card_image_url"]) == (choice != "preview")
     assert (await client.delete(url, headers=auth_headers)).status_code == 204
-    assert (await client.get(image_url)).status_code == 404
+    assert (await client.get(backend_url(image_url), headers=auth_headers)).status_code == 404
     detail = (await client.get(url.removesuffix("/photo"), headers=auth_headers)).json()
     assert detail["selfie_photo"] is None and detail["card_image_url"] is None
 
@@ -63,7 +64,7 @@ async def test_preview_choice_and_unchanged_default(
     await db_session.commit()
     reply = await client.patch(url + "-choice", headers=auth_headers, json={"choice": "preview"})
     assert reply.status_code == 200, reply.text
-    assert "sig=" in reply.json()["card_image_url"]
+    assert reply.json()["card_image_url"].startswith("/photos/users/me/preview-photo/files/")
     assert (
         await client.patch(url + "-choice", headers=auth_headers, json={"choice": "invalid"})
     ).status_code == 422
@@ -76,12 +77,12 @@ async def test_replace_and_outfit_delete_remove_files(client, auth_headers, prev
     old = first.json()["selfie_photo"]["image_url"]
     second = await client.put(url, headers=auth_headers, files=photo())
     assert second.status_code == 200
-    assert (await client.get(old)).status_code == 404
+    assert (await client.get(backend_url(old), headers=auth_headers)).status_code == 404
     current = second.json()["selfie_photo"]["image_url"]
     assert (
         await client.delete(url.removesuffix("/photo"), headers=auth_headers)
     ).status_code == 204
-    assert (await client.get(current)).status_code == 404
+    assert (await client.get(backend_url(current), headers=auth_headers)).status_code == 404
     assert list(preview_setup["folder"].glob("*.jpg")) == []
 
 
@@ -144,7 +145,7 @@ async def test_user_deletion_removes_photo(
     url = reply.json()["selfie_photo"]["image_url"]
     await db_session.delete(test_user)
     await db_session.commit()
-    assert (await client.get(url)).status_code == 404
+    assert (await client.get(backend_url(url), headers=auth_headers)).status_code == 401
     assert list(preview_setup["folder"].glob("*.jpg")) == []
 
 

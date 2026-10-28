@@ -25,9 +25,9 @@ from app.services.photo_redraw_service import (
 )
 from app.services.preview_face import face_reference, reference_hash
 from app.utils.garment_vocabulary import ITEM_ROLE
+from app.utils.photo_urls import image_url
 from app.utils.prompts import load_prompt
 from app.utils.rate_limit import rate_limit_by_user
-from app.utils.signed_urls import sign_image_url
 
 logger = logging.getLogger(__name__)
 ANGLES = ("front", "quarter", "side")
@@ -52,7 +52,7 @@ MEASUREMENT_FIELDS = frozenset(
 def reference_urls(
     paths: dict[str, dict[str, str]],
 ) -> dict[str, str | dict[str, dict[str, str]]]:
-    """Return signed URLs for every angle and the legacy front fields."""
+    """Return photo URLs for every angle and the legacy front fields."""
     return {
         **urls(paths.get("front", {})),
         "photos": {angle: urls(paths[angle]) for angle in ANGLES if angle in paths},
@@ -73,8 +73,8 @@ def reference_key(
 
 def urls(paths):
     return {
-        name.replace("_path", "_url"): sign_image_url(path, expiry_seconds=600).replace(
-            "/api/v1/images/", "/api/v1/users/me/preview-photo/files/"
+        name.replace("_path", "_url"): image_url(path).replace(
+            "/photos/images/", "/photos/users/me/preview-photo/files/"
         )
         for name, path in paths.items()
     }

@@ -62,7 +62,8 @@ it.each(['draw', 'remove'] as const)('refreshes outfit cards after preview %s', 
 
 import { useOutfit } from '@/lib/hooks/use-outfits';
 
-it('refreshes selfie URLs before their ten-minute expiry', async () => {
+it('keeps the selfie URL without a background expiry refresh', async () => {
+  vi.mocked(fetch).mockClear();
   vi.useFakeTimers();
   const client = createQueryClient();
   vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...outfit(1), selfie_photo: { image_url: '/me.jpg?fresh=1' } }) } as Response);
@@ -72,7 +73,8 @@ it('refreshes selfie URLs before their ten-minute expiry', async () => {
     expect(hook.result.current.data?.selfie_photo?.image_url).toBe('/me.jpg?fresh=1');
     vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...outfit(1), selfie_photo: { image_url: '/me.jpg?fresh=2' } }) } as Response);
     await act(async () => { await vi.advanceTimersByTimeAsync(9 * 60_000); });
-    expect(hook.result.current.data?.selfie_photo?.image_url).toBe('/me.jpg?fresh=2');
+    expect(hook.result.current.data?.selfie_photo?.image_url).toBe('/me.jpg?fresh=1');
+    expect(fetch).toHaveBeenCalledTimes(1);
     hook.unmount();
   } finally {
     client.clear();

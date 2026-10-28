@@ -10,7 +10,7 @@ Forward-auth lets an authenticating reverse proxy sign people in to Wardrowbe. I
 <details>
 <summary>What happens to a session when the proxy user changes</summary>
 
-The proxy headers can only refuse a request: a request that carries the right secret and a `Remote-User` that is not a forward-auth identity of the session's account gets a 401. Image links the app already handed out are signed and keep working until they expire. So if the proxy starts reporting a different `Remote-User`, the next page load signs the old session out, and a tab that is already open has its API calls refused until it reloads (unless those calls skip the proxy, see the mobile app below). A page load also signs out a forward-auth session that reaches the app without the secret or without `Remote-User`, and an OIDC or development session in a browser the proxy now serves, since the login page offers only forward-auth there.
+The proxy headers can only refuse a request: a request that carries the right secret and a `Remote-User` that is not a forward-auth identity of the session's account gets a 401. Photo requests carry the session and the same proxy headers, so a changed `Remote-User` also stops photos from loading. If the proxy starts reporting a different `Remote-User`, the next page load signs the old session out, and a tab that is already open has its API calls refused until it reloads (unless those calls skip the proxy, see the mobile app below). A page load also signs out a forward-auth session that reaches the app without the secret or without `Remote-User`, and an OIDC or development session in a browser the proxy now serves, since the login page offers only forward-auth there.
 
 </details>
 

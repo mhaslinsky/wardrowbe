@@ -31,9 +31,19 @@ async function interact(action: () => void) {
 }
 const item = {
   id: 'shirt', name: 'Shirt', type: 'shirt', status: 'ready', tags: {},
-  image_url: '/full.jpg?signature=unchanged', medium_url: '/medium.webp', thumbnail_url: '/thumb.webp',
+  image_url: '/photos/images/11111111-1111-4111-8111-111111111111/20261028_000000_1234abcd.jpg', medium_url: '/medium.webp', thumbnail_url: '/thumb.webp',
   additional_images: [{ id: 'extra', image_url: '/extra.webp' }],
 } as Item;
+
+it('renders the primary photo URL verbatim before opening the gallery', () => {
+  const client = new QueryClient();
+  const { unmount } = render(<QueryClientProvider client={client}>
+    <ItemDetailDialog item={item} open onOpenChange={vi.fn()} />
+  </QueryClientProvider>);
+  expect(screen.getByLabelText('open', { exact: true }).querySelector('img'))
+    .toHaveAttribute('src', '/photos/images/11111111-1111-4111-8111-111111111111/20261028_000000_1234abcd.jpg');
+  unmount(); client.clear();
+});
 
 it.each(['close', 'escape', 'backdrop'])('opens the gallery, cycles full sources, and closes via %s', async (method) => {
   const onOpenChange = vi.fn();

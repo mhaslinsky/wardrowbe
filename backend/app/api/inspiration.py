@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import ValidationError
@@ -13,9 +13,8 @@ from app.models.user import User
 from app.services.ai_service import AIDisabledError
 from app.services.inspiration_service import InspirationService
 from app.services.weather_service import WeatherServiceError
-from app.utils.auth import get_current_user, get_current_user_optional
+from app.utils.auth import get_current_user
 from app.utils.rate_limit import rate_limit_by_user
-from app.utils.signed_urls import verify_signature
 
 router = APIRouter(prefix="/inspiration", tags=["Inspiration"])
 CurrentUser = Annotated[User, Depends(get_current_user)]
@@ -55,21 +54,18 @@ async def list_inspiration(db: DbSession, user: CurrentUser):
 async def inspiration_image(
     outfit_id: UUID,
     db: DbSession,
-    user: Annotated[User | None, Depends(get_current_user_optional)] = None,
-    expires: str = Query(""),
-    sig: str = Query(""),
+    user: CurrentUser,
 ):
     outfit = await db.get(Outfit, outfit_id)
     if outfit is None or not (outfit.ai_raw_response or {}).get("inspiration"):
         raise HTTPException(404, "Look not found")
-    key = f"inspiration/{outfit.user_id}/{outfit.id}.jpg"
-    if not (user and user.id == outfit.user_id) and not verify_signature(key, expires, sig):
+    if user.id != outfit.user_id:
         raise HTTPException(401, "Access denied")
     path = InspirationService(db).image_path(outfit.user_id, outfit.id)
     if not path.is_file():
         raise HTTPException(404, "Image not found")
     return FileResponse(
-        path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"}
+        path, media_type="image/jpeg", headers={"Cache-Control": "private, no-store"}
     )
 
 

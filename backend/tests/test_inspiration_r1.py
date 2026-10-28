@@ -18,6 +18,7 @@ from app.services.ai_service import AIService
 from app.services.inspiration_service import InspirationService
 from app.services.weather_service import WeatherData, WeatherService, WeatherServiceError
 from tests.identity_helpers import add_users_with_identities
+from tests.photo_helpers import backend_url
 
 
 @pytest.fixture
@@ -90,7 +91,9 @@ async def test_all_gap_look_is_saved_and_can_be_compared(
     assert look["items"] == []
     saved = await db_session.get(Outfit, UUID(look["id"]))
     assert saved.scheduled_for is None
-    assert (await client.get(look["image_url"])).status_code == 200
+    assert (
+        await client.get(backend_url(look["image_url"]), headers=auth_headers)
+    ).status_code == 200
     assert (await client.get("/api/v1/inspiration", headers=auth_headers)).json()[0]["id"] == look[
         "id"
     ]
@@ -176,11 +179,13 @@ async def test_foreign_item_and_nonowner_access_are_rejected(
     look = response.json()
     assert look["slots"][0]["no_match"] and look["items"] == []
     headers = {"Authorization": f"Bearer {create_access_token(other.id, identity.id)}"}
-    assert (await client.get(look["image_url"].split("?")[0], headers=headers)).status_code == 401
+    assert (
+        await client.get(backend_url(look["image_url"].split("?")[0]), headers=headers)
+    ).status_code == 401
     assert (
         await client.delete(f"/api/v1/inspiration/{look['id']}", headers=headers)
     ).status_code == 404
-    assert (await client.get(look["image_url"] + "bad")).status_code == 401
+    assert (await client.get(backend_url(look["image_url"]))).status_code == 401
     assert (
         await client.delete(f"/api/v1/inspiration/{look['id']}", headers=auth_headers)
     ).status_code == 204

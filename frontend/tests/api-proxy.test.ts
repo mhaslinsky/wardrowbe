@@ -73,7 +73,7 @@ describe('/api/v1 catch-all proxy', () => {
   })
 
   describe('url preservation', () => {
-    it('preserves the signed-url query string for images', async () => {
+    it('preserves the original query string for images', async () => {
       const spy = mockBackend(new Response('binary', { status: 200 }))
       const url =
         'http://localhost:3000/api/v1/images/8f14e45f-ceea-467a-9d2b-1c2f3a4b5c6d/abc_thumb.jpg?expires=123&sig=xyz%2Babc'

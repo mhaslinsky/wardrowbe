@@ -118,8 +118,7 @@ export function useOutfitPreview(outfitId: string) {
   const query = useQuery({
     queryKey: key, queryFn: ({ signal }) => read(signal),
     enabled: Boolean(outfitId),
-    staleTime: 9 * 60_000, refetchInterval: 9 * 60_000,
-    refetchIntervalInBackground: true, retry: false, gcTime: 0,
+    retry: false, gcTime: 0,
     meta: { toastsOwnErrors: true },
   });
   const mutation = useMutation({

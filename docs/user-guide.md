@@ -284,3 +284,9 @@ Source: [analytics page](../frontend/app/dashboard/analytics/page.tsx).
 When reporting a problem, include the page, what you selected, the visible error, and roughly when it happened. Avoid sharing access tokens or private photos in a public issue.
 
 Operator setup: [AI configuration and notifications](../README.md#configuration), [server settings](../backend/app/config.py).
+
+## Photo access
+
+Sign in to view photos. A copied photo link works only for someone with access to that photo. Family members can view item photos. Reference photos, AI previews, outfit selfies, and inspiration photos are visible only to their owner.
+
+Sources: [item photo access](../backend/app/api/images.py), [preview and selfie access](../backend/app/api/users.py), [inspiration photo access](../backend/app/api/inspiration.py), [browser photo route](../frontend/app/photos/[...path]/route.ts).

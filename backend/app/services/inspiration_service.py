@@ -19,8 +19,8 @@ from app.services.recommendation_service import RecommendationService
 from app.services.studio_service import validate_item_ownership
 from app.utils.clothing import canonical_item_order, repair_top_layers
 from app.utils.garment_vocabulary import ITEM_ROLE, TYPES, is_outfit_type
+from app.utils.photo_urls import image_url
 from app.utils.prompts import load_prompt
-from app.utils.signed_urls import sign_image_url
 from app.utils.timezone import get_user_today
 
 
@@ -102,14 +102,9 @@ class InspirationService:
 
     def response(self, outfit: Outfit) -> dict:
         data = outfit.ai_raw_response["inspiration"]
-        image_key = f"inspiration/{outfit.user_id}/{outfit.id}.jpg"
-        image_url = sign_image_url(image_key).replace(
-            f"/images/{image_key}", f"/inspiration/{outfit.id}/image"
-        )
-        items = [
-            {**item, "image_url": sign_image_url(item["image_path"])} for item in data["items"]
-        ]
-        return {"id": str(outfit.id), **data, "items": items, "image_url": image_url}
+        photo_url = f"/photos/inspiration/{outfit.id}/image"
+        items = [{**item, "image_url": image_url(item["image_path"])} for item in data["items"]]
+        return {"id": str(outfit.id), **data, "items": items, "image_url": photo_url}
 
     async def create(self, user: User, image_bytes: bytes) -> dict:
         require_internal_ai("vision")

@@ -2,15 +2,14 @@ import re
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 
 from app.database import DbSession
 from app.models import User
 from app.services.family_service import FamilyService
 from app.services.image_service import IMAGE_MIME_TYPES, ImageService
-from app.utils.auth import get_current_user_optional
-from app.utils.signed_urls import verify_signature
+from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/images", tags=["Images"])
 
@@ -22,9 +21,7 @@ async def get_image(
     user_id: str,
     filename: str,
     db: DbSession,
-    current_user: Annotated[User | None, Depends(get_current_user_optional)] = None,
-    expires: str | None = Query(None),
-    sig: str | None = Query(None),
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> FileResponse:
     try:
         UUID(user_id)
@@ -43,19 +40,14 @@ async def get_image(
     path = f"{user_id}/{filename}"
     can_access = False
 
-    if expires and sig:
-        if verify_signature(path, expires, sig):
-            can_access = True
-
-    if not can_access and current_user:
-        if str(current_user.id) == user_id:
-            can_access = True
-        elif current_user.family_id:
-            family_service = FamilyService(db)
-            family = await family_service.get_by_id(current_user.family_id)
-            if family:
-                family_user_ids = [str(m.id) for m in family.members]
-                can_access = user_id in family_user_ids
+    if str(current_user.id) == user_id:
+        can_access = True
+    elif current_user.family_id:
+        family_service = FamilyService(db)
+        family = await family_service.get_by_id(current_user.family_id)
+        if family:
+            family_user_ids = [str(member.id) for member in family.members]
+            can_access = user_id in family_user_ids
 
     if not can_access:
         raise HTTPException(
@@ -85,6 +77,6 @@ async def get_image(
         path=str(image_path),
         media_type=content_type,
         headers={
-            "Cache-Control": "private, max-age=3600, must-revalidate",
+            "Cache-Control": "private, no-store",
         },
     )

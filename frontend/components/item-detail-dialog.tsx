@@ -93,7 +93,6 @@ interface ItemDetailDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Images now use signed URLs from backend (item.image_url, item.thumbnail_url)
 
 interface EditForm {
   name: string;
@@ -327,7 +326,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
 
   const isAnalyzing = reanalyzeItem.isPending || item.status === 'processing';
 
-  // Use signed URL from backend for better quality in detail view
+  // The image key reloads edited photos without changing their authenticated URL.
   const imageUrl = garmentImageUrl(item, 'detail') || item.image_path;
   const comparisonChoices = item.photo_choices?.original && item.photo_choices?.redrawn
     ? (['original', 'redrawn'] as const).filter((choice) => choice !== item.photo_redraw?.selected)
@@ -539,7 +538,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
               <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
                 {(() => {
                   const allImages = [
-                    { url: `${imageUrl}&v=${imageKey}`, id: 'primary' },
+                    { url: imageUrl, id: 'primary' },
                     ...comparisonImages,
                     ...(item.additional_images || []).map((img) => ({ url: img.image_url, id: img.id })),
                   ];
