@@ -349,7 +349,9 @@ async def test_comparison_links_both_calls_and_preserves_comment_state(
     fix = next(row for row in exported_fix.json()["feedback"] if row["kind"] == "preview_fix")
     assert fix["data"]["comparison_call_id"] == str(comparison_id)
     assert fix["data"]["real_photo_informed"] is True
-    comment = next(row for row in exported_fix.json()["feedback"] if row["kind"] == "preview_comment")
+    comment = next(
+        row for row in exported_fix.json()["feedback"] if row["kind"] == "preview_comment"
+    )
     assert comment["data"]["real_photo_informed"] is False
     assert comment["data"]["comparison_call_id"] is None
     assert "Shorten the shirt hem" not in provider.call_args.args[1]
