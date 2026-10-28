@@ -167,7 +167,10 @@ def _response_metadata(
         if not isinstance(answers, dict):
             result["error_kind"] = "invalid_answer"
             return result
-        result["answer"]["structured"] = [answers]
+        # Invalid decision answers still need to fit JSONB.
+        result["answer"]["structured"] = [
+            json.loads(json.dumps(answers), parse_constant=lambda _constant: "non-finite")
+        ]
         try:
             parse_answer(payload)
         except ValueError:
@@ -306,7 +309,18 @@ async def record_ai_call(
                         "latency_ms": (monotonic() - started) * 1000,
                         "outcome": "error",
                         "error_kind": context.failure_reason,
-                        **({"answer": {"fallback_notice": notice_status}} if notice_status else {}),
+                        **(
+                            {
+                                "answer": {
+                                    "structured": [],
+                                    "text": [],
+                                    "images": [],
+                                    "fallback_notice": notice_status,
+                                }
+                            }
+                            if notice_status
+                            else {}
+                        ),
                     }
                 )
             except Exception:
@@ -316,7 +330,9 @@ async def record_ai_call(
         try:
             metadata = _response_metadata(response, native, response_format)
             if notice_status:
-                metadata.setdefault("answer", {})["fallback_notice"] = notice_status
+                metadata.setdefault("answer", {"structured": [], "text": [], "images": []})[
+                    "fallback_notice"
+                ] = notice_status
             if response.status_code >= 400:
                 metadata["error_kind"] = "http_error"
             context.failure_reason = metadata.get("error_kind")

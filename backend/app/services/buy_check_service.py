@@ -45,6 +45,7 @@ def number(value: Any, minimum: float = 0, maximum: float = 1) -> float:
 
 
 def parse_answer(payload: Any) -> tuple[int, dict[str, float]]:
+    """Return the rounded like/love percentage and dimension probabilities, or raise ValueError."""
     try:
         if not isinstance(payload["model"], str) or not payload["model"].strip():
             raise ValueError("Missing model")
@@ -119,6 +120,7 @@ async def fallback_notice(db: AsyncSession, user_id: UUID, failure: str) -> str:
 
 
 async def get_buy_check(db: AsyncSession, user_id: UUID, item_id: UUID) -> dict[str, Any]:
+    """Return a check for the owner's considering item, with a percentage only for scored results."""
     evidence = await get_fit_evidence(db, user_id, item_id)
     state, candidate, neighbours = await build_state(db, user_id, evidence)
     result = {
@@ -227,7 +229,10 @@ async def get_buy_check(db: AsyncSession, user_id: UUID, item_id: UUID) -> dict[
                 except ValueError:
                     raise ValueError("invalid_answer") from None
                 pluses, minuses, unknowns = reasons(candidate, neighbours, dimensions)
-                if evidence.outfit_ideas_found["count"] <= 1:
+                if (
+                    evidence.outfit_ideas_found["status"] == "known"
+                    and evidence.outfit_ideas_found["count"] <= 1
+                ):
                     minuses.append(
                         {
                             "kind": "few_outfits",

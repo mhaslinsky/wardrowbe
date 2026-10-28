@@ -107,13 +107,26 @@ async def test_restore_then_check_and_missing_purchase_state(
     assert state["candidate"]["planned_size"] is None
 
 
-async def test_unknown_type_has_no_uncited_reason(
-    client, auth_headers, shelf, provider, db_session
+async def test_matching_fit_without_notes_stays_unknown(
+    client, auth_headers, shelf, provider, db_session, test_user
 ):
-    shelf.type = ""
+    from sqlalchemy import select
+
+    from app.models.item import ClothingItem
+
+    for item in await db_session.scalars(
+        select(ClothingItem).where(
+            ClothingItem.user_id == test_user.id, ClothingItem.id != shelf.id
+        )
+    ):
+        item.notes = "Rating: love | Fabric: 100% cotton"
     await db_session.commit()
     result = await check(client, auth_headers, shelf)
-    assert all(reason["citations"] for key in ("pluses", "minuses") for reason in result[key])
+    assert result["status"] == "scored"
+    assert any(reason["kind"] == "fit_and_cut" for reason in result["unknowns"])
+    assert not any(
+        reason["kind"] == "fit_and_cut" for key in ("pluses", "minuses") for reason in result[key]
+    )
 
 
 @pytest.mark.parametrize(

@@ -16,7 +16,7 @@ from app.services.fit_evidence_service import compare
 DIMENSIONS = {
     "fit_and_cut": ("fit", "doesnt"),
     "feel_and_quality": ("fabric_detail", "warmth"),
-    "style_and_look": ("style", "color", "works", "doesnt"),
+    "style_and_look": ("style", "color", "works"),
 }
 
 
@@ -128,9 +128,17 @@ async def build_state(
             **{
                 field: [
                     source.excerpt
-                    for source in candidate.sources.values()
+                    for source_id, source in candidate.sources.items()
                     if source.field == f"tags.{field}"
                     or source.field.startswith(f"notes.{field.replace('_', ' ')}:")
+                    or (
+                        field == "fabric_detail"
+                        and source.field == "tags.material_detail"
+                        and any(
+                            fact.kind == "feel" and fact.source_id == source_id
+                            for fact in candidate.facts
+                        )
+                    )
                 ]
                 or None
                 for field in ("fit", "fabric_detail", "warmth", "works", "doesnt", "style")
