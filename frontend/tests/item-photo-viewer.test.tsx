@@ -9,7 +9,7 @@ function show(index = 0) {
 }
 function open() { fireEvent.click(screen.getByRole('button', { name: 'open' })); }
 
-it('opens the active photo with the unresized signed source', async () => {
+it('opens the active photo with its full-resolution source', async () => {
   show(1);
   expect(screen.queryByRole('dialog')).toBeNull();
   open();

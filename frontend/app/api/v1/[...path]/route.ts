@@ -78,7 +78,7 @@ async function proxy(request: NextRequest): Promise<NextResponse> {
   }
   const target = new URL(request.url);
   const backend = backendUrl();
-  // pathname/search rather than the decoded `params.path`, so signed image URLs survive intact.
+  // Preserve the encoded path and query when forwarding the request.
   const url = `${backend}${target.pathname}${target.search}`;
 
   const hasBody = !METHODS_WITHOUT_BODY.has(request.method);

@@ -40,15 +40,14 @@ async def get_image(
     path = f"{user_id}/{filename}"
     can_access = False
 
-    if current_user:
-        if str(current_user.id) == user_id:
-            can_access = True
-        elif current_user.family_id:
-            family_service = FamilyService(db)
-            family = await family_service.get_by_id(current_user.family_id)
-            if family:
-                family_user_ids = [str(m.id) for m in family.members]
-                can_access = user_id in family_user_ids
+    if str(current_user.id) == user_id:
+        can_access = True
+    elif current_user.family_id:
+        family_service = FamilyService(db)
+        family = await family_service.get_by_id(current_user.family_id)
+        if family:
+            family_user_ids = [str(member.id) for member in family.members]
+            can_access = user_id in family_user_ids
 
     if not can_access:
         raise HTTPException(

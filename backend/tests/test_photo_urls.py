@@ -6,12 +6,11 @@ def test_urls_have_no_signature_or_expiry():
     assert optional_image_url("u/a_thumb.jpg") == "/photos/images/u/a_thumb.jpg"
 
 
-def test_missing_paths_and_fallback_reset():
+def test_missing_paths_and_fallback():
     assert optional_image_url(None) is None
     assert optional_image_url("") is None
     assert optional_image_url(None, fallback="u/a.jpg") == "/photos/images/u/a.jpg"
     assert optional_image_url("u/a_thumb.jpg", fallback="u/a.jpg") == "/photos/images/u/a_thumb.jpg"
-    assert optional_image_url(None) is None
 
 
 def test_response_surfaces_use_the_photo_route():
