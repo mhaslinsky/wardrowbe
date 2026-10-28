@@ -226,7 +226,7 @@
     "replaceFailedStale": "変更できず、提案の反映が遅れる場合があります"
   },
   "preview": {
-    "comparisonChanged": "比較が変わりました。メモを確認するか、もう一度比較してください。",
+    "comparisonChanged": "メモを確認するか、もう一度比較してください。",
     "comparing": "写真を比較中…",
     "comparisonFailed": "比較に失敗しました",
 

@@ -226,7 +226,7 @@
     "replaceFailedStale": "Remplacement échoué ; suggestions parfois retardées"
   },
   "preview": {
-    "comparisonChanged": "Comparaison modifiée. Vérifiez la note ou comparez à nouveau.",
+    "comparisonChanged": "Vérifiez la note ou comparez à nouveau.",
     "comparing": "Comparaison des photos…",
     "comparisonFailed": "Échec de la comparaison",
 

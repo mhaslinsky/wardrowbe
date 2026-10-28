@@ -226,7 +226,7 @@
     "replaceFailedStale": "Could not replace; suggestions may lag"
   },
   "preview": {
-    "comparisonChanged": "Comparison changed. Review the note or compare again.",
+    "comparisonChanged": "Review the note or compare again.",
     "comparing": "Comparing photos…",
     "comparisonFailed": "Comparison failed",
 

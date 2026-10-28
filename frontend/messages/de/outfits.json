@@ -226,7 +226,7 @@
     "replaceFailedStale": "Ersetzen fehlgeschlagen; Vorschläge können verzögert sein"
   },
   "preview": {
-    "comparisonChanged": "Vergleich geändert. Prüfe die Notiz oder vergleiche erneut.",
+    "comparisonChanged": "Prüfe die Notiz oder vergleiche erneut.",
     "comparing": "Fotos werden verglichen…",
     "comparisonFailed": "Vergleich fehlgeschlagen",
 

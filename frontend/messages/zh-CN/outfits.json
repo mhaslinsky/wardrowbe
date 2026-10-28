@@ -226,7 +226,7 @@
     "replaceFailedStale": "替换失败，推荐可能延迟更新"
   },
   "preview": {
-    "comparisonChanged": "比较已更改。请检查备注或重新比较。",
+    "comparisonChanged": "请检查备注或重新比较。",
     "comparing": "正在比较照片…",
     "comparisonFailed": "比较失败",
 
