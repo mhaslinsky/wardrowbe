@@ -15,8 +15,13 @@ from app.services.ai_telemetry_service import _enqueue
 
 @pytest_asyncio.fixture
 async def telemetry(monkeypatch, session_maker):
+    from app.config import get_settings
     from app.services import ai_telemetry_service
 
+    settings = get_settings()
+    monkeypatch.setattr(settings, "ai_base_url", "http://stub.test/v1")
+    monkeypatch.setattr(settings, "ai_api_key", "stub-only")
+    monkeypatch.setattr(settings, "ai_image_model", "stub-image")
     monkeypatch.setattr(ai_telemetry_service, "async_session_maker", session_maker)
     monkeypatch.setattr(ai_telemetry_service, "_enqueue", _enqueue)
     monkeypatch.setattr(ai_telemetry_service, "_write_slots", asyncio.Semaphore(2))
