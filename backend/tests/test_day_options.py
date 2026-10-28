@@ -304,7 +304,8 @@ async def http_ai(db_session, test_user, monkeypatch):
     async def post(client, url, **kwargs):
         if not str(url).endswith("/chat/completions"):
             return await original_post(client, url, **kwargs)
-        state["prompts"].append(kwargs["json"]["messages"][-1]["content"])
+        body = json.loads(kwargs["content"]) if "content" in kwargs else kwargs["json"]
+        state["prompts"].append(body["messages"][-1]["content"])
         content = json.dumps(
             {
                 "outfits": [
