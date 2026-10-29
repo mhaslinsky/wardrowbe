@@ -181,6 +181,7 @@ function StyleSlider({
 }
 
 type UnitSystem = 'metric' | 'imperial';
+const measurementUnitsByUser = new Map<string, UnitSystem>();
 type ProfileFields = {
   location_name: string;
   location_lat: string;
@@ -224,8 +225,9 @@ export default function SettingsPage() {
   const testEndpoint = useTestAIEndpoint();
   const updateUserProfile = useUpdateUserProfile({ toastsOwnErrors: true });
 
+  const owner = session?.user.id || userProfile?.id;
   const reportSaveError = (error: unknown) => toast.error(error instanceof Error ? error.message : t('autosave.error'));
-  const autosave = useAutosaveFields<Preferences>(preferences, updatePreferences.mutateAsync, reportSaveError);
+  const autosave = useAutosaveFields<Preferences>(preferences, updatePreferences.mutateAsync, reportSaveError, owner ? { resource: 'preferences', user: owner } : undefined);
   const formData = autosave.values;
   const occasions = useOccasionOptions([formData.default_occasion, preferences?.default_occasion]);
   const [standingRulesError, setStandingRulesError] = useState(false);
@@ -237,13 +239,26 @@ export default function SettingsPage() {
   const [profileErrors, setProfileErrors] = useState<Partial<Record<keyof ProfileFields, string>>>({});
   const clearProfileError = (key: keyof ProfileFields) => setProfileErrors((previous) => { const next = { ...previous }; delete next[key]; return next; });
   const [unitSystem, setUnitSystem] = useState<UnitSystem>(() => {
+    if (owner && measurementUnitsByUser.has(owner)) return measurementUnitsByUser.get(owner)!;
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('wardrowbe_unit_system') as UnitSystem) || 'metric';
     }
     return 'metric';
   });
   const unitSystemRef = useRef(unitSystem);
-  unitSystemRef.current = unitSystem;
+  if (owner && !measurementUnitsByUser.has(owner)) measurementUnitsByUser.set(owner, unitSystem);
+  unitSystemRef.current = (owner && measurementUnitsByUser.get(owner)) || unitSystem;
+  useEffect(() => {
+    const synchronize = (event?: Event) => {
+      const change = event as CustomEvent<{ owner?: string; units: UnitSystem }> | undefined;
+      if (change && change.detail.owner !== owner) return;
+      const selected = change?.detail.units || (owner && measurementUnitsByUser.get(owner));
+      if (selected) { unitSystemRef.current = selected; setUnitSystem(selected); }
+    };
+    synchronize();
+    window.addEventListener('wardrowbe-units', synchronize);
+    return () => window.removeEventListener('wardrowbe-units', synchronize);
+  }, [owner]);
   const initialProfile = useMemo(() => userProfile ? displayProfile(userProfile, unitSystemRef.current) : undefined, [userProfile]);
   const profileAutosave = useAutosaveFields<ProfileFields>(initialProfile, async (patch) => {
     const payload: UserProfileUpdate = {};
@@ -259,34 +274,46 @@ export default function SettingsPage() {
       payload.body_measurements = Object.keys(parsed).length ? parsed : null;
     }
     return displayProfile(await updateUserProfile.mutateAsync(payload), unitSystemRef.current);
-  }, reportSaveError);
+  }, reportSaveError, owner ? { resource: 'profile', user: owner } : undefined);
   const locationName = profileAutosave.values.location_name || '';
   const locationLat = profileAutosave.values.location_lat || '';
   const locationLon = profileAutosave.values.location_lon || '';
   const timezone = profileAutosave.values.timezone || 'UTC';
   const measurements = profileAutosave.values.body_measurements || {};
   const setLocationName = (value: string) => { clearProfileError('location_name'); profileAutosave.stage({ location_name: value }); };
-  const setLocationLat = (value: string) => { clearProfileError('location_lat'); profileAutosave.stage({ location_lat: value }); };
-  const setLocationLon = (value: string) => { clearProfileError('location_lon'); profileAutosave.stage({ location_lon: value }); };
+  const stageCoordinate = (key: 'location_lat' | 'location_lon', value: string) => {
+    clearProfileError(key); profileAutosave.stage({ [key]: value });
+    const current = profileAutosave.current.current;
+    if (!(['location_lat', 'location_lon'] as const).every((field) => {
+      const raw = current[field] || '';
+      return raw.trim() && Number.isFinite(Number(raw)) && Math.abs(Number(raw)) <= (field === 'location_lat' ? 90 : 180);
+    })) profileAutosave.cancelPending('location_lat', 'location_lon');
+  };
+  const setLocationLat = (value: string) => stageCoordinate('location_lat', value);
+  const setLocationLon = (value: string) => stageCoordinate('location_lon', value);
   const setTimezone = (value: string) => { void profileAutosave.commit({ timezone: value }); };
 
   const saveProfileField = (key: 'location_name' | 'location_lat' | 'location_lon') => {
-    if (!profileAutosave.isStaged(key)) return;
-    const value = profileAutosave.current.current[key] || '';
-    if (key !== 'location_name') {
-      const coordinate = Number(value);
-      const limit = key === 'location_lat' ? 90 : 180;
-      if (!value.trim() || !Number.isFinite(coordinate)) {
-        setProfileErrors((previous) => ({ ...previous, [key]: t('location.errors.invalidCoordinates') }));
-        return;
-      }
-      if (coordinate < -limit || coordinate > limit) {
-        setProfileErrors((previous) => ({ ...previous, [key]: t(key === 'location_lat' ? 'location.errors.latitudeRange' : 'location.errors.longitudeRange') }));
-        return;
-      }
+    const current = profileAutosave.current.current;
+    if (key === 'location_name') {
+      if (profileAutosave.isStaged(key)) void profileAutosave.commit({ location_name: current.location_name || '' });
+      return;
     }
-    clearProfileError(key);
-    void profileAutosave.commit({ [key]: value });
+    if (!profileAutosave.isStaged('location_lat') && !profileAutosave.isStaged('location_lon')) return;
+    const errors: Partial<Record<keyof ProfileFields, string>> = {};
+    for (const coordinate of ['location_lat', 'location_lon'] as const) {
+      const raw = current[coordinate] || '';
+      const value = Number(raw);
+      const limit = coordinate === 'location_lat' ? 90 : 180;
+      if (!raw.trim() || !Number.isFinite(value)) errors[coordinate] = t('location.errors.invalidCoordinates');
+      else if (value < -limit || value > limit) errors[coordinate] = t(coordinate === 'location_lat' ? 'location.errors.latitudeRange' : 'location.errors.longitudeRange');
+    }
+    setProfileErrors((previous) => {
+      const next = { ...previous }; delete next.location_lat; delete next.location_lon;
+      return { ...next, ...errors };
+    });
+    if (Object.keys(errors).length) { profileAutosave.cancelPending('location_lat', 'location_lon'); return; }
+    void profileAutosave.commit({ location_lat: current.location_lat!, location_lon: current.location_lon! }, { atomic: true });
   };
 
   const detectLocationFromNetwork = async () => {
@@ -312,7 +339,7 @@ export default function SettingsPage() {
       location_lon: resolved.lon,
       ...(resolved.locationName ? { location_name: resolved.locationName } : {}),
       ...(resolved.timezone ? { timezone: resolved.timezone } : {}),
-    });
+    }, { atomic: true });
     return resolved;
   };
 
@@ -389,7 +416,7 @@ export default function SettingsPage() {
         const originalName = profileAutosave.current.current.location_name;
         clearProfileError('location_lat');
         clearProfileError('location_lon');
-        const coordinatesSaved = profileAutosave.commit({ location_lat: lat, location_lon: lon });
+        const coordinatesSaved = profileAutosave.commit({ location_lat: lat, location_lon: lon }, { atomic: true });
         const name = await finalizeFromCoordinates(lat, lon);
         await coordinatesSaved;
         const confirmed = profileAutosave.confirmed();
@@ -409,20 +436,28 @@ export default function SettingsPage() {
   };
 
   const handleToggleUnits = () => {
-    const newSystem: UnitSystem = unitSystem === 'metric' ? 'imperial' : 'metric';
-    profileAutosave.transform('body_measurements', (values) => Object.fromEntries(
-      Object.entries(values || {}).map(([key, value]) => [key,
+    let conversion: { from: UnitSystem; to: UnitSystem };
+    void profileAutosave.transform('body_measurements', (values) => {
+      conversion ??= { from: unitSystemRef.current, to: unitSystemRef.current === 'metric' ? 'imperial' : 'metric' };
+      return Object.fromEntries(Object.entries(values || {}).map(([key, value]) => [key,
         NUMERIC_MEASUREMENT_KEYS.includes(key) && value.trim() && Number.isFinite(Number(value))
-          ? String(convertMeasurement(Number(value), key, unitSystem, newSystem)) : value,
-      ]),
-    ));
-    setUnitSystem(newSystem);
-    localStorage.setItem('wardrowbe_unit_system', newSystem);
+          ? String(convertMeasurement(Number(value), key, conversion.from, conversion.to)) : value,
+      ]));
+    }, () => {
+      unitSystemRef.current = conversion.to;
+      if (owner) measurementUnitsByUser.set(owner, conversion.to);
+      setUnitSystem(conversion.to);
+      localStorage.setItem('wardrowbe_unit_system', conversion.to);
+      window.dispatchEvent(new CustomEvent('wardrowbe-units', { detail: { owner, units: conversion.to } }));
+    }).catch(reportSaveError);
   };
 
   const handleMeasurementChange = (key: string, value: string) => {
     clearProfileError('body_measurements');
     profileAutosave.stage({ body_measurements: { ...profileAutosave.current.current.body_measurements, [key]: value } });
+    if (Object.entries(profileAutosave.current.current.body_measurements || {}).some(([field, raw]) =>
+      NUMERIC_MEASUREMENT_KEYS.includes(field) && raw.trim() && (!Number.isFinite(Number(raw)) || Number(raw) <= 0),
+    )) profileAutosave.cancelPending('body_measurements');
   };
 
   const saveMeasurements = () => {
@@ -430,6 +465,7 @@ export default function SettingsPage() {
     const current = profileAutosave.current.current.body_measurements || {};
     for (const [key, value] of Object.entries(current)) {
       if (value.trim() && NUMERIC_MEASUREMENT_KEYS.includes(key) && (!Number.isFinite(Number(value)) || Number(value) <= 0)) {
+        profileAutosave.cancelPending('body_measurements');
         setProfileErrors((previous) => ({ ...previous, body_measurements: t('body.errors.positiveNumber', { field: t(`body.fields.${key}`) }) }));
         return;
       }
@@ -483,6 +519,7 @@ export default function SettingsPage() {
     if (!autosave.isStaged('standing_rules')) return;
     const rules = text.split('\n').map((rule) => rule.trim()).filter(Boolean);
     if (rules.length > 20 || rules.some((rule) => rule.length > 300)) {
+      autosave.cancelPending('standing_rules');
       setStandingRulesError(true);
       return;
     }
@@ -512,9 +549,7 @@ export default function SettingsPage() {
     if (!confirm(t('confirmReset'))) return;
     setResetting(true);
     try {
-      await Promise.all([autosave.wait(), profileAutosave.wait()]);
-      const saved = await resetPreferences.mutateAsync(autosave.current.current.preview_preferences!.rev);
-      autosave.replace(saved);
+      await Promise.all([profileAutosave.wait(), autosave.reset(() => resetPreferences.mutateAsync(autosave.confirmed().preview_preferences!.rev))]);
       setStandingRulesError(false);
       setPaletteSeason(null);
     } catch (error) {
@@ -530,6 +565,23 @@ export default function SettingsPage() {
     window.addEventListener('beforeunload', preventUnload);
     return () => window.removeEventListener('beforeunload', preventUnload);
   }, [autosave.busy, profileAutosave.busy, autosave.dirty, profileAutosave.dirty]);
+
+  useEffect(() => {
+    const warnBeforeLeaving = (event: MouseEvent) => {
+      const rules = (autosave.current.current.standing_rules || []).map((rule) => rule.trim()).filter(Boolean);
+      if (!autosave.isStaged('standing_rules') || (rules.length <= 20 && rules.every((rule) => rule.length <= 300))) return;
+      const link = (event.target as Element | null)?.closest('a[href]') as HTMLAnchorElement | null;
+      if (!link || link.target === '_blank' || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const destination = new URL(link.href, window.location.href);
+      if (destination.origin !== window.location.origin || destination.pathname === window.location.pathname) return;
+      if (!window.confirm(t('confirmLeave'))) { event.preventDefault(); event.stopImmediatePropagation(); }
+    };
+    document.addEventListener('click', warnBeforeLeaving, true);
+    return () => document.removeEventListener('click', warnBeforeLeaving, true);
+  }, [autosave, t]);
+
+  const status = autosave.busy || profileAutosave.busy || resetting ? 'saving'
+    : autosave.status === 'error' || profileAutosave.status === 'error' || standingRulesError || Object.keys(profileErrors).length ? 'error' : 'saved';
 
   if (isLoading || isLoadingProfile) {
     return (
@@ -554,16 +606,9 @@ export default function SettingsPage() {
             {t('reset')}
           </Button>
           {Object.entries(profileErrors).map(([key, message]) => <p key={key} role="alert" className="self-center text-sm text-destructive">{message}</p>)}
-          {profileAutosave.status !== 'idle' && (
-            <p role={profileAutosave.status === 'error' ? 'alert' : 'status'} className="self-center text-sm text-muted-foreground">
-              {t(`autosave.${profileAutosave.status}`)}
-            </p>
-          )}
-          {autosave.status !== 'idle' && (
-            <p role={autosave.status === 'error' ? 'alert' : 'status'} className="self-center text-sm text-muted-foreground">
-              {t(`autosave.${autosave.status}`)}
-            </p>
-          )}
+          <p role={status === 'error' ? 'alert' : 'status'} className={status === 'error' ? 'self-center text-sm text-destructive' : 'self-center text-sm text-muted-foreground'}>
+            {t('autosave.' + status)}
+          </p>
         </div>
       </div>
 
@@ -696,7 +741,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-6">
             <div className="flex items-center justify-between">
               <Label>{t('body.unitSystem')}</Label>
-              <Button variant="outline" size="sm" onClick={handleToggleUnits} disabled={profileAutosave.busy}>
+              <Button variant="outline" size="sm" onClick={handleToggleUnits}>
                 {unitSystem === 'metric' ? t('body.metric') : t('body.imperial')}
               </Button>
             </div>
@@ -983,6 +1028,7 @@ export default function SettingsPage() {
                 const valid = rules.length <= 20 && rules.every((rule) => rule.length <= 300);
                 setStandingRulesError((previous) => previous && !valid);
                 updateField('standing_rules', event.target.value.split('\n'), false);
+                if (!valid) autosave.cancelPending('standing_rules');
               }}
               onBlur={(event) => saveStandingRules(event.target.value)}
               aria-invalid={standingRulesError}

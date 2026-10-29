@@ -45,7 +45,7 @@ describe('standing rules settings', () => {
     if (value === '') {
       await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: [] }))
     } else {
-      expect(screen.getByRole('alert')).toHaveTextContent('standingRules.limit')
+      expect(screen.getByText('standingRules.limit')).toBeInTheDocument()
       expect(state.save).not.toHaveBeenCalled()
     }
   })

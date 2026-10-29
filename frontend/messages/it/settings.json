@@ -242,5 +242,6 @@
     "saved": "Salvato",
     "saving": "Salvataggio...",
     "error": "Salvataggio non riuscito"
-  }
+  },
+  "confirmLeave": "Uscire con modifiche non salvate?"
 }

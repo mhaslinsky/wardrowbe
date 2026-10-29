@@ -242,5 +242,6 @@
     "saved": "Gespeichert",
     "saving": "Wird gespeichert...",
     "error": "Speichern fehlgeschlagen"
-  }
+  },
+  "confirmLeave": "Mit ungespeicherten Änderungen verlassen?"
 }

@@ -242,5 +242,6 @@
     "saved": "Enregistré",
     "saving": "Enregistrement...",
     "error": "Échec de l’enregistrement"
-  }
+  },
+  "confirmLeave": "Quitter sans enregistrer les modifications ?"
 }

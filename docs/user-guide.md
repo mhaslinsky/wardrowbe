@@ -244,15 +244,15 @@ Feel and quality reasons use Fabric detail and Warmth notes. Pluses cite liked o
 
 ### Preferences and fit information
 
-In **Settings**, choices and color picks save immediately, sliders save when released, and text and number fields save when you leave the field. **Saved** confirms a save. If a save fails, **Could not save** appears. The field returns to its last saved value unless you edited it again; the error message gives the reason. **Reset** asks before restoring defaults. Leaving Settings saves valid text drafts. Reloading or closing the tab warns while edits remain; confirming can discard unsaved edits. Preview preferences keep their **Save preview preferences** control.
+In **Settings**, choices and color picks save immediately, sliders save when released, and text and number fields save when you leave the field. **Saved** confirms a save. If a save fails, **Could not save** appears. The field returns to its last saved value unless you edited it again; the error message gives the reason. **Reset** asks before restoring defaults. Leaving Settings saves valid text drafts. Invalid standing rules trigger a warning on navigation links and stay in the editor when you return. Saves continue in the same queue if you leave Settings and come back. Reloading or closing the tab warns while edits remain; confirming can discard unsaved edits. Preview preferences keep their **Save preview preferences** control.
 
-- **Location**: use **Use My Location** or enter coordinates and review the timezone. Browser permission can be denied; manual entry remains available.
+- **Location**: use **Use My Location** or enter both latitude and longitude and review the timezone. Coordinates save together. Browser permission can be denied; manual entry remains available.
 - **Style Profile**, **Favorite Colors**, and **Colors to Avoid**: describe the styles and colors you want.
 - **Temperature & Comfort**: choose temperature units, sensitivity, layering, and your hot and cold thresholds.
 - **Washing**: set wears before washing by clothing type; see [laundry](#keep-laundry-up-to-date).
 - **Recommendation Settings**: choose a default occasion, variety, repeat avoidance, and whether to prefer underused items.
 - **Standing rules**: add one instruction per line, up to 20 rules of 300 characters each.
-- **Body Measurements**: choose metric or imperial units, enter the measurements you know and usual clothing sizes.
+- **Body Measurements**: choose metric or imperial units, enter the measurements you know and usual clothing sizes. Unit changes wait for pending saves.
 
 Open **Fit profile** from the left menu or the link in **Settings**. Use **Add brand size** under **Brand sizes** to record a brand, optional line, actual size, and note. Use **Add skip entry** under **Skip list** for brands or lines that do not work for you, with a reason. Add neck, sleeve, and thigh measurements in centimeters if useful. Describe a well-fitting piece under **Reference garment**, then save.
 

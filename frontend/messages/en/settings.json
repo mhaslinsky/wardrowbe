@@ -242,5 +242,6 @@
     "saved": "Saved",
     "saving": "Saving...",
     "error": "Could not save"
-  }
+  },
+  "confirmLeave": "Leave with unsaved changes?"
 }

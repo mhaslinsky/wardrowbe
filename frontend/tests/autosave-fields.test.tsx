@@ -96,3 +96,86 @@ it('keeps the captured server baseline when a refetch arrives during a failing w
   await act(async () => { reject(new Error('Offline')); await result.current.wait(); });
   expect(result.current.values.city).toBe('London');
 });
+
+it('shares the queue across remounts and keeps the returning mount latest', async () => {
+  const scope = { resource: 'preferences', user: 'queue-remount' };
+  const initial = { city: 'London' };
+  const requests: { patch: Partial<typeof initial>; resolve: (value: typeof initial) => void }[] = [];
+  const persist = vi.fn((patch) => new Promise<typeof initial>((resolve) => { requests.push({ patch, resolve }); }));
+  const first = renderHook(() => useAutosaveFields(initial, persist, undefined, scope));
+  act(() => { void first.result.current.commit({ city: 'Paris' }); void first.result.current.commit({ city: 'Rome' }); });
+  first.unmount();
+  const second = renderHook(() => useAutosaveFields(initial, persist, undefined, scope));
+  act(() => { void second.result.current.commit({ city: 'Berlin' }); });
+  expect(requests).toHaveLength(1);
+  await act(async () => { requests[0].resolve({ city: 'Paris' }); });
+  expect(requests[1].patch).toEqual({ city: 'Berlin' });
+  await act(async () => { requests[1].resolve({ city: 'Berlin' }); await second.result.current.wait(); });
+  expect(second.result.current.confirmed()).toEqual({ city: 'Berlin' });
+});
+
+it('keeps a later confirmed replacement when an earlier request fails', async () => {
+  const initial = { city: 'London' };
+  let reject!: (error: Error) => void;
+  const persist = vi.fn(() => new Promise<typeof initial>((_resolve, fail) => { reject = fail; }));
+  const { result } = renderHook(() => useAutosaveFields(initial, persist));
+  act(() => { void result.current.commit({ city: 'Paris' }); });
+  act(() => { result.current.replace({ city: 'Berlin' }); });
+  await act(async () => { reject(new Error('Offline')); await result.current.wait(); });
+  expect(result.current.values.city).toBe('Berlin');
+  expect(result.current.confirmed().city).toBe('Berlin');
+});
+
+it('keeps a queued field pending when a newer value is staged', async () => {
+  const initial = { city: 'London', style: 'casual' };
+  const requests: { patch: Partial<typeof initial>; resolve: (value: typeof initial) => void }[] = [];
+  const persist = vi.fn((patch) => new Promise<typeof initial>((resolve) => { requests.push({ patch, resolve }); }));
+  const { result } = renderHook(() => useAutosaveFields(initial, persist));
+  act(() => { void result.current.commit({ city: 'Paris' }); void result.current.commit({ style: 'formal' }); result.current.stage({ style: 'sporty' }); });
+  await act(async () => { requests[0].resolve({ city: 'Paris', style: 'casual' }); });
+  expect(requests).toHaveLength(2);
+  expect(requests[1].patch).toEqual({ style: 'sporty' });
+  await act(async () => { requests[1].resolve({ city: 'Paris', style: 'sporty' }); });
+});
+
+it('waits for the previous mount queue before a returning Reset can post', async () => {
+  const scope = { resource: 'preferences', user: 'reset-remount' };
+  const initial = { city: 'London' };
+  const requests: { resolve: (value: typeof initial) => void }[] = [];
+  const persist = vi.fn(() => new Promise<typeof initial>((resolve) => { requests.push({ resolve }); }));
+  const first = renderHook(() => useAutosaveFields(initial, persist, undefined, scope));
+  act(() => { void first.result.current.commit({ city: 'Paris' }); void first.result.current.commit({ city: 'Rome' }); });
+  first.unmount();
+  const second = renderHook(() => useAutosaveFields(initial, persist, undefined, scope));
+  const postReset = vi.fn();
+  let reset!: Promise<void>;
+  await act(async () => { reset = second.result.current.wait().then(postReset); });
+  expect(postReset).not.toHaveBeenCalled();
+  await act(async () => { requests[0].resolve({ city: 'Paris' }); });
+  await act(async () => { requests[1].resolve({ city: 'Rome' }); await reset; });
+  expect(postReset).toHaveBeenCalledOnce();
+});
+
+it('queues a conversion while saves are pending instead of throwing', async () => {
+  const initial = { height: 178 };
+  let finish!: (value: typeof initial) => void;
+  const persist = vi.fn(() => new Promise<typeof initial>((resolve) => { finish = resolve; }));
+  const { result } = renderHook(() => useAutosaveFields(initial, persist));
+  act(() => { void result.current.commit({ height: 180 }); });
+  let conversion!: Promise<void>;
+  act(() => { conversion = result.current.transform('height', (value) => (value ?? 0) / 2); });
+  await act(async () => { finish({ height: 180 }); await conversion; });
+  expect(result.current.values.height).toBe(90);
+});
+
+it.each([{ resource: 'preferences', user: 'second-user' }, { resource: 'profile', user: 'first-user' }])('isolates resources with a different scope %j', async (other) => {
+  const initial = { city: 'London' };
+  const persist = vi.fn(async (patch) => patch);
+  const first = renderHook(() => useAutosaveFields(initial, persist, undefined, { resource: 'preferences', user: 'first-user' }));
+  const second = renderHook(() => useAutosaveFields(initial, persist, undefined, other));
+  act(() => { first.result.current.stage({ city: 'Paris' }); });
+  expect(second.result.current.values.city).toBe('London');
+  await act(async () => { await second.result.current.commit({ city: 'Berlin' }); });
+  expect(first.result.current.values.city).toBe('Paris');
+  expect(second.result.current.confirmed().city).toBe('Berlin');
+});

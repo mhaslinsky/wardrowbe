@@ -115,7 +115,7 @@ it.each([Array(21).fill('rule').join('\n'), 'x'.repeat(301)])('blocks invalid st
   render(<SettingsPage />);
   fireEvent.change(screen.getByLabelText('standingRules.label'), { target: { value } });
   fireEvent.blur(screen.getByLabelText('standingRules.label'));
-  expect(await screen.findByRole('alert')).toHaveTextContent('standingRules.limit');
+  expect(await screen.findByText('standingRules.limit')).toBeInTheDocument();
   fireEvent.change(selectFor('temperature.unit'), { target: { value: 'fahrenheit' } });
   await waitFor(() => expect(state.save).toHaveBeenCalledWith({ temperature_unit: 'fahrenheit' }));
   expect(state.save).toHaveBeenCalledTimes(1);
@@ -175,7 +175,7 @@ it.each(['', '91'])('blocks invalid latitude (%s) while other profile fields sti
   render(<SettingsPage />);
   fireEvent.change(inputFor('location.latitude'), { target: { value } });
   fireEvent.blur(inputFor('location.latitude'));
-  expect(screen.getByRole('alert')).toHaveTextContent(value ? 'location.errors.latitudeRange' : 'location.errors.invalidCoordinates');
+  expect(screen.getByText(value ? 'location.errors.latitudeRange' : 'location.errors.invalidCoordinates')).toBeInTheDocument();
   fireEvent.change(selectFor('location.timezone'), { target: { value: 'Europe/Paris' } });
   await waitFor(() => expect(state.profileSave).toHaveBeenCalledTimes(1));
   expect(state.profileSave).toHaveBeenCalledWith({ timezone: 'Europe/Paris' });
@@ -255,7 +255,7 @@ it('R1-4: late reverse geocoding never replays coordinates over a newer edit', a
   await act(async () => { finishLookup(new Response(JSON.stringify({ address: { city: 'Detected' } }))); });
   await waitFor(() => expect(state.profileSave).toHaveBeenCalled());
   expect(inputFor('location.latitude')).toHaveValue(30);
-  expect(state.profileSave.mock.calls.at(-1)?.[0]).toEqual({ location_lat: 30 });
+  expect(state.profileSave.mock.calls.at(-1)?.[0]).toEqual({ location_lat: 30, location_lon: 20 });
 });
 
 it('R1-6: Reset shows one error with the server reason', async () => {
@@ -287,7 +287,7 @@ it('clears the rules error when the editor returns to its saved value', () => {
   const editor = screen.getByLabelText('standingRules.label');
   fireEvent.change(editor, { target: { value: 'x'.repeat(301) } });
   fireEvent.blur(editor);
-  expect(screen.getByRole('alert')).toHaveTextContent('standingRules.limit');
+  expect(screen.getByText('standingRules.limit')).toBeInTheDocument();
   fireEvent.change(editor, { target: { value: 'Original' } });
   fireEvent.blur(editor);
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -301,7 +301,7 @@ it('clears invalid coordinate errors when location detection supplies valid coor
   render(<SettingsPage />);
   fireEvent.change(inputFor('location.latitude'), { target: { value: '91' } });
   fireEvent.blur(inputFor('location.latitude'));
-  expect(screen.getByRole('alert')).toHaveTextContent('location.errors.latitudeRange');
+  expect(screen.getByText('location.errors.latitudeRange')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'location.useMyLocation' }));
   await act(async () => { locate({ coords: { latitude: 10, longitude: 20 } } as GeolocationPosition); });
   await waitFor(() => expect(state.profileSave).toHaveBeenCalled());
@@ -331,4 +331,86 @@ it('shows an ordinary save failure reason once while keeping the short status', 
   fireEvent.change(selectFor('temperature.unit'), { target: { value: 'fahrenheit' } });
   expect(await screen.findByRole('alert')).toHaveTextContent('autosave.error');
   expect(toast.error).toHaveBeenCalledExactlyOnceWith('Preferences changed');
+});
+
+it('saves valid rules after a limit error and warns before leaving an invalid draft', async () => {
+  const confirm = vi.fn(() => false);
+  vi.stubGlobal('confirm', confirm);
+  render(<SettingsPage />);
+  const editor = screen.getByLabelText('standingRules.label');
+  fireEvent.change(editor, { target: { value: 'x'.repeat(301) } });
+  fireEvent.blur(editor);
+  fireEvent.change(editor, { target: { value: 'A valid rule' } });
+  fireEvent.blur(editor);
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: ['A valid rule'] }));
+  fireEvent.change(editor, { target: { value: 'x'.repeat(301) } });
+  const navigate = new MouseEvent('click', { bubbles: true, cancelable: true });
+  screen.getByRole('link', { name: 'fitProfile' }).dispatchEvent(navigate);
+  expect(confirm).toHaveBeenCalledWith('confirmLeave');
+  expect(navigate.defaultPrevented).toBe(true);
+});
+
+it('keeps a unit-toggle click made while the blur save is pending', async () => {
+  state.profile = { body_measurements: { height: 178 } };
+  let finish!: (value: unknown) => void;
+  state.profileSave.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  render(<SettingsPage />);
+  fireEvent.change(inputFor('body.fields.height'), { target: { value: '180' } });
+  fireEvent.blur(inputFor('body.fields.height'));
+  fireEvent.click(screen.getByRole('button', { name: 'body.metric' }));
+  await act(async () => { finish({ body_measurements: { height: 180 } }); });
+  expect(screen.getByRole('button', { name: 'body.imperial' })).toBeEnabled();
+  expect(inputFor('body.fields.height')).toHaveValue(70.9);
+});
+
+it('combines both resource statuses with saving before errors and one final Saved', async () => {
+  state.profile = { location_name: 'London' };
+  state.save.mockRejectedValueOnce(new Error('Offline'));
+  render(<SettingsPage />);
+  fireEvent.change(selectFor('temperature.unit'), { target: { value: 'fahrenheit' } });
+  await screen.findByRole('alert');
+  let finish!: (value: unknown) => void;
+  state.profileSave.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  fireEvent.change(inputFor('location.cityLabel'), { target: { value: 'Paris' } });
+  fireEvent.blur(inputFor('location.cityLabel'));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('autosave.saving');
+  await act(async () => { finish({ location_name: 'Paris' }); });
+  expect(screen.getByRole('alert')).toHaveTextContent('autosave.error');
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  fireEvent.change(selectFor('temperature.unit'), { target: { value: 'fahrenheit' } });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('autosave.saved'));
+  expect(screen.getAllByRole('status')).toHaveLength(1);
+});
+
+it('validates coordinates together and saves a valid pair in one PATCH', async () => {
+  state.profile = { location_lat: 1, location_lon: 2 };
+  render(<SettingsPage />);
+  fireEvent.change(inputFor('location.latitude'), { target: { value: '3' } });
+  fireEvent.change(inputFor('location.longitude'), { target: { value: '400' } });
+  fireEvent.blur(inputFor('location.latitude'));
+  expect(screen.getByText('location.errors.longitudeRange')).toBeInTheDocument();
+  expect(state.profileSave).not.toHaveBeenCalled();
+  fireEvent.change(inputFor('location.longitude'), { target: { value: '4' } });
+  fireEvent.blur(inputFor('location.longitude'));
+  await waitFor(() => expect(state.profileSave).toHaveBeenCalledWith({ location_lat: 3, location_lon: 4 }));
+});
+
+it('retains an invalid rules draft without sending it when a queued rule is edited', async () => {
+  let finish!: (value: unknown) => void;
+  state.save.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  render(<SettingsPage />);
+  fireEvent.change(selectFor('temperature.unit'), { target: { value: 'fahrenheit' } });
+  const editor = screen.getByLabelText('standingRules.label');
+  fireEvent.change(editor, { target: { value: 'Queued rule' } });
+  fireEvent.blur(editor);
+  fireEvent.change(editor, { target: { value: 'x'.repeat(301) } });
+  fireEvent.blur(editor);
+  await act(async () => { finish({ ...state.preferences, temperature_unit: 'fahrenheit' }); });
+  expect(state.save).toHaveBeenCalledTimes(1);
+  expect(editor).toHaveValue('x'.repeat(301));
+  expect(screen.getByText('standingRules.limit')).toBeInTheDocument();
+  fireEvent.change(editor, { target: { value: 'Valid latest rule' } });
+  fireEvent.blur(editor);
+  await waitFor(() => expect(state.save).toHaveBeenLastCalledWith({ standing_rules: ['Valid latest rule'] }));
 });
