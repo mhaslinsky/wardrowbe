@@ -224,7 +224,8 @@ export default function SettingsPage() {
   const testEndpoint = useTestAIEndpoint();
   const updateUserProfile = useUpdateUserProfile({ toastsOwnErrors: true });
 
-  const autosave = useAutosaveFields<Preferences>(preferences, updatePreferences.mutateAsync);
+  const reportSaveError = (error: unknown) => toast.error(error instanceof Error ? error.message : t('autosave.error'));
+  const autosave = useAutosaveFields<Preferences>(preferences, updatePreferences.mutateAsync, reportSaveError);
   const formData = autosave.values;
   const occasions = useOccasionOptions([formData.default_occasion, preferences?.default_occasion]);
   const [standingRulesError, setStandingRulesError] = useState(false);
@@ -241,7 +242,9 @@ export default function SettingsPage() {
     }
     return 'metric';
   });
-  const initialProfile = useMemo(() => userProfile ? displayProfile(userProfile, unitSystem) : undefined, [userProfile, unitSystem]);
+  const unitSystemRef = useRef(unitSystem);
+  unitSystemRef.current = unitSystem;
+  const initialProfile = useMemo(() => userProfile ? displayProfile(userProfile, unitSystemRef.current) : undefined, [userProfile]);
   const profileAutosave = useAutosaveFields<ProfileFields>(initialProfile, async (patch) => {
     const payload: UserProfileUpdate = {};
     if ('location_name' in patch) payload.location_name = patch.location_name;
@@ -252,11 +255,11 @@ export default function SettingsPage() {
       const parsed = Object.fromEntries(Object.entries(patch.body_measurements || {})
         .filter(([, value]) => value.trim())
         .map(([key, value]) => [key, NUMERIC_MEASUREMENT_KEYS.includes(key)
-          ? convertMeasurement(Number(value), key, unitSystem, 'metric') : value.trim()]));
+          ? convertMeasurement(Number(value), key, unitSystemRef.current, 'metric') : value.trim()]));
       payload.body_measurements = Object.keys(parsed).length ? parsed : null;
     }
-    return displayProfile(await updateUserProfile.mutateAsync(payload), unitSystem);
-  });
+    return displayProfile(await updateUserProfile.mutateAsync(payload), unitSystemRef.current);
+  }, reportSaveError);
   const locationName = profileAutosave.values.location_name || '';
   const locationLat = profileAutosave.values.location_lat || '';
   const locationLon = profileAutosave.values.location_lon || '';
@@ -301,6 +304,9 @@ export default function SettingsPage() {
 
     const data = await response.json();
     const resolved = resolveNetworkLocation(data, timezone);
+    clearProfileError('location_lat');
+    clearProfileError('location_lon');
+    if (resolved.locationName) clearProfileError('location_name');
     void profileAutosave.commit({
       location_lat: resolved.lat,
       location_lon: resolved.lon,
@@ -381,14 +387,19 @@ export default function SettingsPage() {
         const lat = position.coords.latitude.toFixed(6);
         const lon = position.coords.longitude.toFixed(6);
         const originalName = profileAutosave.current.current.location_name;
-        void profileAutosave.commit({ location_lat: lat, location_lon: lon });
+        clearProfileError('location_lat');
+        clearProfileError('location_lon');
+        const coordinatesSaved = profileAutosave.commit({ location_lat: lat, location_lon: lon });
         const name = await finalizeFromCoordinates(lat, lon);
+        await coordinatesSaved;
+        const confirmed = profileAutosave.confirmed();
+        const coordinatesMatch = Number(confirmed.location_lat) === Number(lat) && Number(confirmed.location_lon) === Number(lon);
         const current = profileAutosave.current.current;
-        if (name && Number(current.location_lat) === Number(lat) && Number(current.location_lon) === Number(lon) && current.location_name === originalName) {
+        if (coordinatesMatch && name && Number(current.location_lat) === Number(lat) && Number(current.location_lon) === Number(lon) && current.location_name === originalName) {
           void profileAutosave.commit({ location_name: name });
         }
         setIsGettingLocation(false);
-        toast.success(t('location.detected'));
+        if (coordinatesMatch) toast.success(t('location.detected'));
       },
       (error) => {
         void fallbackToNetworkLocation(describeGeolocationFailure(error));
@@ -791,7 +802,7 @@ export default function SettingsPage() {
                   replacesColors={!!(formData.color_favorites?.length || formData.color_avoid?.length)}
                   onClose={() => setPaletteSeason(null)}
                   onApply={(palette) => {
-                    void autosave.commit({ color_favorites: palette.best, color_avoid: palette.avoid });
+                    void autosave.commit({ color_favorites: palette.best, color_avoid: palette.avoid }, { atomic: true });
                     setPaletteSeason(null);
                   }}
                 />
@@ -967,7 +978,12 @@ export default function SettingsPage() {
               id="standing-rules"
               rows={5}
               value={(formData.standing_rules || []).join('\n')}
-              onChange={(event) => updateField('standing_rules', event.target.value.split('\n'), false)}
+              onChange={(event) => {
+                const rules = event.target.value.split('\n').map((rule) => rule.trim()).filter(Boolean);
+                const valid = rules.length <= 20 && rules.every((rule) => rule.length <= 300);
+                setStandingRulesError((previous) => previous && !valid);
+                updateField('standing_rules', event.target.value.split('\n'), false);
+              }}
               onBlur={(event) => saveStandingRules(event.target.value)}
               aria-invalid={standingRulesError}
               aria-describedby={standingRulesError ? 'standing-rules-error' : undefined}

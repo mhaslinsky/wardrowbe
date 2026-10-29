@@ -54,9 +54,6 @@
     },
     "imperial": "英制（in/lbs）",
     "metric": "公制（cm/kg）",
-    "saveError": "儲存測量數值失敗",
-    "saveMeasurements": "儲存測量數值",
-    "saved": "測量數值已儲存",
     "sizeFields": {
       "dressSize": "洋裝尺碼",
       "pantsSize": "褲子尺碼",
@@ -97,14 +94,11 @@
       "latitudeRange": "緯度必須介於 -90 到 90 之間",
       "longitudeRange": "經度必須介於 -180 到 180 之間",
       "networkLookupFailed": "透過網路查詢位置失敗（{status}）",
-      "saveFailed": "儲存位置失敗，請重試。",
       "unableToDetect": "無法偵測你的位置。"
     },
     "latitude": "緯度",
     "longitude": "經度",
     "required": "以天氣為依據的穿搭推薦需要設定位置。",
-    "saveLocation": "儲存位置",
-    "saved": "位置與時區已儲存",
     "selectTimezone": "選擇時區",
     "timezone": "時區",
     "title": "位置",
@@ -153,7 +147,6 @@
     "unit": "溫度單位"
   },
   "title": "設定",
-  "unsavedChanges": "你有未儲存的變更。確定要離開此頁面？",
   "standingRules": {
     "title": "固定規則",
     "description": "每行一條，最多20條。",

@@ -244,7 +244,7 @@ Feel and quality reasons use Fabric detail and Warmth notes. Pluses cite liked o
 
 ### Preferences and fit information
 
-In **Settings**, choices and color picks save immediately, sliders save when released, and text and number fields save when you leave the field. **Saved** confirms a save. If a save fails, **Could not save** appears and the field returns to its last saved value. **Reset** asks before restoring defaults. Leaving Settings saves valid text drafts. Reloading or closing the tab warns while edits remain; confirming can discard unsaved edits. Preview preferences keep their **Save preview preferences** control.
+In **Settings**, choices and color picks save immediately, sliders save when released, and text and number fields save when you leave the field. **Saved** confirms a save. If a save fails, **Could not save** appears. The field returns to its last saved value unless you edited it again; the error message gives the reason. **Reset** asks before restoring defaults. Leaving Settings saves valid text drafts. Reloading or closing the tab warns while edits remain; confirming can discard unsaved edits. Preview preferences keep their **Save preview preferences** control.
 
 - **Location**: use **Use My Location** or enter coordinates and review the timezone. Browser permission can be denied; manual entry remains available.
 - **Style Profile**, **Favorite Colors**, and **Colors to Avoid**: describe the styles and colors you want.
@@ -276,7 +276,7 @@ Choose **Not set** to stop applying a color season.
 
 Changing style sliders keeps your saved color season. Only changing **Color season** updates that preference.
 
-Changes made during a save are saved in order.
+The latest change saves after the current save finishes.
 
 Sources: [Settings](../frontend/app/dashboard/settings/page.tsx), [season palettes](../backend/app/data/color_seasons.py), [item scoring](../backend/app/services/item_scorer.py), [suggestion preferences](../backend/app/services/recommendation_service.py).
 

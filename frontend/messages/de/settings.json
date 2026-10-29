@@ -54,9 +54,6 @@
     },
     "imperial": "Imperial (in/lbs)",
     "metric": "Metrisch (cm/kg)",
-    "saveError": "Maße konnten nicht gespeichert werden",
-    "saveMeasurements": "Maße speichern",
-    "saved": "Maße gespeichert",
     "sizeFields": {
       "dressSize": "Kleidergröße",
       "pantsSize": "Hosengröße",
@@ -97,14 +94,11 @@
       "latitudeRange": "Der Breitengrad muss zwischen -90 und 90 liegen",
       "longitudeRange": "Der Längengrad muss zwischen -180 und 180 liegen",
       "networkLookupFailed": "Netzwerkbasierte Standortermittlung fehlgeschlagen ({status})",
-      "saveFailed": "Standort konnte nicht gespeichert werden. Bitte versuche es erneut.",
       "unableToDetect": "Dein Standort konnte nicht ermittelt werden."
     },
     "latitude": "Breitengrad",
     "longitude": "Längengrad",
     "required": "Für wetterbasierte Outfit-Empfehlungen ist ein Standort erforderlich.",
-    "saveLocation": "Standort speichern",
-    "saved": "Standort und Zeitzone gespeichert",
     "selectTimezone": "Zeitzone auswählen",
     "timezone": "Zeitzone",
     "title": "Standort",
@@ -153,7 +147,6 @@
     "unit": "Temperatureinheit"
   },
   "title": "Einstellungen",
-  "unsavedChanges": "Du hast ungespeicherte Änderungen. Diese Seite verlassen?",
   "standingRules": {
     "title": "Feste Regeln",
     "description": "Eine Regel pro Zeile, bis zu 20 Regeln.",

@@ -267,3 +267,68 @@ it('R1-6: Reset shows one error with the server reason', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'reset' }));
   await waitFor(() => expect(toast.error).toHaveBeenCalledExactlyOnceWith('Preferences changed'));
 });
+
+it('keeps a saved measurement when units change before the profile refetch', async () => {
+  state.profile = { body_measurements: { height: 178, chest: 96 } };
+  render(<SettingsPage />);
+  fireEvent.change(inputFor('body.fields.height'), { target: { value: '180' } });
+  fireEvent.blur(inputFor('body.fields.height'));
+  await screen.findByText('autosave.saved');
+  fireEvent.click(screen.getByRole('button', { name: 'body.metric' }));
+  expect(inputFor('body.fields.height')).toHaveValue(70.9);
+  fireEvent.change(inputFor('body.fields.chest'), { target: { value: '40' } });
+  fireEvent.blur(inputFor('body.fields.chest'));
+  await waitFor(() => expect(state.profileSave).toHaveBeenCalledTimes(2));
+  expect(state.profileSave.mock.calls[1][0].body_measurements.height).toBeCloseTo(180, 0);
+});
+
+it('clears the rules error when the editor returns to its saved value', () => {
+  render(<SettingsPage />);
+  const editor = screen.getByLabelText('standingRules.label');
+  fireEvent.change(editor, { target: { value: 'x'.repeat(301) } });
+  fireEvent.blur(editor);
+  expect(screen.getByRole('alert')).toHaveTextContent('standingRules.limit');
+  fireEvent.change(editor, { target: { value: 'Original' } });
+  fireEvent.blur(editor);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it('clears invalid coordinate errors when location detection supplies valid coordinates', async () => {
+  state.profile = { location_lat: 1, location_lon: 2 };
+  let locate!: PositionCallback;
+  vi.stubGlobal('navigator', { geolocation: { getCurrentPosition: vi.fn((success) => { locate = success; }) } });
+  vi.mocked(fetch).mockResolvedValueOnce(new Response('{}'));
+  render(<SettingsPage />);
+  fireEvent.change(inputFor('location.latitude'), { target: { value: '91' } });
+  fireEvent.blur(inputFor('location.latitude'));
+  expect(screen.getByRole('alert')).toHaveTextContent('location.errors.latitudeRange');
+  fireEvent.click(screen.getByRole('button', { name: 'location.useMyLocation' }));
+  await act(async () => { locate({ coords: { latitude: 10, longitude: 20 } } as GeolocationPosition); });
+  await waitFor(() => expect(state.profileSave).toHaveBeenCalled());
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it('does not save a reverse-geocoded city when its coordinates fail to save', async () => {
+  state.profile = { location_lat: 1, location_lon: 2, location_name: 'Original' };
+  let locate!: PositionCallback;
+  let rejectCoordinates!: (error: Error) => void;
+  state.profileSave.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectCoordinates = reject; }));
+  vi.stubGlobal('navigator', { geolocation: { getCurrentPosition: vi.fn((success) => { locate = success; }) } });
+  vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ address: { city: 'Detected' } })));
+  render(<SettingsPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'location.useMyLocation' }));
+  await act(async () => { locate({ coords: { latitude: 10, longitude: 20 } } as GeolocationPosition); });
+  await act(async () => { rejectCoordinates(new Error('Offline')); });
+  expect(state.profileSave).toHaveBeenCalledTimes(1);
+  expect(inputFor('location.cityLabel')).toHaveValue('Original');
+});
+
+it('shows an ordinary save failure reason once while keeping the short status', async () => {
+  const { toast } = await import('sonner');
+  vi.mocked(toast.error).mockClear();
+  state.save.mockRejectedValueOnce(new Error('Preferences changed'));
+  render(<SettingsPage />);
+  fireEvent.change(selectFor('temperature.unit'), { target: { value: 'fahrenheit' } });
+  expect(await screen.findByRole('alert')).toHaveTextContent('autosave.error');
+  expect(toast.error).toHaveBeenCalledExactlyOnceWith('Preferences changed');
+});

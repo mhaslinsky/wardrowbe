@@ -38,3 +38,15 @@ it.each(['update', 'reset'] as const)('R1-6: %s delegates error feedback to the 
   expect(toast.error).not.toHaveBeenCalled();
   client.clear();
 });
+
+it('writes confirmed profile fields into the cache without replacing unrelated fields', async () => {
+  const { useUpdateUserProfile } = await import('@/lib/hooks/use-user');
+  const client = new QueryClient();
+  client.setQueryData(queryKeys.userProfile, { body_measurements: { height: 178 }, timezone: 'UTC' });
+  vi.mocked(api.patch).mockResolvedValueOnce({ body_measurements: { height: 180 }, timezone: 'Europe/London' });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const { result } = renderHook(() => useUpdateUserProfile(), { wrapper });
+  await act(async () => { await result.current.mutateAsync({ body_measurements: { height: 180 } }); });
+  expect(client.getQueryData(queryKeys.userProfile)).toEqual({ body_measurements: { height: 180 }, timezone: 'UTC' });
+  client.clear();
+});

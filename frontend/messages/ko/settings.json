@@ -54,9 +54,6 @@
     },
     "imperial": "야드파운드법 (in/lbs)",
     "metric": "미터법 (cm/kg)",
-    "saveError": "신체 치수 저장 실패",
-    "saveMeasurements": "치수 저장",
-    "saved": "치수가 저장되었어요",
     "sizeFields": {
       "dressSize": "드레스 사이즈",
       "pantsSize": "바지 사이즈",
@@ -97,14 +94,11 @@
       "latitudeRange": "위도는 -90에서 90 사이여야 해요",
       "longitudeRange": "경도는 -180에서 180 사이여야 해요",
       "networkLookupFailed": "네트워크 기반 위치 조회에 실패했어요 ({status})",
-      "saveFailed": "위치 저장에 실패했어요. 다시 시도해 주세요.",
       "unableToDetect": "위치를 감지할 수 없어요."
     },
     "latitude": "위도",
     "longitude": "경도",
     "required": "날씨 기반 코디 추천에는 위치가 필요해요.",
-    "saveLocation": "위치 저장",
-    "saved": "위치와 시간대가 저장되었어요",
     "selectTimezone": "시간대 선택",
     "timezone": "시간대",
     "title": "위치",
@@ -153,7 +147,6 @@
     "unit": "온도 단위"
   },
   "title": "설정",
-  "unsavedChanges": "저장하지 않은 변경사항이 있어요. 이 페이지를 나가시겠어요?",
   "standingRules": {
     "title": "기본 규칙",
     "description": "한 줄에 하나씩, 최대 20개.",

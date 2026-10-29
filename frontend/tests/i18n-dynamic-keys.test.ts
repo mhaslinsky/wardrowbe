@@ -48,6 +48,8 @@ const SIZE_FIELDS = ['shirt_size', 'pants_size', 'dress_size', 'shoe_size'] as c
 const STYLE_VALUES = ['bold', 'casual', 'formal', 'minimalist', 'sporty'] as const;
 const WEATHER_CONDITIONS = ['clear', 'cloudy', 'rain', 'snow'] as const;
 
+const AUTOSAVE_STATUSES = ['saving', 'saved', 'error'] as const;
+
 const DYNAMIC_KEYS: Array<[string, readonly string[]]> = [
   ['constants.types', CLOTHING_TYPES.map((t) => t.value)],
   ['constants.colors', CLOTHING_COLORS.map((c) => c.value)],
@@ -59,6 +61,7 @@ const DYNAMIC_KEYS: Array<[string, readonly string[]]> = [
   ['notifications.days', NOTIFICATION_DAYS],
   ['outfits.calendar.weekDays', CALENDAR_WEEKDAYS],
   ['wardrobe.sort', WARDROBE_SORTS],
+  ['settings.autosave', AUTOSAVE_STATUSES],
   ['settings.body.fields', BODY_FIELDS],
   ['settings.body.sizePlaceholders', SIZE_FIELDS],
 ];

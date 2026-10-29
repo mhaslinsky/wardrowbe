@@ -54,9 +54,6 @@
     },
     "imperial": "英制（in/lbs）",
     "metric": "公制（cm/kg）",
-    "saveError": "保存尺寸失败",
-    "saveMeasurements": "保存尺寸",
-    "saved": "尺寸已保存",
     "sizeFields": {
       "dressSize": "裙装尺码",
       "pantsSize": "裤子尺码",
@@ -97,14 +94,11 @@
       "latitudeRange": "纬度必须在 -90 到 90 之间",
       "longitudeRange": "经度必须在 -180 到 180 之间",
       "networkLookupFailed": "基于网络的位置查询失败（{status}）",
-      "saveFailed": "保存位置失败，请重试。",
       "unableToDetect": "无法检测到您的位置。"
     },
     "latitude": "纬度",
     "longitude": "经度",
     "required": "基于天气的穿搭推荐需要设置位置。",
-    "saveLocation": "保存位置",
-    "saved": "位置和时区已保存",
     "selectTimezone": "选择时区",
     "timezone": "时区",
     "title": "位置",
@@ -153,7 +147,6 @@
     "unit": "温度单位"
   },
   "title": "设置",
-  "unsavedChanges": "您有未保存的更改。确定离开此页面？",
   "standingRules": {
     "title": "固定规则",
     "description": "每行一条，最多20条。",

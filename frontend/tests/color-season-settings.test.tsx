@@ -209,3 +209,16 @@ it('resets applied colors and the season to the saved reset response', async () 
   expect(screen.queryByRole('button', { name: 'save' })).not.toBeInTheDocument()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
+
+it('sends both palette lists even when the favorite list already matches', async () => {
+  const best = ['black', 'white', 'navy', 'blue', 'purple', 'silver'];
+  const avoid = ['orange', 'brown', 'tan', 'gold', 'cream'];
+  state.preferences = { standing_rules: [], color_favorites: best, color_avoid: ['tan'] };
+  render(<SettingsPage />);
+  fireEvent.change(screen.getByLabelText('colorSeason.label'), { target: { value: 'cool-winter' } });
+  const dialog = await screen.findByRole('dialog');
+  const apply = within(dialog).getByRole('button', { name: 'colorSeason.useColors' });
+  await waitFor(() => expect(apply).toBeEnabled());
+  fireEvent.click(apply);
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({ color_favorites: best, color_avoid: avoid }));
+});

@@ -54,9 +54,6 @@
     },
     "imperial": "Impérial (in/lbs)",
     "metric": "Métrique (cm/kg)",
-    "saveError": "Échec de l’enregistrement des mensurations",
-    "saveMeasurements": "Enregistrer les mensurations",
-    "saved": "Mensurations enregistrées",
     "sizeFields": {
       "dressSize": "Taille robe",
       "pantsSize": "Taille pantalon",
@@ -97,14 +94,11 @@
       "latitudeRange": "La latitude doit être comprise entre -90 et 90",
       "longitudeRange": "La longitude doit être comprise entre -180 et 180",
       "networkLookupFailed": "Échec de la localisation par le réseau ({status})",
-      "saveFailed": "Échec de l'enregistrement de la localisation. Veuillez réessayer.",
       "unableToDetect": "Impossible de détecter votre localisation."
     },
     "latitude": "Latitude",
     "longitude": "Longitude",
     "required": "La localisation est requise pour les recommandations de tenues basées sur la météo.",
-    "saveLocation": "Enregistrer la localisation",
-    "saved": "Localisation et fuseau horaire enregistrés",
     "selectTimezone": "Sélectionner le fuseau horaire",
     "timezone": "Fuseau horaire",
     "title": "Localisation",
@@ -153,7 +147,6 @@
     "unit": "Unité de température"
   },
   "title": "Paramètres",
-  "unsavedChanges": "Vous avez des modifications non enregistrées. Quitter cette page ?",
   "standingRules": {
     "title": "Règles permanentes",
     "description": "Une règle par ligne, 20 règles maximum.",

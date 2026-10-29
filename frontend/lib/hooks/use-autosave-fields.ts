@@ -14,126 +14,141 @@ function sameValue(left: unknown, right: unknown): boolean {
   );
 }
 
+type Resource<Fields> = {
+  server: Partial<Fields>;
+  drafts: Partial<Fields>;
+  pending: Set<keyof Fields>;
+  inflight: { sent: Partial<Fields>; before: Partial<Fields> } | null;
+  failures: Map<keyof Fields, unknown>;
+  saved: boolean;
+};
+
 export function useAutosaveFields<Fields extends object>(
   initial: Partial<Fields> | undefined,
   persist: (patch: Partial<Fields>) => Promise<Partial<Fields>>,
+  onError?: (error: unknown) => void,
 ) {
-  const [values, setValues] = useState<Partial<Fields>>(() => structuredClone(initial ?? {}));
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [busy, setBusy] = useState(false);
-  const current = useRef(structuredClone(values));
-  const saved = useRef(structuredClone(values));
-  const revisions = useRef(new Map<keyof Fields, number>());
-  const drafts = useRef(new Set<keyof Fields>());
-  const failures = useRef(new Set<keyof Fields>());
-  const queued = useRef(new Map<keyof Fields, { count: number; value: unknown }>());
-  const tail = useRef(Promise.resolve());
-  const pending = useRef(0);
-  const succeeded = useRef(false);
-
-  const publish = () => {
-    setValues(structuredClone(current.current));
-    setBusy(pending.current > 0);
-    setStatus(failures.current.size ? 'error' : pending.current ? 'saving' : succeeded.current ? 'saved' : 'idle');
+  const resource = useRef<Resource<Fields> | null>(null);
+  if (!resource.current) resource.current = {
+    server: structuredClone(initial ?? {}), drafts: {}, pending: new Set(), inflight: null, failures: new Map(), saved: false,
   };
+  const state = resource.current;
+  const snapshot = () => {
+    const dirty = Object.keys(state.drafts).length > 0;
+    const busy = !!state.inflight || state.pending.size > 0;
+    const status = state.failures.size ? 'error' : busy ? 'saving' : dirty ? 'idle' : state.saved ? 'saved' : 'idle';
+    return { values: structuredClone({ ...state.server, ...state.inflight?.sent, ...state.drafts }), dirty, busy, status } as const;
+  };
+  const [view, setView] = useState(snapshot);
+  const current = useRef(view.values);
+  const callbacks = useRef({ persist, onError });
+  callbacks.current = { persist, onError };
+  const sender = useRef<Promise<void> | null>(null);
+  const publish = () => { const next = snapshot(); current.current = next.values; setView(next); };
+  const fields = (patch: Partial<Fields>) => Object.keys(patch) as (keyof Fields)[];
+  const base = (key: keyof Fields) => state.inflight && Object.hasOwn(state.inflight.sent, key) ? state.inflight.sent[key] : state.server[key];
 
   useEffect(() => {
     if (!initial) return;
     for (const key of Object.keys(initial) as (keyof Fields)[]) {
-      if (drafts.current.has(key) || queued.current.has(key)) continue;
-      saved.current[key] = structuredClone(initial[key]);
-      current.current[key] = structuredClone(initial[key]);
+      if (Object.hasOwn(state.drafts, key) || state.pending.has(key) || (state.inflight && Object.hasOwn(state.inflight.sent, key))) continue;
+      state.server[key] = structuredClone(initial[key]);
     }
-    setValues(structuredClone(current.current));
-  }, [initial]);
+    const values = structuredClone({ ...state.server, ...state.inflight?.sent, ...state.drafts });
+    current.current = values;
+    setView((previous) => ({ ...previous, values }));
+  }, [initial, state]);
 
-  const target = (key: keyof Fields) => queued.current.has(key) ? queued.current.get(key)!.value : saved.current[key];
   const stage = (patch: Partial<Fields>) => {
-    for (const key of Object.keys(patch) as (keyof Fields)[]) {
+    for (const key of fields(patch)) {
       if (sameValue(current.current[key], patch[key])) continue;
-      revisions.current.set(key, (revisions.current.get(key) ?? 0) + 1);
-      current.current[key] = structuredClone(patch[key]);
-      failures.current.delete(key);
-      if (sameValue(patch[key], target(key))) drafts.current.delete(key);
-      else drafts.current.add(key);
-      succeeded.current = false;
+      state.pending.delete(key);
+      state.failures.delete(key);
+      state.saved = false;
+      if (sameValue(patch[key], base(key))) delete state.drafts[key];
+      else state.drafts[key] = structuredClone(patch[key]);
     }
     publish();
   };
 
-  const commit = (input: Partial<Fields>) => {
-    const patch = structuredClone(input);
-    const keys = (Object.keys(patch) as (keyof Fields)[]).filter((key) => !sameValue(patch[key], target(key)));
-    if (!keys.length) {
-      for (const key of Object.keys(patch) as (keyof Fields)[]) {
-        current.current[key] = structuredClone(patch[key]);
-        drafts.current.delete(key);
-      }
-      publish();
-      return tail.current;
-    }
-    const changed: Partial<Fields> = {};
-    for (const key of keys) changed[key] = patch[key];
-    stage(changed);
-    const submitted = new Map(keys.map((key) => [key, revisions.current.get(key)]));
-    const persistPatch = persist;
-    for (const key of keys) {
-      queued.current.set(key, { count: (queued.current.get(key)?.count ?? 0) + 1, value: structuredClone(changed[key]) });
-      drafts.current.delete(key);
-      failures.current.delete(key);
-    }
-    pending.current += 1;
-    publish();
-    // Serialize writes so an older request cannot commit after a newer one.
-    tail.current = tail.current.then(async () => {
+  const send = () => {
+    if (state.inflight || !state.pending.size) return;
+    let finish!: () => void;
+    sender.current = new Promise<void>((resolve) => { finish = resolve; });
+    void (async () => {
       try {
-        const response = await persistPatch(changed);
-        if (keys.some((key) => !(key in response))) throw new Error('Saved field missing');
-        for (const key of keys) {
-          saved.current[key] = structuredClone(response[key]);
-          if (revisions.current.get(key) === submitted.get(key)) {
-            current.current[key] = structuredClone(response[key]);
-            drafts.current.delete(key);
-            failures.current.delete(key);
+        while (state.pending.size) {
+          const keys = Array.from(state.pending);
+          const sent: Partial<Fields> = {};
+          // Capture the rollback baseline before the request can trigger a refetch.
+          const before: Partial<Fields> = {};
+          for (const key of keys) {
+            sent[key] = structuredClone(state.drafts[key]);
+            before[key] = structuredClone(state.server[key]);
+            delete state.drafts[key];
           }
-        }
-        succeeded.current = true;
-      } catch {
-        for (const key of keys) {
-          if (revisions.current.get(key) === submitted.get(key)) {
-            current.current[key] = structuredClone(saved.current[key]);
-            drafts.current.delete(key);
-            failures.current.add(key);
+          state.pending.clear();
+          state.inflight = { sent, before };
+          publish();
+          try {
+            const response = await callbacks.current.persist(structuredClone(sent));
+            if (keys.some((key) => !(key in response))) throw new Error('Saved field missing');
+            for (const key of keys) {
+              state.server[key] = structuredClone(response[key]);
+              state.failures.delete(key);
+            }
+            state.saved = true;
+          } catch (error) {
+            for (const key of keys) {
+              state.server[key] = structuredClone(before[key]);
+              if (!Object.hasOwn(state.drafts, key)) state.failures.set(key, error);
+            }
+            callbacks.current.onError?.(error);
           }
+          state.inflight = null;
         }
       } finally {
-        for (const key of keys) {
-          const entry = queued.current.get(key)!;
-          if (entry.count === 1) queued.current.delete(key);
-          else entry.count -= 1;
-        }
-        pending.current -= 1;
+        sender.current = null;
         publish();
+        finish();
       }
-    });
-    return tail.current;
+    })();
+  };
+
+  const commit = (patch: Partial<Fields>, { atomic = false } = {}) => {
+    stage(patch);
+    for (const key of fields(patch)) {
+      if (!atomic && sameValue(patch[key], base(key))) {
+        delete state.drafts[key];
+        state.pending.delete(key);
+      } else {
+        state.drafts[key] = structuredClone(patch[key]);
+        state.pending.add(key);
+        state.failures.delete(key);
+      }
+    }
+    send();
+    publish();
+    return sender.current ?? Promise.resolve();
   };
 
   const replace = (next: Partial<Fields>) => {
-    saved.current = structuredClone(next);
-    current.current = structuredClone(next);
-    drafts.current.clear();
-    failures.current.clear();
-    succeeded.current = true;
+    state.server = structuredClone(next);
+    state.drafts = {};
+    state.pending.clear();
+    state.failures.clear();
+    state.saved = true;
     publish();
   };
 
   const transform = <Key extends keyof Fields>(key: Key, convert: (value: Fields[Key] | undefined) => Fields[Key]) => {
-    saved.current[key] = convert(structuredClone(saved.current[key]));
-    current.current[key] = convert(structuredClone(current.current[key]));
+    if (state.inflight || state.pending.size) throw new Error('Wait for saves before changing units');
+    state.server[key] = convert(structuredClone(state.server[key]));
+    if (Object.hasOwn(state.drafts, key)) state.drafts[key] = convert(structuredClone(state.drafts[key]));
     publish();
   };
 
-  return { values, current, stage, commit, replace, transform, status, busy, dirty: drafts.current.size > 0,
-    isStaged: (key: keyof Fields) => drafts.current.has(key), draftKeys: () => Array.from(drafts.current), wait: () => tail.current };
+  return { ...view, current, stage, commit, replace, transform,
+    isStaged: (key: keyof Fields) => Object.hasOwn(state.drafts, key), draftKeys: () => fields(state.drafts),
+    confirmed: () => structuredClone(state.server), wait: () => sender.current ?? Promise.resolve() };
 }

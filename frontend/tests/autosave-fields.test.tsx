@@ -50,3 +50,49 @@ it('R1-8: copies replacement data, submitted patches and server responses', asyn
   response.rules.push('Changed after response');
   expect(result.current.values.rules).toEqual(['Saved']);
 });
+
+it('rolls back a failed value after editing away and back to the in-flight value', async () => {
+  const initial = { city: 'London' };
+  let reject!: (error: Error) => void;
+  const persist = vi.fn(() => new Promise<typeof initial>((_resolve, fail) => { reject = fail; }));
+  const { result } = renderHook(() => useAutosaveFields(initial, persist));
+  await act(async () => { void result.current.commit({ city: 'Paris' }); });
+  act(() => { result.current.stage({ city: 'Rome' }); result.current.stage({ city: 'Paris' }); });
+  await act(async () => { reject(new Error('Offline')); await result.current.wait(); });
+  expect(result.current.values.city).toBe('London');
+  expect(result.current.status).toBe('error');
+});
+
+it('adopts a normalized response after a draft returns to the in-flight value', async () => {
+  const initial = { city: 'London' };
+  let resolve!: (value: typeof initial) => void;
+  const persist = vi.fn(() => new Promise<typeof initial>((complete) => { resolve = complete; }));
+  const { result } = renderHook(() => useAutosaveFields(initial, persist));
+  await act(async () => { void result.current.commit({ city: ' paris ' }); });
+  act(() => { result.current.stage({ city: 'Rome' }); result.current.stage({ city: ' paris ' }); });
+  await act(async () => { resolve({ city: 'Paris' }); await result.current.wait(); });
+  expect(result.current.values.city).toBe('Paris');
+});
+
+it('retains the last committed value after an earlier failure and a no-op blur', async () => {
+  const initial = { city: 'London' };
+  let reject!: (error: Error) => void;
+  const persist = vi.fn(async (patch) => patch).mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+  const { result } = renderHook(() => useAutosaveFields(initial, persist));
+  await act(async () => { void result.current.commit({ city: 'Paris' }); });
+  act(() => { void result.current.commit({ city: 'Rome' }); void result.current.commit({ city: 'Rome' }); });
+  await act(async () => { reject(new Error('Offline')); await result.current.wait(); });
+  expect(result.current.values.city).toBe('Rome');
+  expect(persist).toHaveBeenLastCalledWith({ city: 'Rome' });
+});
+
+it('keeps the captured server baseline when a refetch arrives during a failing write', async () => {
+  let reject!: (error: Error) => void;
+  const persist = vi.fn(() => new Promise<{ city: string }>((_resolve, fail) => { reject = fail; }));
+  const { result, rerender } = renderHook(({ initial }) => useAutosaveFields(initial, persist), { initialProps: { initial: { city: 'London' } } });
+  await act(async () => { void result.current.commit({ city: 'Paris' }); });
+  rerender({ initial: { city: 'Berlin' } });
+  expect(result.current.values.city).toBe('Paris');
+  await act(async () => { reject(new Error('Offline')); await result.current.wait(); });
+  expect(result.current.values.city).toBe('London');
+});
