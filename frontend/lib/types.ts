@@ -336,7 +336,7 @@ export interface WeatherData {
   window_max?: number | null;
 }
 
-// /weather/current serves the same snapshot outfits store, minus the wearing-window range.
+// /weather/current returns live readings; outfit scoring uses separate active-hour averages.
 export type CurrentWeather = Omit<WeatherData, 'window_min' | 'window_max'>;
 
 export interface WoreInsteadItem {

@@ -64,7 +64,9 @@ class TripWeather:
     def __init__(self):
         self.weather = WeatherService()
 
-    async def for_dates(self, destination: str, dates: list[date], *, active_hours=(10, 18)) -> list[tuple[WeatherData, str]]:
+    async def for_dates(
+        self, destination: str, dates: list[date], *, active_hours=(10, 18)
+    ) -> list[tuple[WeatherData, str]]:
         location = await self.weather.geocode_location_name(destination)
         if location is None:
             raise ValueError("Destination not found")
@@ -173,11 +175,13 @@ class TripWeather:
                         )
                         response.raise_for_status()
                         normals = response.json()["daily"]
-                    results.append((self.climate_normal(day, normals), "climate"))
+                    results.append(
+                        (self.climate_normal(day, normals, active_hours=active_hours), "climate")
+                    )
         return results
 
     @staticmethod
-    def climate_normal(day: date, daily: dict) -> WeatherData:
+    def climate_normal(day: date, daily: dict, *, active_hours=(10, 18)) -> WeatherData:
         if not isinstance(daily["time"], list) or any(
             not isinstance(daily[field], list) or len(daily[field]) != len(daily["time"])
             for field in ("temperature_2m_min", "temperature_2m_max")
@@ -212,6 +216,8 @@ class TripWeather:
             timestamp=datetime.combine(day, datetime.min.time()),
             window_min=low,
             window_max=high,
+            window_start_hour=active_hours[0],
+            window_end_hour=active_hours[1],
         )
 
 

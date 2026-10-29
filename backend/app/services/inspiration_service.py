@@ -120,7 +120,9 @@ class InspirationService:
         if user.location_lat is None or user.location_lon is None:
             raise ValueError("Set your location first")
         weather = await recommendations.weather_service.get_current_weather(
-            float(user.location_lat), float(user.location_lon), active_hours=wearing_hours(preferences)
+            float(user.location_lat),
+            float(user.location_lon),
+            active_hours=wearing_hours(preferences),
         )
         candidates = await recommendations.get_candidate_items(
             user, weather, "casual", preferences, []
@@ -128,7 +130,7 @@ class InspirationService:
         today = get_user_today(user)
         scored = score_items(
             candidates,
-            weather,
+            weather.for_scoring(),
             "casual",
             preferences,
             today,

@@ -96,11 +96,7 @@ def format_temp_range_text(weather: WeatherData) -> str:
     temp_range = scoring_temp_range(weather)
     if temp_range is None:
         return ""
-    low, high = temp_range
-    return (
-        f"- Temperature ahead ranges from {low:.1f}°C to {high:.1f}°C, a large swing, "
-        "favour adaptable layers that work at both ends."
-    )
+    return "- A large swing: favour adaptable layers that work at both ends."
 
 
 def format_active_hours_weather(weather: WeatherData, preferences=None) -> str:
@@ -115,6 +111,10 @@ def format_active_hours_weather(weather: WeatherData, preferences=None) -> str:
     if fahrenheit:
         low, high = low * 9 / 5 + 32, high * 9 / 5 + 32
     unit = "F" if fahrenheit else "C"
+    if weather.condition == "climate normal":
+        return (
+            f"- Active hours: {hours}. Climate normal (whole day): {low:.0f} to {high:.0f}°{unit}."
+        )
     if weather.window_start_hour is None:
         return f"- Active hours: {hours}. Whole-day fallback: {low:.0f} to {high:.0f}°{unit}."
     return f"- {hours}: {low:.0f} to {high:.0f}°{unit}."
@@ -128,7 +128,11 @@ def suggestion_context(
     outfit_notes: list[dict] | None = None,
 ) -> dict:
     return {
-        "temps": [weather.temperature, weather.feels_like, *(scoring_temp_range(weather) or ())],
+        "temps": [
+            weather.for_scoring().temperature,
+            weather.for_scoring().feels_like,
+            *(scoring_temp_range(weather) or ()),
+        ],
         "outfit_notes": hashlib.sha256(
             json.dumps(outfit_notes or [], sort_keys=True).encode()
         ).hexdigest(),
@@ -286,7 +290,10 @@ class RecommendationService:
             # Pick-a-day outfits must exclude temperatures outside the user's active hours.
             preferences = await PreferenceService(self.db).get_preferences(user.id)
             weather = await self.weather_service.get_forecast_weather(
-                float(lat), float(lon), forecast, active_hours=wearing_hours(preferences),
+                float(lat),
+                float(lon),
+                forecast,
+                active_hours=wearing_hours(preferences),
             )
             self._defer_commit = True
             await self.generate_recommendations(
@@ -1237,7 +1244,7 @@ class RecommendationService:
         current_season = get_season(user_today.month, lat)
         scored = score_items(
             items=candidates,
-            weather=weather,
+            weather=weather.for_scoring(),
             occasion=occasion,
             preferences=preferences,
             user_today=user_today,
@@ -1287,13 +1294,19 @@ class RecommendationService:
         prompt = prompt_template.format(
             occasion=occasion,
             time_of_day=time_of_day,
-            temperature=weather.temperature,
-            feels_like=weather.feels_like,
+            temperature=weather.for_scoring().temperature,
+            feels_like=weather.for_scoring().feels_like,
             condition=weather.condition,
             precipitation_chance=weather.precipitation_chance,
-            temp_range_text="\n".join(filter(None, (
-                format_active_hours_weather(weather, preferences), format_temp_range_text(weather),
-            ))),
+            temp_range_text="\n".join(
+                filter(
+                    None,
+                    (
+                        format_active_hours_weather(weather, preferences),
+                        format_temp_range_text(weather),
+                    ),
+                )
+            ),
             preferences_text=preferences_text,
             items_text=items_text,
             mandatory_items_section=mandatory_items_section,

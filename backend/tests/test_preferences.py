@@ -33,20 +33,25 @@ DEFAULT_PREFERENCES_RESPONSE = {
 }
 
 
-@pytest.mark.parametrize("patch", [
-    {"active_start_hour": 10},
-    {"active_end_hour": 17},
-    {"active_start_hour": None, "active_end_hour": 17},
-    {"active_start_hour": 10, "active_end_hour": 11},
-    {"active_start_hour": 18, "active_end_hour": 10},
-    {"active_start_hour": -1, "active_end_hour": 17},
-    {"active_start_hour": 10, "active_end_hour": 24},
-    {"active_start_hour": "10", "active_end_hour": 17},
-    {"active_start_hour": True, "active_end_hour": 17},
-])
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"active_start_hour": 10},
+        {"active_end_hour": 17},
+        {"active_start_hour": None, "active_end_hour": 17},
+        {"active_start_hour": 10, "active_end_hour": 11},
+        {"active_start_hour": 18, "active_end_hour": 10},
+        {"active_start_hour": -1, "active_end_hour": 17},
+        {"active_start_hour": 10, "active_end_hour": 24},
+        {"active_start_hour": "10", "active_end_hour": 17},
+        {"active_start_hour": True, "active_end_hour": 17},
+    ],
+)
 async def test_invalid_active_hours_do_not_save(client, auth_headers, patch):
     path = "/api/v1/users/me/preferences"
-    await client.patch(path, headers=auth_headers, json={"active_start_hour": 10, "active_end_hour": 17})
+    await client.patch(
+        path, headers=auth_headers, json={"active_start_hour": 10, "active_end_hour": 17}
+    )
     response = await client.patch(path, headers=auth_headers, json=patch)
     assert response.status_code == 422
     saved = (await client.get(path, headers=auth_headers)).json()
@@ -55,14 +60,22 @@ async def test_invalid_active_hours_do_not_save(client, auth_headers, patch):
 
 async def test_active_hours_save_reload_unrelated_patch_and_reset(client, auth_headers):
     path = "/api/v1/users/me/preferences"
-    response = await client.patch(path, headers=auth_headers, json={"active_start_hour": 10, "active_end_hour": 17})
+    response = await client.patch(
+        path, headers=auth_headers, json={"active_start_hour": 10, "active_end_hour": 17}
+    )
     assert response.status_code == 200
     await client.patch(path, headers=auth_headers, json={"variety_level": "high"})
     saved = (await client.get(path, headers=auth_headers)).json()
     assert (saved["active_start_hour"], saved["active_end_hour"]) == (10, 17)
-    cleared = (await client.patch(path, headers=auth_headers, json={"active_start_hour": None, "active_end_hour": None})).json()
+    cleared = (
+        await client.patch(
+            path, headers=auth_headers, json={"active_start_hour": None, "active_end_hour": None}
+        )
+    ).json()
     assert cleared["active_start_hour"] is None and cleared["active_end_hour"] is None
-    await client.patch(path, headers=auth_headers, json={"active_start_hour": 0, "active_end_hour": 23})
+    await client.patch(
+        path, headers=auth_headers, json={"active_start_hour": 0, "active_end_hour": 23}
+    )
     reset = (await client.post(path + "/reset", headers=auth_headers)).json()
     assert reset["active_start_hour"] is None and reset["active_end_hour"] is None
 

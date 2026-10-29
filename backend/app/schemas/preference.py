@@ -239,8 +239,12 @@ class ColorSeasonPalette(BaseModel):
 
 
 class PreferenceResponse(PreferenceBase):
-    default_active_start_hour: int = Field(default_factory=lambda: get_settings().wearing_day_start_hour)
-    default_active_end_hour: int = Field(default_factory=lambda: get_settings().wearing_day_end_hour)
+    default_active_start_hour: int = Field(
+        default_factory=lambda: get_settings().wearing_day_start_hour
+    )
+    default_active_end_hour: int = Field(
+        default_factory=lambda: get_settings().wearing_day_end_hour
+    )
     wash_interval_defaults: dict[str, int] = Field(
         default_factory=lambda: dict(DEFAULT_WASH_INTERVALS)
     )

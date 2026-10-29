@@ -4,8 +4,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from app.database import DbSession
 from app.models.user import User
-from app.services.weather_service import GeocodingServiceError, WeatherService, WeatherServiceError
+from app.services.preference_service import PreferenceService
+from app.services.weather_service import (
+    GeocodingServiceError,
+    WeatherService,
+    WeatherServiceError,
+    wearing_hours,
+)
 from app.utils.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -55,6 +62,7 @@ class WeatherOverride(BaseModel):
 @router.get("/current", response_model=WeatherResponse)
 async def get_current_weather(
     current_user: Annotated[User, Depends(get_current_user)],
+    db: DbSession,
     latitude: float | None = Query(None, ge=-90, le=90),
     longitude: float | None = Query(None, ge=-180, le=180),
 ) -> WeatherResponse:
@@ -81,7 +89,10 @@ async def get_current_weather(
         )
 
     try:
-        weather = await weather_service.get_current_weather(float(lat), float(lon))
+        preferences = await PreferenceService(db).get_preferences(current_user.id)
+        weather = await weather_service.get_current_weather(
+            float(lat), float(lon), active_hours=wearing_hours(preferences)
+        )
     except WeatherServiceError as e:
         logger.error(f"Weather service error: {e}")
         raise HTTPException(

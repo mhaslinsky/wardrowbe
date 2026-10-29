@@ -263,7 +263,13 @@ class TestProcessScheduledNotification:
         schedule_user.location_lat = Decimal(lat)
         schedule_user.location_lon = Decimal(lon)
         if active_hours:
-            db_session.add(UserPreference(user_id=schedule_user.id, active_start_hour=active_hours[0], active_end_hour=active_hours[1]))
+            db_session.add(
+                UserPreference(
+                    user_id=schedule_user.id,
+                    active_start_hour=active_hours[0],
+                    active_end_hour=active_hours[1],
+                )
+            )
         schedule = _make_due_schedule(schedule_user, notify_day_before=notify_day_before)
         outfit = Outfit(
             user_id=schedule_user.id,
@@ -297,7 +303,9 @@ class TestProcessScheduledNotification:
         assert [c.args[0] for c in post.call_args_list] == ["https://ntfy.sh/test-topic"]
         forecast = weather_service.return_value.get_tomorrow_weather
         if notify_day_before:
-            forecast.assert_awaited_once_with(Decimal(lat), Decimal(lon), active_hours=active_hours or (0, 21))
+            forecast.assert_awaited_once_with(
+                Decimal(lat), Decimal(lon), active_hours=active_hours or (0, 21)
+            )
         else:
             forecast.assert_not_called()
         [row] = (

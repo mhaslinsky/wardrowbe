@@ -181,7 +181,9 @@ async def process_scheduled_notification(ctx: dict, schedule_id: str):
             try:
                 weather_service = WeatherService()
                 weather_override = await weather_service.get_tomorrow_weather(
-                    user.location_lat, user.location_lon, active_hours=wearing_hours(user.preferences)
+                    user.location_lat,
+                    user.location_lon,
+                    active_hours=wearing_hours(user.preferences),
                 )
                 logger.info(
                     f"Fetched tomorrow's forecast for user {user.id}: "

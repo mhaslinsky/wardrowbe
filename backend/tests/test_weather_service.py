@@ -11,11 +11,119 @@ from app.services.weather_service import (
     CACHE_PREFIX,
     GEOCODE_CACHE_PREFIX,
     WMO_CODES,
+    DailyForecast,
     GeocodingServiceError,
     WeatherData,
     WeatherService,
     WeatherServiceError,
 )
+
+
+async def test_current_readings_are_separate_from_outfit_averages(weather_service, mock_redis):
+    payload = {
+        "current": {
+            **SAMPLE_API_RESPONSE["current"],
+            "time": "2026-10-29T07:00",
+            "temperature_2m": 6.8,
+            "apparent_temperature": 5.2,
+        },
+        "hourly": {
+            "time": [f"2026-10-29T{hour:02d}:00" for hour in range(24)],
+            "temperature_2m": [20] * 24,
+            "apparent_temperature": [19] * 24,
+        },
+    }
+    with patch("httpx.AsyncClient.get", return_value=_mock_response(json_data=payload)):
+        weather = await weather_service.get_current_weather(40, -74, active_hours=(10, 17))
+    assert (weather.temperature, weather.feels_like) == (6.8, 5.2)
+    assert (weather.window_temperature, weather.window_feels_like) == (20, 19)
+    restored = WeatherData(**{**weather.to_dict(), "timestamp": weather.timestamp})
+    assert (restored.for_scoring().temperature, restored.for_scoring().feels_like) == (20, 19)
+    assert (weather.temperature, weather.feels_like) == (6.8, 5.2)
+
+
+@pytest.mark.parametrize(
+    "current_hour,expected_range,expected_mean", [(14, (20, 23), 21.5), (17, (None, None), None)]
+)
+async def test_today_only_uses_remaining_hours(
+    weather_service, mock_redis, current_hour, expected_range, expected_mean
+):
+    payload = {
+        "current": {
+            **SAMPLE_API_RESPONSE["current"],
+            "time": f"2026-10-29T{current_hour:02d}:00",
+            "temperature_2m": 22,
+        },
+        "hourly": {
+            "time": [f"2026-10-29T{hour:02d}:00" for hour in range(24)],
+            "temperature_2m": [1] * 14 + [20, 21, 22, 23] + [2] * 6,
+        },
+    }
+    with patch("httpx.AsyncClient.get", return_value=_mock_response(json_data=payload)):
+        weather = await weather_service.get_current_weather(40, -74, active_hours=(10, 17))
+    assert (weather.window_min, weather.window_max) == expected_range
+    assert weather.window_temperature == expected_mean
+    if current_hour == 14:
+        assert (weather.window_start_hour, weather.window_end_hour) == (14, 17)
+
+
+@pytest.mark.parametrize("offset", [0, 1])
+async def test_selected_date_trims_only_location_today(weather_service, offset):
+    day = f"2026-10-{29 + offset}"
+    payload = {
+        "current": {"time": "2026-10-29T14:00"},
+        "hourly": {
+            "time": [f"{day}T{hour:02d}:00" for hour in range(24)],
+            "temperature_2m": [1] * 14 + [20] * 10,
+        },
+    }
+    with patch("httpx.AsyncClient.get", return_value=_mock_response(json_data=payload)):
+        weather = await weather_service.get_forecast_weather(
+            40, -74, DailyForecast(day, 0, 25, 0, "sunny", 0), active_hours=(10, 17)
+        )
+    assert weather.window_min == (20 if offset == 0 else 1)
+    assert weather.window_start_hour == (14 if offset == 0 else 10)
+
+
+async def test_west_of_location_today_uses_hourly_forecast(weather_service):
+    async def forecast_response(*args, **kwargs):
+        params = kwargs["params"]
+        if "start_date" in params:
+            return _mock_response(status_code=400, json_data={"error": True})
+        assert params["forecast_days"] >= 9
+        assert params["past_days"] == 1
+        return _mock_response(
+            json_data={
+                "current": {"time": "2026-10-30T01:00"},
+                "hourly": {
+                    "time": ["2026-10-29T10:00", "2026-10-29T11:00", "2026-10-30T10:00"],
+                    "temperature_2m": [14, 20, 30],
+                },
+            }
+        )
+
+    with patch("httpx.AsyncClient.get", side_effect=forecast_response):
+        weather = await weather_service.get_forecast_weather(
+            35, 139, DailyForecast("2026-10-29", 6, 25, 0, "sunny", 0), active_hours=(10, 17)
+        )
+    assert (weather.window_min, weather.window_max) == (14, 20)
+
+
+async def test_forecast_timestamp_is_generation_time(weather_service):
+    before = datetime.utcnow()
+    with patch("httpx.AsyncClient.get", return_value=_mock_response(json_data={"hourly": {}})):
+        weather = await weather_service.get_forecast_weather(
+            40, -74, DailyForecast("2026-03-01", 6, 25, 0, "sunny", 0)
+        )
+    assert before <= weather.timestamp <= datetime.utcnow()
+
+
+async def test_null_current_temperature_raises_weather_error(weather_service, mock_redis):
+    payload = {"current": {**SAMPLE_API_RESPONSE["current"], "temperature_2m": None}}
+    with patch("httpx.AsyncClient.get", return_value=_mock_response(json_data=payload)):
+        with pytest.raises(WeatherServiceError, match="temperature"):
+            await weather_service.get_current_weather(40, -74)
+
 
 FAKE_REQUEST = httpx.Request("GET", "https://api.open-meteo.com/v1/forecast")
 
@@ -98,7 +206,9 @@ def mock_redis():
 
 class TestCacheKey:
     def test_rounds_coordinates(self):
-        assert WeatherService._cache_key(40.7142, -74.0059) == f"{CACHE_PREFIX}40.71,-74.01:hours:0-21"
+        assert (
+            WeatherService._cache_key(40.7142, -74.0059) == f"{CACHE_PREFIX}40.71,-74.01:hours:0-21"
+        )
 
     def test_exact_coordinates(self):
         assert WeatherService._cache_key(50.0, 10.0) == f"{CACHE_PREFIX}50.0,10.0:hours:0-21"
@@ -697,8 +807,8 @@ class TestGetTomorrowWeatherWearingHours:
         assert result.temp_max == pytest.approx(22.0)
         hourly_params = mock_get.call_args_list[1][1]["params"]
         assert hourly_params["hourly"] == ["temperature_2m", "apparent_temperature"]
-        assert hourly_params["start_date"] == "2026-03-01"
-        assert hourly_params["end_date"] == "2026-03-01"
+        assert hourly_params["forecast_days"] == 10
+        assert hourly_params["past_days"] == 1
 
     @pytest.mark.asyncio
     async def test_failed_hourly_request_falls_back_to_the_whole_day(
@@ -789,23 +899,33 @@ async def test_current_weather_cache_separates_users_hours(weather_service, mock
         early = await weather_service.get_current_weather(40, -74, active_hours=(10, 17))
         late = await weather_service.get_current_weather(40, -74, active_hours=(18, 23))
         cached = await weather_service.get_current_weather(40, -74, active_hours=(10, 17))
-    assert (early.window_min, early.window_max, early.temperature, early.feels_like) == (10, 17, 13.5, 12.5)
+    assert (
+        early.window_min,
+        early.window_max,
+        early.window_temperature,
+        early.window_feels_like,
+    ) == (10, 17, 13.5, 12.5)
+    assert (early.temperature, early.feels_like) == (22.5, 21.0)
     assert (late.window_min, late.window_max) == (18, 23)
     assert cached.to_dict() == early.to_dict()
     assert request.call_count == 2
 
 
 async def test_tomorrow_user_hours_override_server(weather_service, mock_redis, ten_to_six):
-    with patch("httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data=_tomorrow_hourly()))):
+    with patch(
+        "httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data=_tomorrow_hourly()))
+    ):
         result = await weather_service.get_tomorrow_weather(40, -74, active_hours=(12, 14))
     assert (result.window_min, result.window_max) == (12, 13)
     assert result.temperature == 12.5
     assert result.feels_like == 11.5
 
 
-@pytest.mark.parametrize("hourly", [{}, {"time": []}, {"time": ["bad", None]}, {"time": ["2026-03-01T10:00"], "temperature_2m": ["bad"]}])
+@pytest.mark.parametrize("hourly", [{}, {"time": []}, {"time": None, "temperature_2m": None}])
 async def test_unusable_hourly_data_falls_back(weather_service, mock_redis, hourly):
-    with patch("httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data={"hourly": hourly}))):
+    with patch(
+        "httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data={"hourly": hourly}))
+    ):
         result = await weather_service.get_tomorrow_weather(40, -74, active_hours=(10, 17))
     assert (result.window_min, result.window_max) == (12, 22)
     assert result.window_start_hour is None

@@ -2,9 +2,10 @@ import json
 from datetime import UTC, datetime
 from io import BytesIO
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from PIL import Image
 
@@ -33,8 +34,16 @@ async def inspiration(client, test_user, auth_headers, db_session, monkeypatch, 
     weather = AsyncMock(
         return_value=WeatherData(20, 20, 50, 0, 0, 0, "clear", 0, True, 0, datetime.now(UTC))
     )
+    original_weather = WeatherService.get_current_weather
     monkeypatch.setattr(WeatherService, "get_current_weather", weather)
-    state = SimpleNamespace(text=None, prompts=[], weather=weather, path=tmp_path, user=test_user)
+    state = SimpleNamespace(
+        original_weather=original_weather,
+        text=None,
+        prompts=[],
+        weather=weather,
+        path=tmp_path,
+        user=test_user,
+    )
     state.text = json.dumps({"slots": [slot()], "allowed_item_ids": []})
 
     async def vision(self, messages, task_name, **kwargs):
@@ -99,12 +108,43 @@ async def test_all_gap_look_is_saved_and_can_be_compared(
     ]
 
 
-async def test_inspiration_uses_user_active_hours(inspiration, client, auth_headers):
-    saved = await client.patch("/api/v1/users/me/preferences", headers=auth_headers, json={"active_start_hour": 10, "active_end_hour": 17})
+async def test_inspiration_uses_user_active_hours(inspiration, client, auth_headers, monkeypatch):
+    from app.services import inspiration_service
+
+    saved = await client.patch(
+        "/api/v1/users/me/preferences",
+        headers=auth_headers,
+        json={"active_start_hour": 10, "active_end_hour": 17},
+    )
     assert saved.status_code == 200
-    response = await inspiration.upload()
+    monkeypatch.setattr(WeatherService, "get_current_weather", inspiration.original_weather)
+    monkeypatch.setattr(WeatherService, "_cache_get", AsyncMock(return_value=None))
+    monkeypatch.setattr(WeatherService, "_cache_set", AsyncMock())
+    payload = {
+        "current": {"time": "2026-10-29T07:00", "temperature_2m": 6.8, "apparent_temperature": 5},
+        "hourly": {
+            "time": [f"2026-10-29T{hour:02d}:00" for hour in range(24)],
+            "temperature_2m": [1] * 10 + [20] * 8 + [2] * 6,
+            "apparent_temperature": [19] * 24,
+        },
+    }
+    original_get = httpx.AsyncClient.get
+
+    async def get(instance, url, **kwargs):
+        if str(url).endswith("/forecast"):
+            return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
+        return await original_get(instance, url, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    with patch.object(
+        inspiration_service, "score_items", wraps=inspiration_service.score_items
+    ) as score:
+        response = await inspiration.upload()
     assert response.status_code == 201
-    inspiration.weather.assert_awaited_once_with(40.0, -74.0, active_hours=(10, 17))
+    weather = score.call_args.args[1]
+    assert (weather.window_min, weather.window_max) == (20, 20)
+    assert (weather.window_start_hour, weather.window_end_hour) == (10, 17)
+    assert (weather.temperature, weather.feels_like) == (20, 19)
 
 
 async def test_full_eligible_wardrobe_reaches_vision(inspiration, db_session):
