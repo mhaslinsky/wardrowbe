@@ -1,4 +1,11 @@
 {
+  "activeHours": {
+    "title": "Ore di attività",
+    "description": "Orari locali per il meteo degli outfit",
+    "start": "Inizio",
+    "end": "Fine",
+    "invalid": "La fine deve essere almeno due ore dopo l’inizio"
+  },
   "washing": {
     "title": "Lavaggio",
     "description": "Utilizzi prima del lavaggio",

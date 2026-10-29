@@ -1,7 +1,8 @@
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 
+from app.config import get_settings
 from app.data.color_seasons import ColorSeason
 from app.schemas.color import ColorList
 from app.schemas.outfit import Occasion
@@ -119,7 +120,23 @@ class StyleProfile(BaseModel):
     )
 
 
-class PreferenceBase(BaseModel):
+class ActiveHours(BaseModel):
+    active_start_hour: int | None = Field(default=None, ge=0, le=23, strict=True)
+    active_end_hour: int | None = Field(default=None, ge=0, le=23, strict=True)
+
+    @model_validator(mode="after")
+    def validate_active_hours(self):
+        supplied = self.model_fields_set & {"active_start_hour", "active_end_hour"}
+        if supplied and len(supplied) != 2:
+            raise ValueError("Set both active hours")
+        if (self.active_start_hour is None) != (self.active_end_hour is None):
+            raise ValueError("Set both active hours")
+        if self.active_start_hour is not None and self.active_end_hour - self.active_start_hour < 2:
+            raise ValueError("End must be at least two hours after start")
+        return self
+
+
+class PreferenceBase(ActiveHours):
     wash_intervals: WashIntervals = Field(default_factory=dict)
     color_season: ColorSeason | None = None
     standing_rules: StandingRules = Field(default_factory=list)
@@ -192,7 +209,7 @@ class PreferenceCreate(PreferenceBase):
     pass
 
 
-class PreferenceUpdate(BaseModel):
+class PreferenceUpdate(ActiveHours):
     wash_intervals: WashIntervals = Field(default_factory=dict)
     color_season: ColorSeason | None = None
     preview_preferences: PreviewPreferences | None = None
@@ -222,6 +239,8 @@ class ColorSeasonPalette(BaseModel):
 
 
 class PreferenceResponse(PreferenceBase):
+    default_active_start_hour: int = Field(default_factory=lambda: get_settings().wearing_day_start_hour)
+    default_active_end_hour: int = Field(default_factory=lambda: get_settings().wearing_day_end_hour)
     wash_interval_defaults: dict[str, int] = Field(
         default_factory=lambda: dict(DEFAULT_WASH_INTERVALS)
     )

@@ -15,6 +15,7 @@ from app.services.recommendation_service import (
     AIRecommendationError,
     RecommendationService,
     cached_suggestion_fits,
+    format_active_hours_weather,
     format_temp_range_text,
     get_time_of_day,
     suggestion_context,
@@ -211,6 +212,21 @@ class TestPromptTemplateTempRange:
 
 
 class TestTempRangeText:
+    @pytest.mark.parametrize("unit,expected", [("fahrenheit", "57 to 68°F"), ("celsius", "14 to 20°C")])
+    def test_active_hours_in_prompt_use_preferred_unit(self, unit, expected):
+        weather = _weather(temp=17, window_min=14, window_max=20)
+        weather.window_start_hour, weather.window_end_hour = 10, 17
+        preferences = UserPreference(temperature_unit=unit, active_start_hour=10, active_end_hour=17)
+        text = format_active_hours_weather(weather, preferences)
+        assert "10 AM to 5 PM" in text
+        assert expected in text
+
+    def test_prompt_labels_whole_day_fallback(self):
+        weather = _weather(temp=17, window_min=6, window_max=20)
+        text = format_active_hours_weather(weather, UserPreference(active_start_hour=10, active_end_hour=17))
+        assert "10 AM to 5 PM" in text
+        assert "Whole-day fallback" in text
+
     def test_empty_when_min_missing(self):
         weather = _weather(temp=12, window_min=None, window_max=30)
         assert format_temp_range_text(weather) == ""
@@ -488,6 +504,18 @@ def _make_item(**kwargs) -> ClothingItem:
     }
     defaults.update(kwargs)
     return ClothingItem(**defaults)
+
+
+async def test_same_day_passes_user_active_hours(db_session, test_user):
+    test_user.location_lat, test_user.location_lon = 40, -74
+    test_user.preferences = UserPreference(user_id=test_user.id, active_start_hour=10, active_end_hour=17)
+    await db_session.commit()
+    service = RecommendationService(db_session)
+    service.weather_service.get_current_weather = AsyncMock(return_value=_weather(temp=17))
+    service.get_candidate_items = AsyncMock(side_effect=ValueError("Stop before AI"))
+    with pytest.raises(ValueError, match="Stop before AI"):
+        await service.generate_recommendations(test_user, "casual")
+    service.weather_service.get_current_weather.assert_awaited_once_with(40.0, -74.0, active_hours=(10, 17))
 
 
 class TestMultiOutfitParse:

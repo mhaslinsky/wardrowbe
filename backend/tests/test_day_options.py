@@ -68,6 +68,48 @@ def forecast(service, day):
     service.weather_service.get_daily_forecast = AsyncMock(
         return_value=[DailyForecast(day.isoformat(), 10, 22, 20, "sunny", 0)]
     )
+    service.weather_service._wearing_hours_forecast = AsyncMock(return_value=([], []))
+
+
+async def test_pick_a_day_excludes_cold_morning(db_session, test_user, day_generation):
+    from app.models.preference import UserPreference
+
+    await prepare(db_session, test_user)
+    test_user.preferences = UserPreference(user_id=test_user.id, active_start_hour=10, active_end_hour=17)
+    await db_session.commit()
+    day = get_user_today(test_user) + timedelta(days=5)
+    service = RecommendationService(db_session)
+    forecast(service, day)
+    del service.weather_service._wearing_hours_forecast
+    payload = {"hourly": {
+        "time": [f"{day.isoformat()}T{hour:02d}:00" for hour in range(24)],
+        "temperature_2m": [6.8] * 10 + [14, 15, 16, 17, 18, 19, 20, 21] + [7] * 6,
+        "apparent_temperature": [5] * 10 + [13, 14, 15, 16, 17, 18, 19, 20] + [6] * 6,
+    }}
+    with patch("httpx.AsyncClient.get", return_value=httpx.Response(200, json=payload, request=httpx.Request("GET", "http://forecast"))) as request:
+        await service.top_up_day(test_user, day, "casual")
+    weather = day_generation[0]["weather_override"]
+    assert (weather.window_min, weather.window_max) == (14, 21)
+    assert weather.temperature == 17.5
+    assert weather.feels_like == 16.5
+    params = request.call_args.kwargs["params"]
+    assert params["end_date"] == day.isoformat()
+
+
+async def test_pick_a_day_prompt_and_disposable_user_smoke(db_session, test_user, client, auth_headers, http_ai):
+    saved = await client.patch("/api/v1/users/me/preferences", headers=auth_headers, json={"active_start_hour": 10, "active_end_hour": 17, "temperature_unit": "fahrenheit"})
+    assert saved.status_code == 200
+    await db_session.refresh(test_user, ["preferences"])
+    service = RecommendationService(db_session)
+    day = get_user_today(test_user) + timedelta(days=1)
+    forecast(service, day)
+    service.weather_service._wearing_hours_forecast.return_value = ([14, 20], [13, 19])
+    outfits = await service.top_up_day(test_user, day, "casual")
+    assert len(outfits) == 3
+    assert "10 AM to 5 PM: 57 to 68°F" in http_ai["prompts"][0]
+    weather = outfits[0].weather_data
+    assert (weather["window_min"], weather["window_max"]) == (14, 20)
+    print(json.dumps({"user": str(test_user.id), "active_hours": [10, 17], "weather": weather, "outfits": len(outfits), "paid_calls": 0}))
 
 
 async def prepare(db, user):
@@ -383,6 +425,8 @@ async def test_seventh_day_with_different_location_date(
     async def get(client, url, **kwargs):
         params = kwargs["params"]
         assert params["timezone"] == "auto"
+        if "hourly" in params:
+            return httpx.Response(200, request=httpx.Request("GET", url), json={"hourly": {}})
         days = params["forecast_days"]
         return httpx.Response(
             200,

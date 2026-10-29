@@ -29,6 +29,8 @@ class UserPreference(Base):
     __tablename__ = "user_preferences"
 
     wash_intervals: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+    active_start_hour: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    active_end_hour: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

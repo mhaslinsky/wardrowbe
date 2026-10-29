@@ -106,7 +106,7 @@ def test_climate_normal_uses_matching_calendar_day_and_rejects_missing():
         TripWeather.climate_normal(date(2030, 1, 1), daily)
 
 
-async def weather_request(forecast=None):
+async def weather_request(forecast=None, active_hours=(10, 18)):
     replies = capture()
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(
@@ -126,7 +126,17 @@ async def weather_request(forecast=None):
             AsyncMock(return_value=(48.8566, 2.3522, "Paris")),
         ),
     ):
-        return await TripWeather().for_dates("Paris", [date(2026, 10, 24), date(2030, 10, 24)])
+        return await TripWeather().for_dates("Paris", [date(2026, 10, 24), date(2030, 10, 24)], active_hours=active_hours)
+
+
+async def test_trip_weather_uses_custom_active_hours():
+    results = await weather_request(active_hours=(12, 15))
+    weather, source = results[0]
+    assert source == "forecast"
+    hourly = capture()["forecast"]["hourly"]
+    temps = [temp for slot, temp in zip(hourly["time"], hourly["temperature_2m"], strict=True) if slot[:10] == "2026-10-24" and 12 <= int(slot[11:13]) <= 15]
+    assert (weather.window_min, weather.window_max) == (min(temps), max(temps))
+    assert (weather.window_start_hour, weather.window_end_hour) == (12, 15)
 
 
 async def test_daytime_forecast_and_beyond_range_fallback():

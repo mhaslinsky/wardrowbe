@@ -99,6 +99,14 @@ async def test_all_gap_look_is_saved_and_can_be_compared(
     ]
 
 
+async def test_inspiration_uses_user_active_hours(inspiration, client, auth_headers):
+    saved = await client.patch("/api/v1/users/me/preferences", headers=auth_headers, json={"active_start_hour": 10, "active_end_hour": 17})
+    assert saved.status_code == 200
+    response = await inspiration.upload()
+    assert response.status_code == 201
+    inspiration.weather.assert_awaited_once_with(40.0, -74.0, active_hours=(10, 17))
+
+
 async def test_full_eligible_wardrobe_reaches_vision(inspiration, db_session):
     items = [clothing(inspiration.user.id, "red") for _ in range(70)]
     blue = clothing(inspiration.user.id)

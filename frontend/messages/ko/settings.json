@@ -1,4 +1,11 @@
 {
+  "activeHours": {
+    "title": "활동 시간",
+    "description": "코디 날씨에 사용할 현지 시간",
+    "start": "시작",
+    "end": "종료",
+    "invalid": "종료는 시작보다 최소 2시간 이후여야 합니다"
+  },
   "washing": {
     "title": "세탁",
     "description": "세탁 전 착용 횟수",

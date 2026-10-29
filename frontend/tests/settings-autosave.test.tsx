@@ -55,6 +55,47 @@ function selectFor(text: string) {
   return screen.getByText(text).parentElement!.querySelector('select')!;
 }
 
+it('autosaves both active hours and restores them on reload', async () => {
+  state.preferences = { ...state.preferences, active_start_hour: null, active_end_hour: null, default_active_start_hour: 10, default_active_end_hour: 18 };
+  const view = render(<SettingsPage />);
+  fireEvent.change(selectFor('activeHours.end'), { target: { value: '17' } });
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({ active_start_hour: 10, active_end_hour: 17 }));
+  view.unmount();
+  state.preferences = { ...state.persisted };
+  render(<SettingsPage />);
+  expect(selectFor('activeHours.start')).toHaveValue('10');
+  expect(selectFor('activeHours.end')).toHaveValue('17');
+});
+
+it('retains invalid active hours without saving and saves the corrected pair', async () => {
+  state.preferences = { ...state.preferences, active_start_hour: 10, active_end_hour: 17 };
+  render(<SettingsPage />);
+  fireEvent.change(selectFor('activeHours.start'), { target: { value: '16' } });
+  expect(screen.getByText('activeHours.invalid')).toBeInTheDocument();
+  expect(state.save).not.toHaveBeenCalled();
+  fireEvent.change(selectFor('activeHours.end'), { target: { value: '18' } });
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({ active_start_hour: 16, active_end_hour: 18 }));
+  expect(screen.queryByText('activeHours.invalid')).not.toBeInTheDocument();
+});
+
+it('resets active hours to server defaults', async () => {
+  state.preferences = { ...state.preferences, active_start_hour: 10, active_end_hour: 17, default_active_start_hour: 9, default_active_end_hour: 21 };
+  state.reset.mockResolvedValue({ ...state.preferences, active_start_hour: null, active_end_hour: null });
+  vi.stubGlobal('confirm', vi.fn(() => true));
+  render(<SettingsPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'reset' }));
+  await waitFor(() => expect(selectFor('activeHours.start')).toHaveValue('9'));
+  expect(selectFor('activeHours.end')).toHaveValue('21');
+});
+
+it('does not flush an invalid active-hours draft on unmount', async () => {
+  state.preferences = { ...state.preferences, active_start_hour: 10, active_end_hour: 17 };
+  const view = render(<SettingsPage />);
+  fireEvent.change(selectFor('activeHours.start'), { target: { value: '16' } });
+  view.unmount();
+  expect(state.save).not.toHaveBeenCalled();
+});
+
 it('saves different controls independently and removes the Save button', async () => {
   render(<SettingsPage />);
   fireEvent.change(selectFor('temperature.unit'), { target: { value: 'fahrenheit' } });

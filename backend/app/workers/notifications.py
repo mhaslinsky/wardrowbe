@@ -19,7 +19,7 @@ from app.services.learning_service import LearningService
 from app.services.notification_providers import NotificationMessage
 from app.services.notification_service import NotificationDispatcher
 from app.services.recommendation_service import RecommendationService
-from app.services.weather_service import WeatherService
+from app.services.weather_service import WeatherService, wearing_hours
 from app.utils.redis_lock import distributed_lock
 from app.utils.timezone import get_user_timezone, get_user_today
 from app.workers.db import get_db_session
@@ -181,7 +181,7 @@ async def process_scheduled_notification(ctx: dict, schedule_id: str):
             try:
                 weather_service = WeatherService()
                 weather_override = await weather_service.get_tomorrow_weather(
-                    user.location_lat, user.location_lon
+                    user.location_lat, user.location_lon, active_hours=wearing_hours(user.preferences)
                 )
                 logger.info(
                     f"Fetched tomorrow's forecast for user {user.id}: "

@@ -98,10 +98,10 @@ def mock_redis():
 
 class TestCacheKey:
     def test_rounds_coordinates(self):
-        assert WeatherService._cache_key(40.7142, -74.0059) == f"{CACHE_PREFIX}40.71,-74.01"
+        assert WeatherService._cache_key(40.7142, -74.0059) == f"{CACHE_PREFIX}40.71,-74.01:hours:0-21"
 
     def test_exact_coordinates(self):
-        assert WeatherService._cache_key(50.0, 10.0) == f"{CACHE_PREFIX}50.0,10.0"
+        assert WeatherService._cache_key(50.0, 10.0) == f"{CACHE_PREFIX}50.0,10.0:hours:0-21"
 
 
 class TestCacheGet:
@@ -140,7 +140,7 @@ class TestCacheSet:
 
         mock_redis.set.assert_called_once()
         call_args = mock_redis.set.call_args
-        assert call_args[0][0] == f"{CACHE_PREFIX}40.71,-74.01"
+        assert call_args[0][0] == f"{CACHE_PREFIX}40.71,-74.01:hours:0-21"
         assert call_args[1]["ex"] == 3600
 
         stored = json.loads(call_args[0][1])
@@ -697,7 +697,8 @@ class TestGetTomorrowWeatherWearingHours:
         assert result.temp_max == pytest.approx(22.0)
         hourly_params = mock_get.call_args_list[1][1]["params"]
         assert hourly_params["hourly"] == ["temperature_2m", "apparent_temperature"]
-        assert hourly_params["forecast_days"] == 2
+        assert hourly_params["start_date"] == "2026-03-01"
+        assert hourly_params["end_date"] == "2026-03-01"
 
     @pytest.mark.asyncio
     async def test_failed_hourly_request_falls_back_to_the_whole_day(
@@ -770,6 +771,54 @@ class TestCurrentWeatherWearingHours:
         # 10:00 to 18:00 only: the 7 AM reading, 7 to 9 AM and 7 PM on are left out.
         assert result.window_min == pytest.approx(11.0)
         assert result.window_max == pytest.approx(13.0)
+
+
+async def test_current_weather_cache_separates_users_hours(weather_service, mock_redis):
+    stored = {}
+    mock_redis.get.side_effect = lambda key: stored.get(key)
+    mock_redis.set.side_effect = lambda key, value, **kwargs: stored.update({key: value})
+    response = {
+        "current": {**SAMPLE_API_RESPONSE["current"], "time": "2026-02-28T07:00"},
+        "hourly": {
+            "time": [f"2026-02-28T{hour:02d}:00" for hour in range(24)],
+            "temperature_2m": [float(hour) for hour in range(24)],
+            "apparent_temperature": [float(hour - 1) for hour in range(24)],
+        },
+    }
+    with patch("httpx.AsyncClient.get", return_value=_mock_response(json_data=response)) as request:
+        early = await weather_service.get_current_weather(40, -74, active_hours=(10, 17))
+        late = await weather_service.get_current_weather(40, -74, active_hours=(18, 23))
+        cached = await weather_service.get_current_weather(40, -74, active_hours=(10, 17))
+    assert (early.window_min, early.window_max, early.temperature, early.feels_like) == (10, 17, 13.5, 12.5)
+    assert (late.window_min, late.window_max) == (18, 23)
+    assert cached.to_dict() == early.to_dict()
+    assert request.call_count == 2
+
+
+async def test_tomorrow_user_hours_override_server(weather_service, mock_redis, ten_to_six):
+    with patch("httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data=_tomorrow_hourly()))):
+        result = await weather_service.get_tomorrow_weather(40, -74, active_hours=(12, 14))
+    assert (result.window_min, result.window_max) == (12, 13)
+    assert result.temperature == 12.5
+    assert result.feels_like == 11.5
+
+
+@pytest.mark.parametrize("hourly", [{}, {"time": []}, {"time": ["bad", None]}, {"time": ["2026-03-01T10:00"], "temperature_2m": ["bad"]}])
+async def test_unusable_hourly_data_falls_back(weather_service, mock_redis, hourly):
+    with patch("httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data={"hourly": hourly}))):
+        result = await weather_service.get_tomorrow_weather(40, -74, active_hours=(10, 17))
+    assert (result.window_min, result.window_max) == (12, 22)
+    assert result.window_start_hour is None
+
+
+def test_resolves_user_or_server_hours(ten_to_six):
+    from app.models.preference import UserPreference
+    from app.services.weather_service import wearing_hours
+
+    assert wearing_hours() == (10, 18)
+    assert wearing_hours(UserPreference()) == (10, 18)
+    assert wearing_hours(UserPreference(active_start_hour=0, active_end_hour=23)) == (0, 23)
+    assert wearing_hours(UserPreference(), fallback=(10, 18)) == (10, 18)
 
 
 class TestCheckHealth:

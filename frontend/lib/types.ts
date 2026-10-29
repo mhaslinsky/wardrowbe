@@ -162,6 +162,10 @@ export interface AIEndpoint {
 }
 
 export interface Preferences {
+  active_start_hour?: number | null;
+  active_end_hour?: number | null;
+  default_active_start_hour?: number;
+  default_active_end_hour?: number;
   wash_intervals?: Record<string, number>;
   wash_interval_defaults?: Record<string, number>;
   color_season?: 'deep-winter' | 'cool-winter' | 'clear-winter'
