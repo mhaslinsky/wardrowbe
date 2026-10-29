@@ -16,9 +16,15 @@ from app.models.trip import Trip
 from app.models.user import User
 from app.services.ai_service import require_internal_ai
 from app.services.inspiration_service import InspirationService
+from app.services.preference_service import PreferenceService
 from app.services.recommendation_service import RecommendationService
 from app.services.wear_service import WearService
-from app.services.weather_service import WeatherData, WeatherService, WeatherServiceError
+from app.services.weather_service import (
+    WeatherData,
+    WeatherService,
+    WeatherServiceError,
+    wearing_hours,
+)
 from app.utils.clothing import BODY_SLOTS, OVER_LAYER_SUBTYPES, covered_body_slots
 from app.utils.garment_vocabulary import (
     BASE_UNDER_LAYER_TYPES,
@@ -58,17 +64,20 @@ class TripWeather:
     def __init__(self):
         self.weather = WeatherService()
 
-    async def for_dates(self, destination: str, dates: list[date]) -> list[tuple[WeatherData, str]]:
+    async def for_dates(
+        self, destination: str, dates: list[date], *, active_hours=(10, 18)
+    ) -> list[tuple[WeatherData, str]]:
         location = await self.weather.geocode_location_name(destination)
         if location is None:
             raise ValueError("Destination not found")
         try:
-            return await self._for_location(location, dates)
+            return await self._for_location(location, dates, active_hours)
         except (ValueError, KeyError, TypeError, IndexError, OverflowError) as error:
             raise WeatherServiceError("Invalid trip weather response") from error
 
-    async def _for_location(self, location, dates):
+    async def _for_location(self, location, dates, active_hours):
         latitude, longitude, _ = location
+        start_hour, end_hour = active_hours
         async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
             response = await client.get(
                 f"{self.weather.base_url}/forecast",
@@ -102,10 +111,10 @@ class TripWeather:
                     index
                     for index, slot in enumerate(hourly["time"])
                     if slot[:10] == day.isoformat()
-                    and 10 <= datetime.fromisoformat(slot).hour <= 18
+                    and start_hour <= datetime.fromisoformat(slot).hour <= end_hour
                 ]
                 if (
-                    len(indices) == 9
+                    len(indices) == end_hour - start_hour + 1
                     and all(
                         isinstance(values, list)
                         and index < len(values)
@@ -131,6 +140,10 @@ class TripWeather:
                     data = WeatherData(
                         temperature=mean(temps),
                         feels_like=mean(hourly["apparent_temperature"][index] for index in indices),
+                        window_temperature=mean(temps),
+                        window_feels_like=mean(
+                            hourly["apparent_temperature"][index] for index in indices
+                        ),
                         humidity=round(
                             mean(hourly["relative_humidity_2m"][index] for index in indices)
                         ),
@@ -146,6 +159,8 @@ class TripWeather:
                         timestamp=datetime.combine(day, datetime.min.time()),
                         window_min=min(temps),
                         window_max=max(temps),
+                        window_start_hour=start_hour,
+                        window_end_hour=end_hour,
                     )
                     results.append((data, "forecast"))
                 else:
@@ -164,11 +179,13 @@ class TripWeather:
                         )
                         response.raise_for_status()
                         normals = response.json()["daily"]
-                    results.append((self.climate_normal(day, normals), "climate"))
+                    results.append(
+                        (self.climate_normal(day, normals, active_hours=active_hours), "climate")
+                    )
         return results
 
     @staticmethod
-    def climate_normal(day: date, daily: dict) -> WeatherData:
+    def climate_normal(day: date, daily: dict, *, active_hours=(10, 18)) -> WeatherData:
         if not isinstance(daily["time"], list) or any(
             not isinstance(daily[field], list) or len(daily[field]) != len(daily["time"])
             for field in ("temperature_2m_min", "temperature_2m_max")
@@ -203,6 +220,8 @@ class TripWeather:
             timestamp=datetime.combine(day, datetime.min.time()),
             window_min=low,
             window_max=high,
+            window_start_hour=active_hours[0],
+            window_end_hour=active_hours[1],
         )
 
 
@@ -275,7 +294,10 @@ class TripService:
             request.start_date + timedelta(days=offset)
             for offset in range((request.end_date - request.start_date).days + 1)
         ]
-        weather = await TripWeather().for_dates(request.destination, dates)
+        preferences = await PreferenceService(self.db).get_preferences(user.id)
+        weather = await TripWeather().for_dates(
+            request.destination, dates, active_hours=wearing_hours(preferences, fallback=(10, 18))
+        )
         connection = await self.db.connection()
         try:
             async with AsyncSession(

@@ -162,6 +162,10 @@ export interface AIEndpoint {
 }
 
 export interface Preferences {
+  active_start_hour?: number | null;
+  active_end_hour?: number | null;
+  default_active_start_hour?: number;
+  default_active_end_hour?: number;
   wash_intervals?: Record<string, number>;
   wash_interval_defaults?: Record<string, number>;
   color_season?: 'deep-winter' | 'cool-winter' | 'clear-winter'
@@ -332,7 +336,7 @@ export interface WeatherData {
   window_max?: number | null;
 }
 
-// /weather/current serves the same snapshot outfits store, minus the wearing-window range.
+// /weather/current returns live readings; outfit scoring uses separate active-hour averages.
 export type CurrentWeather = Omit<WeatherData, 'window_min' | 'window_max'>;
 
 export interface WoreInsteadItem {

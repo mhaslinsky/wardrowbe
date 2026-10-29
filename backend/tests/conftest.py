@@ -12,13 +12,15 @@ os.environ.pop("OIDC_CLIENT_ID", None)
 os.environ.pop("OIDC_CLIENT_SECRET", None)
 
 from collections.abc import AsyncGenerator
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import asyncpg
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
+from httpx import URL, ASGITransport, AsyncClient, Request, Response
 from redis.asyncio import Redis
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -28,6 +30,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.main import app
 from app.models import User, UserIdentity, UserPreference
+from app.services.weather_service import WeatherService
 from tests.identity_helpers import add_users_with_identities
 
 # Test database URL from environment — set in docker-compose.dev.yml, never falls back to DATABASE_URL.
@@ -216,3 +219,33 @@ def sample_tags() -> dict[str, Any]:
         "season": ["spring", "fall", "all-season"],
         "confidence": 0.85,
     }
+
+
+@pytest.fixture
+def openmeteo_http(monkeypatch):
+    original_get = AsyncClient.get
+    provider_host = URL(get_settings().openmeteo_url).host
+    state = SimpleNamespace(payload=None, requests=[])
+
+    async def get(client, url, **kwargs):
+        target = URL(url)
+        if target.host == provider_host and target.path.endswith("/forecast"):
+            assert state.payload is not None, (
+                "Set the Open-Meteo response before requesting weather"
+            )
+            params = dict(kwargs["params"])
+            state.requests.append(params)
+            payload = state.payload(params) if callable(state.payload) else state.payload
+            return Response(200, json=payload, request=Request("GET", url))
+        return await original_get(client, url, **kwargs)
+
+    monkeypatch.setattr(AsyncClient, "get", get)
+    return state
+
+
+@pytest.fixture
+def weather_cache(monkeypatch):
+    state = SimpleNamespace(read=AsyncMock(return_value=None), write=AsyncMock())
+    monkeypatch.setattr(WeatherService, "_cache_get", state.read)
+    monkeypatch.setattr(WeatherService, "_cache_set", state.write)
+    return state

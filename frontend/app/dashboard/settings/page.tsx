@@ -229,6 +229,9 @@ export default function SettingsPage() {
   const reportSaveError = (error: unknown) => toast.error(error instanceof Error ? error.message : t('autosave.error'));
   const autosave = useAutosaveFields<Preferences>(preferences, updatePreferences.mutateAsync, reportSaveError, owner ? { resource: 'preferences', user: owner } : undefined);
   const formData = autosave.values;
+  const activeStart = formData.active_start_hour ?? preferences?.default_active_start_hour ?? 0;
+  const activeEnd = formData.active_end_hour ?? preferences?.default_active_end_hour ?? 21;
+  const activeHoursInvalid = activeEnd - activeStart < 2;
   const occasions = useOccasionOptions([formData.default_occasion, preferences?.default_occasion]);
   const [standingRulesError, setStandingRulesError] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -515,6 +518,21 @@ export default function SettingsPage() {
     }, save);
   };
 
+  const updateActiveHours = (key: 'active_start_hour' | 'active_end_hour', value: number) => {
+    const current = autosave.current.current;
+    const patch = {
+      active_start_hour: current.active_start_hour ?? preferences?.default_active_start_hour ?? 0,
+      active_end_hour: current.active_end_hour ?? preferences?.default_active_end_hour ?? 21,
+      [key]: value,
+    };
+    autosave.stage(patch);
+    if (patch.active_end_hour - patch.active_start_hour < 2) {
+      autosave.cancelPending('active_start_hour', 'active_end_hour');
+    } else {
+      void autosave.commit(patch, { atomic: true });
+    }
+  };
+
   const saveStandingRules = (text: string) => {
     if (!autosave.isStaged('standing_rules')) return;
     const rules = text.split('\n').map((rule) => rule.trim()).filter(Boolean);
@@ -535,6 +553,7 @@ export default function SettingsPage() {
   const flushDrafts = useRef(() => {});
   flushDrafts.current = () => {
     for (const key of autosave.draftKeys()) {
+      if (key === 'active_start_hour' || key === 'active_end_hour') continue;
       if (key === 'standing_rules') saveStandingRules((autosave.current.current.standing_rules || []).join('\n'));
       else saveStagedField(key);
     }
@@ -581,7 +600,7 @@ export default function SettingsPage() {
   }, [autosave, t]);
 
   const status = autosave.busy || profileAutosave.busy || resetting ? 'saving'
-    : autosave.status === 'error' || profileAutosave.status === 'error' || standingRulesError || Object.keys(profileErrors).length ? 'error' : 'saved';
+    : autosave.status === 'error' || profileAutosave.status === 'error' || standingRulesError || activeHoursInvalid || Object.keys(profileErrors).length ? 'error' : 'saved';
 
   if (isLoading || isLoadingProfile) {
     return (
@@ -910,6 +929,31 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <fieldset className="space-y-2">
+              <legend className="font-medium">{t('activeHours.title')}</legend>
+              <p className="text-sm text-muted-foreground">{t('activeHours.description')}</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(['start', 'end'] as const).map((boundary) => (
+                  <div key={boundary} className="space-y-2">
+                    <Label htmlFor={`active-${boundary}`}>{t(`activeHours.${boundary}`)}</Label>
+                    <Select
+                      value={String(boundary === 'start' ? activeStart : activeEnd)}
+                      onValueChange={(value) => updateActiveHours(boundary === 'start' ? 'active_start_hour' : 'active_end_hour', Number(value))}
+                    >
+                      <SelectTrigger id={`active-${boundary}`} aria-invalid={activeHoursInvalid} aria-describedby={activeHoursInvalid ? 'active-hours-error' : undefined}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 24 }, (_, hour) => (
+                          <SelectItem key={hour} value={String(hour)}>{`${String(hour).padStart(2, '0')}:00`}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+              {activeHoursInvalid && <p id="active-hours-error" role="alert" className="text-sm text-destructive">{t('activeHours.invalid')}</p>}
+            </fieldset>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>{t('temperature.unit')}</Label>

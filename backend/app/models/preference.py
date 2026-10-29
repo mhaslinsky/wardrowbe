@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,8 +27,19 @@ if TYPE_CHECKING:
 
 class UserPreference(Base):
     __tablename__ = "user_preferences"
+    __table_args__ = (
+        CheckConstraint(
+            "(active_start_hour IS NULL AND active_end_hour IS NULL) OR "
+            "(active_start_hour IS NOT NULL AND active_end_hour IS NOT NULL "
+            "AND active_start_hour BETWEEN 0 AND 23 AND active_end_hour BETWEEN 0 AND 23 "
+            "AND active_end_hour >= active_start_hour + 2)",
+            name="ck_user_preferences_active_hours",
+        ),
+    )
 
     wash_intervals: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+    active_start_hour: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    active_end_hour: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

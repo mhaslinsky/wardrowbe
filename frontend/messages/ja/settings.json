@@ -1,4 +1,11 @@
 {
+  "activeHours": {
+    "title": "活動時間",
+    "description": "コーデの天気に使う現地時間",
+    "start": "開始",
+    "end": "終了",
+    "invalid": "終了は開始の2時間後以降にしてください"
+  },
   "washing": {
     "title": "洗濯",
     "description": "洗濯までの着用回数",

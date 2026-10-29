@@ -106,7 +106,7 @@ def test_climate_normal_uses_matching_calendar_day_and_rejects_missing():
         TripWeather.climate_normal(date(2030, 1, 1), daily)
 
 
-async def weather_request(forecast=None):
+async def weather_request(forecast=None, active_hours=(10, 18)):
     replies = capture()
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(
@@ -126,7 +126,46 @@ async def weather_request(forecast=None):
             AsyncMock(return_value=(48.8566, 2.3522, "Paris")),
         ),
     ):
-        return await TripWeather().for_dates("Paris", [date(2026, 10, 24), date(2030, 10, 24)])
+        return await TripWeather().for_dates(
+            "Paris", [date(2026, 10, 24), date(2030, 10, 24)], active_hours=active_hours
+        )
+
+
+async def test_trip_weather_uses_custom_active_hours():
+    results = await weather_request(active_hours=(12, 15))
+    weather, source = results[0]
+    assert source == "forecast"
+    hourly = capture()["forecast"]["hourly"]
+    temps = [
+        temp
+        for slot, temp in zip(hourly["time"], hourly["temperature_2m"], strict=True)
+        if slot[:10] == "2026-10-24" and 12 <= int(slot[11:13]) <= 15
+    ]
+    assert (weather.window_min, weather.window_max) == (min(temps), max(temps))
+    assert (weather.window_start_hour, weather.window_end_hour) == (12, 15)
+
+
+async def test_trip_forecast_scoring_uses_explicit_window_averages():
+    weather, source = (await weather_request(active_hours=(12, 15)))[0]
+    assert source == "forecast"
+    expected = (weather.temperature, weather.feels_like)
+    assert (weather.window_temperature, weather.window_feels_like) == expected
+    weather.temperature, weather.feels_like = 99, 98
+    assert (weather.for_scoring().temperature, weather.for_scoring().feels_like) == expected
+
+
+@pytest.mark.parametrize("active_hours", [(10, 18), (12, 15)])
+async def test_climate_normal_labels_actual_trip_hours(active_hours):
+    from app.services.recommendation_service import format_active_hours_weather
+
+    results = await weather_request(active_hours=active_hours)
+    weather, source = results[1]
+    assert source == "climate"
+    assert (weather.window_start_hour, weather.window_end_hour) == active_hours
+    text = format_active_hours_weather(weather)
+    assert "Climate normal" in text
+    assert "Whole-day fallback" not in text
+    assert ("10 AM to 6 PM" if active_hours == (10, 18) else "12 PM to 3 PM") in text
 
 
 async def test_daytime_forecast_and_beyond_range_fallback():

@@ -8,11 +8,14 @@ from app.models.item import ItemStatus
 from app.services.recommendation_service import RecommendationService
 from app.utils.timezone import get_user_today
 from tests.test_day_options import day_generation as day_generation
-from tests.test_day_options import forecast, prepare
+from tests.test_day_options import forecast as forecast
+from tests.test_day_options import prepare
 from tests.test_selfie import _jpeg
 
 
-async def test_saved_option_retyped_underwear_is_replaced(db_session, test_user, day_generation):
+async def test_saved_option_retyped_underwear_is_replaced(
+    db_session, test_user, day_generation, forecast
+):
     await prepare(db_session, test_user)
     day = get_user_today(test_user)
     service = RecommendationService(db_session)

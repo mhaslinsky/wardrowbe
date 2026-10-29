@@ -1,4 +1,11 @@
 {
+  "activeHours": {
+    "title": "Aktive Stunden",
+    "description": "Lokale Zeiten für das Outfit-Wetter",
+    "start": "Beginn",
+    "end": "Ende",
+    "invalid": "Das Ende muss mindestens zwei Stunden nach dem Beginn liegen"
+  },
   "washing": {
     "title": "Waschen",
     "description": "Tragen vor dem Waschen",

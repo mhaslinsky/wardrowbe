@@ -1,4 +1,11 @@
 {
+  "activeHours": {
+    "title": "活動時間",
+    "description": "穿搭天氣使用的當地時間",
+    "start": "開始",
+    "end": "結束",
+    "invalid": "結束時間須比開始時間晚至少兩小時"
+  },
   "washing": {
     "title": "洗滌",
     "description": "洗滌前穿著次數",

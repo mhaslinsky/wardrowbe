@@ -19,7 +19,6 @@ from app.services import recommendation_service
 from app.services.recommendation_service import RecommendationService
 from app.services.wear_service import WearService
 from app.services.weather_service import (
-    DailyForecast,
     GeocodingServiceError,
     WeatherData,
     WeatherService,
@@ -64,10 +63,132 @@ async def day_generation(monkeypatch, db_session, test_user):
     return calls
 
 
-def forecast(service, day):
-    service.weather_service.get_daily_forecast = AsyncMock(
-        return_value=[DailyForecast(day.isoformat(), 10, 22, 20, "sunny", 0)]
+@pytest.fixture
+def forecast(openmeteo_http):
+    def configure(service, day, hourly=None):
+        openmeteo_http.payload = {
+            "daily": {
+                "time": [day.isoformat()],
+                "temperature_2m_min": [10],
+                "temperature_2m_max": [22],
+                "precipitation_probability_max": [20],
+                "weather_code": [0],
+            },
+            "hourly": hourly
+            if hourly is not None
+            else {
+                "time": [f"{day.isoformat()}T{hour:02d}:00" for hour in range(24)],
+                "temperature_2m": [10, 22] * 12,
+                "apparent_temperature": [9, 21] * 12,
+            },
+        }
+
+    return configure
+
+
+async def test_pick_a_day_excludes_cold_morning(
+    db_session, test_user, day_generation, forecast, openmeteo_http
+):
+    from app.models.preference import UserPreference
+
+    await prepare(db_session, test_user)
+    test_user.preferences = UserPreference(
+        user_id=test_user.id, active_start_hour=10, active_end_hour=17
     )
+    await db_session.commit()
+    day = get_user_today(test_user) + timedelta(days=5)
+    service = RecommendationService(db_session)
+    payload = {
+        "hourly": {
+            "time": [f"{day.isoformat()}T{hour:02d}:00" for hour in range(24)],
+            "temperature_2m": [6.8] * 10 + [14, 15, 16, 17, 18, 19, 20, 21] + [7] * 6,
+            "apparent_temperature": [5] * 10 + [13, 14, 15, 16, 17, 18, 19, 20] + [6] * 6,
+        }
+    }
+    forecast(service, day, hourly=payload["hourly"])
+    await service.top_up_day(test_user, day, "casual")
+    weather = day_generation[0]["weather_override"]
+    assert (weather.window_min, weather.window_max) == (14, 21)
+    assert weather.temperature == 17.5
+    assert weather.feels_like == 16.5
+    params = openmeteo_http.requests[-1]
+    assert params["forecast_days"] == 10
+    assert "start_date" not in params
+
+
+async def test_pick_a_day_prompt_uses_saved_hours_and_unit(
+    db_session, test_user, client, auth_headers, http_ai, forecast
+):
+    saved = await client.patch(
+        "/api/v1/users/me/preferences",
+        headers=auth_headers,
+        json={"active_start_hour": 10, "active_end_hour": 17, "temperature_unit": "fahrenheit"},
+    )
+    assert saved.status_code == 200
+    await db_session.refresh(test_user, ["preferences"])
+    service = RecommendationService(db_session)
+    day = get_user_today(test_user) + timedelta(days=1)
+    forecast(
+        service,
+        day,
+        hourly={
+            "time": [f"{day.isoformat()}T{hour:02d}:00" for hour in range(24)],
+            "temperature_2m": [14, 20] * 12,
+            "apparent_temperature": [13, 19] * 12,
+        },
+    )
+    outfits = await service.top_up_day(test_user, day, "casual")
+    assert len(outfits) == 3
+    assert "10 AM to 5 PM: 57 to 68°F" in http_ai["prompts"][0]
+    weather = outfits[0].weather_data
+    assert (weather["window_min"], weather["window_max"]) == (14, 20)
+
+
+@pytest.mark.parametrize(
+    "unit,weather_line,window_line",
+    [
+        ("fahrenheit", "68.0°F (feels like 66.2°F)", "10 AM to 5 PM: 57 to 79°F"),
+        ("celsius", "20.0°C (feels like 19.0°C)", "10 AM to 5 PM: 14 to 26°C"),
+    ],
+)
+async def test_same_day_scoring_and_prompt_use_window_averages(
+    db_session, test_user, http_ai, unit, weather_line, window_line, openmeteo_http, weather_cache
+):
+    from app.models.preference import UserPreference
+
+    test_user.preferences = UserPreference(
+        user_id=test_user.id,
+        active_start_hour=10,
+        active_end_hour=17,
+        temperature_unit=unit,
+    )
+    await db_session.commit()
+    service = RecommendationService(db_session)
+    openmeteo_http.payload = {
+        "current": {"time": "2026-10-29T07:00", "temperature_2m": 6.8, "apparent_temperature": 5},
+        "hourly": {
+            "time": [f"2026-10-29T{hour:02d}:00" for hour in range(24)],
+            "temperature_2m": [1] * 10 + [14, 26] * 4 + [2] * 6,
+            "apparent_temperature": [1] * 10 + [13, 25] * 4 + [2] * 6,
+        },
+    }
+    with (
+        patch.object(
+            recommendation_service, "score_items", wraps=recommendation_service.score_items
+        ) as score,
+    ):
+        outfits = await service.generate_recommendations(test_user, "casual", count=3)
+    weather = score.call_args.kwargs["weather"]
+    assert (weather.temperature, weather.feels_like) == (20, 19)
+    assert (weather.window_start_hour, weather.window_end_hour) == (10, 17)
+    assert window_line in http_ai["prompts"][0]
+    assert weather_line in http_ai["prompts"][0]
+    assert http_ai["prompts"][0].count("10 AM to 5 PM") == 1
+    assert ("°C" if unit == "fahrenheit" else "°F") not in http_ai["prompts"][0]
+    assert "14.0°C to 26.0°C" not in http_ai["prompts"][0]
+    assert "large swing" in http_ai["prompts"][0]
+    assert outfits[0].weather_data["temperature"] == 6.8
+    assert outfits[0].weather_data["window_temperature"] == 20
 
 
 async def prepare(db, user):
@@ -76,7 +197,7 @@ async def prepare(db, user):
     await db.commit()
 
 
-async def test_topup_repeat_and_full_day(db_session, test_user, day_generation):
+async def test_topup_repeat_and_full_day(db_session, test_user, day_generation, forecast):
     await prepare(db_session, test_user)
     day = get_user_today(test_user) + timedelta(days=1)
     service = RecommendationService(db_session)
@@ -135,7 +256,7 @@ async def test_future_limit(db_session, test_user, day_generation):
 
 
 async def test_two_callers_recount(
-    session_maker, db_session, test_user, day_generation, monkeypatch
+    session_maker, db_session, test_user, day_generation, monkeypatch, forecast
 ):
     monkeypatch.setattr(
         recommendation_service, "DAY_LOCK_TIMEOUT_MS", TEST_HANG_CEILING_SECONDS * 1000
@@ -240,7 +361,7 @@ async def test_missing_forecast_writes_nothing(db_session, test_user, day_genera
 
 
 async def test_generation_failure_rolls_back_and_resets(
-    db_session, session_maker, test_user, http_ai, monkeypatch
+    db_session, session_maker, test_user, http_ai, monkeypatch, forecast
 ):
     await prepare(db_session, test_user)
     user_id = test_user.id
@@ -324,7 +445,9 @@ async def http_ai(db_session, test_user, monkeypatch):
 
 
 @pytest.mark.parametrize("missing", [1, 2])
-async def test_real_generator_requests_missing_count(db_session, test_user, http_ai, missing):
+async def test_real_generator_requests_missing_count(
+    db_session, test_user, http_ai, missing, forecast
+):
     day = get_user_today(test_user)
     for _ in range(3 - missing):
         db_session.add(
@@ -372,7 +495,7 @@ async def test_weather_failures_are_400(
 
 
 async def test_seventh_day_with_different_location_date(
-    db_session, test_user, day_generation, monkeypatch
+    db_session, test_user, day_generation, openmeteo_http
 ):
     location_today = date(2026, 10, 24)
     target = date(2026, 11, 1)
@@ -380,26 +503,22 @@ async def test_seventh_day_with_different_location_date(
     test_user.timezone = "UTC"
     await db_session.commit()
 
-    async def get(client, url, **kwargs):
-        params = kwargs["params"]
+    def payload(params):
         assert params["timezone"] == "auto"
+        if "hourly" in params:
+            return {"hourly": {}}
         days = params["forecast_days"]
-        return httpx.Response(
-            200,
-            request=httpx.Request("GET", url),
-            json={
-                "daily": {
-                    "time": [
-                        (location_today + timedelta(days=offset)).isoformat()
-                        for offset in range(days)
-                    ],
-                    "temperature_2m_min": [10] * days,
-                    "temperature_2m_max": [22] * days,
-                }
-            },
-        )
+        return {
+            "daily": {
+                "time": [
+                    (location_today + timedelta(days=offset)).isoformat() for offset in range(days)
+                ],
+                "temperature_2m_min": [10] * days,
+                "temperature_2m_max": [22] * days,
+            }
+        }
 
-    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    openmeteo_http.payload = payload
     with patch("app.utils.timezone.datetime") as clock:
         clock.now.return_value = datetime(2026, 10, 25, 0, 30, tzinfo=UTC)
         assert get_user_today(test_user) == date(2026, 10, 25)
@@ -409,7 +528,14 @@ async def test_seventh_day_with_different_location_date(
 
 
 async def test_day_lock_survives_savepoint_until_commit(
-    db_session, session_maker, client, auth_headers, test_user, day_generation, monkeypatch
+    db_session,
+    session_maker,
+    client,
+    auth_headers,
+    test_user,
+    day_generation,
+    monkeypatch,
+    forecast,
 ):
     await prepare(db_session, test_user)
     user_id, day = test_user.id, get_user_today(test_user)

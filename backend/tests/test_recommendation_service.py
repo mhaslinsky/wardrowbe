@@ -15,6 +15,7 @@ from app.services.recommendation_service import (
     AIRecommendationError,
     RecommendationService,
     cached_suggestion_fits,
+    format_active_hours_weather,
     format_temp_range_text,
     get_time_of_day,
     suggestion_context,
@@ -114,6 +115,7 @@ class TestPromptTemplate:
             occasion="casual",
             time_of_day="evening",
             temperature=22,
+            temperature_unit="C",
             feels_like=20,
             condition="clear",
             precipitation_chance=10,
@@ -134,6 +136,7 @@ class TestPromptTemplate:
                 occasion="work",
                 time_of_day=tod,
                 temperature=15,
+                temperature_unit="C",
                 feels_like=13,
                 condition="cloudy",
                 precipitation_chance=30,
@@ -184,6 +187,7 @@ class TestPromptTemplateTempRange:
             occasion="casual",
             time_of_day="evening",
             temperature=22,
+            temperature_unit="C",
             feels_like=20,
             condition="clear",
             precipitation_chance=10,
@@ -199,6 +203,7 @@ class TestPromptTemplateTempRange:
             occasion="casual",
             time_of_day="evening",
             temperature=22,
+            temperature_unit="C",
             feels_like=20,
             condition="clear",
             precipitation_chance=10,
@@ -211,6 +216,27 @@ class TestPromptTemplateTempRange:
 
 
 class TestTempRangeText:
+    @pytest.mark.parametrize(
+        "unit,expected", [("fahrenheit", "57 to 68°F"), ("celsius", "14 to 20°C")]
+    )
+    def test_active_hours_in_prompt_use_preferred_unit(self, unit, expected):
+        weather = _weather(temp=17, window_min=14, window_max=20)
+        weather.window_start_hour, weather.window_end_hour = 10, 17
+        preferences = UserPreference(
+            temperature_unit=unit, active_start_hour=10, active_end_hour=17
+        )
+        text = format_active_hours_weather(weather, preferences)
+        assert "10 AM to 5 PM" in text
+        assert expected in text
+
+    def test_prompt_labels_whole_day_fallback(self):
+        weather = _weather(temp=17, window_min=6, window_max=20)
+        text = format_active_hours_weather(
+            weather, UserPreference(active_start_hour=10, active_end_hour=17)
+        )
+        assert "10 AM to 5 PM" in text
+        assert "Whole-day fallback" in text
+
     def test_empty_when_min_missing(self):
         weather = _weather(temp=12, window_min=None, window_max=30)
         assert format_temp_range_text(weather) == ""
@@ -227,22 +253,17 @@ class TestTempRangeText:
         weather = _weather(temp=12, temp_min=5, temp_max=30)
         assert format_temp_range_text(weather) == ""
 
-    def test_renders_regardless_of_is_day(self):
+    def test_large_swing_guidance_does_not_repeat_range(self):
         weather = _weather(temp=12, window_min=5, window_max=30, is_day=False)
         text = format_temp_range_text(weather)
-        assert "5.0°C" in text
-        assert "30.0°C" in text
-        assert "currently" not in text
+        assert "large swing" in text
+        assert "adaptable layers" in text
+        assert "°" not in text
+        assert not any(character.isdigit() for character in text)
 
     def test_degenerate_equal_bounds(self):
         weather = _weather(temp=20, window_min=20, window_max=20)
         assert format_temp_range_text(weather) == ""
-
-    def test_float_rounding(self):
-        weather = _weather(temp=12.34, window_min=5.06, window_max=30.049)
-        text = format_temp_range_text(weather)
-        assert "5.1°C" in text
-        assert "30.0°C" in text
 
 
 def _fit_prefs(updated_at=datetime(2026, 3, 8, 9, 0), **kwargs) -> UserPreference:
@@ -488,6 +509,61 @@ def _make_item(**kwargs) -> ClothingItem:
     }
     defaults.update(kwargs)
     return ClothingItem(**defaults)
+
+
+async def test_same_day_passes_user_active_hours(
+    db_session, test_user, openmeteo_http, weather_cache
+):
+    test_user.location_lat, test_user.location_lon = 40, -74
+    test_user.preferences = UserPreference(
+        user_id=test_user.id, active_start_hour=10, active_end_hour=17
+    )
+    await db_session.commit()
+    service = RecommendationService(db_session)
+    service.get_candidate_items = AsyncMock(side_effect=ValueError("Stop before AI"))
+    openmeteo_http.payload = {
+        "current": {"time": "2026-10-29T14:00", "temperature_2m": 22},
+        "hourly": {
+            "time": [f"2026-10-29T{hour:02d}:00" for hour in range(24)],
+            "temperature_2m": [1] * 14 + [20, 21, 22, 23] + [2] * 6,
+        },
+    }
+    with pytest.raises(ValueError, match="Stop before AI"):
+        await service.generate_recommendations(test_user, "casual")
+    weather = service.get_candidate_items.call_args.kwargs["weather"]
+    assert (weather.window_min, weather.window_max) == (20, 23)
+    assert (weather.window_start_hour, weather.window_end_hour) == (14, 17)
+    assert weather.window_temperature == 21.5
+
+
+@pytest.mark.parametrize("route", ["suggest", "suggest-options"])
+@pytest.mark.parametrize("credential", ["identity", "personal-token"])
+async def test_real_request_dependency_loads_saved_active_hours(
+    client, test_user, auth_headers, db_session, session_maker, monkeypatch, route, credential
+):
+    from app.database import get_db
+    from app.main import app
+    from app.services.access_token_service import AccessTokenService
+    from app.services.weather_service import WeatherService, WeatherServiceError
+
+    test_user.location_lat, test_user.location_lon = 40, -74
+    db_session.add(UserPreference(user_id=test_user.id, active_start_hour=10, active_end_hour=17))
+    headers = auth_headers
+    if credential == "personal-token":
+        _, secret = await AccessTokenService(db_session).create(test_user.id, "Active hours proof")
+        headers = {"Authorization": f"Bearer {secret}"}
+    await db_session.commit()
+
+    async def request_db():
+        async with session_maker() as fresh_session:
+            yield fresh_session
+
+    monkeypatch.setitem(app.dependency_overrides, get_db, request_db)
+    weather = AsyncMock(side_effect=WeatherServiceError("Dependency proof"))
+    monkeypatch.setattr(WeatherService, "get_current_weather", weather)
+    response = await client.post(f"/api/v1/outfits/{route}", json={}, headers=headers)
+    assert response.status_code == 400
+    weather.assert_awaited_once_with(40.0, -74.0, active_hours=(10, 17))
 
 
 class TestMultiOutfitParse:

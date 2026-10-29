@@ -18,6 +18,7 @@ from app.services.item_scorer import get_season, score_items
 from app.services.preference_service import PreferenceService
 from app.services.recommendation_service import RecommendationService
 from app.services.studio_service import validate_item_ownership
+from app.services.weather_service import wearing_hours
 from app.utils.clothing import canonical_item_order, repair_top_layers
 from app.utils.garment_vocabulary import ITEM_ROLE, TYPES, is_outfit_type
 from app.utils.photo_urls import image_url
@@ -119,7 +120,9 @@ class InspirationService:
         if user.location_lat is None or user.location_lon is None:
             raise ValueError("Set your location first")
         weather = await recommendations.weather_service.get_current_weather(
-            float(user.location_lat), float(user.location_lon)
+            float(user.location_lat),
+            float(user.location_lon),
+            active_hours=wearing_hours(preferences),
         )
         candidates = await recommendations.get_candidate_items(
             user, weather, "casual", preferences, []
@@ -127,7 +130,7 @@ class InspirationService:
         today = get_user_today(user)
         scored = score_items(
             candidates,
-            weather,
+            weather.for_scoring(),
             "casual",
             preferences,
             today,

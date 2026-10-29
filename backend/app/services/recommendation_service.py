@@ -37,6 +37,7 @@ from app.services.item_scorer import (
     stays_above_hot_threshold,
     temperature_band,
 )
+from app.services.preference_service import PreferenceService
 from app.services.suggestion_cache import pop_suggestion, push_suggestions
 from app.services.wear_service import WearService
 from app.services.weather_service import (
@@ -44,6 +45,7 @@ from app.services.weather_service import (
     WeatherData,
     WeatherService,
     WeatherServiceError,
+    wearing_hours,
 )
 from app.utils.clothing import (
     canonical_item_order,
@@ -94,11 +96,28 @@ def format_temp_range_text(weather: WeatherData) -> str:
     temp_range = scoring_temp_range(weather)
     if temp_range is None:
         return ""
-    low, high = temp_range
-    return (
-        f"- Temperature ahead ranges from {low:.1f}°C to {high:.1f}°C, a large swing, "
-        "favour adaptable layers that work at both ends."
-    )
+    return "- A large swing: favour adaptable layers that work at both ends."
+
+
+def format_active_hours_weather(weather: WeatherData, preferences=None) -> str:
+    start, end = wearing_hours(preferences)
+    if weather.window_start_hour is not None and weather.window_end_hour is not None:
+        start, end = weather.window_start_hour, weather.window_end_hour
+    hours = " to ".join(f"{hour % 12 or 12} {'AM' if hour < 12 else 'PM'}" for hour in (start, end))
+    if weather.window_min is None or weather.window_max is None:
+        return f"- Active hours: {hours}. Current conditions used; hourly range unavailable."
+    fahrenheit = getattr(preferences, "temperature_unit", None) == "fahrenheit"
+    low, high = weather.window_min, weather.window_max
+    if fahrenheit:
+        low, high = low * 9 / 5 + 32, high * 9 / 5 + 32
+    unit = "F" if fahrenheit else "C"
+    if weather.condition == "climate normal":
+        return (
+            f"- Active hours: {hours}. Climate normal (whole day): {low:.0f} to {high:.0f}°{unit}."
+        )
+    if weather.window_start_hour is None:
+        return f"- Active hours: {hours}. Whole-day fallback: {low:.0f} to {high:.0f}°{unit}."
+    return f"- {hours}: {low:.0f} to {high:.0f}°{unit}."
 
 
 def suggestion_context(
@@ -109,7 +128,11 @@ def suggestion_context(
     outfit_notes: list[dict] | None = None,
 ) -> dict:
     return {
-        "temps": [weather.temperature, weather.feels_like, *(scoring_temp_range(weather) or ())],
+        "temps": [
+            weather.for_scoring().temperature,
+            weather.for_scoring().feels_like,
+            *(scoring_temp_range(weather) or ()),
+        ],
         "outfit_notes": hashlib.sha256(
             json.dumps(outfit_notes or [], sort_keys=True).encode()
         ).hexdigest(),
@@ -264,23 +287,13 @@ class RecommendationService:
             forecast = next((entry for entry in forecasts if entry.date == day.isoformat()), None)
             if forecast is None:
                 raise ValueError("Forecast unavailable for this date")
-            temperature = (forecast.temp_min + forecast.temp_max) / 2
-            weather = WeatherData(
-                temperature=temperature,
-                feels_like=temperature,
-                humidity=forecast.humidity if forecast.humidity is not None else 50,
-                precipitation_chance=forecast.precipitation_chance,
-                precipitation_mm=0,
-                wind_speed=forecast.wind_speed if forecast.wind_speed is not None else 0,
-                condition=forecast.condition,
-                condition_code=forecast.condition_code,
-                is_day=True,
-                uv_index=forecast.uv_index if forecast.uv_index is not None else 0,
-                timestamp=datetime.combine(day, datetime.min.time()),
-                temp_min=forecast.temp_min,
-                temp_max=forecast.temp_max,
-                window_min=forecast.temp_min,
-                window_max=forecast.temp_max,
+            # Pick-a-day outfits must exclude temperatures outside the user's active hours.
+            preferences = await PreferenceService(self.db).get_preferences(user.id)
+            weather = await self.weather_service.get_forecast_weather(
+                float(lat),
+                float(lon),
+                forecast,
+                active_hours=wearing_hours(preferences),
             )
             self._defer_commit = True
             await self.generate_recommendations(
@@ -1092,7 +1105,9 @@ class RecommendationService:
             if lat is None or lon is None:
                 raise ValueError("User location not set. Please set location in settings.")
             try:
-                weather = await self.weather_service.get_current_weather(lat, lon)
+                weather = await self.weather_service.get_current_weather(
+                    lat, lon, active_hours=wearing_hours(user.preferences)
+                )
             except WeatherServiceError as e:
                 logger.error(f"Weather service failed: {e}")
                 raise ValueError(
@@ -1229,7 +1244,7 @@ class RecommendationService:
         current_season = get_season(user_today.month, lat)
         scored = score_items(
             items=candidates,
-            weather=weather,
+            weather=weather.for_scoring(),
             occasion=occasion,
             preferences=preferences,
             user_today=user_today,
@@ -1276,14 +1291,31 @@ class RecommendationService:
                 flags=re.DOTALL,
             )
 
+        prompt_weather = weather.for_scoring()
+        temperature_unit = (
+            "F" if getattr(preferences, "temperature_unit", None) == "fahrenheit" else "C"
+        )
+        temperature, feels_like = prompt_weather.temperature, prompt_weather.feels_like
+        if temperature_unit == "F":
+            temperature, feels_like = temperature * 9 / 5 + 32, feels_like * 9 / 5 + 32
+
         prompt = prompt_template.format(
             occasion=occasion,
             time_of_day=time_of_day,
-            temperature=weather.temperature,
-            feels_like=weather.feels_like,
+            temperature=f"{temperature:.1f}",
+            feels_like=f"{feels_like:.1f}",
+            temperature_unit=temperature_unit,
             condition=weather.condition,
             precipitation_chance=weather.precipitation_chance,
-            temp_range_text=format_temp_range_text(weather),
+            temp_range_text="\n".join(
+                filter(
+                    None,
+                    (
+                        format_active_hours_weather(weather, preferences),
+                        format_temp_range_text(weather),
+                    ),
+                )
+            ),
             preferences_text=preferences_text,
             items_text=items_text,
             mandatory_items_section=mandatory_items_section,

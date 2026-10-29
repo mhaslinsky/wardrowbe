@@ -1,4 +1,11 @@
 {
+  "activeHours": {
+    "title": "Active hours",
+    "description": "Local hours for outfit weather",
+    "start": "Start",
+    "end": "End",
+    "invalid": "End must be at least two hours after start"
+  },
   "washing": {
     "title": "Washing",
     "description": "Wears before washing",

@@ -15,6 +15,7 @@ from app.config import Settings
 from app.models.item import ClothingItem
 from app.models.notification import Notification, NotificationSettings, NotificationStatus
 from app.models.outfit import Outfit, OutfitSource, OutfitStatus
+from app.models.preference import UserPreference
 from app.models.schedule import Schedule
 from app.models.user import User
 from app.services.notification_providers import EXPO_PUSH_URL
@@ -241,12 +242,12 @@ class TestCheckScheduledNotifications:
 class TestProcessScheduledNotification:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("notify_day_before", "lat", "lon"),
+        ("notify_day_before", "lat", "lon", "active_hours"),
         [
-            pytest.param(False, "40.71427800", "-74.00597200", id="today"),
-            pytest.param(True, "40.71427800", "-74.00597200", id="day-before"),
-            pytest.param(True, "0", "37.00000000", id="day-before-on-the-equator"),
-            pytest.param(True, "51.50000000", "0", id="day-before-on-greenwich"),
+            pytest.param(False, "40.71427800", "-74.00597200", None, id="today"),
+            pytest.param(True, "40.71427800", "-74.00597200", None, id="day-before"),
+            pytest.param(True, "0", "37.00000000", None, id="day-before-on-the-equator"),
+            pytest.param(True, "51.50000000", "0", (10, 17), id="day-before-custom-hours"),
         ],
     )
     async def test_happy_path_generates_outfit_and_sends(
@@ -257,9 +258,18 @@ class TestProcessScheduledNotification:
         notify_day_before,
         lat,
         lon,
+        active_hours,
     ):
         schedule_user.location_lat = Decimal(lat)
         schedule_user.location_lon = Decimal(lon)
+        if active_hours:
+            db_session.add(
+                UserPreference(
+                    user_id=schedule_user.id,
+                    active_start_hour=active_hours[0],
+                    active_end_hour=active_hours[1],
+                )
+            )
         schedule = _make_due_schedule(schedule_user, notify_day_before=notify_day_before)
         outfit = Outfit(
             user_id=schedule_user.id,
@@ -293,7 +303,9 @@ class TestProcessScheduledNotification:
         assert [c.args[0] for c in post.call_args_list] == ["https://ntfy.sh/test-topic"]
         forecast = weather_service.return_value.get_tomorrow_weather
         if notify_day_before:
-            forecast.assert_awaited_once_with(Decimal(lat), Decimal(lon))
+            forecast.assert_awaited_once_with(
+                Decimal(lat), Decimal(lon), active_hours=active_hours or (0, 21)
+            )
         else:
             forecast.assert_not_called()
         [row] = (
