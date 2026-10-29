@@ -1,11 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingsPage from '@/app/dashboard/settings/page'
-import { toast } from 'sonner'
 
 const state = vi.hoisted(() => ({
   preferences: { standing_rules: ['Never a polo under an overshirt'] } as { standing_rules: string[] } | undefined,
-  save: vi.fn().mockResolvedValue({}),
+  save: vi.fn().mockImplementation(async (patch) => patch),
 }))
 vi.mock('@/lib/hooks/use-preferences', () => ({
   usePreferences: () => ({ data: state.preferences, isLoading: false }),
@@ -35,18 +34,18 @@ describe('standing rules settings', () => {
     const editor = screen.getByLabelText('standingRules.label')
     expect(editor).toHaveValue('Never a polo under an overshirt')
     fireEvent.change(editor, { target: { value: '  Add a base shirt  \n\n Never a polo ' } })
-    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
+    fireEvent.blur(screen.getByLabelText('standingRules.label'))
     await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: ['Add a base shirt', 'Never a polo'] }))
   })
 
   it.each(['', Array(21).fill('rule').join('\n'), 'x'.repeat(301)])('handles empty or over-limit input', async (value) => {
     render(<SettingsPage />)
     fireEvent.change(screen.getByLabelText('standingRules.label'), { target: { value } })
-    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
+    fireEvent.blur(screen.getByLabelText('standingRules.label'))
     if (value === '') {
       await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: [] }))
     } else {
-      expect(toast.error).toHaveBeenCalledWith('standingRules.limit')
+      expect(screen.getByRole('alert')).toHaveTextContent('standingRules.limit')
       expect(state.save).not.toHaveBeenCalled()
     }
   })
@@ -64,7 +63,7 @@ it('keeps the main Settings draft when preview preferences refresh', async () =>
     state.preferences = { ...original, standing_rules: [...original.standing_rules] };
     rerender(<SettingsPage />);
     expect(editor).toHaveValue('Keep this unsaved rule');
-    expect(screen.getAllByText('save', { selector: 'button' })[0]).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'save' })).not.toBeInTheDocument();
   } finally { state.preferences = original; }
 });
 
@@ -80,7 +79,7 @@ it.each([false, true])('omits unseeded standing rules when saving another field 
       state.preferences = original;
       rerender(<SettingsPage />);
     }
-    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0]);
+    fireEvent.blur(input);
     await waitFor(() => expect(state.save).toHaveBeenCalledWith({ avoid_repeat_days: 4 }));
   } finally { state.preferences = original; }
 });
@@ -91,7 +90,7 @@ it('allows explicitly clearing rules before the server data arrives', async () =
     state.preferences = undefined;
     render(<SettingsPage />);
     fireEvent.change(screen.getByLabelText('standingRules.label'), { target: { value: '   ' } });
-    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0]);
+    fireEvent.blur(screen.getByLabelText('standingRules.label'));
     await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: [] }));
   } finally { state.preferences = original; }
 });

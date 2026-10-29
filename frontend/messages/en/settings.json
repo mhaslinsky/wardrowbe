@@ -80,12 +80,12 @@
   },
   "confirmReset": "Are you sure you want to reset all preferences to defaults?",
   "location": {
-    "approximateDetected": "Approximate location filled in. Review it, then save.",
-    "approximateDetectedWithReason": "{reason} Approximate location filled in. Review it, then save.",
+    "approximateDetected": "Approximate location detected",
+    "approximateDetectedWithReason": "Approximate location detected",
     "cityLabel": "City / Location Name (optional)",
     "cityPlaceholder": "e.g., London, UK",
     "description": "Set your location for weather-based outfit recommendations",
-    "detected": "Location detected. Review it, then save.",
+    "detected": "Location detected",
     "errors": {
       "geolocationDenied": "Location access was denied.",
       "geolocationFailed": "Failed to get exact location: {message}",
@@ -244,5 +244,10 @@
     "useColors": "Use these colors",
     "notNow": "Not now",
     "loadFailed": "Could not load colors."
+  },
+  "autosave": {
+    "saved": "Saved",
+    "saving": "Saving...",
+    "error": "Could not save"
   }
 }

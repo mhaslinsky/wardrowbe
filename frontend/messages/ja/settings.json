@@ -80,12 +80,12 @@
   },
   "confirmReset": "すべての設定をデフォルトに戻してもよろしいですか？",
   "location": {
-    "approximateDetected": "おおよその位置情報を入力しました。確認して保存してください。",
-    "approximateDetectedWithReason": "{reason} おおよその位置情報を入力しました。確認して保存してください。",
+    "approximateDetected": "おおよその現在地を検出しました",
+    "approximateDetectedWithReason": "おおよその現在地を検出しました",
     "cityLabel": "市区町村・地名（任意）",
     "cityPlaceholder": "例：東京都渋谷区",
     "description": "天気に基づくコーデのおすすめのために位置情報を設定します",
-    "detected": "位置情報を検出しました。確認して保存してください。",
+    "detected": "現在地を検出しました",
     "errors": {
       "geolocationDenied": "位置情報へのアクセスが拒否されました。",
       "geolocationFailed": "正確な位置情報の取得に失敗しました：{message}",
@@ -244,5 +244,10 @@
     "useColors": "この色を使う",
     "notNow": "今はしない",
     "loadFailed": "色を読み込めませんでした。"
+  },
+  "autosave": {
+    "saved": "保存しました",
+    "saving": "保存中...",
+    "error": "保存できませんでした"
   }
 }

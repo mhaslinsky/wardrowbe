@@ -27,8 +27,13 @@ export function useUpdatePreferences() {
       applySessionToken(session);
       return api.patch<Preferences>('/users/me/preferences', data);
     },
-    onSuccess: (saved) => {
-      queryClient.setQueryData(queryKeys.preferences, saved);
+    onSuccess: (saved, submitted) => {
+      const changed = Object.fromEntries(
+        Object.keys(submitted).map((key) => [key, saved[key as keyof Preferences]]),
+      );
+      queryClient.setQueryData<Preferences>(queryKeys.preferences, (previous) =>
+        previous ? { ...previous, ...changed } : saved,
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences });
       queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.everyItem });

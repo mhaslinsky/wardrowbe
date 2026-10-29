@@ -6,7 +6,7 @@ import SettingsPage from '@/app/dashboard/settings/page'
 
 const state = vi.hoisted(() => ({
   preferences: { standing_rules: ['Never a polo under an overshirt'] } as Partial<Preferences> | undefined,
-  save: vi.fn().mockResolvedValue({}),
+  save: vi.fn().mockImplementation(async (patch) => patch),
   reset: vi.fn(),
 }))
 vi.mock('@/lib/hooks/use-preferences', () => ({
@@ -45,13 +45,11 @@ it('offers all seasons, saves a choice, and clears it', async () => {
   expect(select.querySelectorAll('option')).toHaveLength(13)
   expect(screen.getByText('colorSeason.help').closest('a')).toHaveAttribute('href', 'https://colorwise.me/')
   fireEvent.change(select, { target: { value: 'cool-winter' } })
-  fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
   await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
     color_season: 'cool-winter',
   })))
   state.save.mockClear()
   fireEvent.change(select, { target: { value: '' } })
-  fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
   await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
     color_season: null,
   })))
@@ -72,7 +70,6 @@ it.each(['cool-winter', null] as const)('omits an unchanged season when saving a
     state.preferences = { standing_rules: [], color_season: season }
     render(<SettingsPage />)
     fireEvent.keyDown(screen.getAllByRole('slider')[0], { key: 'ArrowRight' })
-    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
     await waitFor(() => expect(state.save).toHaveBeenCalled())
     expect(state.save.mock.calls[0][0]).not.toHaveProperty('color_season')
     expect(state.save.mock.calls[0][0]).toHaveProperty('style_profile')
@@ -87,49 +84,13 @@ it('omits an untouched season when a refetch arrives during a style edit', async
     fireEvent.keyDown(screen.getAllByRole('slider')[0], { key: 'ArrowRight' })
     state.preferences = { standing_rules: [], color_season: 'cool-winter' }
     rerender(<SettingsPage />)
-    fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
     await waitFor(() => expect(state.save).toHaveBeenCalled())
     expect(state.save.mock.calls[0][0]).not.toHaveProperty('color_season')
   } finally { state.preferences = original }
 })
 
-it('clears the season dirty flag after a successful save', async () => {
-  render(<SettingsPage />)
-  const save = screen.getAllByText('save', { selector: 'button' })[0]
-  fireEvent.change(screen.getByLabelText('colorSeason.label'), { target: { value: 'cool-winter' } })
-  fireEvent.click(screen.getByRole('button', { name: 'colorSeason.notNow' }))
-  fireEvent.click(save)
-  await waitFor(() => expect(save).toBeDisabled())
-  state.save.mockClear()
-  fireEvent.keyDown(screen.getAllByRole('slider')[0], { key: 'ArrowRight' })
-  fireEvent.click(save)
-  await waitFor(() => expect(state.save).toHaveBeenCalled())
-  expect(state.save.mock.calls[0][0]).not.toHaveProperty('color_season')
-})
 
-it.each([false, true])('keeps a season edit made while saving (season submitted: %s)', async (submittedSeason) => {
-  let finishSave!: (value: unknown) => void
-  const pending = new Promise((resolve) => { finishSave = resolve })
-  state.save.mockReturnValueOnce(pending)
-  render(<SettingsPage />)
-  const season = screen.getByLabelText('colorSeason.label')
-  const save = screen.getAllByText('save', { selector: 'button' })[0]
-  if (submittedSeason) fireEvent.change(season, { target: { value: 'cool-winter' } })
-  else fireEvent.keyDown(screen.getAllByRole('slider')[0], { key: 'ArrowRight' })
-  fireEvent.click(save)
-  expect(state.save).toHaveBeenCalledTimes(1)
-  if (!submittedSeason) expect(state.save.mock.calls[0][0]).not.toHaveProperty('color_season')
-  const selected = submittedSeason ? 'warm-autumn' : 'cool-winter'
-  fireEvent.change(season, { target: { value: selected } })
-  await act(async () => { finishSave({}); await pending })
-  expect(save).toBeEnabled()
-  fireEvent.click(save)
-  await waitFor(() => expect(state.save).toHaveBeenCalledTimes(2))
-  expect(state.save.mock.calls[1][0]).toHaveProperty('color_season', selected)
-})
-
-
-it.each([false, true])('previews and applies both lists only on Save (existing picks: %s)', async (existing) => {
+it.each([false, true])('previews and saves both lists immediately on Apply (existing picks: %s)', async (existing) => {
   state.preferences = {
     standing_rules: [],
     color_favorites: existing ? ['orange'] : [],
@@ -149,19 +110,14 @@ it.each([false, true])('previews and applies both lists only on Save (existing p
     const group = within(dialog).getByRole('group', { name: label })
     expect(within(group).getAllByRole('img').map((swatch) => swatch.getAttribute('aria-label'))).toEqual(colors)
   }
-  expect(state.save).not.toHaveBeenCalled()
   fireEvent.click(useColors)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  expect(state.save).not.toHaveBeenCalled()
-  fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
   await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
-    color_season: 'cool-winter',
     color_favorites: ['black', 'white', 'navy', 'blue', 'purple', 'silver'],
     color_avoid: ['orange', 'brown', 'tan', 'gold', 'cream'],
   })))
   state.save.mockClear()
   fireEvent.click(screen.getAllByTitle('black')[0])
-  fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
   await waitFor(() => expect(state.save).toHaveBeenCalled())
   expect(state.save.mock.calls[0][0].color_favorites).not.toContain('black')
 })
@@ -175,9 +131,8 @@ it.each(['not-now', 'escape'])('dismisses the palette with %s and keeps both lis
   if (dismissal === 'not-now') fireEvent.click(within(dialog).getByRole('button', { name: 'colorSeason.notNow' }))
   else fireEvent.keyDown(dialog, { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-  fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
   await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
-    color_season: 'cool-winter', color_favorites: ['orange'], color_avoid: ['black'],
+    color_season: 'cool-winter',
   })))
 })
 
@@ -193,9 +148,8 @@ it('clears a season without opening the palette or changing colors', async () =>
   fireEvent.change(screen.getByLabelText('colorSeason.label'), { target: { value: '' } })
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(api.get).not.toHaveBeenCalled()
-  fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
   await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
-    color_season: null, color_favorites: ['blue'], color_avoid: ['tan'],
+    color_season: null,
   })))
 })
 
@@ -208,8 +162,8 @@ it.each([undefined, {}, { 'cool-winter': { best: [], avoid: [] } }])('reports a 
   expect(await within(dialog).findByRole('alert')).toHaveTextContent('colorSeason.loadFailed')
   expect(within(dialog).getByRole('button', { name: 'colorSeason.useColors' })).toBeDisabled()
   fireEvent.click(within(dialog).getByRole('button', { name: 'colorSeason.notNow' }))
-  fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
-  await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({ color_favorites: ['blue'], color_avoid: ['tan'] })))
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({ color_season: 'cool-winter' }))
+  expect(state.save.mock.calls.every(([patch]) => !('color_favorites' in patch) && !('color_avoid' in patch))).toBe(true)
 })
 
 it('shows palette request failures without applying colors', async () => {
@@ -234,9 +188,8 @@ it('keeps a dismissed request from applying colors when it completes', async () 
   fireEvent.click(within(dialog).getByRole('button', { name: 'colorSeason.notNow' }))
   await act(async () => { finishRequest({ 'cool-winter': { best: ['black'], avoid: ['orange'] } }); await pending })
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  fireEvent.click(screen.getAllByText('save', { selector: 'button' })[0])
   await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
-    color_season: 'cool-winter', color_favorites: ['blue'], color_avoid: ['tan'],
+    color_season: 'cool-winter',
   })))
 })
 
@@ -253,7 +206,6 @@ it('resets applied colors and the season to the saved reset response', async () 
   fireEvent.click(useColors)
   fireEvent.click(screen.getByRole('button', { name: 'reset' }))
   await waitFor(() => expect(screen.getByLabelText('colorSeason.label')).toHaveValue(''))
-  expect(screen.getAllByText('save', { selector: 'button' })[0]).toBeDisabled()
+  expect(screen.queryByRole('button', { name: 'save' })).not.toBeInTheDocument()
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  expect(state.save).not.toHaveBeenCalled()
 })

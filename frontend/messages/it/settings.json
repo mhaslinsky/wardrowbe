@@ -80,12 +80,12 @@
   },
   "confirmReset": "Sei sicuro di voler ripristinare tutte le preferenze ai valori predefiniti?",
   "location": {
-    "approximateDetected": "Posizione approssimativa inserita. Verificala, poi salva.",
-    "approximateDetectedWithReason": "{reason} Posizione approssimativa inserita. Verificala, poi salva.",
+    "approximateDetected": "Posizione approssimativa rilevata",
+    "approximateDetectedWithReason": "Posizione approssimativa rilevata",
     "cityLabel": "Città / Nome località (opzionale)",
     "cityPlaceholder": "es., Roma, Italia",
     "description": "Imposta la tua posizione per raccomandazioni di outfit basate sul meteo",
-    "detected": "Posizione rilevata. Verificala, poi salva.",
+    "detected": "Posizione rilevata",
     "errors": {
       "geolocationDenied": "Accesso alla posizione negato.",
       "geolocationFailed": "Impossibile ottenere la posizione esatta: {message}",
@@ -244,5 +244,10 @@
     "useColors": "Usa questi colori",
     "notNow": "Non ora",
     "loadFailed": "Impossibile caricare i colori."
+  },
+  "autosave": {
+    "saved": "Salvato",
+    "saving": "Salvataggio...",
+    "error": "Salvataggio non riuscito"
   }
 }

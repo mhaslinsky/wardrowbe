@@ -80,12 +80,12 @@
   },
   "confirmReset": "Möchtest du wirklich alle Vorlieben auf die Standardwerte zurücksetzen?",
   "location": {
-    "approximateDetected": "Ungefährer Standort eingetragen. Überprüfe ihn und speichere dann.",
-    "approximateDetectedWithReason": "{reason} Ungefährer Standort eingetragen. Überprüfe ihn und speichere dann.",
+    "approximateDetected": "Ungefährer Standort erkannt",
+    "approximateDetectedWithReason": "Ungefährer Standort erkannt",
     "cityLabel": "Stadt/Ortsname (optional)",
     "cityPlaceholder": "z. B. Berlin, DE",
     "description": "Lege deinen Standort für wetterbasierte Outfit-Empfehlungen fest",
-    "detected": "Standort erkannt. Überprüfe ihn und speichere dann.",
+    "detected": "Standort erkannt",
     "errors": {
       "geolocationDenied": "Der Zugriff auf den Standort wurde verweigert.",
       "geolocationFailed": "Genauer Standort konnte nicht ermittelt werden: {message}",
@@ -244,5 +244,10 @@
     "useColors": "Diese Farben verwenden",
     "notNow": "Jetzt nicht",
     "loadFailed": "Farben konnten nicht geladen werden."
+  },
+  "autosave": {
+    "saved": "Gespeichert",
+    "saving": "Wird gespeichert...",
+    "error": "Speichern fehlgeschlagen"
   }
 }

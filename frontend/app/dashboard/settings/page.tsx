@@ -6,9 +6,10 @@ import { ColorSeasonDialog } from '@/components/color-season-dialog';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PreviewPhotoSettings } from '@/components/preview-photo-settings';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useAutosaveFields } from '@/lib/hooks/use-autosave-fields';
 import { useSession } from 'next-auth/react';
-import { Loader2, Save, RotateCcw, Check, Plus, Trash2, ChevronUp, ChevronDown, Server, MapPin, Navigation, Ruler } from 'lucide-react';
+import { Loader2, RotateCcw, Check, Plus, Trash2, ChevronUp, ChevronDown, Server, MapPin, Navigation, Ruler } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { usePreferences, useUpdatePreferences, useResetPreferences, useTestAIEndpoint } from '@/lib/hooks/use-preferences';
-import { useUserProfile, useUpdateUserProfile } from '@/lib/hooks/use-user';
+import { useUserProfile, useUpdateUserProfile, UserProfile, UserProfileUpdate } from '@/lib/hooks/use-user';
 import {
   getNetworkLocationUrl,
   formatReverseGeocodedLocation,
@@ -154,10 +155,12 @@ function StyleSlider({
   label,
   value,
   onChange,
+  onCommit,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  onCommit: (value: number) => void;
 }) {
   return (
     <div className="space-y-2">
@@ -167,13 +170,36 @@ function StyleSlider({
       </div>
       <Slider
         value={[value]}
-        onValueChange={(vals) => onChange(vals[0])}
+        onValueChange={(values) => onChange(values[0])}
+        onValueCommit={(values) => onCommit(values[0])}
         min={STYLE_SCORE.min}
         max={STYLE_SCORE.max}
         step={10}
       />
     </div>
   );
+}
+
+type UnitSystem = 'metric' | 'imperial';
+type ProfileFields = {
+  location_name: string;
+  location_lat: string;
+  location_lon: string;
+  timezone: string;
+  body_measurements: Record<string, string>;
+};
+
+function displayProfile(profile: Partial<UserProfile>, unitSystem: UnitSystem): ProfileFields {
+  return {
+    location_name: profile.location_name || '',
+    location_lat: profile.location_lat?.toString() || '',
+    location_lon: profile.location_lon?.toString() || '',
+    timezone: profile.timezone || 'UTC',
+    body_measurements: Object.fromEntries(Object.entries(profile.body_measurements || {}).map(([key, value]) => [
+      key, String(NUMERIC_MEASUREMENT_KEYS.includes(key) && typeof value === 'number'
+        ? convertMeasurement(value, key, 'metric', unitSystem) : value),
+    ])),
+  };
 }
 
 export default function SettingsPage() {
@@ -198,63 +224,65 @@ export default function SettingsPage() {
   const testEndpoint = useTestAIEndpoint();
   const updateUserProfile = useUpdateUserProfile({ toastsOwnErrors: true });
 
-  const [formData, setFormData] = useState<Partial<Preferences>>({});
+  const autosave = useAutosaveFields<Preferences>(preferences, updatePreferences.mutateAsync);
+  const formData = autosave.values;
   const occasions = useOccasionOptions([formData.default_occasion, preferences?.default_occasion]);
-  const [standingRulesText, setStandingRulesText] = useState('');
-  const [standingRulesReady, setStandingRulesReady] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [colorSeasonDirty, setColorSeasonDirty] = useState(false);
+  const [standingRulesError, setStandingRulesError] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [paletteSeason, setPaletteSeason] = useState<NonNullable<Preferences['color_season']> | null>(null);
-  const colorSeasonRevision = useRef(0);
-  const hasChangesRef = useRef(hasChanges);
-  hasChangesRef.current = hasChanges;
   const [endpointTests, setEndpointTests] = useState<Record<number, EndpointTestResult>>({});
 
-  // Location and timezone state
-  const [locationName, setLocationName] = useState('');
-  const [locationLat, setLocationLat] = useState('');
-  const [locationLon, setLocationLon] = useState('');
-  const [timezone, setTimezone] = useState('UTC');
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-
-  // Body measurements state
-  type UnitSystem = 'metric' | 'imperial';
-  const [measurements, setMeasurements] = useState<Record<string, string>>({});
-  const [measurementsDirty, setMeasurementsDirty] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [unitSystem, setUnitSystem] = useState<UnitSystem>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('wardrowbe_unit_system') as UnitSystem) || 'metric';
     }
     return 'metric';
   });
-  const unitSystemRef = useRef(unitSystem);
+  const initialProfile = useMemo(() => userProfile ? displayProfile(userProfile, unitSystem) : undefined, [userProfile, unitSystem]);
+  const profileAutosave = useAutosaveFields<ProfileFields>(initialProfile, async (patch) => {
+    const payload: UserProfileUpdate = {};
+    if ('location_name' in patch) payload.location_name = patch.location_name;
+    if ('timezone' in patch) payload.timezone = patch.timezone;
+    if ('location_lat' in patch) payload.location_lat = Number(patch.location_lat);
+    if ('location_lon' in patch) payload.location_lon = Number(patch.location_lon);
+    if ('body_measurements' in patch) {
+      const parsed = Object.fromEntries(Object.entries(patch.body_measurements || {})
+        .filter(([, value]) => value.trim())
+        .map(([key, value]) => [key, NUMERIC_MEASUREMENT_KEYS.includes(key)
+          ? convertMeasurement(Number(value), key, unitSystem, 'metric') : value.trim()]));
+      payload.body_measurements = Object.keys(parsed).length ? parsed : null;
+    }
+    return displayProfile(await updateUserProfile.mutateAsync(payload), unitSystem);
+  });
+  const locationName = profileAutosave.values.location_name || '';
+  const locationLat = profileAutosave.values.location_lat || '';
+  const locationLon = profileAutosave.values.location_lon || '';
+  const timezone = profileAutosave.values.timezone || 'UTC';
+  const measurements = profileAutosave.values.body_measurements || {};
+  const setLocationName = (value: string) => profileAutosave.stage({ location_name: value });
+  const setLocationLat = (value: string) => profileAutosave.stage({ location_lat: value });
+  const setLocationLon = (value: string) => profileAutosave.stage({ location_lon: value });
+  const setTimezone = (value: string) => { void profileAutosave.commit({ timezone: value }); };
 
-  useEffect(() => {
-    unitSystemRef.current = unitSystem;
-  }, [unitSystem]);
-
-  useEffect(() => {
-    if (userProfile) {
-      setLocationName(userProfile.location_name || '');
-      setLocationLat(userProfile.location_lat?.toString() || '');
-      setLocationLon(userProfile.location_lon?.toString() || '');
-      setTimezone(userProfile.timezone || 'UTC');
-
-      if (userProfile.body_measurements) {
-        const initial: Record<string, string> = {};
-        const displayUnitSystem = unitSystemRef.current;
-        for (const [key, value] of Object.entries(userProfile.body_measurements)) {
-          if (NUMERIC_MEASUREMENT_KEYS.includes(key) && typeof value === 'number') {
-            const converted = convertMeasurement(value, key, 'metric', displayUnitSystem);
-            initial[key] = String(converted);
-          } else {
-            initial[key] = String(value);
-          }
-        }
-        setMeasurements(initial);
+  const saveProfileField = (key: 'location_name' | 'location_lat' | 'location_lon') => {
+    const value = profileAutosave.current.current[key] || '';
+    if (key !== 'location_name') {
+      const coordinate = Number(value);
+      const limit = key === 'location_lat' ? 90 : 180;
+      if (!value.trim() || !Number.isFinite(coordinate)) {
+        setProfileError(t('location.errors.invalidCoordinates'));
+        return;
+      }
+      if (coordinate < -limit || coordinate > limit) {
+        setProfileError(t(key === 'location_lat' ? 'location.errors.latitudeRange' : 'location.errors.longitudeRange'));
+        return;
       }
     }
-  }, [userProfile]);
+    setProfileError(null);
+    void profileAutosave.commit({ [key]: value });
+  };
 
   const detectLocationFromNetwork = async () => {
     const response = await fetch(getNetworkLocationUrl(), {
@@ -271,14 +299,12 @@ export default function SettingsPage() {
 
     const data = await response.json();
     const resolved = resolveNetworkLocation(data, timezone);
-    setLocationLat(resolved.lat);
-    setLocationLon(resolved.lon);
-    if (resolved.locationName) {
-      setLocationName(resolved.locationName);
-    }
-    if (resolved.timezone) {
-      setTimezone(resolved.timezone);
-    }
+    void profileAutosave.commit({
+      location_lat: resolved.lat,
+      location_lon: resolved.lon,
+      ...(resolved.locationName ? { location_name: resolved.locationName } : {}),
+      ...(resolved.timezone ? { timezone: resolved.timezone } : {}),
+    });
     return resolved;
   };
 
@@ -355,7 +381,8 @@ export default function SettingsPage() {
         const lon = position.coords.longitude.toFixed(6);
         setLocationLat(lat);
         setLocationLon(lon);
-        await finalizeFromCoordinates(lat, lon);
+        const name = await finalizeFromCoordinates(lat, lon);
+        void profileAutosave.commit({ location_lat: lat, location_lon: lon, ...(name ? { location_name: name } : {}) });
         setIsGettingLocation(false);
         toast.success(t('location.detected'));
       },
@@ -366,116 +393,32 @@ export default function SettingsPage() {
     );
   };
 
-  const handleSaveLocation = async () => {
-    const lat = parseFloat(locationLat);
-    const lon = parseFloat(locationLon);
-
-    if (isNaN(lat) || isNaN(lon)) {
-      toast.error(t('location.errors.invalidCoordinates'));
-      return;
-    }
-
-    if (lat < -90 || lat > 90) {
-      toast.error(t('location.errors.latitudeRange'));
-      return;
-    }
-
-    if (lon < -180 || lon > 180) {
-      toast.error(t('location.errors.longitudeRange'));
-      return;
-    }
-
-    try {
-      await updateUserProfile.mutateAsync({
-        location_lat: lat,
-        location_lon: lon,
-        location_name: locationName || undefined,
-        timezone: timezone,
-      });
-      toast.success(t('location.saved'));
-    } catch {
-      toast.error(t('location.errors.saveFailed'));
-    }
-  };
-
-  const hasLocationChanges = userProfile && (
-    locationName !== (userProfile.location_name || '') ||
-    locationLat !== (userProfile.location_lat?.toString() || '') ||
-    locationLon !== (userProfile.location_lon?.toString() || '') ||
-    timezone !== (userProfile.timezone || 'UTC')
-  );
-
-  const isDirty = hasChanges || measurementsDirty || !!hasLocationChanges;
-
-  useEffect(() => {
-    if (!isDirty) return;
-
-    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener('beforeunload', onBeforeUnload);
-
-    const origPush = history.pushState.bind(history);
-    history.pushState = function (...args) {
-      if (window.confirm(t('unsavedChanges'))) {
-        origPush(...args);
-      }
-    };
-
-    return () => {
-      window.removeEventListener('beforeunload', onBeforeUnload);
-      history.pushState = origPush;
-    };
-  }, [isDirty]);
-
   const handleToggleUnits = () => {
     const newSystem: UnitSystem = unitSystem === 'metric' ? 'imperial' : 'metric';
-    const converted: Record<string, string> = {};
-    for (const [key, value] of Object.entries(measurements)) {
-      const trimmed = value.trim();
-      if (!trimmed) { converted[key] = value; continue; }
-      if (NUMERIC_MEASUREMENT_KEYS.includes(key)) {
-        const num = parseFloat(trimmed);
-        if (!isNaN(num)) {
-          converted[key] = String(convertMeasurement(num, key, unitSystem, newSystem));
-          continue;
-        }
-      }
-      converted[key] = value;
-    }
-    setMeasurements(converted);
+    profileAutosave.transform('body_measurements', (values) => Object.fromEntries(
+      Object.entries(values || {}).map(([key, value]) => [key,
+        NUMERIC_MEASUREMENT_KEYS.includes(key) && value.trim() && Number.isFinite(Number(value))
+          ? String(convertMeasurement(Number(value), key, unitSystem, newSystem)) : value,
+      ]),
+    ));
     setUnitSystem(newSystem);
     localStorage.setItem('wardrowbe_unit_system', newSystem);
   };
 
   const handleMeasurementChange = (key: string, value: string) => {
-    setMeasurements((prev) => ({ ...prev, [key]: value }));
-    setMeasurementsDirty(true);
+    profileAutosave.stage({ body_measurements: { ...profileAutosave.current.current.body_measurements, [key]: value } });
   };
 
-  const handleSaveMeasurements = async () => {
-    const parsed: Record<string, number | string> = {};
-    for (const [key, value] of Object.entries(measurements)) {
-      const trimmed = value.trim();
-      if (!trimmed) continue;
-      if (NUMERIC_MEASUREMENT_KEYS.includes(key)) {
-        const num = parseFloat(trimmed);
-        if (isNaN(num) || num <= 0) {
-          toast.error(t('body.errors.positiveNumber', { field: t(`body.fields.${key}`) }));
-          return;
-        }
-        parsed[key] = convertMeasurement(num, key, unitSystem, 'metric');
-      } else {
-        parsed[key] = trimmed;
+  const saveMeasurements = () => {
+    const current = profileAutosave.current.current.body_measurements || {};
+    for (const [key, value] of Object.entries(current)) {
+      if (value.trim() && NUMERIC_MEASUREMENT_KEYS.includes(key) && (!Number.isFinite(Number(value)) || Number(value) <= 0)) {
+        setProfileError(t('body.errors.positiveNumber', { field: t(`body.fields.${key}`) }));
+        return;
       }
     }
-    try {
-      await updateUserProfile.mutateAsync({
-        body_measurements: Object.keys(parsed).length > 0 ? parsed : null,
-      });
-      setMeasurementsDirty(false);
-      toast.success(t('body.saved'));
-    } catch {
-      toast.error(t('body.saveError'));
-    }
+    setProfileError(null);
+    void profileAutosave.commit({ body_measurements: current });
   };
 
   const handleTestEndpoint = async (index: number, url: string) => {
@@ -500,90 +443,57 @@ export default function SettingsPage() {
     }
   };
 
-  useEffect(() => {
-    if (preferences) {
-      if (hasChangesRef.current) {
-        setFormData((previous) => ({ ...previous, preview_preferences: preferences.preview_preferences }));
-        return;
-      }
-      setFormData(preferences);
-      setStandingRulesText((preferences.standing_rules || []).join('\n'));
-      setStandingRulesReady(true);
-      setColorSeasonDirty(false);
-      setHasChanges(false);
+  const updateField = <Key extends keyof Preferences>(key: Key, value: Preferences[Key], save = true) => {
+    const patch: Partial<Preferences> = { [key]: value };
+    const current = autosave.current.current;
+    if (key === 'color_favorites' && Array.isArray(value) && current.color_avoid?.some((color) => (value as string[]).includes(color))) {
+      patch.color_avoid = (current.color_avoid || []).filter((color) => !(value as string[]).includes(color));
+    } else if (key === 'color_avoid' && Array.isArray(value) && current.color_favorites?.some((color) => (value as string[]).includes(color))) {
+      patch.color_favorites = (current.color_favorites || []).filter((color) => !(value as string[]).includes(color));
     }
-  }, [preferences]);
-
-  const updateField = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
-    if (key === 'color_season') {
-      colorSeasonRevision.current += 1;
-      setColorSeasonDirty(true);
-    }
-    setFormData((prev) => {
-      const next = { ...prev, [key]: value };
-      if (key === 'color_favorites' && Array.isArray(value)) {
-        next.color_avoid = (prev.color_avoid || []).filter(
-          (c) => !(value as string[]).includes(c)
-        );
-      } else if (key === 'color_avoid' && Array.isArray(value)) {
-        next.color_favorites = (prev.color_favorites || []).filter(
-          (c) => !(value as string[]).includes(c)
-        );
-      }
-      return next;
-    });
-    setHasChanges(true);
+    if (save) void autosave.commit(patch);
+    else autosave.stage(patch);
   };
 
-  const updateStyleProfile = (key: keyof StyleProfile, value: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      style_profile: {
-        ...(prev.style_profile || DEFAULT_STYLE_PROFILE),
-        [key]: value,
-      },
-    }));
-    setHasChanges(true);
+  const updateStyleProfile = (key: keyof StyleProfile, value: number, save = false) => {
+    updateField('style_profile', {
+      ...(autosave.current.current.style_profile || DEFAULT_STYLE_PROFILE),
+      [key]: value,
+    }, save);
   };
 
-  const handleSave = async () => {
-    try {
-      const rules = standingRulesText.split('\n').map((rule) => rule.trim()).filter(Boolean);
-      if (rules.length > 20 || rules.some((rule) => rule.length > 300)) {
-        toast.error(t('standingRules.limit'));
-        return;
-      }
-      const settings = { ...formData };
-      delete settings.preview_preferences;
-      if (!colorSeasonDirty) delete settings.color_season;
-      if (standingRulesReady) settings.standing_rules = rules;
-      else delete settings.standing_rules;
-      const submittedSeason = 'color_season' in settings;
-      const submittedSeasonRevision = colorSeasonRevision.current;
-      await updatePreferences.mutateAsync(settings);
-      const seasonChangedDuringSave = colorSeasonRevision.current !== submittedSeasonRevision;
-      if (submittedSeason && !seasonChangedDuringSave) setColorSeasonDirty(false);
-      setHasChanges(seasonChangedDuringSave);
-    } catch (error) {
-      console.error('Failed to save preferences:', error);
+  const saveStandingRules = (text: string) => {
+    const rules = text.split('\n').map((rule) => rule.trim()).filter(Boolean);
+    if (rules.length > 20 || rules.some((rule) => rule.length > 300)) {
+      setStandingRulesError(true);
+      return;
     }
+    setStandingRulesError(false);
+    updateField('standing_rules', rules);
   };
 
   const handleReset = async () => {
-    if (confirm(t('confirmReset'))) {
-      try {
-        const saved = await resetPreferences.mutateAsync(formData.preview_preferences!.rev);
-        setFormData(saved);
-        setStandingRulesText(saved.standing_rules.join('\n'));
-        setStandingRulesReady(true);
-        setColorSeasonDirty(false);
-        setPaletteSeason(null);
-        setHasChanges(false);
-      } catch (error) {
-        console.error('Failed to reset preferences:', error);
-      }
+    if (!confirm(t('confirmReset'))) return;
+    setResetting(true);
+    try {
+      await Promise.all([autosave.wait(), profileAutosave.wait()]);
+      const saved = await resetPreferences.mutateAsync(autosave.current.current.preview_preferences!.rev);
+      autosave.replace(saved);
+      setStandingRulesError(false);
+      setPaletteSeason(null);
+    } catch {
+      toast.error(t('autosave.error'));
+    } finally {
+      setResetting(false);
     }
   };
+
+  useEffect(() => {
+    if (!autosave.busy && !profileAutosave.busy) return;
+    const preventUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', preventUnload);
+    return () => window.removeEventListener('beforeunload', preventUnload);
+  }, [autosave.busy, profileAutosave.busy]);
 
   if (isLoading || isLoadingProfile) {
     return (
@@ -603,22 +513,25 @@ export default function SettingsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleReset} disabled={resetPreferences.isPending}>
+          <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
             <RotateCcw className="mr-2 h-4 w-4" />
             {t('reset')}
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={!hasChanges || updatePreferences.isPending}>
-            {updatePreferences.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            {tc('save')}
-          </Button>
+          {profileError && <p role="alert" className="self-center text-sm text-destructive">{profileError}</p>}
+          {profileAutosave.status !== 'idle' && (
+            <p role={profileAutosave.status === 'error' ? 'alert' : 'status'} className="self-center text-sm text-muted-foreground">
+              {t(`autosave.${profileAutosave.status}`)}
+            </p>
+          )}
+          {autosave.status !== 'idle' && (
+            <p role={autosave.status === 'error' ? 'alert' : 'status'} className="self-center text-sm text-muted-foreground">
+              {t(`autosave.${autosave.status}`)}
+            </p>
+          )}
         </div>
       </div>
 
-      <div className="grid gap-6">
+      <fieldset disabled={resetting} className="grid min-w-0 gap-6">
         <Link href="/dashboard/fit-profile" className="text-sm text-primary underline underline-offset-4">{navigation('fitProfile')}</Link>
         <AccessTokenSettings />
         {/* Account Section */}
@@ -658,7 +571,8 @@ export default function SettingsPage() {
               <Input
                 value={locationName}
                 maxLength={LOCATION_NAME_MAX_LENGTH}
-                onChange={(e) => setLocationName(e.target.value)}
+                onChange={(event) => setLocationName(event.target.value)}
+                onBlur={() => saveProfileField('location_name')}
                 placeholder={t('location.cityPlaceholder')}
               />
             </div>
@@ -669,7 +583,8 @@ export default function SettingsPage() {
                   type="number"
                   step="0.000001"
                   value={locationLat}
-                  onChange={(e) => setLocationLat(e.target.value)}
+                  onChange={(event) => setLocationLat(event.target.value)}
+                  onBlur={() => saveProfileField('location_lat')}
                   placeholder={tc('example', { value: '51.5074' })}
                 />
               </div>
@@ -679,7 +594,8 @@ export default function SettingsPage() {
                   type="number"
                   step="0.000001"
                   value={locationLon}
-                  onChange={(e) => setLocationLon(e.target.value)}
+                  onChange={(event) => setLocationLon(event.target.value)}
+                  onBlur={() => saveProfileField('location_lon')}
                   placeholder={tc('example', { value: '-0.1278' })}
                 />
               </div>
@@ -722,17 +638,7 @@ export default function SettingsPage() {
                 )}
                 {t('location.useMyLocation')}
               </Button>
-              <Button
-                onClick={handleSaveLocation}
-                disabled={!hasLocationChanges || updateUserProfile.isPending}
-              >
-                {updateUserProfile.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
-                {t('location.saveLocation')}
-              </Button>
+
             </div>
             {!locationLat && !locationLon && (
               <p className="text-sm text-amber-600 dark:text-amber-400">
@@ -754,7 +660,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-6">
             <div className="flex items-center justify-between">
               <Label>{t('body.unitSystem')}</Label>
-              <Button variant="outline" size="sm" onClick={handleToggleUnits}>
+              <Button variant="outline" size="sm" onClick={handleToggleUnits} disabled={profileAutosave.busy}>
                 {unitSystem === 'metric' ? t('body.metric') : t('body.imperial')}
               </Button>
             </div>
@@ -774,7 +680,8 @@ export default function SettingsPage() {
                           step="0.1"
                           min="0"
                           value={measurements[field.key] ?? ''}
-                          onChange={(e) => handleMeasurementChange(field.key, e.target.value)}
+                          onChange={(event) => handleMeasurementChange(field.key, event.target.value)}
+                          onBlur={saveMeasurements}
                           placeholder={placeholder}
                           className="flex-1"
                         />
@@ -799,7 +706,8 @@ export default function SettingsPage() {
                     <Label className="text-sm">{label}</Label>
                     <Input
                       value={measurements[key] ?? ''}
-                      onChange={(e) => handleMeasurementChange(key, e.target.value)}
+                      onChange={(event) => handleMeasurementChange(key, event.target.value)}
+                      onBlur={saveMeasurements}
                       placeholder={t(`body.sizePlaceholders.${key}`)}
                     />
                   </div>
@@ -807,19 +715,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {measurementsDirty && (
-              <Button
-                onClick={handleSaveMeasurements}
-                disabled={updateUserProfile.isPending}
-                size="sm"
-              >
-                {updateUserProfile.isPending ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{tc('saving')}</>
-                ) : (
-                  <><Save className="mr-2 h-4 w-4" />{t('body.saveMeasurements')}</>
-                )}
-              </Button>
-            )}
           </CardContent>
         </Card>
 
@@ -871,8 +766,7 @@ export default function SettingsPage() {
                   replacesColors={!!(formData.color_favorites?.length || formData.color_avoid?.length)}
                   onClose={() => setPaletteSeason(null)}
                   onApply={(palette) => {
-                    updateField('color_favorites', palette.best);
-                    updateField('color_avoid', palette.avoid);
+                    void autosave.commit({ color_favorites: palette.best, color_avoid: palette.avoid });
                     setPaletteSeason(null);
                   }}
                 />
@@ -896,27 +790,32 @@ export default function SettingsPage() {
             <StyleSlider
               label={tConst('styles.casual')}
               value={formData.style_profile?.casual ?? DEFAULT_STYLE_PROFILE.casual}
-              onChange={(v) => updateStyleProfile('casual', v)}
+              onChange={(value) => updateStyleProfile('casual', value)}
+              onCommit={(value) => updateStyleProfile('casual', value, true)}
             />
             <StyleSlider
               label={tConst('styles.formal')}
               value={formData.style_profile?.formal ?? DEFAULT_STYLE_PROFILE.formal}
-              onChange={(v) => updateStyleProfile('formal', v)}
+              onChange={(value) => updateStyleProfile('formal', value)}
+              onCommit={(value) => updateStyleProfile('formal', value, true)}
             />
             <StyleSlider
               label={tConst('styles.sporty')}
               value={formData.style_profile?.sporty ?? DEFAULT_STYLE_PROFILE.sporty}
-              onChange={(v) => updateStyleProfile('sporty', v)}
+              onChange={(value) => updateStyleProfile('sporty', value)}
+              onCommit={(value) => updateStyleProfile('sporty', value, true)}
             />
             <StyleSlider
               label={tConst('styles.minimalist')}
               value={formData.style_profile?.minimalist ?? DEFAULT_STYLE_PROFILE.minimalist}
-              onChange={(v) => updateStyleProfile('minimalist', v)}
+              onChange={(value) => updateStyleProfile('minimalist', value)}
+              onCommit={(value) => updateStyleProfile('minimalist', value, true)}
             />
             <StyleSlider
               label={tConst('styles.bold')}
               value={formData.style_profile?.bold ?? DEFAULT_STYLE_PROFILE.bold}
-              onChange={(v) => updateStyleProfile('bold', v)}
+              onChange={(value) => updateStyleProfile('bold', value)}
+              onCommit={(value) => updateStyleProfile('bold', value, true)}
             />
           </CardContent>
         </Card>
@@ -1002,9 +901,10 @@ export default function SettingsPage() {
                       <Input
                         type="number"
                         value={display(coldC)}
+                        onBlur={() => updateField('cold_threshold', autosave.current.current.cold_threshold ?? cold.default)}
                         onChange={(e) => {
                           const raw = e.target.value === '' ? display(cold.default) : parseInt(e.target.value);
-                          updateField('cold_threshold', isFahrenheit ? Math.round(toCelsius(raw)) : raw);
+                          updateField('cold_threshold', isFahrenheit ? Math.round(toCelsius(raw)) : raw, false);
                         }}
                         min={display(cold.min)}
                         max={display(cold.max)}
@@ -1015,9 +915,10 @@ export default function SettingsPage() {
                       <Input
                         type="number"
                         value={display(hotC)}
+                        onBlur={() => updateField('hot_threshold', autosave.current.current.hot_threshold ?? hot.default)}
                         onChange={(e) => {
                           const raw = e.target.value === '' ? display(hot.default) : parseInt(e.target.value);
-                          updateField('hot_threshold', isFahrenheit ? Math.round(toCelsius(raw)) : raw);
+                          updateField('hot_threshold', isFahrenheit ? Math.round(toCelsius(raw)) : raw, false);
                         }}
                         min={display(hot.min)}
                         max={display(hot.max)}
@@ -1040,9 +941,13 @@ export default function SettingsPage() {
             <Textarea
               id="standing-rules"
               rows={5}
-              value={standingRulesText}
-              onChange={(event) => { setStandingRulesText(event.target.value); setStandingRulesReady(true); setHasChanges(true); }}
+              value={(formData.standing_rules || []).join('\n')}
+              onChange={(event) => updateField('standing_rules', event.target.value.split('\n'), false)}
+              onBlur={(event) => saveStandingRules(event.target.value)}
+              aria-invalid={standingRulesError}
+              aria-describedby={standingRulesError ? 'standing-rules-error' : undefined}
             />
+            {standingRulesError && <p id="standing-rules-error" role="alert" className="text-sm text-destructive">{t('standingRules.limit')}</p>}
           </CardContent>
         </Card>
 
@@ -1107,7 +1012,8 @@ export default function SettingsPage() {
                 <Input
                   type="number"
                   value={formData.avoid_repeat_days ?? AVOID_REPEAT_DAYS.default}
-                  onChange={(e) => updateField('avoid_repeat_days', e.target.value === '' ? AVOID_REPEAT_DAYS.default : parseInt(e.target.value))}
+                  onChange={(event) => updateField('avoid_repeat_days', event.target.value === '' ? AVOID_REPEAT_DAYS.default : parseInt(event.target.value), false)}
+                  onBlur={() => updateField('avoid_repeat_days', autosave.current.current.avoid_repeat_days ?? AVOID_REPEAT_DAYS.default)}
                   min={AVOID_REPEAT_DAYS.min}
                   max={AVOID_REPEAT_DAYS.max}
                 />
@@ -1282,10 +1188,11 @@ export default function SettingsPage() {
                         <Label className="text-xs">{t('aiEndpoints.fields.name')}</Label>
                         <Input
                           value={endpoint.name}
+                          onBlur={() => updateField('ai_endpoints', autosave.current.current.ai_endpoints || [])}
                           onChange={(e) => {
                             const updated = [...(formData.ai_endpoints || [])];
                             updated[index] = { ...updated[index], name: e.target.value };
-                            updateField('ai_endpoints', updated);
+                            updateField('ai_endpoints', updated, false);
                           }}
                           placeholder={t('aiEndpoints.placeholders.name')}
                           className="h-8"
@@ -1295,10 +1202,11 @@ export default function SettingsPage() {
                         <Label className="text-xs">{t('aiEndpoints.fields.url')}</Label>
                         <Input
                           value={endpoint.url}
+                          onBlur={() => updateField('ai_endpoints', autosave.current.current.ai_endpoints || [])}
                           onChange={(e) => {
                             const updated = [...(formData.ai_endpoints || [])];
                             updated[index] = { ...updated[index], url: e.target.value };
-                            updateField('ai_endpoints', updated);
+                            updateField('ai_endpoints', updated, false);
                           }}
                           placeholder="http://localhost:11434/v1"
                           className="h-8"
@@ -1308,10 +1216,11 @@ export default function SettingsPage() {
                         <Label className="text-xs">{t('aiEndpoints.fields.visionModel')}</Label>
                         <Input
                           value={endpoint.vision_model}
+                          onBlur={() => updateField('ai_endpoints', autosave.current.current.ai_endpoints || [])}
                           onChange={(e) => {
                             const updated = [...(formData.ai_endpoints || [])];
                             updated[index] = { ...updated[index], vision_model: e.target.value };
-                            updateField('ai_endpoints', updated);
+                            updateField('ai_endpoints', updated, false);
                           }}
                           placeholder={EXAMPLE_VISION_MODEL}
                           className="h-8"
@@ -1321,10 +1230,11 @@ export default function SettingsPage() {
                         <Label className="text-xs">{t('aiEndpoints.fields.textModel')}</Label>
                         <Input
                           value={endpoint.text_model}
+                          onBlur={() => updateField('ai_endpoints', autosave.current.current.ai_endpoints || [])}
                           onChange={(e) => {
                             const updated = [...(formData.ai_endpoints || [])];
                             updated[index] = { ...updated[index], text_model: e.target.value };
-                            updateField('ai_endpoints', updated);
+                            updateField('ai_endpoints', updated, false);
                           }}
                           placeholder={EXAMPLE_TEXT_MODEL}
                           className="h-8"
@@ -1353,21 +1263,12 @@ export default function SettingsPage() {
                 <Plus className="h-4 w-4 mr-2" />
                 {t('aiEndpoints.addEndpoint')}
               </Button>
-              {hasChanges && (
-                <Button onClick={handleSave} disabled={updatePreferences.isPending}>
-                  {updatePreferences.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  {tc('save')}
-                </Button>
-              )}
+
             </div>
           </CardContent>
         </Card>
         <PreviewPhotoSettings />
-      </div>
+      </fieldset>
     </div>
   );
 }

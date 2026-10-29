@@ -80,12 +80,12 @@
   },
   "confirmReset": "确定要将所有偏好恢复为默认值吗？",
   "location": {
-    "approximateDetected": "已填入大致位置。请确认后保存。",
-    "approximateDetectedWithReason": "{reason} 已填入大致位置。请确认后保存。",
+    "approximateDetected": "已检测到大致位置",
+    "approximateDetectedWithReason": "已检测到大致位置",
     "cityLabel": "城市/位置名称（可选）",
     "cityPlaceholder": "例如：英国伦敦",
     "description": "设置您的位置以获取基于天气的穿搭推荐",
-    "detected": "位置已检测到。请确认后保存。",
+    "detected": "已检测到位置",
     "errors": {
       "geolocationDenied": "位置访问被拒绝。",
       "geolocationFailed": "获取精确位置失败：{message}",
@@ -244,5 +244,10 @@
     "useColors": "使用这些颜色",
     "notNow": "暂不使用",
     "loadFailed": "无法加载颜色。"
+  },
+  "autosave": {
+    "saved": "已保存",
+    "saving": "正在保存...",
+    "error": "无法保存"
   }
 }
