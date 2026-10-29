@@ -238,6 +238,11 @@
     "clear-spring": "Klarer Frühling",
     "light-summer": "Heller Sommer",
     "cool-summer": "Kühler Sommer",
-    "soft-summer": "Sanfter Sommer"
+    "soft-summer": "Sanfter Sommer",
+    "prompt": "Diese Lieblingsfarben und zu vermeidenden Farben verwenden?",
+    "replaceColors": "Deine bisherigen Farben werden ersetzt.",
+    "useColors": "Diese Farben verwenden",
+    "notNow": "Jetzt nicht",
+    "loadFailed": "Farben konnten nicht geladen werden."
   }
 }

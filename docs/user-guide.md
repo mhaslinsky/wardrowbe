@@ -270,6 +270,8 @@ In **Settings**, find **Color season** beside **Favorite Colors** and **Colors t
 
 Suggestions gently favor your season's colors for pieces worn near your face, such as tops, layers, coats, dresses, hats, and scarves. Bottoms and shoes are unaffected. Your explicit favorite and avoid colors take priority over the season; learned color preferences still contribute when scoring applies.
 
+Selecting a season opens a preview of its favorite and avoid colors. Choose **Use these colors** to replace both lists, or **Not now** to keep your current picks, then choose **Save**.
+
 Choose **Not set** and **Save** to stop applying a color season.
 
 Changing style sliders keeps your saved color season. Only changing **Color season** updates that preference.

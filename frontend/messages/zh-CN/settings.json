@@ -238,6 +238,11 @@
     "clear-spring": "净春型",
     "light-summer": "浅夏型",
     "cool-summer": "冷夏型",
-    "soft-summer": "柔夏型"
+    "soft-summer": "柔夏型",
+    "prompt": "使用这些偏好色和避选色？",
+    "replaceColors": "当前选择的颜色将被替换。",
+    "useColors": "使用这些颜色",
+    "notNow": "暂不使用",
+    "loadFailed": "无法加载颜色。"
   }
 }

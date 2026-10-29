@@ -216,6 +216,11 @@ class PreferenceUpdate(BaseModel):
     ai_endpoints: list[AIEndpoint] | None = None
 
 
+class ColorSeasonPalette(BaseModel):
+    best: ColorList
+    avoid: ColorList
+
+
 class PreferenceResponse(PreferenceBase):
     wash_interval_defaults: dict[str, int] = Field(
         default_factory=lambda: dict(DEFAULT_WASH_INTERVALS)

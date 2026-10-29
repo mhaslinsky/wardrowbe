@@ -2,6 +2,7 @@
 
 import { AccessTokenSettings } from '@/components/access-token-settings';
 import { WashingSettings } from '@/components/washing-settings';
+import { ColorSeasonDialog } from '@/components/color-season-dialog';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PreviewPhotoSettings } from '@/components/preview-photo-settings';
@@ -203,6 +204,7 @@ export default function SettingsPage() {
   const [standingRulesReady, setStandingRulesReady] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [colorSeasonDirty, setColorSeasonDirty] = useState(false);
+  const [paletteSeason, setPaletteSeason] = useState<NonNullable<Preferences['color_season']> | null>(null);
   const colorSeasonRevision = useRef(0);
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
@@ -575,6 +577,7 @@ export default function SettingsPage() {
         setStandingRulesText(saved.standing_rules.join('\n'));
         setStandingRulesReady(true);
         setColorSeasonDirty(false);
+        setPaletteSeason(null);
         setHasChanges(false);
       } catch (error) {
         console.error('Failed to reset preferences:', error);
@@ -845,9 +848,11 @@ export default function SettingsPage() {
                 id="color-season"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={formData.color_season || ''}
-                onChange={(event) => updateField(
-                  'color_season', event.target.value as Preferences['color_season'] || null,
-                )}
+                onChange={(event) => {
+                  const season = event.target.value as Preferences['color_season'] || null;
+                  updateField('color_season', season);
+                  setPaletteSeason(season);
+                }}
               >
                 <option value="">{t('colorSeason.notSet')}</option>
                 {([
@@ -859,6 +864,19 @@ export default function SettingsPage() {
                   <option key={season} value={season}>{t(`colorSeason.${season}`)}</option>
                 ))}
               </select>
+              {paletteSeason && (
+                <ColorSeasonDialog
+                  key={paletteSeason}
+                  season={paletteSeason}
+                  replacesColors={!!(formData.color_favorites?.length || formData.color_avoid?.length)}
+                  onClose={() => setPaletteSeason(null)}
+                  onApply={(palette) => {
+                    updateField('color_favorites', palette.best);
+                    updateField('color_avoid', palette.avoid);
+                    setPaletteSeason(null);
+                  }}
+                />
+              )}
               <a className="block text-sm text-muted-foreground underline" href="https://colorwise.me/" target="_blank" rel="noopener noreferrer">
                 {t('colorSeason.help')}
               </a>

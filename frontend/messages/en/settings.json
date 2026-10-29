@@ -238,6 +238,11 @@
     "clear-spring": "Clear Spring",
     "light-summer": "Light Summer",
     "cool-summer": "Cool Summer",
-    "soft-summer": "Soft Summer"
+    "soft-summer": "Soft Summer",
+    "prompt": "Use these favorite and avoid colors?",
+    "replaceColors": "Your current color picks will be replaced.",
+    "useColors": "Use these colors",
+    "notNow": "Not now",
+    "loadFailed": "Could not load colors."
   }
 }

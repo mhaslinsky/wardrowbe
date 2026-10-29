@@ -238,6 +238,11 @@
     "clear-spring": "Printemps lumineux",
     "light-summer": "Été clair",
     "cool-summer": "Été froid",
-    "soft-summer": "Été doux"
+    "soft-summer": "Été doux",
+    "prompt": "Utiliser ces couleurs favorites et à éviter ?",
+    "replaceColors": "Vos choix de couleurs seront remplacés.",
+    "useColors": "Utiliser ces couleurs",
+    "notNow": "Pas maintenant",
+    "loadFailed": "Impossible de charger les couleurs."
   }
 }
