@@ -54,9 +54,6 @@
     },
     "imperial": "英制（in/lbs）",
     "metric": "公制（cm/kg）",
-    "saveError": "儲存測量數值失敗",
-    "saveMeasurements": "儲存測量數值",
-    "saved": "測量數值已儲存",
     "sizeFields": {
       "dressSize": "洋裝尺碼",
       "pantsSize": "褲子尺碼",
@@ -80,12 +77,12 @@
   },
   "confirmReset": "確定要將所有偏好重設為預設值嗎？",
   "location": {
-    "approximateDetected": "已填入大致位置。請確認後儲存。",
-    "approximateDetectedWithReason": "{reason} 已填入大致位置。請確認後儲存。",
+    "approximateDetected": "已偵測到大致位置",
+    "approximateDetectedWithReason": "已偵測到大致位置 ({reason})",
     "cityLabel": "城市/地點名稱（選填）",
     "cityPlaceholder": "例如：英國倫敦",
     "description": "設定你的位置，以取得以天氣為依據的穿搭推薦",
-    "detected": "已偵測到位置。請確認後儲存。",
+    "detected": "已偵測到位置",
     "errors": {
       "geolocationDenied": "位置存取被拒絕。",
       "geolocationFailed": "取得精確位置失敗：{message}",
@@ -97,14 +94,11 @@
       "latitudeRange": "緯度必須介於 -90 到 90 之間",
       "longitudeRange": "經度必須介於 -180 到 180 之間",
       "networkLookupFailed": "透過網路查詢位置失敗（{status}）",
-      "saveFailed": "儲存位置失敗，請重試。",
       "unableToDetect": "無法偵測你的位置。"
     },
     "latitude": "緯度",
     "longitude": "經度",
     "required": "以天氣為依據的穿搭推薦需要設定位置。",
-    "saveLocation": "儲存位置",
-    "saved": "位置與時區已儲存",
     "selectTimezone": "選擇時區",
     "timezone": "時區",
     "title": "位置",
@@ -153,7 +147,6 @@
     "unit": "溫度單位"
   },
   "title": "設定",
-  "unsavedChanges": "你有未儲存的變更。確定要離開此頁面？",
   "standingRules": {
     "title": "固定規則",
     "description": "每行一條，最多20條。",
@@ -244,5 +237,11 @@
     "useColors": "使用這些顏色",
     "notNow": "暫不使用",
     "loadFailed": "無法載入顏色。"
-  }
+  },
+  "autosave": {
+    "saved": "已儲存",
+    "saving": "正在儲存...",
+    "error": "無法儲存"
+  },
+  "confirmLeave": "離開而不儲存變更？"
 }

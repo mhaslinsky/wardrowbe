@@ -68,7 +68,13 @@ export function useUpdateUserProfile({ toastsOwnErrors = false } = {}) {
       applySessionToken(session);
       return api.patch<UserProfile>('/users/me', data);
     },
-    onSuccess: () => {
+    onSuccess: (saved, submitted) => {
+      const changed = Object.fromEntries(
+        Object.keys(submitted).map((key) => [key, saved[key as keyof UserProfile]]),
+      );
+      queryClient.setQueryData<UserProfile>(queryKeys.userProfile, (previous) =>
+        previous ? { ...previous, ...changed } : saved,
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.userProfile });
     },
   });

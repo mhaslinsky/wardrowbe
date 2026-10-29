@@ -124,7 +124,7 @@ Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outf
 
 Each item tracks wears since its last wash. At its wash interval, it needs washing and is excluded from normal outfit recommendations.
 
-In **Settings > Washing**, choose the wears before washing for each clothing type you own: 1 to 30, or **Never**. Select **Reset** beside a type to restore its built-in default, then select **Save**. These settings apply only to your wardrobe, starting with the next wear. Past wear counts and wash status stay as recorded.
+In **Settings > Washing**, choose the wears before washing for each clothing type you own: 1 to 30, or **Never**. Select **Reset** beside a type to restore its built-in default. Each change saves automatically. These settings apply only to your wardrobe, starting with the next wear. Past wear counts and wash status stay as recorded.
 
 1. Open an item and edit **Wash Interval** to override its type setting. Leave it blank and save to use your type setting, including when clearing an existing override. The **Default** placeholder shows that setting.
 2. Use **Put in the wash** if it needs washing earlier.
@@ -244,15 +244,15 @@ Feel and quality reasons use Fabric detail and Warmth notes. Pluses cite liked o
 
 ### Preferences and fit information
 
-In **Settings**, review these sections. Use **Save** for general preference changes; location, measurements, and preview preferences have their own save controls:
+In **Settings**, choices and color picks save immediately, sliders save when released, and text and number fields save when you leave the field. **Saved** confirms a save. If a save fails, **Could not save** appears. The field returns to its last saved value unless you edited it again; the error message gives the reason. **Reset** asks before restoring defaults. Leaving Settings saves valid text drafts. Invalid standing rules trigger a warning on navigation links and stay in the editor when you return. Saves continue in the same queue if you leave Settings and come back. Reloading or closing the tab warns while edits remain; confirming can discard unsaved edits. Preview preferences keep their **Save preview preferences** control.
 
-- **Location**: use **Use My Location** or enter coordinates, review the timezone, then **Save Location**. Browser permission can be denied; manual entry remains available.
+- **Location**: use **Use My Location** or enter both latitude and longitude and review the timezone. Coordinates save together. Browser permission can be denied; manual entry remains available.
 - **Style Profile**, **Favorite Colors**, and **Colors to Avoid**: describe the styles and colors you want.
 - **Temperature & Comfort**: choose temperature units, sensitivity, layering, and your hot and cold thresholds.
 - **Washing**: set wears before washing by clothing type; see [laundry](#keep-laundry-up-to-date).
 - **Recommendation Settings**: choose a default occasion, variety, repeat avoidance, and whether to prefer underused items.
 - **Standing rules**: add one instruction per line, up to 20 rules of 300 characters each.
-- **Body Measurements**: choose metric or imperial units, enter the measurements you know and usual clothing sizes, then **Save Measurements**.
+- **Body Measurements**: choose metric or imperial units, enter the measurements you know and usual clothing sizes. Unit changes wait for pending saves.
 
 Open **Fit profile** from the left menu or the link in **Settings**. Use **Add brand size** under **Brand sizes** to record a brand, optional line, actual size, and note. Use **Add skip entry** under **Skip list** for brands or lines that do not work for you, with a reason. Add neck, sleeve, and thigh measurements in centimeters if useful. Describe a well-fitting piece under **Reference garment**, then save.
 
@@ -266,17 +266,17 @@ If Fit profile reports **Profile changed**, another save has changed the stored 
 
 ### Choose a color season
 
-In **Settings**, find **Color season** beside **Favorite Colors** and **Colors to Avoid**. Use **Find your season on ColorWise.** to take the ColorWise analysis, then return, select the matching choice, such as **Cool Winter**, and choose **Save**. Each person sets their own season.
+In **Settings**, find **Color season** beside **Favorite Colors** and **Colors to Avoid**. Use **Find your season on ColorWise.** to take the ColorWise analysis, then return, select the matching choice, such as **Cool Winter**. The choice saves immediately. Each person sets their own season.
 
 Suggestions gently favor your season's colors for pieces worn near your face, such as tops, layers, coats, dresses, hats, and scarves. Bottoms and shoes are unaffected. Your explicit favorite and avoid colors take priority over the season; learned color preferences still contribute when scoring applies.
 
-Selecting a season opens a preview of its favorite and avoid colors. Choose **Use these colors** to replace both lists, or **Not now** to keep your current picks, then choose **Save**.
+Selecting a season opens a preview of its favorite and avoid colors. Choose **Use these colors** to replace and save both lists immediately, or **Not now** to keep your current picks.
 
-Choose **Not set** and **Save** to stop applying a color season.
+Choose **Not set** to stop applying a color season.
 
 Changing style sliders keeps your saved color season. Only changing **Color season** updates that preference.
 
-If you change **Color season** during a save, choose **Save** again after it finishes to save the new choice.
+The latest change saves after the current save finishes.
 
 Sources: [Settings](../frontend/app/dashboard/settings/page.tsx), [season palettes](../backend/app/data/color_seasons.py), [item scoring](../backend/app/services/item_scorer.py), [suggestion preferences](../backend/app/services/recommendation_service.py).
 

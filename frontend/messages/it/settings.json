@@ -54,9 +54,6 @@
     },
     "imperial": "Imperiale (in/lbs)",
     "metric": "Metrico (cm/kg)",
-    "saveError": "Salvataggio delle misure fallito",
-    "saveMeasurements": "Salva misure",
-    "saved": "Misure salvate",
     "sizeFields": {
       "dressSize": "Taglia vestito",
       "pantsSize": "Taglia pantaloni",
@@ -80,12 +77,12 @@
   },
   "confirmReset": "Sei sicuro di voler ripristinare tutte le preferenze ai valori predefiniti?",
   "location": {
-    "approximateDetected": "Posizione approssimativa inserita. Verificala, poi salva.",
-    "approximateDetectedWithReason": "{reason} Posizione approssimativa inserita. Verificala, poi salva.",
+    "approximateDetected": "Posizione approssimativa rilevata",
+    "approximateDetectedWithReason": "Posizione approssimativa rilevata ({reason})",
     "cityLabel": "Città / Nome località (opzionale)",
     "cityPlaceholder": "es., Roma, Italia",
     "description": "Imposta la tua posizione per raccomandazioni di outfit basate sul meteo",
-    "detected": "Posizione rilevata. Verificala, poi salva.",
+    "detected": "Posizione rilevata",
     "errors": {
       "geolocationDenied": "Accesso alla posizione negato.",
       "geolocationFailed": "Impossibile ottenere la posizione esatta: {message}",
@@ -97,14 +94,11 @@
       "latitudeRange": "La latitudine deve essere compresa tra -90 e 90",
       "longitudeRange": "La longitudine deve essere compresa tra -180 e 180",
       "networkLookupFailed": "Ricerca della posizione tramite rete fallita ({status})",
-      "saveFailed": "Salvataggio posizione fallito. Riprova.",
       "unableToDetect": "Impossibile rilevare la tua posizione."
     },
     "latitude": "Latitudine",
     "longitude": "Longitudine",
     "required": "La posizione è necessaria per le raccomandazioni di outfit basate sul meteo.",
-    "saveLocation": "Salva posizione",
-    "saved": "Posizione e fuso orario salvati",
     "selectTimezone": "Seleziona fuso orario",
     "timezone": "Fuso orario",
     "title": "Posizione",
@@ -153,7 +147,6 @@
     "unit": "Unità di temperatura"
   },
   "title": "Impostazioni",
-  "unsavedChanges": "Hai modifiche non salvate. Uscire da questa pagina?",
   "standingRules": {
     "title": "Regole fisse",
     "description": "Una regola per riga, fino a 20 regole.",
@@ -244,5 +237,11 @@
     "useColors": "Usa questi colori",
     "notNow": "Non ora",
     "loadFailed": "Impossibile caricare i colori."
-  }
+  },
+  "autosave": {
+    "saved": "Salvato",
+    "saving": "Salvataggio...",
+    "error": "Salvataggio non riuscito"
+  },
+  "confirmLeave": "Uscire con modifiche non salvate?"
 }

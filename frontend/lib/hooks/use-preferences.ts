@@ -18,17 +18,23 @@ export function usePreferences() {
   });
 }
 
-export function useUpdatePreferences() {
+export function useUpdatePreferences({ toastsOwnErrors = false } = {}) {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
   return useMutation({
+    meta: { toastsOwnErrors },
     mutationFn: (data: Partial<Preferences>) => {
       applySessionToken(session);
       return api.patch<Preferences>('/users/me/preferences', data);
     },
-    onSuccess: (saved) => {
-      queryClient.setQueryData(queryKeys.preferences, saved);
+    onSuccess: (saved, submitted) => {
+      const changed = Object.fromEntries(
+        Object.keys(submitted).map((key) => [key, saved[key as keyof Preferences]]),
+      );
+      queryClient.setQueryData<Preferences>(queryKeys.preferences, (previous) =>
+        previous ? { ...previous, ...changed } : saved,
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences });
       queryClient.invalidateQueries({ queryKey: queryKeys.items.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.everyItem });
@@ -37,11 +43,12 @@ export function useUpdatePreferences() {
   });
 }
 
-export function useResetPreferences() {
+export function useResetPreferences({ toastsOwnErrors = false } = {}) {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
   return useMutation({
+    meta: { toastsOwnErrors },
     mutationFn: (rev: string) => {
       applySessionToken(session);
       return api.post<Preferences>('/users/me/preferences/reset', { rev });

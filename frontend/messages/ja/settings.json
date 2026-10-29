@@ -54,9 +54,6 @@
     },
     "imperial": "ヤードポンド法（in/lbs）",
     "metric": "メートル法（cm/kg）",
-    "saveError": "測定値の保存に失敗しました",
-    "saveMeasurements": "測定値を保存",
-    "saved": "測定値を保存しました",
     "sizeFields": {
       "dressSize": "ドレスサイズ",
       "pantsSize": "パンツサイズ",
@@ -80,12 +77,12 @@
   },
   "confirmReset": "すべての設定をデフォルトに戻してもよろしいですか？",
   "location": {
-    "approximateDetected": "おおよその位置情報を入力しました。確認して保存してください。",
-    "approximateDetectedWithReason": "{reason} おおよその位置情報を入力しました。確認して保存してください。",
+    "approximateDetected": "おおよその現在地を検出しました",
+    "approximateDetectedWithReason": "おおよその現在地を検出しました ({reason})",
     "cityLabel": "市区町村・地名（任意）",
     "cityPlaceholder": "例：東京都渋谷区",
     "description": "天気に基づくコーデのおすすめのために位置情報を設定します",
-    "detected": "位置情報を検出しました。確認して保存してください。",
+    "detected": "現在地を検出しました",
     "errors": {
       "geolocationDenied": "位置情報へのアクセスが拒否されました。",
       "geolocationFailed": "正確な位置情報の取得に失敗しました：{message}",
@@ -97,14 +94,11 @@
       "latitudeRange": "緯度は-90から90の間で入力してください",
       "longitudeRange": "経度は-180から180の間で入力してください",
       "networkLookupFailed": "ネットワークによる位置情報の取得に失敗しました（{status}）",
-      "saveFailed": "位置情報の保存に失敗しました。もう一度お試しください。",
       "unableToDetect": "位置情報を検出できませんでした。"
     },
     "latitude": "緯度",
     "longitude": "経度",
     "required": "天気に基づくコーデのおすすめには位置情報が必要です。",
-    "saveLocation": "位置情報を保存",
-    "saved": "位置情報とタイムゾーンを保存しました",
     "selectTimezone": "タイムゾーンを選択",
     "timezone": "タイムゾーン",
     "title": "位置情報",
@@ -153,7 +147,6 @@
     "unit": "温度単位"
   },
   "title": "設定",
-  "unsavedChanges": "保存されていない変更があります。このページを離れますか？",
   "standingRules": {
     "title": "いつものルール",
     "description": "1行に1つ、最大20件。",
@@ -244,5 +237,11 @@
     "useColors": "この色を使う",
     "notNow": "今はしない",
     "loadFailed": "色を読み込めませんでした。"
-  }
+  },
+  "autosave": {
+    "saved": "保存しました",
+    "saving": "保存中...",
+    "error": "保存できませんでした"
+  },
+  "confirmLeave": "変更を保存せずに移動しますか？"
 }

@@ -54,9 +54,6 @@
     },
     "imperial": "Impérial (in/lbs)",
     "metric": "Métrique (cm/kg)",
-    "saveError": "Échec de l’enregistrement des mensurations",
-    "saveMeasurements": "Enregistrer les mensurations",
-    "saved": "Mensurations enregistrées",
     "sizeFields": {
       "dressSize": "Taille robe",
       "pantsSize": "Taille pantalon",
@@ -80,12 +77,12 @@
   },
   "confirmReset": "Êtes-vous sûr de vouloir réinitialiser toutes les préférences aux valeurs par défaut ?",
   "location": {
-    "approximateDetected": "Localisation approximative renseignée. Vérifiez-la puis enregistrez.",
-    "approximateDetectedWithReason": "{reason} Localisation approximative renseignée. Vérifiez-la puis enregistrez.",
+    "approximateDetected": "Position approximative détectée",
+    "approximateDetectedWithReason": "Position approximative détectée ({reason})",
     "cityLabel": "Ville / Nom du lieu (facultatif)",
     "cityPlaceholder": "ex. Paris, France",
     "description": "Définissez votre localisation pour des recommandations de tenues basées sur la météo",
-    "detected": "Localisation détectée. Vérifiez-la puis enregistrez.",
+    "detected": "Position détectée",
     "errors": {
       "geolocationDenied": "L'accès à la localisation a été refusé.",
       "geolocationFailed": "Échec de l'obtention de la localisation exacte : {message}",
@@ -97,14 +94,11 @@
       "latitudeRange": "La latitude doit être comprise entre -90 et 90",
       "longitudeRange": "La longitude doit être comprise entre -180 et 180",
       "networkLookupFailed": "Échec de la localisation par le réseau ({status})",
-      "saveFailed": "Échec de l'enregistrement de la localisation. Veuillez réessayer.",
       "unableToDetect": "Impossible de détecter votre localisation."
     },
     "latitude": "Latitude",
     "longitude": "Longitude",
     "required": "La localisation est requise pour les recommandations de tenues basées sur la météo.",
-    "saveLocation": "Enregistrer la localisation",
-    "saved": "Localisation et fuseau horaire enregistrés",
     "selectTimezone": "Sélectionner le fuseau horaire",
     "timezone": "Fuseau horaire",
     "title": "Localisation",
@@ -153,7 +147,6 @@
     "unit": "Unité de température"
   },
   "title": "Paramètres",
-  "unsavedChanges": "Vous avez des modifications non enregistrées. Quitter cette page ?",
   "standingRules": {
     "title": "Règles permanentes",
     "description": "Une règle par ligne, 20 règles maximum.",
@@ -244,5 +237,11 @@
     "useColors": "Utiliser ces couleurs",
     "notNow": "Pas maintenant",
     "loadFailed": "Impossible de charger les couleurs."
-  }
+  },
+  "autosave": {
+    "saved": "Enregistré",
+    "saving": "Enregistrement...",
+    "error": "Échec de l’enregistrement"
+  },
+  "confirmLeave": "Quitter sans enregistrer les modifications ?"
 }
