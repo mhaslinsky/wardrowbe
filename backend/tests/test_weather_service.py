@@ -109,6 +109,29 @@ async def test_west_of_location_today_uses_hourly_forecast(weather_service):
     assert (weather.window_min, weather.window_max) == (14, 20)
 
 
+@pytest.mark.parametrize("hourly", [True, False])
+async def test_forecast_scoring_uses_explicit_window_averages(weather_service, hourly):
+    payload = (
+        {
+            "hourly": {
+                "time": ["2026-10-30T10:00", "2026-10-30T11:00"],
+                "temperature_2m": [14, 20],
+                "apparent_temperature": [13, 19],
+            }
+        }
+        if hourly
+        else {"hourly": {}}
+    )
+    with patch("httpx.AsyncClient.get", return_value=_mock_response(json_data=payload)):
+        weather = await weather_service.get_forecast_weather(
+            40, -74, DailyForecast("2026-10-30", 6, 24, 0, "sunny", 0), active_hours=(10, 17)
+        )
+    expected = (17, 16) if hourly else (15, 24)
+    assert (weather.window_temperature, weather.window_feels_like) == expected
+    weather.temperature, weather.feels_like = 99, 98
+    assert (weather.for_scoring().temperature, weather.for_scoring().feels_like) == expected
+
+
 async def test_forecast_timestamp_is_generation_time(weather_service):
     before = datetime.utcnow()
     with patch("httpx.AsyncClient.get", return_value=_mock_response(json_data={"hourly": {}})):
@@ -849,7 +872,7 @@ class TestTomorrowFallbackIsLogged:
     async def test_empty_hourly_arrays_fall_back_with_a_warning(
         self, weather_service, mock_redis, ten_to_six, caplog
     ):
-        payload = {"hourly": {"time": None, "temperature_2m": None}}
+        payload = {"hourly": {"time": [], "temperature_2m": []}}
         with (
             caplog.at_level("WARNING", logger="app.services.weather_service"),
             patch("httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data=payload))),
@@ -921,7 +944,7 @@ async def test_tomorrow_user_hours_override_server(weather_service, mock_redis, 
     assert result.feels_like == 11.5
 
 
-@pytest.mark.parametrize("hourly", [{}, {"time": []}, {"time": None, "temperature_2m": None}])
+@pytest.mark.parametrize("hourly", [{}, {"time": []}])
 async def test_unusable_hourly_data_falls_back(weather_service, mock_redis, hourly):
     with patch(
         "httpx.AsyncClient.get", side_effect=_route(_mock_response(json_data={"hourly": hourly}))

@@ -145,6 +145,15 @@ async def test_trip_weather_uses_custom_active_hours():
     assert (weather.window_start_hour, weather.window_end_hour) == (12, 15)
 
 
+async def test_trip_forecast_scoring_uses_explicit_window_averages():
+    weather, source = (await weather_request(active_hours=(12, 15)))[0]
+    assert source == "forecast"
+    expected = (weather.temperature, weather.feels_like)
+    assert (weather.window_temperature, weather.window_feels_like) == expected
+    weather.temperature, weather.feels_like = 99, 98
+    assert (weather.for_scoring().temperature, weather.for_scoring().feels_like) == expected
+
+
 @pytest.mark.parametrize("active_hours", [(10, 18), (12, 15)])
 async def test_climate_normal_labels_actual_trip_hours(active_hours):
     from app.services.recommendation_service import format_active_hours_weather

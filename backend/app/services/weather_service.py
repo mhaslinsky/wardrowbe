@@ -636,6 +636,8 @@ class WeatherService:
         return WeatherData(
             temperature=round(avg_temp, 1),
             feels_like=round(feels_like, 1),
+            window_temperature=round(avg_temp, 1),
+            window_feels_like=round(feels_like, 1),
             humidity=forecast.humidity if forecast.humidity is not None else 50,
             precipitation_chance=forecast.precipitation_chance,
             precipitation_mm=0,  # Open-Meteo's daily precipitation_sum is a different quantity than the mm-in-next-hour field this dataclass models

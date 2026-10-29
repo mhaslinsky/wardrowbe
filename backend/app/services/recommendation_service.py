@@ -1291,11 +1291,20 @@ class RecommendationService:
                 flags=re.DOTALL,
             )
 
+        prompt_weather = weather.for_scoring()
+        temperature_unit = (
+            "F" if getattr(preferences, "temperature_unit", None) == "fahrenheit" else "C"
+        )
+        temperature, feels_like = prompt_weather.temperature, prompt_weather.feels_like
+        if temperature_unit == "F":
+            temperature, feels_like = temperature * 9 / 5 + 32, feels_like * 9 / 5 + 32
+
         prompt = prompt_template.format(
             occasion=occasion,
             time_of_day=time_of_day,
-            temperature=weather.for_scoring().temperature,
-            feels_like=weather.for_scoring().feels_like,
+            temperature=f"{temperature:.1f}",
+            feels_like=f"{feels_like:.1f}",
+            temperature_unit=temperature_unit,
             condition=weather.condition,
             precipitation_chance=weather.precipitation_chance,
             temp_range_text="\n".join(

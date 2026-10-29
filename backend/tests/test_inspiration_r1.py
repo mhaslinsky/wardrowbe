@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
-import httpx
 import pytest
 from PIL import Image
 
@@ -108,7 +107,9 @@ async def test_all_gap_look_is_saved_and_can_be_compared(
     ]
 
 
-async def test_inspiration_uses_user_active_hours(inspiration, client, auth_headers, monkeypatch):
+async def test_inspiration_uses_user_active_hours(
+    inspiration, client, auth_headers, monkeypatch, openmeteo_http, weather_cache
+):
     from app.services import inspiration_service
 
     saved = await client.patch(
@@ -118,9 +119,7 @@ async def test_inspiration_uses_user_active_hours(inspiration, client, auth_head
     )
     assert saved.status_code == 200
     monkeypatch.setattr(WeatherService, "get_current_weather", inspiration.original_weather)
-    monkeypatch.setattr(WeatherService, "_cache_get", AsyncMock(return_value=None))
-    monkeypatch.setattr(WeatherService, "_cache_set", AsyncMock())
-    payload = {
+    openmeteo_http.payload = {
         "current": {"time": "2026-10-29T07:00", "temperature_2m": 6.8, "apparent_temperature": 5},
         "hourly": {
             "time": [f"2026-10-29T{hour:02d}:00" for hour in range(24)],
@@ -128,14 +127,6 @@ async def test_inspiration_uses_user_active_hours(inspiration, client, auth_head
             "apparent_temperature": [19] * 24,
         },
     }
-    original_get = httpx.AsyncClient.get
-
-    async def get(instance, url, **kwargs):
-        if str(url).endswith("/forecast"):
-            return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
-        return await original_get(instance, url, **kwargs)
-
-    monkeypatch.setattr(httpx.AsyncClient, "get", get)
     with patch.object(
         inspiration_service, "score_items", wraps=inspiration_service.score_items
     ) as score:

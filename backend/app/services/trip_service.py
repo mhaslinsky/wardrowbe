@@ -140,6 +140,10 @@ class TripWeather:
                     data = WeatherData(
                         temperature=mean(temps),
                         feels_like=mean(hourly["apparent_temperature"][index] for index in indices),
+                        window_temperature=mean(temps),
+                        window_feels_like=mean(
+                            hourly["apparent_temperature"][index] for index in indices
+                        ),
                         humidity=round(
                             mean(hourly["relative_humidity_2m"][index] for index in indices)
                         ),
