@@ -5,12 +5,13 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.data.color_seasons import stored_color_season
+from app.data.color_seasons import COLOR_SEASONS, ColorSeason, stored_color_season
 from app.database import DbSession
 from app.models.user import User
 from app.schemas.fit_profile import FitProfile
 from app.schemas.outfit import stored_occasion_or_default
 from app.schemas.preference import (
+    ColorSeasonPalette,
     PreferenceResponse,
     PreferenceUpdate,
     PreviewPreferenceReset,
@@ -34,6 +35,13 @@ from app.utils.scales import (
 )
 
 router = APIRouter(prefix="/users/me/preferences", tags=["Preferences"])
+
+
+@router.get("/color-seasons", response_model=dict[ColorSeason, ColorSeasonPalette])
+async def get_color_season_palettes(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, dict[str, list[str]]]:
+    return COLOR_SEASONS
 
 
 def _build_preference_response(preferences, preview_preferences) -> PreferenceResponse:

@@ -238,6 +238,11 @@
     "clear-spring": "Primavera brillante",
     "light-summer": "Estate chiara",
     "cool-summer": "Estate fredda",
-    "soft-summer": "Estate tenue"
+    "soft-summer": "Estate tenue",
+    "prompt": "Usare questi colori preferiti e da evitare?",
+    "replaceColors": "Le tue scelte di colore verranno sostituite.",
+    "useColors": "Usa questi colori",
+    "notNow": "Non ora",
+    "loadFailed": "Impossibile caricare i colori."
   }
 }

@@ -459,3 +459,29 @@ async def test_season_set_and_clear_leave_existing_other_user_unchanged(
         assert response.json()["color_season"] == season
         await db_session.refresh(other_preferences)
         assert other_preferences.style_profile == original
+
+
+async def test_palette_endpoint_exposes_all_seasons_without_changing_preferences(
+    client, test_user, auth_headers
+):
+    from app.data.color_seasons import COLOR_SEASONS
+
+    preferences_url = "/api/v1/users/me/preferences"
+    before = await client.get(preferences_url, headers=auth_headers)
+    response = await client.get(f"{preferences_url}/color-seasons", headers=auth_headers)
+    assert response.status_code == 200
+    palettes = response.json()
+    assert set(palettes) == set(SEASONS)
+    assert palettes == COLOR_SEASONS
+    for palette in palettes.values():
+        assert set(palette) == {"best", "avoid"}
+        assert palette["best"] and palette["avoid"]
+        assert set(palette["best"]).isdisjoint(palette["avoid"])
+        assert set(palette["best"] + palette["avoid"]) <= set(COLORS)
+    after = await client.get(preferences_url, headers=auth_headers)
+    assert after.json() == before.json()
+
+
+async def test_palette_endpoint_requires_authentication(client):
+    response = await client.get("/api/v1/users/me/preferences/color-seasons")
+    assert response.status_code == 401

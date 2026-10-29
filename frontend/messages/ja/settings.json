@@ -238,6 +238,11 @@
     "clear-spring": "クリアスプリング",
     "light-summer": "ライトサマー",
     "cool-summer": "クールサマー",
-    "soft-summer": "ソフトサマー"
+    "soft-summer": "ソフトサマー",
+    "prompt": "この色を好きな色と避けたい色に設定しますか？",
+    "replaceColors": "現在選択している色は置き換わります。",
+    "useColors": "この色を使う",
+    "notNow": "今はしない",
+    "loadFailed": "色を読み込めませんでした。"
   }
 }

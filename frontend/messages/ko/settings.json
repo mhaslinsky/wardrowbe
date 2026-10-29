@@ -238,6 +238,11 @@
     "clear-spring": "클리어 봄",
     "light-summer": "라이트 여름",
     "cool-summer": "쿨 여름",
-    "soft-summer": "소프트 여름"
+    "soft-summer": "소프트 여름",
+    "prompt": "이 색상을 선호 색상과 피할 색상으로 설정할까요?",
+    "replaceColors": "현재 선택한 색상이 대체됩니다.",
+    "useColors": "이 색상 사용",
+    "notNow": "나중에",
+    "loadFailed": "색상을 불러오지 못했습니다."
   }
 }
