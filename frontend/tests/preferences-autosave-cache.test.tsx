@@ -7,7 +7,8 @@ import { useUpdatePreferences } from '@/lib/hooks/use-preferences';
 import { queryKeys } from '@/lib/hooks/query-keys';
 import type { Preferences } from '@/lib/types';
 
-vi.mock('@/lib/api', () => ({ api: { patch: vi.fn() } }));
+vi.mock('@/lib/api', async (original) => ({ ...await original<typeof import('@/lib/api')>(), api: { patch: vi.fn(), post: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 it('merges only submitted fields from a full save response into the cache', async () => {
   const client = new QueryClient();
@@ -17,5 +18,23 @@ it('merges only submitted fields from a full save response into the cache', asyn
   const { result } = renderHook(() => useUpdatePreferences(), { wrapper });
   await act(async () => { await result.current.mutateAsync({ variety_level: 'high' }); });
   expect(client.getQueryData<Preferences>(queryKeys.preferences)).toEqual({ temperature_unit: 'fahrenheit', variety_level: 'high' });
+  client.clear();
+});
+
+it.each(['update', 'reset'] as const)('R1-6: %s delegates error feedback to the caller', async (kind) => {
+  const { createQueryClient } = await import('@/lib/query-client');
+  const { ApiError } = await import('@/lib/api');
+  const { useResetPreferences } = await import('@/lib/hooks/use-preferences');
+  const { toast } = await import('sonner');
+  vi.mocked(toast.error).mockClear();
+  const client = createQueryClient();
+  const failure = new ApiError('Preferences changed', 409, {});
+  vi.mocked(kind === 'update' ? api.patch : api.post).mockRejectedValueOnce(failure);
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const { result } = renderHook(() => ({ update: useUpdatePreferences({ toastsOwnErrors: true }), reset: useResetPreferences({ toastsOwnErrors: true }) }), { wrapper });
+  await act(async () => {
+    await expect(kind === 'update' ? result.current.update.mutateAsync({ temperature_unit: 'fahrenheit' }) : result.current.reset.mutateAsync('rev')).rejects.toThrow('Preferences changed');
+  });
+  expect(toast.error).not.toHaveBeenCalled();
   client.clear();
 });

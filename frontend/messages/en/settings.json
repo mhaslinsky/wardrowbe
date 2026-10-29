@@ -81,7 +81,7 @@
   "confirmReset": "Are you sure you want to reset all preferences to defaults?",
   "location": {
     "approximateDetected": "Approximate location detected",
-    "approximateDetectedWithReason": "Approximate location detected",
+    "approximateDetectedWithReason": "Approximate location detected ({reason})",
     "cityLabel": "City / Location Name (optional)",
     "cityPlaceholder": "e.g., London, UK",
     "description": "Set your location for weather-based outfit recommendations",

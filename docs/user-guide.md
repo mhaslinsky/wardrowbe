@@ -244,7 +244,7 @@ Feel and quality reasons use Fabric detail and Warmth notes. Pluses cite liked o
 
 ### Preferences and fit information
 
-In **Settings**, choices and color picks save immediately, sliders save when released, and text and number fields save when you leave the field. **Saved** confirms a save. If a save fails, **Could not save** appears and the field returns to its last saved value. **Reset** asks before restoring defaults. Preview preferences keep their **Save preview preferences** control.
+In **Settings**, choices and color picks save immediately, sliders save when released, and text and number fields save when you leave the field. **Saved** confirms a save. If a save fails, **Could not save** appears and the field returns to its last saved value. **Reset** asks before restoring defaults. Leaving Settings saves valid text drafts. Reloading or closing the tab warns while edits remain; confirming can discard unsaved edits. Preview preferences keep their **Save preview preferences** control.
 
 - **Location**: use **Use My Location** or enter coordinates and review the timezone. Browser permission can be denied; manual entry remains available.
 - **Style Profile**, **Favorite Colors**, and **Colors to Avoid**: describe the styles and colors you want.

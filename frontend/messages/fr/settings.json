@@ -81,7 +81,7 @@
   "confirmReset": "Êtes-vous sûr de vouloir réinitialiser toutes les préférences aux valeurs par défaut ?",
   "location": {
     "approximateDetected": "Position approximative détectée",
-    "approximateDetectedWithReason": "Position approximative détectée",
+    "approximateDetectedWithReason": "Position approximative détectée ({reason})",
     "cityLabel": "Ville / Nom du lieu (facultatif)",
     "cityPlaceholder": "ex. Paris, France",
     "description": "Définissez votre localisation pour des recommandations de tenues basées sur la météo",

@@ -81,7 +81,7 @@
   "confirmReset": "Möchtest du wirklich alle Vorlieben auf die Standardwerte zurücksetzen?",
   "location": {
     "approximateDetected": "Ungefährer Standort erkannt",
-    "approximateDetectedWithReason": "Ungefährer Standort erkannt",
+    "approximateDetectedWithReason": "Ungefährer Standort erkannt ({reason})",
     "cityLabel": "Stadt/Ortsname (optional)",
     "cityPlaceholder": "z. B. Berlin, DE",
     "description": "Lege deinen Standort für wetterbasierte Outfit-Empfehlungen fest",

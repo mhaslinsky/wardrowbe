@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import SettingsPage from '@/app/dashboard/settings/page';
 import type { UserProfile } from '@/lib/hooks/use-user';
 import type { Preferences } from '@/lib/types';
@@ -44,6 +44,11 @@ beforeEach(() => {
   state.profileSave.mockReset().mockImplementation(async (patch) => ({ ...state.profile, ...patch }));
   state.reset.mockReset().mockResolvedValue(state.preferences);
   vi.stubGlobal('localStorage', { getItem: vi.fn(), setItem: vi.fn() });
+});
+
+afterEach(async () => {
+  await act(async () => { cleanup(); });
+  vi.unstubAllGlobals();
 });
 
 function selectFor(text: string) {
@@ -210,4 +215,55 @@ it('keeps converted measurement units when a save fails', async () => {
   fireEvent.blur(height);
   await screen.findByRole('alert');
   expect(height).toHaveValue(70.1);
+});
+
+it('R1-1: tabbing through empty coordinates and unchanged imperial measurements sends nothing', async () => {
+  state.profile = { body_measurements: { height: 178 } };
+  render(<SettingsPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'body.metric' }));
+  fireEvent.blur(inputFor('body.fields.height'));
+  fireEvent.blur(inputFor('location.latitude'));
+  fireEvent.blur(inputFor('location.longitude'));
+  fireEvent.blur(screen.getByLabelText('standingRules.label'));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  await act(async () => { await Promise.resolve(); });
+  expect(state.profileSave).not.toHaveBeenCalled();
+  expect(state.save).not.toHaveBeenCalled();
+});
+
+it('R1-2: warns before unloading a staged draft and saves it on in-app unmount', async () => {
+  const { unmount } = render(<SettingsPage />);
+  fireEvent.change(screen.getByLabelText('standingRules.label'), { target: { value: '  Keep this rule  ' } });
+  const leave = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(leave);
+  expect(leave.defaultPrevented).toBe(true);
+  unmount();
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({ standing_rules: ['Keep this rule'] }));
+});
+
+it('R1-4: late reverse geocoding never replays coordinates over a newer edit', async () => {
+  state.profile = { location_lat: 1, location_lon: 2, location_name: 'Original' };
+  let locate!: PositionCallback;
+  vi.stubGlobal('navigator', { geolocation: { getCurrentPosition: vi.fn((success) => { locate = success; }) } });
+  let finishLookup!: (value: Response) => void;
+  vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { finishLookup = resolve; }));
+  render(<SettingsPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'location.useMyLocation' }));
+  act(() => { locate({ coords: { latitude: 10, longitude: 20 } } as GeolocationPosition); });
+  fireEvent.change(inputFor('location.latitude'), { target: { value: '30' } });
+  fireEvent.blur(inputFor('location.latitude'));
+  await act(async () => { finishLookup(new Response(JSON.stringify({ address: { city: 'Detected' } }))); });
+  await waitFor(() => expect(state.profileSave).toHaveBeenCalled());
+  expect(inputFor('location.latitude')).toHaveValue(30);
+  expect(state.profileSave.mock.calls.at(-1)?.[0]).toEqual({ location_lat: 30 });
+});
+
+it('R1-6: Reset shows one error with the server reason', async () => {
+  const { toast } = await import('sonner');
+  vi.mocked(toast.error).mockClear();
+  state.reset.mockRejectedValueOnce(new Error('Preferences changed'));
+  vi.stubGlobal('confirm', vi.fn(() => true));
+  render(<SettingsPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'reset' }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledExactlyOnceWith('Preferences changed'));
 });

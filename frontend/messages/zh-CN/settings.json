@@ -81,7 +81,7 @@
   "confirmReset": "确定要将所有偏好恢复为默认值吗？",
   "location": {
     "approximateDetected": "已检测到大致位置",
-    "approximateDetectedWithReason": "已检测到大致位置",
+    "approximateDetectedWithReason": "已检测到大致位置 ({reason})",
     "cityLabel": "城市/位置名称（可选）",
     "cityPlaceholder": "例如：英国伦敦",
     "description": "设置您的位置以获取基于天气的穿搭推荐",

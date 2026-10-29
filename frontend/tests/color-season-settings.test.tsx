@@ -45,14 +45,14 @@ it('offers all seasons, saves a choice, and clears it', async () => {
   expect(select.querySelectorAll('option')).toHaveLength(13)
   expect(screen.getByText('colorSeason.help').closest('a')).toHaveAttribute('href', 'https://colorwise.me/')
   fireEvent.change(select, { target: { value: 'cool-winter' } })
-  await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({
     color_season: 'cool-winter',
-  })))
+  }))
   state.save.mockClear()
   fireEvent.change(select, { target: { value: '' } })
-  await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({
     color_season: null,
-  })))
+  }))
 })
 
 it('loads the saved season from the preferences field', () => {
@@ -112,10 +112,10 @@ it.each([false, true])('previews and saves both lists immediately on Apply (exis
   }
   fireEvent.click(useColors)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({
     color_favorites: ['black', 'white', 'navy', 'blue', 'purple', 'silver'],
     color_avoid: ['orange', 'brown', 'tan', 'gold', 'cream'],
-  })))
+  }))
   state.save.mockClear()
   fireEvent.click(screen.getAllByTitle('black')[0])
   await waitFor(() => expect(state.save).toHaveBeenCalled())
@@ -131,9 +131,9 @@ it.each(['not-now', 'escape'])('dismisses the palette with %s and keeps both lis
   if (dismissal === 'not-now') fireEvent.click(within(dialog).getByRole('button', { name: 'colorSeason.notNow' }))
   else fireEvent.keyDown(dialog, { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-  await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({
     color_season: 'cool-winter',
-  })))
+  }))
 })
 
 it('clears a season without opening the palette or changing colors', async () => {
@@ -148,9 +148,9 @@ it('clears a season without opening the palette or changing colors', async () =>
   fireEvent.change(screen.getByLabelText('colorSeason.label'), { target: { value: '' } })
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(api.get).not.toHaveBeenCalled()
-  await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({
     color_season: null,
-  })))
+  }))
 })
 
 it.each([undefined, {}, { 'cool-winter': { best: [], avoid: [] } }])('reports a missing or malformed palette without clearing colors (%j)', async (response) => {
@@ -188,9 +188,9 @@ it('keeps a dismissed request from applying colors when it completes', async () 
   fireEvent.click(within(dialog).getByRole('button', { name: 'colorSeason.notNow' }))
   await act(async () => { finishRequest({ 'cool-winter': { best: ['black'], avoid: ['orange'] } }); await pending })
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  await waitFor(() => expect(state.save).toHaveBeenCalledWith(expect.objectContaining({
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({
     color_season: 'cool-winter',
-  })))
+  }))
 })
 
 

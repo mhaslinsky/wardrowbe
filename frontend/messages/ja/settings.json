@@ -81,7 +81,7 @@
   "confirmReset": "すべての設定をデフォルトに戻してもよろしいですか？",
   "location": {
     "approximateDetected": "おおよその現在地を検出しました",
-    "approximateDetectedWithReason": "おおよその現在地を検出しました",
+    "approximateDetectedWithReason": "おおよその現在地を検出しました ({reason})",
     "cityLabel": "市区町村・地名（任意）",
     "cityPlaceholder": "例：東京都渋谷区",
     "description": "天気に基づくコーデのおすすめのために位置情報を設定します",

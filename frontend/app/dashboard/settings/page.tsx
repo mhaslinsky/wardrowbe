@@ -6,7 +6,7 @@ import { ColorSeasonDialog } from '@/components/color-season-dialog';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PreviewPhotoSettings } from '@/components/preview-photo-settings';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAutosaveFields } from '@/lib/hooks/use-autosave-fields';
 import { useSession } from 'next-auth/react';
 import { Loader2, RotateCcw, Check, Plus, Trash2, ChevronUp, ChevronDown, Server, MapPin, Navigation, Ruler } from 'lucide-react';
@@ -219,8 +219,8 @@ export default function SettingsPage() {
   const { data: session } = useSession();
   const { data: preferences, isLoading } = usePreferences();
   const { data: userProfile, isLoading: isLoadingProfile } = useUserProfile();
-  const updatePreferences = useUpdatePreferences();
-  const resetPreferences = useResetPreferences();
+  const updatePreferences = useUpdatePreferences({ toastsOwnErrors: true });
+  const resetPreferences = useResetPreferences({ toastsOwnErrors: true });
   const testEndpoint = useTestAIEndpoint();
   const updateUserProfile = useUpdateUserProfile({ toastsOwnErrors: true });
 
@@ -233,7 +233,8 @@ export default function SettingsPage() {
   const [endpointTests, setEndpointTests] = useState<Record<number, EndpointTestResult>>({});
 
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileErrors, setProfileErrors] = useState<Partial<Record<keyof ProfileFields, string>>>({});
+  const clearProfileError = (key: keyof ProfileFields) => setProfileErrors((previous) => { const next = { ...previous }; delete next[key]; return next; });
   const [unitSystem, setUnitSystem] = useState<UnitSystem>(() => {
     if (typeof window !== 'undefined') {
       return (localStorage.getItem('wardrowbe_unit_system') as UnitSystem) || 'metric';
@@ -261,26 +262,27 @@ export default function SettingsPage() {
   const locationLon = profileAutosave.values.location_lon || '';
   const timezone = profileAutosave.values.timezone || 'UTC';
   const measurements = profileAutosave.values.body_measurements || {};
-  const setLocationName = (value: string) => profileAutosave.stage({ location_name: value });
-  const setLocationLat = (value: string) => profileAutosave.stage({ location_lat: value });
-  const setLocationLon = (value: string) => profileAutosave.stage({ location_lon: value });
+  const setLocationName = (value: string) => { clearProfileError('location_name'); profileAutosave.stage({ location_name: value }); };
+  const setLocationLat = (value: string) => { clearProfileError('location_lat'); profileAutosave.stage({ location_lat: value }); };
+  const setLocationLon = (value: string) => { clearProfileError('location_lon'); profileAutosave.stage({ location_lon: value }); };
   const setTimezone = (value: string) => { void profileAutosave.commit({ timezone: value }); };
 
   const saveProfileField = (key: 'location_name' | 'location_lat' | 'location_lon') => {
+    if (!profileAutosave.isStaged(key)) return;
     const value = profileAutosave.current.current[key] || '';
     if (key !== 'location_name') {
       const coordinate = Number(value);
       const limit = key === 'location_lat' ? 90 : 180;
       if (!value.trim() || !Number.isFinite(coordinate)) {
-        setProfileError(t('location.errors.invalidCoordinates'));
+        setProfileErrors((previous) => ({ ...previous, [key]: t('location.errors.invalidCoordinates') }));
         return;
       }
       if (coordinate < -limit || coordinate > limit) {
-        setProfileError(t(key === 'location_lat' ? 'location.errors.latitudeRange' : 'location.errors.longitudeRange'));
+        setProfileErrors((previous) => ({ ...previous, [key]: t(key === 'location_lat' ? 'location.errors.latitudeRange' : 'location.errors.longitudeRange') }));
         return;
       }
     }
-    setProfileError(null);
+    clearProfileError(key);
     void profileAutosave.commit({ [key]: value });
   };
 
@@ -336,7 +338,6 @@ export default function SettingsPage() {
           const data = await response.json();
           const nextLocationName = formatReverseGeocodedLocation(data);
           if (nextLocationName) {
-            setLocationName(nextLocationName);
             return nextLocationName;
           }
         }
@@ -379,10 +380,13 @@ export default function SettingsPage() {
       async (position) => {
         const lat = position.coords.latitude.toFixed(6);
         const lon = position.coords.longitude.toFixed(6);
-        setLocationLat(lat);
-        setLocationLon(lon);
+        const originalName = profileAutosave.current.current.location_name;
+        void profileAutosave.commit({ location_lat: lat, location_lon: lon });
         const name = await finalizeFromCoordinates(lat, lon);
-        void profileAutosave.commit({ location_lat: lat, location_lon: lon, ...(name ? { location_name: name } : {}) });
+        const current = profileAutosave.current.current;
+        if (name && Number(current.location_lat) === Number(lat) && Number(current.location_lon) === Number(lon) && current.location_name === originalName) {
+          void profileAutosave.commit({ location_name: name });
+        }
         setIsGettingLocation(false);
         toast.success(t('location.detected'));
       },
@@ -406,18 +410,20 @@ export default function SettingsPage() {
   };
 
   const handleMeasurementChange = (key: string, value: string) => {
+    clearProfileError('body_measurements');
     profileAutosave.stage({ body_measurements: { ...profileAutosave.current.current.body_measurements, [key]: value } });
   };
 
   const saveMeasurements = () => {
+    if (!profileAutosave.isStaged('body_measurements')) return;
     const current = profileAutosave.current.current.body_measurements || {};
     for (const [key, value] of Object.entries(current)) {
       if (value.trim() && NUMERIC_MEASUREMENT_KEYS.includes(key) && (!Number.isFinite(Number(value)) || Number(value) <= 0)) {
-        setProfileError(t('body.errors.positiveNumber', { field: t(`body.fields.${key}`) }));
+        setProfileErrors((previous) => ({ ...previous, body_measurements: t('body.errors.positiveNumber', { field: t(`body.fields.${key}`) }) }));
         return;
       }
     }
-    setProfileError(null);
+    clearProfileError('body_measurements');
     void profileAutosave.commit({ body_measurements: current });
   };
 
@@ -463,6 +469,7 @@ export default function SettingsPage() {
   };
 
   const saveStandingRules = (text: string) => {
+    if (!autosave.isStaged('standing_rules')) return;
     const rules = text.split('\n').map((rule) => rule.trim()).filter(Boolean);
     if (rules.length > 20 || rules.some((rule) => rule.length > 300)) {
       setStandingRulesError(true);
@@ -471,6 +478,24 @@ export default function SettingsPage() {
     setStandingRulesError(false);
     updateField('standing_rules', rules);
   };
+
+  const saveStagedField = <Key extends keyof Preferences>(key: Key) => {
+    const value = autosave.current.current[key];
+    if (autosave.isStaged(key) && value !== undefined) updateField(key, value);
+  };
+
+  const flushDrafts = useRef(() => {});
+  flushDrafts.current = () => {
+    for (const key of autosave.draftKeys()) {
+      if (key === 'standing_rules') saveStandingRules((autosave.current.current.standing_rules || []).join('\n'));
+      else saveStagedField(key);
+    }
+    for (const key of profileAutosave.draftKeys()) {
+      if (key === 'body_measurements') saveMeasurements();
+      else if (key !== 'timezone') saveProfileField(key);
+    }
+  };
+  useEffect(() => () => flushDrafts.current(), []);
 
   const handleReset = async () => {
     if (!confirm(t('confirmReset'))) return;
@@ -481,19 +506,19 @@ export default function SettingsPage() {
       autosave.replace(saved);
       setStandingRulesError(false);
       setPaletteSeason(null);
-    } catch {
-      toast.error(t('autosave.error'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('autosave.error'));
     } finally {
       setResetting(false);
     }
   };
 
   useEffect(() => {
-    if (!autosave.busy && !profileAutosave.busy) return;
+    if (!autosave.busy && !profileAutosave.busy && !autosave.dirty && !profileAutosave.dirty) return;
     const preventUnload = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener('beforeunload', preventUnload);
     return () => window.removeEventListener('beforeunload', preventUnload);
-  }, [autosave.busy, profileAutosave.busy]);
+  }, [autosave.busy, profileAutosave.busy, autosave.dirty, profileAutosave.dirty]);
 
   if (isLoading || isLoadingProfile) {
     return (
@@ -517,7 +542,7 @@ export default function SettingsPage() {
             <RotateCcw className="mr-2 h-4 w-4" />
             {t('reset')}
           </Button>
-          {profileError && <p role="alert" className="self-center text-sm text-destructive">{profileError}</p>}
+          {Object.entries(profileErrors).map(([key, message]) => <p key={key} role="alert" className="self-center text-sm text-destructive">{message}</p>)}
           {profileAutosave.status !== 'idle' && (
             <p role={profileAutosave.status === 'error' ? 'alert' : 'status'} className="self-center text-sm text-muted-foreground">
               {t(`autosave.${profileAutosave.status}`)}
@@ -901,9 +926,9 @@ export default function SettingsPage() {
                       <Input
                         type="number"
                         value={display(coldC)}
-                        onBlur={() => updateField('cold_threshold', autosave.current.current.cold_threshold ?? cold.default)}
-                        onChange={(e) => {
-                          const raw = e.target.value === '' ? display(cold.default) : parseInt(e.target.value);
+                        onBlur={() => saveStagedField('cold_threshold')}
+                        onChange={(event) => {
+                          const raw = event.target.value === '' ? display(cold.default) : parseInt(event.target.value);
                           updateField('cold_threshold', isFahrenheit ? Math.round(toCelsius(raw)) : raw, false);
                         }}
                         min={display(cold.min)}
@@ -915,9 +940,9 @@ export default function SettingsPage() {
                       <Input
                         type="number"
                         value={display(hotC)}
-                        onBlur={() => updateField('hot_threshold', autosave.current.current.hot_threshold ?? hot.default)}
-                        onChange={(e) => {
-                          const raw = e.target.value === '' ? display(hot.default) : parseInt(e.target.value);
+                        onBlur={() => saveStagedField('hot_threshold')}
+                        onChange={(event) => {
+                          const raw = event.target.value === '' ? display(hot.default) : parseInt(event.target.value);
                           updateField('hot_threshold', isFahrenheit ? Math.round(toCelsius(raw)) : raw, false);
                         }}
                         min={display(hot.min)}
@@ -1013,7 +1038,7 @@ export default function SettingsPage() {
                   type="number"
                   value={formData.avoid_repeat_days ?? AVOID_REPEAT_DAYS.default}
                   onChange={(event) => updateField('avoid_repeat_days', event.target.value === '' ? AVOID_REPEAT_DAYS.default : parseInt(event.target.value), false)}
-                  onBlur={() => updateField('avoid_repeat_days', autosave.current.current.avoid_repeat_days ?? AVOID_REPEAT_DAYS.default)}
+                  onBlur={() => saveStagedField('avoid_repeat_days')}
                   min={AVOID_REPEAT_DAYS.min}
                   max={AVOID_REPEAT_DAYS.max}
                 />
@@ -1188,10 +1213,10 @@ export default function SettingsPage() {
                         <Label className="text-xs">{t('aiEndpoints.fields.name')}</Label>
                         <Input
                           value={endpoint.name}
-                          onBlur={() => updateField('ai_endpoints', autosave.current.current.ai_endpoints || [])}
-                          onChange={(e) => {
+                          onBlur={() => saveStagedField('ai_endpoints')}
+                          onChange={(event) => {
                             const updated = [...(formData.ai_endpoints || [])];
-                            updated[index] = { ...updated[index], name: e.target.value };
+                            updated[index] = { ...updated[index], name: event.target.value };
                             updateField('ai_endpoints', updated, false);
                           }}
                           placeholder={t('aiEndpoints.placeholders.name')}
@@ -1202,10 +1227,10 @@ export default function SettingsPage() {
                         <Label className="text-xs">{t('aiEndpoints.fields.url')}</Label>
                         <Input
                           value={endpoint.url}
-                          onBlur={() => updateField('ai_endpoints', autosave.current.current.ai_endpoints || [])}
-                          onChange={(e) => {
+                          onBlur={() => saveStagedField('ai_endpoints')}
+                          onChange={(event) => {
                             const updated = [...(formData.ai_endpoints || [])];
-                            updated[index] = { ...updated[index], url: e.target.value };
+                            updated[index] = { ...updated[index], url: event.target.value };
                             updateField('ai_endpoints', updated, false);
                           }}
                           placeholder="http://localhost:11434/v1"
@@ -1216,10 +1241,10 @@ export default function SettingsPage() {
                         <Label className="text-xs">{t('aiEndpoints.fields.visionModel')}</Label>
                         <Input
                           value={endpoint.vision_model}
-                          onBlur={() => updateField('ai_endpoints', autosave.current.current.ai_endpoints || [])}
-                          onChange={(e) => {
+                          onBlur={() => saveStagedField('ai_endpoints')}
+                          onChange={(event) => {
                             const updated = [...(formData.ai_endpoints || [])];
-                            updated[index] = { ...updated[index], vision_model: e.target.value };
+                            updated[index] = { ...updated[index], vision_model: event.target.value };
                             updateField('ai_endpoints', updated, false);
                           }}
                           placeholder={EXAMPLE_VISION_MODEL}
@@ -1230,10 +1255,10 @@ export default function SettingsPage() {
                         <Label className="text-xs">{t('aiEndpoints.fields.textModel')}</Label>
                         <Input
                           value={endpoint.text_model}
-                          onBlur={() => updateField('ai_endpoints', autosave.current.current.ai_endpoints || [])}
-                          onChange={(e) => {
+                          onBlur={() => saveStagedField('ai_endpoints')}
+                          onChange={(event) => {
                             const updated = [...(formData.ai_endpoints || [])];
-                            updated[index] = { ...updated[index], text_model: e.target.value };
+                            updated[index] = { ...updated[index], text_model: event.target.value };
                             updateField('ai_endpoints', updated, false);
                           }}
                           placeholder={EXAMPLE_TEXT_MODEL}

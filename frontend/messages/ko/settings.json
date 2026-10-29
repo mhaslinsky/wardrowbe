@@ -81,7 +81,7 @@
   "confirmReset": "모든 설정을 기본값으로 초기화하시겠어요?",
   "location": {
     "approximateDetected": "대략적인 위치를 확인했습니다",
-    "approximateDetectedWithReason": "대략적인 위치를 확인했습니다",
+    "approximateDetectedWithReason": "대략적인 위치를 확인했습니다 ({reason})",
     "cityLabel": "도시/지역 이름 (선택사항)",
     "cityPlaceholder": "예: 런던, 영국",
     "description": "날씨 기반 코디 추천을 위해 위치를 설정하세요",

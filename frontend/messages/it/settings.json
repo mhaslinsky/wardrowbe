@@ -81,7 +81,7 @@
   "confirmReset": "Sei sicuro di voler ripristinare tutte le preferenze ai valori predefiniti?",
   "location": {
     "approximateDetected": "Posizione approssimativa rilevata",
-    "approximateDetectedWithReason": "Posizione approssimativa rilevata",
+    "approximateDetectedWithReason": "Posizione approssimativa rilevata ({reason})",
     "cityLabel": "Città / Nome località (opzionale)",
     "cityPlaceholder": "es., Roma, Italia",
     "description": "Imposta la tua posizione per raccomandazioni di outfit basate sul meteo",

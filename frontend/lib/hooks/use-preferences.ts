@@ -18,11 +18,12 @@ export function usePreferences() {
   });
 }
 
-export function useUpdatePreferences() {
+export function useUpdatePreferences({ toastsOwnErrors = false } = {}) {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
   return useMutation({
+    meta: { toastsOwnErrors },
     mutationFn: (data: Partial<Preferences>) => {
       applySessionToken(session);
       return api.patch<Preferences>('/users/me/preferences', data);
@@ -42,11 +43,12 @@ export function useUpdatePreferences() {
   });
 }
 
-export function useResetPreferences() {
+export function useResetPreferences({ toastsOwnErrors = false } = {}) {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
   return useMutation({
+    meta: { toastsOwnErrors },
     mutationFn: (rev: string) => {
       applySessionToken(session);
       return api.post<Preferences>('/users/me/preferences/reset', { rev });
