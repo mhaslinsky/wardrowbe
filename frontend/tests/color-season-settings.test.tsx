@@ -182,8 +182,14 @@ it.each(['not-now', 'escape'])('dismisses the palette with %s and keeps both lis
 })
 
 it('clears a season without opening the palette or changing colors', async () => {
-  state.preferences = { standing_rules: [], color_season: 'cool-winter', color_favorites: ['blue'], color_avoid: ['tan'] }
+  state.preferences = { standing_rules: [], color_favorites: ['blue'], color_avoid: ['tan'] }
   render(<SettingsPage />)
+  fireEvent.change(screen.getByLabelText('colorSeason.label'), { target: { value: 'cool-winter' } })
+  const dialog = await screen.findByRole('dialog')
+  await waitFor(() => expect(within(dialog).getByRole('button', { name: 'colorSeason.useColors' })).toBeEnabled())
+  fireEvent.click(within(dialog).getByRole('button', { name: 'colorSeason.notNow' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  vi.mocked(api.get).mockClear()
   fireEvent.change(screen.getByLabelText('colorSeason.label'), { target: { value: '' } })
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(api.get).not.toHaveBeenCalled()
