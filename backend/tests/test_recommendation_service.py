@@ -65,7 +65,6 @@ class TestWeeklyRotation:
         )
         await db_session.commit()
         service = RecommendationService(db_session)
-        monkeypatch.setattr(service, "_materialize_outfit", AsyncMock(return_value=object()))
         apply_cap = MagicMock(wraps=service._apply_weekly_wear_cap)
         monkeypatch.setattr(service, "_apply_weekly_wear_cap", apply_cap)
         weather = _weather(temp=20)
@@ -96,7 +95,6 @@ class TestWeeklyRotation:
         monkeypatch.setattr("app.utils.timezone.datetime", local_clock)
         monkeypatch.setattr("app.services.recommendation_service.score_items", capture_score)
         monkeypatch.setattr("app.services.recommendation_service.pop_suggestion", pop)
-        monkeypatch.setattr("app.services.recommendation_service.AIService", MagicMock())
         engine = db_session.bind.sync_engine
         event.listen(engine, "before_cursor_execute", capture_query)
         try:
@@ -187,18 +185,22 @@ class TestWeeklyRotation:
         assert {item.id for item in kept} == set(sorted(counts)[:4])
 
 
-def test_weekly_rotation_prompt_keeps_recency_and_adds_frequency():
+@pytest.mark.parametrize(
+    ("wear_count", "frequency"),
+    [(1, "worn once this week"), (2, "worn 2 times this week"), (3, "worn 3 times this week")],
+)
+def test_weekly_rotation_prompt_keeps_recency_and_adds_frequency(wear_count, frequency):
     item = ClothingItem(id=uuid4(), type="shoes", last_worn_at=date(2026, 10, 27))
     service = RecommendationService(MagicMock())
     prompt, _ = service._format_items_for_prompt(
-        [ScoredItem(item)], {}, date(2026, 10, 30), weekly_wear_counts={item.id: 2}
+        [ScoredItem(item)], {}, date(2026, 10, 30), weekly_wear_counts={item.id: wear_count}
     )
     assert "worn 3 days ago" in prompt
-    assert "worn 2 times this week" in prompt
+    assert frequency in prompt
     prompt, _ = service._format_items_for_prompt(
         [ScoredItem(item)], {}, date(2026, 10, 30), weekly_wear_counts={}
     )
-    assert "times this week" not in prompt
+    assert "this week" not in prompt
 
 
 class TestGetTimeOfDay:

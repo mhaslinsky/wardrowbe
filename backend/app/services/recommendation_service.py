@@ -629,7 +629,9 @@ class RecommendationService:
                 parts.append("never worn")
 
             weekly_wears = (weekly_wear_counts or {}).get(item.id, 0)
-            if weekly_wears >= 1:
+            if weekly_wears == 1:
+                parts.append("worn once this week")
+            elif weekly_wears >= 2:
                 parts.append(f"worn {weekly_wears} times this week")
 
             # Pair annotation
