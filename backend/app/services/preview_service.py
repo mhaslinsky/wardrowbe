@@ -26,7 +26,7 @@ from app.services.photo_redraw_service import (
     response_parts,
 )
 from app.services.preview_face import face_reference, reference_hash
-from app.utils.garment_vocabulary import ITEM_ROLE
+from app.utils.garment_vocabulary import CAN_BE_MID_LAYER_TYPES, ITEM_ROLE
 from app.utils.photo_urls import image_url
 from app.utils.prompts import load_prompt
 from app.utils.rate_limit import rate_limit_by_user
@@ -165,7 +165,13 @@ def jpeg(path, size):
     return service.encode_variant(ImageOps.exif_transpose(image), ImageVariant("", "", size, 85))
 
 
-def split_preview_layers(images, records):
+def layer_jpeg(data):
+    service = ImageService()
+    image = service._open_bounded(data, ".png")
+    return service.encode_variant(ImageOps.exif_transpose(image), ImageVariant("", "", 1600, 85))
+
+
+def split_preview_layers(images, records, positions):
     layers, base = [], []
     for image, garment in zip(images, records, strict=True):
         role = ITEM_ROLE.get(garment["type"])
@@ -175,16 +181,31 @@ def split_preview_layers(images, records):
             base.append((image, garment))
     if not any(ITEM_ROLE.get(garment["type"]) in {"base_top", "full_body"} for _, garment in base):
         return images, records, []
-    layers.sort(
-        key=lambda pair: (
-            pair[1]["layer"] == "outer"
-            or (pair[1]["layer"] != "mid" and ITEM_ROLE.get(pair[1]["type"]) == "outer_layer")
+
+    def layer_order(pair):
+        garment = pair[1]
+        depth = {"mid": 0, "outer": 1}.get(
+            garment["layer"], 0 if ITEM_ROLE.get(garment["type"]) == "mid_layer" else 1
         )
-    )
+        return (
+            depth,
+            garment["type"] not in CAN_BE_MID_LAYER_TYPES,
+            positions[garment["id"]],
+            garment["id"],
+        )
+
+    layers.sort(key=layer_order)
+    layers = layers[-2:]
+    edited_ids = {garment["id"] for _, garment in layers}
+    base = [
+        (image, garment)
+        for image, garment in zip(images, records, strict=True)
+        if garment["id"] not in edited_ids
+    ]
     return [image for image, _ in base], [garment for _, garment in base], layers
 
 
-def layer_prompt(garment, item, measurements, style_notes, note):
+def layer_prompt(garment, item, measurements, style_notes, note, preferences):
     prompt = load_prompt("outfit_preview_layer")
     blocks = {
         "garment_data": {
@@ -200,6 +221,7 @@ def layer_prompt(garment, item, measurements, style_notes, note):
         },
         "style_notes": style_notes,
         "change_request": note,
+        "preview_preferences": preferences["lines"],
     }
     material = (item.tags or {}).get("material")
     if material:
@@ -213,15 +235,28 @@ def layer_prompt(garment, item, measurements, style_notes, note):
 
 async def request_preview_image(provider, images, prompt, usage, call_ids):
     payload = await provider.request(images, prompt, "IMAGE", mime_type="image/jpeg")
-    for name, value in provider.usage.get("IMAGE", {}).items():
+    counts = provider.usage.get("IMAGE", {})
+    if not isinstance(counts, dict):
+        logger.warning("Skipping malformed preview usage")
+        counts = {}
+    for name, value in counts.items():
         if isinstance(value, int) and not isinstance(value, bool):
             usage[name] = usage.get(name, 0) + value
         elif name.endswith("TokensDetails") and isinstance(value, list):
             details = {entry["modality"]: dict(entry) for entry in usage.get(name, [])}
             for entry in value:
-                modality = entry["modality"]
+                modality = entry.get("modality") if isinstance(entry, dict) else None
+                count = entry.get("tokenCount") if isinstance(entry, dict) else None
+                if (
+                    not isinstance(modality, str)
+                    or not modality
+                    or not isinstance(count, int)
+                    or isinstance(count, bool)
+                ):
+                    logger.warning("Skipping malformed preview token details")
+                    continue
                 previous = details.get(modality, {}).get("tokenCount", 0)
-                details[modality] = {**entry, "tokenCount": previous + entry["tokenCount"]}
+                details[modality] = {**entry, "tokenCount": previous + count}
             usage[name] = list(details.values())
     if provider.telemetry.last_call_id:
         call_ids.append(str(provider.telemetry.last_call_id))
@@ -548,7 +583,9 @@ class PreviewService:
             ]
             if face is not None:
                 reference_images.insert(1, face)
-            images, records, layers = split_preview_layers(images, records)
+            images, records, layers = split_preview_layers(
+                images, records, {str(link.item_id): link.position for link in outfit.items}
+            )
             images = reference_images + images
             layer_items = {str(link.item_id): link.item for link in outfit.items}
             if record is None:
@@ -665,13 +702,14 @@ class PreviewService:
             usage, call_ids = {}, []
             output = await request_preview_image(provider, images, prompt, usage, call_ids)
             for garment_image, garment in layers:
-                image_service = ImageService()
-                previous = image_service._open_bounded(output, ".png")
-                previous = image_service.encode_variant(
-                    ImageOps.exif_transpose(previous), ImageVariant("", "", 1600, 85)
-                )
+                previous = await asyncio.to_thread(layer_jpeg, output)
                 prompt = layer_prompt(
-                    garment, layer_items[garment["id"]], measurements, outfit.style_notes, note
+                    garment,
+                    layer_items[garment["id"]],
+                    measurements,
+                    outfit.style_notes,
+                    note,
+                    preferences,
                 )
                 output = await request_preview_image(
                     provider, [previous, garment_image], prompt, usage, call_ids
@@ -719,11 +757,14 @@ class PreviewService:
             record.paths, record.cache_key = paths, key
             record.clothes_key, record.person_key = clothes_key, person_key
             record.preferences_key = preferences_key
+            last_usage = provider.usage.get("IMAGE", {})
+            if not isinstance(last_usage, dict):
+                last_usage = {}
             record.created_at, record.usage = (
                 datetime.now(UTC),
                 {
                     **provider.usage,
-                    **({"IMAGE": {**provider.usage["IMAGE"], **usage}} if usage else {}),
+                    **({"IMAGE": {**last_usage, **usage}} if usage else {}),
                     "_ai_call_id": str(provider.telemetry.last_call_id)
                     if provider.telemetry.last_call_id
                     else None,

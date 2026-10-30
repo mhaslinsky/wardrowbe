@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
-import { api, ApiError, API_BASE_PATH, getAccessToken } from '@/lib/api';
+import { api, ApiError, NetworkError, API_BASE_PATH, getAccessToken } from '@/lib/api';
 import { useSetTokenIfAvailable } from '@/lib/hooks/use-session-token';
 import { queryKeys } from '@/lib/hooks/query-keys';
 import { invalidateOutfitCaches } from '@/lib/hooks/cache-invalidation';
@@ -102,6 +102,15 @@ function pausePoll(signal: AbortSignal): Promise<void> {
   });
 }
 
+function previewDeadline(signal: AbortSignal) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal.addEventListener('abort', abort, { once: true });
+  if (signal.aborted) abort();
+  const timer = setTimeout(abort, 200_000);
+  return { signal: controller.signal, clear: () => { clearTimeout(timer); signal.removeEventListener('abort', abort); } };
+}
+
 export function useOutfitPreview(outfitId: string) {
   useSetTokenIfAvailable();
   const client = useQueryClient();
@@ -130,18 +139,27 @@ export function useOutfitPreview(outfitId: string) {
         if (saved) return saved;
       }
       if (signal.aborted) throw new Error('Preview cancelled');
-      try { return checkedPhoto(await api.post<OutfitPreview>(`/outfits/${outfitId}/preview${regenerate ? '?regenerate=true' : ''}`, regenerate ? { note: note ?? '', ...(comparisonCallId ? { comparison_call_id: comparisonCallId } : {}) } : undefined, { signal })); }
+      const request = previewDeadline(signal);
+      try { return checkedPhoto(await api.post<OutfitPreview>(`/outfits/${outfitId}/preview${regenerate ? '?regenerate=true' : ''}`, regenerate ? { note: note ?? '', ...(comparisonCallId ? { comparison_call_id: comparisonCallId } : {}) } : undefined, { signal: request.signal })); }
       catch (error) {
-        if (!(error instanceof ApiError && error.status === 409 && previewErrorCode(error) === 'PREVIEW_IN_PROGRESS')) throw error;
-        if (regenerate && note?.trim()) throw error;
+        if (signal.aborted) throw error;
+        const inProgress = error instanceof ApiError && error.status === 409 && previewErrorCode(error) === 'PREVIEW_IN_PROGRESS';
+        const interrupted = (error instanceof ApiError && [504, 524].includes(error.status)) || error instanceof NetworkError || request.signal.aborted;
+        if (!inProgress && !interrupted) throw error;
+        if (inProgress && regenerate && note?.trim()) throw error;
       }
-      const deadline = Date.now() + 200_000;
-      while (Date.now() < deadline) {
-        await pausePoll(signal);
-        const saved = await read(signal);
-        if (saved && (!regenerate || (typeof saved.created_at === 'string' && saved.created_at !== previousCreatedAt))) return saved;
+      finally { request.clear(); }
+      const polling = previewDeadline(signal);
+      try {
+        const deadline = Date.now() + 200_000;
+        while (Date.now() < deadline) {
+          await pausePoll(polling.signal);
+          const saved = await read(polling.signal);
+          if (saved && (!regenerate || (typeof saved.created_at === 'string' && saved.created_at !== previousCreatedAt))) return saved;
+        }
+        throw new Error('Preview timed out');
       }
-      throw new Error('Preview timed out');
+      finally { polling.clear(); }
     },
     onSuccess: (preview, { signal }) => { if (!signal.aborted) { client.setQueryData(key, preview); invalidateOutfitCaches(client, outfitId); } },
   });
@@ -188,10 +206,9 @@ export function useOutfitPreview(outfitId: string) {
     active.current = controller;
     const cancelRead = () => { void client.cancelQueries({ queryKey: key }); };
     controller.signal.addEventListener('abort', cancelRead, { once: true });
-    const timeout = setTimeout(() => controller.abort(), 200_000);
     try { await mutation.mutateAsync({ regenerate, signal: controller.signal, note, comparisonCallId }); return true; }
     catch { return false; }
-    finally { clearTimeout(timeout); controller.signal.removeEventListener('abort', cancelRead); if (active.current === controller) active.current = null; }
+    finally { controller.signal.removeEventListener('abort', cancelRead); if (active.current === controller) active.current = null; }
   };
   return { preview: query.data, pending: mutation.isPending || removal.isPending || feedback.isPending || comparison.isPending, comparisonPending: comparison.isPending, comparisonError: comparison.isError, error: (query.isError || mutation.isError || removal.isError || (feedback.isError && !(feedback.error instanceof ApiError && feedback.error.status === 409))) && !['NO_PREVIEW_PHOTO', 'PREVIEW_IN_PROGRESS'].includes(previewErrorCode(mutation.error) ?? ''),
     conflict: mutation.isError && previewErrorCode(mutation.error) === 'PREVIEW_IN_PROGRESS',
