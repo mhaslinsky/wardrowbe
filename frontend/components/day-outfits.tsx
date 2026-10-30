@@ -40,13 +40,14 @@ function SwapPicker({ outfit, onConfirm }: { outfit: Outfit; onConfirm: (ids: st
   const [ids, setIds] = useState(outfit.items.map((item) => item.id));
   const [pageCount, setPageCount] = useState(1);
   const wardrobe = useItemPages({ needs_wash: false, is_archived: false }, pageCount, 100);
-  const loading = wardrobe.isLoading || wardrobe.isFetching || wardrobe.hasMore;
-  // A partial wardrobe can omit the piece the user actually wore.
+  const hasMore = wardrobe.hasMore && !wardrobe.lastPageEmpty;
+  const loading = wardrobe.isLoading || wardrobe.isFetching || hasMore;
+  // Cached pages can leave fetch flags unchanged, so progress follows page counts.
   useEffect(() => {
-    if (wardrobe.hasMore && !wardrobe.isFetching && !wardrobe.isError) {
-      setPageCount((count) => count + 1);
+    if (hasMore && wardrobe.loadedPages === pageCount && !wardrobe.isLoading && !wardrobe.isFetching && !wardrobe.isError) {
+      setPageCount((count) => count === wardrobe.loadedPages ? count + 1 : count);
     }
-  }, [wardrobe.hasMore, wardrobe.isFetching, wardrobe.isError]);
+  }, [hasMore, pageCount, wardrobe.loadedPages, wardrobe.isLoading, wardrobe.isFetching, wardrobe.isError]);
   return <div className="space-y-3">
     {outfit.items.map((piece, index) => <label key={piece.id} className="block space-y-1">
       <span>{piece.name || typeLabel(piece.type)}</span>
