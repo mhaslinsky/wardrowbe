@@ -89,8 +89,11 @@ export function useItemPages(filters: ItemFilter, pageCount: number, pageSize = 
         items,
         total: results[0]?.data?.total ?? 0,
         hasMore: loaded[loaded.length - 1]?.data?.has_more ?? false,
-        isLoading: results[0]?.isLoading ?? false,
+        loadedPages: loaded.length,
+        lastPageEmpty: loaded[loaded.length - 1]?.data?.items?.length === 0,
+        isLoading: status === 'loading' || (results[0]?.isLoading ?? false),
         isFetching: results.some((result) => result.isFetching),
+        isError: results.some((result) => result.isError),
       };
     },
   });

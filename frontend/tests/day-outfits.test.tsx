@@ -29,7 +29,7 @@ vi.mock('@/lib/hooks/use-outfits', () => ({
   useInfiniteOutfits: (filters: unknown) => { state.savedFilters(filters); return { data: { pages: [{ total: 1, outfits: [state.outfit] }] } } },
   useRejectOutfit: () => ({ mutate: vi.fn() }),
 }))
-vi.mock('@/lib/hooks/use-items', () => ({ useItemPages: () => ({ items: state.items, isLoading: state.loading, hasMore: state.more }) }))
+vi.mock('@/lib/hooks/use-items', () => ({ useItemPages: () => ({ items: state.items, isLoading: state.loading, isFetching: state.loading, hasMore: state.more, isError: false }) }))
 vi.mock('@/components/outfits/outfit-card', () => ({ OutfitCard: ({ outfit, hideWashWarnings }: { outfit: Outfit; hideWashWarnings?: boolean }) => <div>{outfit.name}{!hideWashWarnings && <span>Wash</span>}</div> }))
 const item = (id: string, type = 'shirt', extra = {}) => ({ id, name: id, type, status: 'ready', needs_wash: false, is_archived: false, ...extra } as Item)
 const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
@@ -185,13 +185,13 @@ it('uses a separate generation failure message', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('generateFailed')
 })
 
-it('reuses common loading and load-more strings in the swap picker', () => {
+it('shows common loading without a load-more button in the swap picker', () => {
   translationMock.includeNamespace = true
   state.loading = true; state.more = true
   render(<WearActions outfit={state.outfit} date="2026-10-24" />)
   fireEvent.click(screen.getByRole('button', { name: 'outfits.day.swap' }))
   expect(screen.getByText('common.loading')).toBeVisible()
-  expect(screen.getByRole('button', { name: 'common.loadMore' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'common.loadMore' })).not.toBeInTheDocument()
   translationMock.includeNamespace = false
 })
 
