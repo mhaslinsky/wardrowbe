@@ -26,7 +26,7 @@ from app.services.photo_redraw_service import (
     response_parts,
 )
 from app.services.preview_face import face_reference, reference_hash
-from app.utils.garment_vocabulary import ITEM_ROLE
+from app.utils.garment_vocabulary import CAN_BE_MID_LAYER_TYPES, ITEM_ROLE
 from app.utils.photo_urls import image_url
 from app.utils.prompts import load_prompt
 from app.utils.rate_limit import rate_limit_by_user
@@ -163,6 +163,109 @@ def jpeg(path, size):
     service = ImageService()
     image = service._open_bounded(service.get_image_path(path).read_bytes(), Path(path).suffix)
     return service.encode_variant(ImageOps.exif_transpose(image), ImageVariant("", "", size, 85))
+
+
+def layer_jpeg(data):
+    service = ImageService()
+    image = service._open_bounded(data, ".png")
+    return service.encode_variant(ImageOps.exif_transpose(image), ImageVariant("", "", 1600, 85))
+
+
+def split_preview_layers(images, records, positions):
+    layers, base = [], []
+    for image, garment in zip(images, records, strict=True):
+        role = ITEM_ROLE.get(garment["type"])
+        if role in {"mid_layer", "outer_layer"} or garment["layer"] in {"mid", "outer"}:
+            layers.append((image, garment))
+        else:
+            base.append((image, garment))
+    if not any(ITEM_ROLE.get(garment["type"]) in {"base_top", "full_body"} for _, garment in base):
+        return images, records, []
+
+    def layer_order(pair):
+        garment = pair[1]
+        depth = {"mid": 0, "outer": 1}.get(
+            garment["layer"], 0 if ITEM_ROLE.get(garment["type"]) == "mid_layer" else 1
+        )
+        return (
+            depth,
+            garment["type"] not in CAN_BE_MID_LAYER_TYPES,
+            positions[garment["id"]],
+            garment["id"],
+        )
+
+    layers.sort(key=layer_order)
+    layers = layers[-2:]
+    edited_ids = {garment["id"] for _, garment in layers}
+    base = [
+        (image, garment)
+        for image, garment in zip(images, records, strict=True)
+        if garment["id"] not in edited_ids
+    ]
+    return [image for image, _ in base], [garment for _, garment in base], layers
+
+
+def layer_prompt(garment, item, measurements, style_notes, note, preferences):
+    prompt = load_prompt("outfit_preview_layer")
+    blocks = {
+        "garment_data": {
+            field: garment[field]
+            for field in ("type", "colors", "primary_color", "fit", "size")
+            if field in garment
+        },
+        "item_notes": item.notes,
+        "body_measurements": {
+            field: measurements[field]
+            for field in ("shirt_size", "height")
+            if measurements and field in measurements
+        },
+        "style_notes": style_notes,
+        "change_request": note,
+        "preview_preferences": preferences["lines"],
+    }
+    material = (item.tags or {}).get("material")
+    if material:
+        blocks["garment_data"]["material"] = material
+    for name, value in blocks.items():
+        if value:
+            data = json.dumps(value).replace("<", "\\u003c").replace(">", "\\u003e")
+            prompt += f"\n<{name}>\n{data}\n</{name}>"
+    return prompt
+
+
+async def request_preview_image(provider, images, prompt, usage, call_ids):
+    payload = await provider.request(images, prompt, "IMAGE", mime_type="image/jpeg")
+    counts = provider.usage.get("IMAGE", {})
+    if not isinstance(counts, dict):
+        logger.warning("Skipping malformed preview usage")
+        counts = {}
+    for name, value in counts.items():
+        if isinstance(value, int) and not isinstance(value, bool):
+            usage[name] = usage.get(name, 0) + value
+        elif name.endswith("TokensDetails") and isinstance(value, list):
+            details = {entry["modality"]: dict(entry) for entry in usage.get(name, [])}
+            for entry in value:
+                modality = entry.get("modality") if isinstance(entry, dict) else None
+                count = entry.get("tokenCount") if isinstance(entry, dict) else None
+                if (
+                    not isinstance(modality, str)
+                    or not modality
+                    or not isinstance(count, int)
+                    or isinstance(count, bool)
+                ):
+                    logger.warning("Skipping malformed preview token details")
+                    continue
+                previous = details.get(modality, {}).get("tokenCount", 0)
+                details[modality] = {**entry, "tokenCount": previous + count}
+            usage[name] = list(details.values())
+    if provider.telemetry.last_call_id:
+        call_ids.append(str(provider.telemetry.last_call_id))
+    inline = next(
+        part["inlineData"]["data"]
+        for part in response_parts(payload)
+        if isinstance(part.get("inlineData"), dict) and part["inlineData"].get("data")
+    )
+    return base64.b64decode(inline, validate=True)
 
 
 class PreviewService:
@@ -480,7 +583,11 @@ class PreviewService:
             ]
             if face is not None:
                 reference_images.insert(1, face)
+            images, records, layers = split_preview_layers(
+                images, records, {str(link.item_id): link.position for link in outfit.items}
+            )
             images = reference_images + images
+            layer_items = {str(link.item_id): link.item for link in outfit.items}
             if record is None:
                 record = OutfitPreview(outfit_id=outfit_id, user_id=user_id)
                 self.db.add(record)
@@ -592,16 +699,23 @@ class PreviewService:
                     outfit_id,
                 )
             )
-            payload = await provider.request(images, prompt, "IMAGE", mime_type="image/jpeg")
-            inline = next(
-                part["inlineData"]["data"]
-                for part in response_parts(payload)
-                if isinstance(part.get("inlineData"), dict) and part["inlineData"].get("data")
-            )
-            pending_store = asyncio.create_task(
-                asyncio.to_thread(
-                    store_photo, user_id, base64.b64decode(inline, validate=True), "preview.png"
+            usage, call_ids = {}, []
+            output = await request_preview_image(provider, images, prompt, usage, call_ids)
+            for garment_image, garment in layers:
+                previous = await asyncio.to_thread(layer_jpeg, output)
+                prompt = layer_prompt(
+                    garment,
+                    layer_items[garment["id"]],
+                    measurements,
+                    outfit.style_notes,
+                    note,
+                    preferences,
                 )
+                output = await request_preview_image(
+                    provider, [previous, garment_image], prompt, usage, call_ids
+                )
+            pending_store = asyncio.create_task(
+                asyncio.to_thread(store_photo, user_id, output, "preview.png")
             )
             paths = await asyncio.shield(pending_store)
             await self.lock_user(user_id)
@@ -643,13 +757,18 @@ class PreviewService:
             record.paths, record.cache_key = paths, key
             record.clothes_key, record.person_key = clothes_key, person_key
             record.preferences_key = preferences_key
+            last_usage = provider.usage.get("IMAGE", {})
+            if not isinstance(last_usage, dict):
+                last_usage = {}
             record.created_at, record.usage = (
                 datetime.now(UTC),
                 {
                     **provider.usage,
+                    **({"IMAGE": {**last_usage, **usage}} if usage else {}),
                     "_ai_call_id": str(provider.telemetry.last_call_id)
                     if provider.telemetry.last_call_id
                     else None,
+                    "_ai_call_ids": call_ids,
                 },
             )
             record.claim_id, record.started_at = None, None

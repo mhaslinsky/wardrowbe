@@ -226,6 +226,67 @@ it.each([false, true])('polls an existing draw with timeout=%s', async (timeout)
   expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
 });
 
+it.each([504, 524, 'network', 'deadline'] as const)('recovers a redraw after a request interruption: %s', async (failure) => {
+  const updated = { ...saved, created_at: '2026-10-30', medium_url: '/finished.jpg' };
+  let reads = 0;
+  vi.mocked(fetch).mockImplementation(async (_url, options) => {
+    if (options?.method === 'POST') {
+      if (failure === 'network') throw new TypeError('Network failed');
+      if (failure === 'deadline') return new Promise<Response>((_resolve, reject) => {
+        options.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+      return response({}, failure) as Response;
+    }
+    return response(++reads < 3 ? saved : updated) as Response;
+  });
+  const { result } = renderHook(() => useOutfitPreview('one'), { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+  await waitFor(() => expect(result.current.preview).toEqual(saved));
+  vi.useFakeTimers();
+  let outcome!: Promise<boolean>;
+  await act(async () => {
+    outcome = result.current.draw(true, 'Looser sleeves');
+    await vi.advanceTimersByTimeAsync(failure === 'deadline' ? 200_000 : 0);
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(reads).toBe(2);
+  expect(result.current.preview).toEqual(saved);
+  expect(result.current.pending).toBe(true);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(await outcome).toBe(true);
+    await vi.advanceTimersToNextTimerAsync();
+  });
+  expect(result.current.preview).toEqual(updated);
+  expect(result.current.error).toBe(false);
+  expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+});
+
+it('stops timeout recovery at the poll deadline', async () => {
+  vi.mocked(fetch).mockImplementation(async (_url, options) => response(options?.method === 'POST' ? {} : saved, options?.method === 'POST' ? 524 : 200) as Response);
+  const { result } = renderHook(() => useOutfitPreview('one'), { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+  await waitFor(() => expect(result.current.preview).toEqual(saved));
+  vi.useFakeTimers();
+  let outcome!: Promise<boolean>;
+  await act(async () => { outcome = result.current.draw(true); await vi.advanceTimersByTimeAsync(200_000); });
+  expect(await outcome).toBe(false);
+  expect(result.current.preview).toEqual(saved);
+  expect(result.current.error).toBe(true);
+  expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
+});
+
+it('cancels timeout recovery on unmount', async () => {
+  vi.mocked(fetch).mockImplementation(async (_url, options) => response(options?.method === 'POST' ? {} : saved, options?.method === 'POST' ? 504 : 200) as Response);
+  const { result, unmount } = renderHook(() => useOutfitPreview('one'), { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+  await waitFor(() => expect(result.current.preview).toEqual(saved));
+  vi.useFakeTimers();
+  let outcome!: Promise<boolean>;
+  await act(async () => { outcome = result.current.draw(true); await vi.advanceTimersByTimeAsync(0); });
+  unmount();
+  await act(async () => { await vi.advanceTimersByTimeAsync(200_000); });
+  expect(await outcome).toBe(false);
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
 it('keeps failed removal open and clears its error after a successful upload', async () => {
   vi.mocked(fetch).mockImplementation(async (_url, options) => response(options?.method === 'DELETE' ? {} : saved, options?.method === 'DELETE' ? 502 : 200) as Response);
   render(<PreviewPhotoSettings />);
