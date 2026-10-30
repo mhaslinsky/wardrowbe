@@ -40,6 +40,13 @@ function SwapPicker({ outfit, onConfirm }: { outfit: Outfit; onConfirm: (ids: st
   const [ids, setIds] = useState(outfit.items.map((item) => item.id));
   const [pageCount, setPageCount] = useState(1);
   const wardrobe = useItemPages({ needs_wash: false, is_archived: false }, pageCount, 100);
+  const loading = wardrobe.isLoading || wardrobe.isFetching || wardrobe.hasMore;
+  // A partial wardrobe can omit the piece the user actually wore.
+  useEffect(() => {
+    if (wardrobe.hasMore && !wardrobe.isFetching && !wardrobe.isError) {
+      setPageCount((count) => count + 1);
+    }
+  }, [wardrobe.hasMore, wardrobe.isFetching, wardrobe.isError]);
   return <div className="space-y-3">
     {outfit.items.map((piece, index) => <label key={piece.id} className="block space-y-1">
       <span>{piece.name || typeLabel(piece.type)}</span>
@@ -50,12 +57,13 @@ function SwapPicker({ outfit, onConfirm }: { outfit: Outfit; onConfirm: (ids: st
       }}>
         <option value={piece.id}>{piece.name || typeLabel(piece.type)}</option>
         {wardrobe.items.filter((item) => canSwap(piece.type, item, ids.filter((_, position) => position !== index)))
-          .filter((item) => item.id !== piece.id).map((item) => <option key={item.id} value={item.id}>{item.name || typeLabel(item.type)}</option>)}
+          .filter((item) => item.id !== piece.id)
+          .sort((first, second) => (first.name || typeLabel(first.type)).localeCompare(second.name || typeLabel(second.type)))
+          .map((item) => <option key={item.id} value={item.id}>{item.name || typeLabel(item.type)}</option>)}
       </select>
     </label>)}
-    {wardrobe.isLoading && <p role="status">{common('loading')}</p>}
-    {wardrobe.hasMore && <Button variant="outline" disabled={wardrobe.isFetching} onClick={() => setPageCount((count) => count + 1)}>{common('loadMore')}</Button>}
-    <Button disabled={wardrobe.isFetching || ids.every((id, index) => id === outfit.items[index].id)} onClick={() => onConfirm(ids)}>{t('wore')}</Button>
+    {wardrobe.isError ? <p role="alert">{common('unexpectedError')}</p> : loading && <p role="status">{common('loading')}</p>}
+    <Button disabled={loading || wardrobe.isError || ids.every((id, index) => id === outfit.items[index].id)} onClick={() => onConfirm(ids)}>{t('wore')}</Button>
   </div>;
 }
 

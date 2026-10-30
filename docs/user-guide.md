@@ -92,7 +92,7 @@ On a saved lookbook outfit, choose **Wear on…**, pick the **Wear date** (today
 
 On the dashboard and Suggest page, **Your day** groups suggestions, saved outfits, and past outfits for the selected day. Move between dates and use **Get options** for suggestions.
 
-Choose **I wore this** to log the selected outfit, or **Swap a piece** to replace a garment before logging. You can record today or a past day, but not a future wear. If that day is already logged, review the existing outfit rather than repeatedly submitting it. **Undo** and **Replace** let you correct a logged day; check **Washed since?** when the correction asks about intervening laundry.
+Choose **I wore this** to log the selected outfit, or **Swap a piece** to replace a garment before logging. The picker loads all clean, ready wardrobe items and lists matching replacements alphabetically after the current piece. Wait for **Loading...** to finish before logging. If loading fails, an error appears and logging stays disabled. You can record today or a past day, but not a future wear. If that day is already logged, review the existing outfit rather than repeatedly submitting it. **Undo** and **Replace** let you correct a logged day; check **Washed since?** when the correction asks about intervening laundry.
 
 On a suggestion, **I wore this** logs the wear for the selected day in one step. There is no separate acceptance or yes/no feedback step. To rate a worn outfit, open **History**, select its day, and choose **Rate** (or **Update** for an existing rating). Set **Overall Rating**, add optional notes, and choose **Submit**. The outfit detail page's **Add note** opens a notes-only dialog, even for worn outfits.
 

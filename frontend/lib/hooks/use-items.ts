@@ -91,6 +91,7 @@ export function useItemPages(filters: ItemFilter, pageCount: number, pageSize = 
         hasMore: loaded[loaded.length - 1]?.data?.has_more ?? false,
         isLoading: results[0]?.isLoading ?? false,
         isFetching: results.some((result) => result.isFetching),
+        isError: results.some((result) => result.isError),
       };
     },
   });
