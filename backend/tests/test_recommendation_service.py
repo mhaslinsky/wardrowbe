@@ -1,11 +1,12 @@
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import event
 
-from app.models.item import ClothingItem, ItemStatus
+from app.models.item import ClothingItem, ItemHistory, ItemStatus
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus, TimeOfDay
 from app.models.preference import UserPreference
 from app.models.user import User
@@ -33,6 +34,171 @@ def _make_user(timezone: str = "UTC") -> User:
         timezone=timezone,
         is_active=True,
     )
+
+
+class TestWeeklyRotation:
+    async def _candidates(self, db_session, user, monkeypatch, specs, mandatory=(), cached=False):
+        today = date(2026, 10, 30)
+        user.preferences = None
+        user.timezone = "America/New_York"
+        items = [
+            ClothingItem(
+                id=uuid4(),
+                user_id=user.id,
+                type=kind,
+                name=f"rotation-{index}",
+                status=ItemStatus.ready,
+                image_path="rotation.jpg",
+                wear_count=0,
+                last_worn_at=today - timedelta(days=min(days)) if days else None,
+            )
+            for index, (kind, days) in enumerate(specs)
+        ]
+        db_session.add_all(items)
+        await db_session.flush()
+        db_session.add_all(
+            [
+                ItemHistory(item_id=item.id, worn_at=today - timedelta(days=days_ago))
+                for item, (_, days) in zip(items, specs, strict=True)
+                for days_ago in days
+            ]
+        )
+        await db_session.commit()
+        service = RecommendationService(db_session)
+        monkeypatch.setattr(service, "_materialize_outfit", AsyncMock(return_value=object()))
+        apply_cap = MagicMock(wraps=service._apply_weekly_wear_cap)
+        monkeypatch.setattr(service, "_apply_weekly_wear_cap", apply_cap)
+        weather = _weather(temp=20)
+        candidate_calls = []
+        history_queries = []
+
+        def capture_score(**kwargs):
+            candidate_calls.append(kwargs)
+            raise RuntimeError("Captured candidates before AI")
+
+        def capture_query(connection, cursor, statement, parameters, context, executemany):
+            if "FROM item_history" in statement:
+                history_queries.append(statement)
+
+        context = suggestion_context(weather, TimeOfDay.afternoon, None, user.body_measurements)
+        cached_option = (
+            {
+                "items": [1, 2],
+                "_number_map": {"1": str(items[0].id), "2": str(items[-1].id)},
+                "_context": json.loads(json.dumps(context)),
+            }
+            if cached
+            else None
+        )
+        pop = AsyncMock(side_effect=[cached_option, None])
+        local_clock = MagicMock(wraps=datetime)
+        local_clock.now.return_value = datetime(2026, 10, 31, 2, 0, tzinfo=UTC)
+        monkeypatch.setattr("app.utils.timezone.datetime", local_clock)
+        monkeypatch.setattr("app.services.recommendation_service.score_items", capture_score)
+        monkeypatch.setattr("app.services.recommendation_service.pop_suggestion", pop)
+        monkeypatch.setattr("app.services.recommendation_service.AIService", MagicMock())
+        engine = db_session.bind.sync_engine
+        event.listen(engine, "before_cursor_execute", capture_query)
+        try:
+            with pytest.raises(RuntimeError, match="Captured candidates before AI"):
+                await service.generate_recommendations(
+                    user,
+                    "casual",
+                    weather_override=weather,
+                    include_items=[items[index].id for index in mandatory],
+                    time_of_day=TimeOfDay.afternoon,
+                )
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_query)
+        candidate_calls[0]["weekly_wear_counts"] = apply_cap.call_args.args[1]
+        return items, candidate_calls[0], history_queries, pop
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("kind", ["sneakers", "pants"])
+    async def test_weekly_rotation_caps_two_wears_but_keeps_one(
+        self, db_session, test_user, monkeypatch, kind
+    ):
+        specs = [(kind, [4, 3]), (kind, [3])] + [(kind, [])] * 6 + [("shirt", [])]
+        items, call, _, _ = await self._candidates(db_session, test_user, monkeypatch, specs)
+        candidate_ids = {item.id for item in call["items"]}
+        assert items[0].id not in candidate_ids
+        assert {item.id for item in items[1:]} <= candidate_ids
+
+    @pytest.mark.asyncio
+    async def test_weekly_rotation_floor_and_mandatory_item(
+        self, db_session, test_user, monkeypatch
+    ):
+        specs = [
+            ("boots", [0, 1, 2, 3]),
+            ("shoes", [3, 4]),
+            ("sandals", [0, 1]),
+            ("sneakers", [4, 5]),
+            ("boots", [1, 2, 3]),
+            ("shoes", []),
+            ("shirt", []),
+        ]
+        items, call, _, _ = await self._candidates(
+            db_session, test_user, monkeypatch, specs, mandatory=[0]
+        )
+        assert {item.id for item in call["items"]} == {items[index].id for index in (0, 1, 3, 5, 6)}
+
+    @pytest.mark.asyncio
+    async def test_weekly_rotation_does_not_cap_shirts_or_jackets(
+        self, db_session, test_user, monkeypatch
+    ):
+        specs = [("shirt", [0, 1]), ("jacket", [0, 1])] + [("shoes", [0, 1])] * 5
+        items, call, _, _ = await self._candidates(db_session, test_user, monkeypatch, specs)
+        candidate_ids = {item.id for item in call["items"]}
+        assert {items[0].id, items[1].id} <= candidate_ids
+        assert len(candidate_ids) == 6
+
+    @pytest.mark.asyncio
+    async def test_weekly_rotation_rejects_capped_cached_item(
+        self, db_session, test_user, monkeypatch
+    ):
+        specs = [("shoes", [4, 3])] + [("shoes", [])] * 6 + [("shirt", [])]
+        items, call, _, pop = await self._candidates(
+            db_session, test_user, monkeypatch, specs, cached=True
+        )
+        assert pop.await_count == 2
+        assert items[0].id not in {item.id for item in call["items"]}
+
+    @pytest.mark.asyncio
+    async def test_weekly_rotation_counts_both_windows_in_one_query(
+        self, db_session, test_user, monkeypatch
+    ):
+        specs = [("shoes", [0, 6, 7, 29, 30, -1])] + [("shoes", [])] * 6 + [("shirt", [])]
+        items, call, queries, _ = await self._candidates(
+            db_session, test_user, monkeypatch, specs, mandatory=[0]
+        )
+        assert len(queries) == 1
+        assert "GROUP BY" in queries[0]
+        assert call["wear_counts_30_days"] == {items[0].id: 4}
+        assert call["weekly_wear_counts"][items[0].id] == 2
+
+    def test_weekly_rotation_floor_breaks_equal_wears_by_id(self):
+        items = [
+            ClothingItem(id=uuid4(), type="jeans", last_worn_at=date(2026, 10, 27))
+            for _ in range(6)
+        ]
+        counts = {item.id: 2 for item in items}
+        service = RecommendationService(MagicMock())
+        kept = service._apply_weekly_wear_cap(items, counts, set())
+        assert {item.id for item in kept} == set(sorted(counts)[:4])
+
+
+def test_weekly_rotation_prompt_keeps_recency_and_adds_frequency():
+    item = ClothingItem(id=uuid4(), type="shoes", last_worn_at=date(2026, 10, 27))
+    service = RecommendationService(MagicMock())
+    prompt, _ = service._format_items_for_prompt(
+        [ScoredItem(item)], {}, date(2026, 10, 30), weekly_wear_counts={item.id: 2}
+    )
+    assert "worn 3 days ago" in prompt
+    assert "worn 2 times this week" in prompt
+    prompt, _ = service._format_items_for_prompt(
+        [ScoredItem(item)], {}, date(2026, 10, 30), weekly_wear_counts={}
+    )
+    assert "times this week" not in prompt
 
 
 class TestGetTimeOfDay:

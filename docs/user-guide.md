@@ -56,6 +56,8 @@ Sources: [upload form](../frontend/components/add-item-dialog.tsx), [accepted im
 
 You can use **Override weather** to try a different temperature or condition. **Reset** clears that override.
 
+Suggestions skip shoes and bottoms worn twice in seven days, except for pieces you include and those needed to keep at least four choices per category.
+
 ### Build around a piece with Pairings
 
 Open a wardrobe item and choose **Find matching outfits**. Set **Number of outfits**, then **Generate Outfits**. **View Pairings** opens the results.

@@ -371,19 +371,29 @@ def _preference_score(
     return max(0.3, min(1.2, score))
 
 
-def _usage_score(item: ClothingItem, median_wear: float) -> float:
-    wear_count = item.wear_count or 0
+def _usage_score(wear_count: int, role_mean: float) -> float:
+    if role_mean <= 0:
+        return 1.0
+    if wear_count == 0:
+        return 1.15
+    elif wear_count < role_mean:
+        return 1.05
+    elif wear_count > 1.5 * role_mean:
+        return 0.9
+    return 1.0
+
+
+def _lifetime_usage_score(item: ClothingItem, median_wear: float) -> float:
     if median_wear <= 1:
         return 1.0
-    ratio = wear_count / median_wear
+    ratio = (item.wear_count or 0) / median_wear
     if ratio <= 0.3:
         return 1.15
-    elif ratio <= 0.7:
+    if ratio <= 0.7:
         return 1.05
-    elif ratio <= 1.5:
+    if ratio <= 1.5:
         return 1.0
-    else:
-        return 0.9
+    return 0.9
 
 
 def _sort_mandatory_first(
@@ -463,6 +473,8 @@ def score_items(
     good_pairs: dict[UUID, list[UUID]],
     recently_worn_dates: dict[UUID, date],
     mandatory_item_ids: set[UUID] | None = None,
+    wear_counts_30_days: dict[UUID, int] | None = None,
+    usage_reference_items: list[ClothingItem] | None = None,
 ) -> list[ScoredItem]:
     items = [item for item in items if is_outfit_type(item.type)]
     if len(items) < MIN_ITEMS_FOR_SCORING:
@@ -488,7 +500,15 @@ def score_items(
     use_underused = (
         preferences.prefer_underused_items if preferences else DEFAULT_PREFER_UNDERUSED_ITEMS
     )
-    median_wear = median([i.wear_count or 0 for i in items]) if use_underused and items else 0
+    wear_counts = wear_counts_30_days or {}
+    role_totals: dict[str | None, int] = {}
+    role_sizes: dict[str | None, int] = {}
+    for reference_item in usage_reference_items if usage_reference_items is not None else items:
+        role = ITEM_ROLE.get((reference_item.type or "").lower())
+        role_totals[role] = role_totals.get(role, 0) + wear_counts.get(reference_item.id, 0)
+        role_sizes[role] = role_sizes.get(role, 0) + 1
+    role_means = {role: total / role_sizes[role] for role, total in role_totals.items()}
+    median_wear = median([item.wear_count or 0 for item in items]) if items else 0
 
     scored = []
     for item in items:
@@ -497,7 +517,14 @@ def score_items(
         ss = _season_score(item, current_season, weather, preferences)
         rs = _recency_score(item, user_today, avoid_days, recently_worn_dates)
         ps = _preference_score(item, preferences, learned_prefs)
-        us = _usage_score(item, median_wear) if use_underused else 1.0
+        role = ITEM_ROLE.get((item.type or "").lower())
+        us = 1.0
+        if use_underused:
+            # Callers without history counts, including inspiration, retain lifetime scoring.
+            if wear_counts_30_days is None:
+                us = _lifetime_usage_score(item, median_wear)
+            else:
+                us = _usage_score(wear_counts.get(item.id, 0), role_means.get(role, 0))
 
         total = ws * fs * ss * rs * ps * us
 

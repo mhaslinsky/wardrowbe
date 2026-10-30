@@ -86,6 +86,84 @@ def _prefs(**kwargs) -> UserPreference:
     return UserPreference(**defaults)
 
 
+@pytest.mark.parametrize("prefer_underused", [True, False])
+def test_rotation_usage_uses_recent_role_mean_despite_zero_lifetime_counts(prefer_underused):
+    shoes = [_item(type="sneakers", wear_count=0) for _ in range(8)]
+    shirts = [_item(type="shirt", wear_count=0) for _ in range(50)]
+    counts = {shoes[0].id: 8, shoes[1].id: 2, shoes[2].id: 1}
+    counts.update({item.id: 30 for item in shirts})
+    scored = score_items(
+        shoes + shirts,
+        _weather(),
+        "casual",
+        _prefs(prefer_underused_items=prefer_underused, avoid_repeat_days=3),
+        date(2026, 10, 30),
+        "fall",
+        None,
+        {},
+        {},
+        wear_counts_30_days=counts,
+    )
+    usage = {entry.item.id: entry.usage_score for entry in scored}
+    assert usage[shoes[0].id] == (0.9 if prefer_underused else 1.0)
+    assert usage[shoes[2].id] == (1.05 if prefer_underused else 1.0)
+    assert usage[shoes[-1].id] == (1.15 if prefer_underused else 1.0)
+
+
+def test_rotation_usage_empty_history_is_neutral():
+    items = [_item(wear_count=100) for _ in range(50)]
+    scored = score_items(
+        items,
+        _weather(),
+        "casual",
+        _prefs(prefer_underused_items=True),
+        date(2026, 10, 30),
+        "fall",
+        None,
+        {},
+        {},
+        wear_counts_30_days={},
+    )
+    assert {entry.usage_score for entry in scored} == {1.0}
+
+
+def test_rotation_preserves_lifetime_scoring_for_callers_without_history():
+    items = [_item(wear_count=4) for _ in range(50)]
+    items[0].wear_count = 0
+    scored = score_items(
+        items,
+        _weather(),
+        "casual",
+        _prefs(prefer_underused_items=True),
+        date(2026, 10, 30),
+        "fall",
+        None,
+        {},
+        {},
+    )
+    assert next(entry for entry in scored if entry.item.id == items[0].id).usage_score == 1.15
+
+
+def test_rotation_usage_includes_capped_items_in_role_mean():
+    shoes = [_item(type="shoes") for _ in range(17)]
+    shirts = [_item(type="shirt") for _ in range(50)]
+    references = shoes + shirts
+    scored = score_items(
+        shoes[1:] + shirts,
+        _weather(),
+        "casual",
+        _prefs(prefer_underused_items=True),
+        date(2026, 10, 30),
+        "fall",
+        None,
+        {},
+        {},
+        wear_counts_30_days={shoes[0].id: 2},
+        usage_reference_items=references,
+    )
+    assert {entry.usage_score for entry in scored if entry.item.type == "shoes"} == {1.15}
+
+
 class TestWeatherScore:
     def test_cold_coat_scores_high(self):
         item = _item(type="coat")

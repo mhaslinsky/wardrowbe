@@ -7,14 +7,14 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, select, text
+from sqlalchemy import and_, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.data.color_seasons import COLOR_SEASONS, stored_color_season
 from app.models.considering import owned_item, owned_outfit
-from app.models.item import ClothingItem, ItemStatus
+from app.models.item import ClothingItem, ItemHistory, ItemStatus
 from app.models.learning import ItemPairScore, UserLearningProfile
 from app.models.outfit import (
     FamilyOutfitRating,
@@ -30,6 +30,7 @@ from app.models.user import User
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
 from app.services.ai_telemetry_service import CallContext
 from app.services.item_scorer import (
+    MIN_CANDIDATES_PER_ESSENTIAL_ROLE,
     get_season,
     rain_likely,
     score_items,
@@ -54,7 +55,12 @@ from app.utils.clothing import (
     remove_legwear,
     repair_top_layers,
 )
-from app.utils.garment_vocabulary import NEAR_FACE_TYPES, is_outfit_type, render_outfit_prompt
+from app.utils.garment_vocabulary import (
+    ITEM_ROLE,
+    NEAR_FACE_TYPES,
+    is_outfit_type,
+    render_outfit_prompt,
+)
 from app.utils.preference_defaults import (
     DEFAULT_LAYERING_PREFERENCE,
     DEFAULT_TEMPERATURE_SENSITIVITY,
@@ -69,6 +75,10 @@ logger = logging.getLogger(__name__)
 CACHED_SUGGESTION_TEMP_TOLERANCE = 3.0
 DAY_LOCK_TIMEOUT_MS = 1500
 DAY_FORECAST_DAYS = 10
+WEEKLY_WEAR_CAP = 2
+WEEKLY_WEAR_WINDOW_DAYS = 7
+USAGE_WEAR_WINDOW_DAYS = 30
+WEEKLY_ROTATION_ROLES = ("footwear", "bottom")
 
 SINGLE_OUTFIT_FORMAT = (
     "Respond with valid JSON:\n"
@@ -353,6 +363,59 @@ class RecommendationService:
 
         return items
 
+    async def _get_wear_counts(
+        self, user: User, user_today: date
+    ) -> tuple[dict[UUID, int], dict[UUID, int]]:
+        weekly_start = user_today - timedelta(days=WEEKLY_WEAR_WINDOW_DAYS - 1)
+        usage_start = user_today - timedelta(days=USAGE_WEAR_WINDOW_DAYS - 1)
+        result = await self.db.execute(
+            select(
+                ItemHistory.item_id,
+                func.count(ItemHistory.id),
+                func.count(ItemHistory.id).filter(ItemHistory.worn_at >= weekly_start),
+            )
+            .join(ClothingItem, ClothingItem.id == ItemHistory.item_id)
+            .where(
+                ClothingItem.user_id == user.id,
+                ItemHistory.worn_at >= usage_start,
+                ItemHistory.worn_at <= user_today,
+            )
+            .group_by(ItemHistory.item_id)
+        )
+        rows = result.all()
+        return (
+            {item_id: monthly for item_id, monthly, weekly in rows},
+            {item_id: weekly for item_id, monthly, weekly in rows},
+        )
+
+    def _apply_weekly_wear_cap(
+        self,
+        items: list[ClothingItem],
+        weekly_wear_counts: dict[UUID, int],
+        mandatory_item_ids: set[UUID],
+    ) -> list[ClothingItem]:
+        removed_ids: set[UUID] = set()
+        for role in WEEKLY_ROTATION_ROLES:
+            role_items = [
+                item for item in items if ITEM_ROLE.get((item.type or "").lower()) == role
+            ]
+            capped = [
+                item
+                for item in role_items
+                if weekly_wear_counts.get(item.id, 0) >= WEEKLY_WEAR_CAP
+                and item.id not in mandatory_item_ids
+            ]
+            capped.sort(
+                key=lambda item: (
+                    weekly_wear_counts[item.id],
+                    item.last_worn_at or date.min,
+                    item.id,
+                )
+            )
+            needed = max(0, MIN_CANDIDATES_PER_ESSENTIAL_ROLE - (len(role_items) - len(capped)))
+            removed_ids.update(item.id for item in capped[needed:])
+        return [item for item in items if item.id not in removed_ids]
+
     async def _get_recent_outfit_notes(self, user: User) -> list[dict]:
         result = await self.db.execute(
             select(UserFeedback)
@@ -504,6 +567,7 @@ class RecommendationService:
         scored_items: list,
         good_pairs: dict[UUID, list[UUID]],
         user_today: date,
+        weekly_wear_counts: dict[UUID, int] | None = None,
     ) -> tuple[str, dict[int, UUID]]:
         lines = []
         number_map: dict[int, UUID] = {}
@@ -563,6 +627,10 @@ class RecommendationService:
                     parts.append(f"worn {days_ago} days ago")
             else:
                 parts.append("never worn")
+
+            weekly_wears = (weekly_wear_counts or {}).get(item.id, 0)
+            if weekly_wears >= 1:
+                parts.append(f"worn {weekly_wears} times this week")
 
             # Pair annotation
             partners = good_pairs.get(item.id, [])
@@ -1170,6 +1238,12 @@ class RecommendationService:
             if unresolved:
                 raise ValueError("One or more selected items could not be found or are not ready.")
 
+        user_today = get_user_today(user)
+        wear_counts_30_days, weekly_wear_counts = await self._get_wear_counts(user, user_today)
+        usage_reference_items = candidates
+        # Apply rotation before cache validation so cached outfits obey the same cap.
+        candidates = self._apply_weekly_wear_cap(candidates, weekly_wear_counts, set(include_items))
+
         if len(candidates) < 2:
             raise InsufficientWardrobeError(
                 "Not enough items in wardrobe for recommendation. "
@@ -1239,7 +1313,6 @@ class RecommendationService:
             )
 
         # Score items (replaces old filter approach)
-        user_today = get_user_today(user)
         lat = float(user.location_lat) if user.location_lat is not None else None
         current_season = get_season(user_today.month, lat)
         scored = score_items(
@@ -1253,10 +1326,14 @@ class RecommendationService:
             good_pairs=good_pairs,
             recently_worn_dates=recently_worn_dates,
             mandatory_item_ids=set(include_items) if include_items else None,
+            wear_counts_30_days=wear_counts_30_days,
+            usage_reference_items=usage_reference_items,
         )
 
         # Format enriched prompt
-        items_text, number_map = self._format_items_for_prompt(scored, good_pairs, user_today)
+        items_text, number_map = self._format_items_for_prompt(
+            scored, good_pairs, user_today, weekly_wear_counts=weekly_wear_counts
+        )
         mandatory_items_section = self._format_mandatory_items_section(include_items, number_map)
 
         worn_combinations = await self._get_recently_worn_outfit_combinations(user, days=7)
