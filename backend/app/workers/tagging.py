@@ -15,6 +15,7 @@ from app.models.user import User
 from app.services.ai_service import AIService, ClothingTags, repeats_identically
 from app.services.ai_telemetry_service import CallContext
 from app.utils.locale import DEFAULT_LOCALE
+from app.utils.washing import clear_unneeded_wash_state
 from app.workers.db import get_db_session
 
 logger = logging.getLogger(__name__)
@@ -324,6 +325,8 @@ async def tag_item_image(ctx: dict, item_id: str, image_path: str) -> dict[str, 
                         or current_value == {}
                     ):
                         setattr(item, field, value)
+
+            clear_unneeded_wash_state(item)
 
             # The guards above may have kept a user's column value while the
             # AI's went into tags; mirror the columns back so the JSONB and the

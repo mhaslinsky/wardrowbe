@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from PIL import ImageOps
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import selectinload, undefer
 
 from app.config import get_settings
@@ -130,7 +130,7 @@ def snapshot(outfit, always_items=()):
                 "id": str(item_id),
                 "image_path": item.image_path,
                 "medium_path": item.medium_path,
-                "type": item.type,
+                "type": item.type.strip().lower() if item_id in always_ids else item.type,
                 "colors": item.colors,
                 "primary_color": item.primary_color,
                 "layer": layer,
@@ -304,7 +304,7 @@ class PreviewService:
                         ClothingItem.user_id == user_id,
                         owned_item(),
                         ClothingItem.always_in_preview.is_(True),
-                        ClothingItem.type == "glasses",
+                        func.lower(func.btrim(ClothingItem.type)) == "glasses",
                         ClothingItem.is_archived.is_(False),
                         ClothingItem.status != ItemStatus.archived,
                     )

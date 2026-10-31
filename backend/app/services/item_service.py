@@ -17,7 +17,7 @@ from app.models.item import (
     WashHistory,
 )
 from app.schemas.item import ItemCreate, ItemFilter, ItemUpdate
-from app.utils.washing import never_washed, wash_interval
+from app.utils.washing import clear_unneeded_wash_state, never_washed, wash_interval
 
 
 class ItemService:
@@ -227,7 +227,7 @@ class ItemService:
 
     async def update(self, item: ClothingItem, item_data: ItemUpdate) -> ClothingItem:
         update_data = item_data.model_dump(exclude_unset=True)
-        effective_type = update_data.get("type", item.type)
+        effective_type = (update_data.get("type", item.type) or "").strip().lower()
         if "always_in_preview" in update_data and update_data["always_in_preview"] is None:
             raise HTTPException(422, "Preview setting must be true or false")
         if effective_type != "glasses":
@@ -260,11 +260,7 @@ class ItemService:
         for field, value in update_data.items():
             setattr(item, field, value)
 
-        # Retyped eyewear has no wash action to clear an old dirty flag.
-        if never_washed(item):
-            item.needs_wash = False
-            item.manually_needs_wash = False
-            item.wears_since_wash = 0
+        clear_unneeded_wash_state(item)
 
         if "tags" in update_data:
             attributes.flag_modified(item, "tags")

@@ -197,6 +197,10 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
   useEffect(() => { setActiveImageIndex(0); }, [comparisonCount]);
 
   if (!item) return null;
+  const normalizedItemType = (item.type ?? '').trim().toLowerCase();
+  const normalizedEditType = editForm.type.trim().toLowerCase();
+  const isGlasses = normalizedItemType === 'glasses';
+  const editIsGlasses = normalizedEditType === 'glasses';
   const defaultWashInterval = preferences?.wash_intervals?.[editForm.type]
     ?? preferences?.wash_interval_defaults?.[editForm.type]
     ?? item.effective_wash_interval;
@@ -214,7 +218,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           primary_color: editForm.primary_color || undefined,
           notes: editForm.notes || undefined,
           favorite: editForm.favorite,
-          always_in_preview: editForm.type === 'glasses' && editForm.always_in_preview,
+          always_in_preview: editIsGlasses && editForm.always_in_preview,
           // A blank interval must reach the server as null to remove the override.
           wash_interval: editForm.wash_interval,
         },
@@ -350,7 +354,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
   }));
 
   const colorInfo = clothingColors.find((c) => c.value === item.primary_color);
-  const typeInfo = clothingTypes.find((type) => type.value === item.type);
+  const typeInfo = clothingTypes.find((type) => type.value === normalizedItemType);
   const unrecognizedType = item.type === 'unknown' ? item.ai_unrecognized_type : null;
   const subtypeSuggestions = CLOTHING_SUBTYPES[editForm.type] ?? [];
 
@@ -395,7 +399,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     }`}
                   />
                 </Button>
-                {item.type !== 'glasses' && ITEM_ROLE[(item.type ?? '').trim().toLowerCase()] !== 'underwear' && (
+                {!isGlasses && ITEM_ROLE[normalizedItemType] !== 'underwear' && (
                   <>
                     <Button
                       variant="ghost"
@@ -712,7 +716,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       </p>
                     )}
                     <Select
-                      value={editForm.type}
+                      value={normalizedEditType}
                       onValueChange={(v) => setEditForm({ ...editForm, type: v })}
                     >
                       <SelectTrigger>
@@ -790,7 +794,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       rows={3}
                     />
                   </div>
-                  {editForm.type === 'glasses' ? (
+                  {editIsGlasses ? (
                     <div className="flex items-center justify-between gap-2">
                       <Label htmlFor="always-in-preview">{t('alwaysInPreview')}</Label>
                       <Switch
@@ -892,7 +896,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                   </div>
 
                   {/* Wash Status */}
-                  {item.type !== 'glasses' && <div className="space-y-2 pt-2 border-t">
+                  {!isGlasses && <div className="space-y-2 pt-2 border-t">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Droplets className={`h-4 w-4 ${item.needs_wash ? 'text-amber-500' : 'text-muted-foreground'}`} />

@@ -49,8 +49,9 @@ it('offers glasses in the shared type picker and every locale', () => {
   }
 });
 
-it('saves the glasses preview switch and reloads its saved state', async () => {
-  openItem(baseItem);
+it.each(['glasses', ' Glasses '])('saves the %s preview switch and reloads its saved state', async (itemType) => {
+  openItem({ ...baseItem, type: itemType });
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   expect(screen.queryByText(/0 \/ 999/)).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Put in wash' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Edit item' }));
@@ -61,7 +62,7 @@ it('saves the glasses preview switch and reloads its saved state', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/items/glasses-item', expect.objectContaining({ always_in_preview: true })));
   cleanup();
-  openItem({ ...baseItem, always_in_preview: true });
+  openItem({ ...baseItem, type: itemType, always_in_preview: true });
   fireEvent.click(screen.getByRole('button', { name: 'Edit item' }));
   expect(screen.getByRole('switch', { name: 'Always wear in previews' })).toBeChecked();
   fireEvent.click(screen.getByRole('switch', { name: 'Always wear in previews' }));

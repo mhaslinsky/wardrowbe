@@ -11,7 +11,7 @@ from sqlalchemy import delete, select, text
 
 from app.models import ClothingItem, OutfitItem, User
 from app.models.considering import ItemPurchase
-from app.models.item import WashHistory
+from app.models.item import ItemStatus, WashHistory
 from app.models.preference import UserPreference
 from app.models.preview import OutfitPreview
 from app.schemas.item import ItemUpdate
@@ -25,6 +25,7 @@ from app.services.wear_service import WearService
 from app.utils.garment_vocabulary import ITEM_ROLE, NEAR_FACE_TYPES, render_outfit_prompt
 from app.utils.prompts import load_prompt
 from app.utils.washing import wash_interval
+from app.workers.tagging import tag_item_image
 from tests.migration_helpers import migration_downgrade
 from tests.test_ha_actions import LAUNDRY_DONE, TOKEN, _ha_settings
 from tests.test_image_undo_replace import _jpeg_bytes, _make_item
@@ -40,6 +41,8 @@ from tests.test_outfit_preview import layer_transport as layer_transport
 from tests.test_outfit_preview import preview_setup as preview_setup
 from tests.test_preview_tryon import KOLORS
 from tests.test_preview_tryon import fal_http as fal_http
+from tests.test_tags_merge import _ai_tags, _StubAI
+from tests.test_tags_merge import stub_ai as stub_ai
 from tests.test_wear_service import source
 
 BASE_REQUEST = Path(__file__).parent / "fixtures" / "glasses-preview-base.json"
@@ -425,6 +428,72 @@ async def test_retyping_dirty_accessory_clears_wash_state(
     await db_session.refresh(item)
     assert (item.needs_wash, item.manually_needs_wash, item.wears_since_wash) == (False, False, 0)
     assert item.last_washed_at == date(2026, 1, 1)
+
+
+@pytest.mark.parametrize(
+    "initial_type,detected_type,expected_type,expected_wash",
+    [
+        ("unknown", "glasses", "glasses", (False, False, 0)),
+        ("unknown", "shirt", "shirt", (True, True, 7)),
+        ("shirt", "glasses", "shirt", (True, True, 7)),
+    ],
+)
+async def test_tagging_clears_wash_state_for_glasses(
+    db_session, test_user, stub_ai, initial_type, detected_type, expected_type, expected_wash
+):
+    item = await _make_item(db_session, test_user)
+    item.type, item.status = initial_type, ItemStatus.processing
+    item.needs_wash, item.manually_needs_wash, item.wears_since_wash = True, True, 7
+    item.last_washed_at = date(2026, 1, 1)
+    await db_session.commit()
+    stub_ai(_ai_tags(type=detected_type))
+    photo = ImageService().get_image_path(item.image_path)
+    with (
+        patch("app.workers.tagging.get_db_session", return_value=db_session),
+        patch.object(db_session, "close", AsyncMock()),
+        patch.object(
+            _StubAI, "analyze_image", autospec=True, side_effect=_StubAI.analyze_image
+        ) as analyze,
+    ):
+        result = await tag_item_image({}, str(item.id), str(photo))
+        analyze.assert_awaited_once()
+        assert analyze.call_args.args[1] == photo
+    assert result["status"] == "success"
+    await db_session.refresh(item)
+    assert item.type == expected_type
+    assert (item.needs_wash, item.manually_needs_wash, item.wears_since_wash) == expected_wash
+    assert item.last_washed_at == date(2026, 1, 1)
+
+
+@pytest.mark.parametrize("writer", ["type_only", "type_and_switch", "legacy"])
+async def test_variant_glasses_type_keeps_switch_and_reaches_preview(
+    client, auth_headers, db_session, test_user, preview_setup, layer_transport, writer
+):
+    item = await glasses_item(db_session, test_user)
+    if writer == "legacy":
+        item.type = " Glasses "
+        await db_session.commit()
+    else:
+        response = await client.patch(
+            f"/api/v1/items/{item.id}",
+            headers=auth_headers,
+            json={
+                "type": " Glasses ",
+                **({"always_in_preview": True} if writer == "type_and_switch" else {}),
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["always_in_preview"] is True
+        enabled = await client.patch(
+            f"/api/v1/items/{item.id}", headers=auth_headers, json={"always_in_preview": True}
+        )
+        assert enabled.status_code == 200, enabled.text
+    await upload(client, auth_headers)
+    await PreviewService(db_session).generate(preview_setup["outfit"], test_user.id, False)
+    prompt = request_prompt(layer_transport.requests[0])
+    assert "glasses" in block(prompt, "present_slots")
+    assert block(prompt, "garment_data")[-1]["type"] == "glasses"
+    assert len(request_images(layer_transport.requests[0])) == 4
 
 
 @pytest.mark.parametrize("endpoint", ["suggestion", "pairing"])
