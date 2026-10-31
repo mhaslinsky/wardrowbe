@@ -13,7 +13,7 @@ from fastapi import HTTPException
 
 from app.services import ai_telemetry_service
 from app.services.ai_telemetry_service import CallContext
-from app.services.image_service import ImageService
+from app.services.image_service import ImageService, ImageTooLargeError
 from app.services.public_download import download_public
 
 logger = logging.getLogger(__name__)
@@ -159,6 +159,8 @@ class TryOnService:
                     response.raise_for_status()
                     queued = response.json()
                     cancel_url = queued.get("cancel_url")
+                    if cancel_url is not None:
+                        queue_url(cancel_url)
                     status_url = queue_url(queued["status_url"])
                     result_url = queue_url(queued["response_url"])
                     while True:
@@ -167,7 +169,14 @@ class TryOnService:
                         )
                         http_status = response.status_code
                         response.raise_for_status()
-                        status = response.json()["status"]
+                        status_payload = response.json()
+                        if "cancel_url" in status_payload:
+                            cancel_url = status_payload["cancel_url"]
+                            queue_url(cancel_url)
+                        for name in ("status_url", "response_url"):
+                            if name in status_payload:
+                                queue_url(status_payload[name])
+                        status = status_payload["status"]
                         if status == "COMPLETED":
                             break
                         if status not in {"IN_QUEUE", "IN_PROGRESS"}:
@@ -189,6 +198,8 @@ class TryOnService:
             reason = "network_error"
         except TryOnError as error:
             reason = error.reason
+        except ImageTooLargeError:
+            reason = "image_too_large"
         except (
             ValueError,
             KeyError,
@@ -206,12 +217,7 @@ class TryOnService:
             raise
         finally:
             try:
-                if cancel_url and reason in {
-                    "timeout",
-                    "cancelled",
-                    "malformed_result",
-                    "image_too_large",
-                }:
+                if cancel_url and reason:
                     await self._cancel(cancel_url)
             finally:
                 try:

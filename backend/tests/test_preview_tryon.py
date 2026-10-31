@@ -68,6 +68,8 @@ def fal_http(monkeypatch, layer_transport):
         submit_seconds=0,
         poll_seconds=0,
         polls=0,
+        rewrite=None,
+        queue_urls=[],
     )
     monkeypatch.setitem(get_settings().__dict__, "fal_key", FAKE_KEY)
     monkeypatch.setattr(ai_telemetry_service, "_enqueue", state.calls.append)
@@ -81,6 +83,7 @@ def fal_http(monkeypatch, layer_transport):
         if url.startswith("/"):
             return await _client.request("POST", url, **kwargs)
         if url.startswith("https://queue.fal.run/"):
+            state.queue_urls.append(url)
             assert kwargs["headers"]["Authorization"] == "Key " + FAKE_KEY
             body = kwargs.get("json") or json.loads(kwargs["content"])
             endpoint = url.removeprefix("https://queue.fal.run/")
@@ -92,6 +95,8 @@ def fal_http(monkeypatch, layer_transport):
             queued = fal_reply(garment_type, "queue")
             state.statuses[queued["status_url"]] = garment_type
             state.results[queued["response_url"]] = garment_type
+            if state.rewrite and state.rewrite[0] == "queue":
+                queued[state.rewrite[1]] = "https://escape.example/" + state.rewrite[1]
             state.now += state.submit_seconds
             return httpx.Response(200, request=httpx.Request("POST", url), json=queued)
         body = json.loads(kwargs["content"])
@@ -105,19 +110,33 @@ def fal_http(monkeypatch, layer_transport):
     async def get(_client, url, **kwargs):
         if url.startswith("/"):
             return await _client.request("GET", url, **kwargs)
+        if httpx.URL(url).host in {"queue.fal.run", "escape.example"}:
+            state.queue_urls.append(url)
         if url in state.statuses:
             state.polls += 1
             state.now += state.poll_seconds
             if state.failure == "timeout":
                 raise httpx.ReadTimeout(FAKE_KEY, request=httpx.Request("GET", url))
+            if state.failure == "status_network_error":
+                raise httpx.ConnectError(FAKE_KEY, request=httpx.Request("GET", url))
+            if state.failure == "status_http_error":
+                return httpx.Response(500, request=httpx.Request("GET", url))
             payload = fal_reply(state.statuses[url], "queue" if state.pending else "status")
+            if state.rewrite and state.rewrite[0] == "status":
+                payload[state.rewrite[1]] = "https://escape.example/" + state.rewrite[1]
         elif url in state.results:
+            if state.failure == "result_network_error":
+                raise httpx.ConnectError(FAKE_KEY, request=httpx.Request("GET", url))
+            if state.failure == "result_http_error":
+                return httpx.Response(500, request=httpx.Request("GET", url))
             payload = fal_reply(state.results[url], "response")
             if state.failure == "malformed_result":
                 payload = {}
             elif state.failure == "non_allowlisted":
                 image = payload.get("image") or payload["images"][0]
                 image["url"] = "https://escape.example/fixture.png"
+        elif httpx.URL(url).host == "escape.example":
+            payload = fal_reply("jacket", "status" if "status" in url else "response")
         else:
             assert "authorization" not in httpx.Headers(kwargs.get("headers"))
             data = b"x" * (21 * 1024 * 1024) if state.failure == "oversized" else state.tryon
@@ -127,7 +146,7 @@ def fal_http(monkeypatch, layer_transport):
     async def put(_client, url, **kwargs):
         if url.startswith("/"):
             return await _client.request("PUT", url, **kwargs)
-        assert url.endswith("/cancel") and url.startswith("https://queue.fal.run/")
+        state.queue_urls.append(url)
         assert kwargs["headers"]["Authorization"] == "Key " + FAKE_KEY
         assert 0 < kwargs["timeout"] <= 5
         state.cancels.append(url)
@@ -479,3 +498,51 @@ async def test_public_download_redirect_policy(reject, fal_http):
             "v3b.fal.media",
             "escape.example",
         ]
+
+
+@pytest.mark.parametrize("source", ["queue", "status"])
+@pytest.mark.parametrize("field", ["status_url", "response_url", "cancel_url"])
+async def test_queue_urls_reject_other_hosts(source, field, fal_http, caplog):
+    from app.services.tryon_service import TryOnError, TryOnService
+
+    fal_http.rewrite = source, field
+    if field == "cancel_url":
+        fal_http.failure = "malformed_result"
+    context = ai_telemetry_service.CallContext(uuid4(), "preview")
+    service = TryOnService(FAKE_KEY, context)
+    with pytest.raises(TryOnError, match="malformed_result"):
+        await service.request([_jpeg_bytes(), _jpeg_bytes()], "jacket")
+    assert fal_http.queue_urls
+    assert {httpx.URL(url).host for url in fal_http.queue_urls} == {"queue.fal.run"}
+    assert not fal_http.downloads
+    if field == "cancel_url":
+        assert not fal_http.cancels
+    assert fal_http.calls[-1]["error_kind"] == "malformed_result"
+    assert FAKE_KEY not in caplog.text + repr(fal_http.calls)
+
+
+@pytest.mark.parametrize("phase", ["status", "result"])
+@pytest.mark.parametrize("reason", ["http_error", "network_error"])
+async def test_submitted_jobs_cancel_on_transport_failure(phase, reason, fal_http, caplog):
+    from app.services.tryon_service import TryOnError, TryOnService
+
+    fal_http.failure = phase + "_" + reason
+    context = ai_telemetry_service.CallContext(uuid4(), "preview")
+    service = TryOnService(FAKE_KEY, context)
+    with pytest.raises(TryOnError, match=reason):
+        await service.request([_jpeg_bytes(), _jpeg_bytes()], "jacket")
+    assert fal_http.cancels == [fal_reply("jacket", "queue")["cancel_url"]]
+    assert fal_http.calls[-1]["error_kind"] == reason
+    assert FAKE_KEY not in caplog.text + repr(fal_http.calls)
+
+
+async def test_pixel_cap_is_recorded_as_image_too_large(fal_http, monkeypatch):
+    from app.services.tryon_service import TryOnError, TryOnService
+
+    monkeypatch.setattr(get_settings(), "max_image_megapixels", 0.1)
+    context = ai_telemetry_service.CallContext(uuid4(), "preview")
+    service = TryOnService(FAKE_KEY, context)
+    with pytest.raises(TryOnError, match="image_too_large"):
+        await service.request([_jpeg_bytes(), _jpeg_bytes()], "jacket")
+    assert fal_http.calls[-1]["error_kind"] == "image_too_large"
+    assert fal_http.cancels == [fal_reply("jacket", "queue")["cancel_url"]]
