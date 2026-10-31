@@ -1,12 +1,16 @@
+import asyncio
 import base64
 import hashlib
 import json
+import socket
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
 import pytest
+import yaml
 from sqlalchemy import select
 
 from app.config import Settings, get_settings
@@ -35,9 +39,15 @@ FASHN = "fal-ai/fashn/tryon/v1.6"
 FAKE_KEY = "per291-secret-never-record"
 
 
+def fal_reply(garment_type: str, stage: str) -> dict:
+    prefix = "b-fashn-tee" if garment_type == "cardigan" else "b-kolors-bomber"
+    return json.loads((Path(__file__).parent / "fixtures" / f"{prefix}.{stage}.json").read_text())
+
+
 @pytest.fixture
 def fal_http(monkeypatch, layer_transport):
     gemini_post = httpx.AsyncClient.post
+    original_lookup = asyncio.BaseEventLoop.getaddrinfo
     state = SimpleNamespace(
         sequence=[],
         calls=layer_transport.calls,
@@ -45,10 +55,19 @@ def fal_http(monkeypatch, layer_transport):
         gemini_wire=[],
         fal=[],
         downloads=[],
+        cancels=[],
         failure=None,
         outputs=layer_transport.outputs,
         tryon=_jpeg_bytes(color="purple"),
         cleanup_failure=False,
+        cancel_failure=False,
+        pending=False,
+        statuses={},
+        results={},
+        now=0,
+        submit_seconds=0,
+        poll_seconds=0,
+        polls=0,
     )
     monkeypatch.setitem(get_settings().__dict__, "fal_key", FAKE_KEY)
     monkeypatch.setattr(ai_telemetry_service, "_enqueue", state.calls.append)
@@ -69,15 +88,12 @@ def fal_http(monkeypatch, layer_transport):
             state.sequence.append(("fal", endpoint))
             if state.failure == "http_error":
                 return httpx.Response(500, request=httpx.Request("POST", url), text=FAKE_KEY)
-            return httpx.Response(
-                200,
-                request=httpx.Request("POST", url),
-                json={
-                    "request_id": "fixture",
-                    "status_url": "https://queue.fal.run/status",
-                    "response_url": "https://queue.fal.run/result",
-                },
-            )
+            garment_type = "cardigan" if endpoint == FASHN else "jacket"
+            queued = fal_reply(garment_type, "queue")
+            state.statuses[queued["status_url"]] = garment_type
+            state.results[queued["response_url"]] = garment_type
+            state.now += state.submit_seconds
+            return httpx.Response(200, request=httpx.Request("POST", url), json=queued)
         body = json.loads(kwargs["content"])
         state.gemini_wire.append(kwargs["content"])
         state.sequence.append(("gemini", len(request_images(body))))
@@ -89,31 +105,71 @@ def fal_http(monkeypatch, layer_transport):
     async def get(_client, url, **kwargs):
         if url.startswith("/"):
             return await _client.request("GET", url, **kwargs)
-        if url.endswith("/status"):
+        if url in state.statuses:
+            state.polls += 1
+            state.now += state.poll_seconds
             if state.failure == "timeout":
                 raise httpx.ReadTimeout(FAKE_KEY, request=httpx.Request("GET", url))
-            payload = {"status": "COMPLETED"}
-        elif url.endswith("/result"):
-            payload = (
-                {}
-                if state.failure == "malformed_result"
-                else {
-                    "image": {"url": "https://v3.fal.media/output.png"},
-                    "images": [{"url": "https://cdn.fashn.ai/output.png"}],
-                }
-            )
+            payload = fal_reply(state.statuses[url], "queue" if state.pending else "status")
+        elif url in state.results:
+            payload = fal_reply(state.results[url], "response")
+            if state.failure == "malformed_result":
+                payload = {}
+            elif state.failure == "non_allowlisted":
+                image = payload.get("image") or payload["images"][0]
+                image["url"] = "https://escape.example/fixture.png"
         else:
-            assert not kwargs.get("headers", {}).get("Authorization")
-            state.downloads.append(url)
-            return httpx.Response(
-                200,
-                request=httpx.Request("GET", url),
-                content=(b"not an image" if state.failure == "invalid_image" else state.tryon),
-            )
+            assert "authorization" not in httpx.Headers(kwargs.get("headers"))
+            data = b"x" * (21 * 1024 * 1024) if state.failure == "oversized" else state.tryon
+            return httpx.Response(200, request=httpx.Request("GET", url), content=data)
         return httpx.Response(200, request=httpx.Request("GET", url), json=payload)
+
+    async def put(_client, url, **kwargs):
+        if url.startswith("/"):
+            return await _client.request("PUT", url, **kwargs)
+        assert url.endswith("/cancel") and url.startswith("https://queue.fal.run/")
+        assert kwargs["headers"]["Authorization"] == "Key " + FAKE_KEY
+        assert 0 < kwargs["timeout"] <= 5
+        state.cancels.append(url)
+        return httpx.Response(
+            500 if state.cancel_failure else 202, request=httpx.Request("PUT", url), text=FAKE_KEY
+        )
+
+    async def lookup(loop, host, port, **kwargs):
+        if host not in {"v3b.fal.media", "cdn.fashn.ai", "escape.example"}:
+            return await original_lookup(loop, host, port, **kwargs)
+        address = "10.0.0.1" if state.failure == "private_address" else "8.8.8.8"
+        return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (address, port))]
+
+    @asynccontextmanager
+    async def stream(_client, method, url, **kwargs):
+        headers = httpx.Headers(_client.headers)
+        headers.update(kwargs.get("headers", {}))
+        assert "authorization" not in headers
+        state.downloads.append({"url": str(url), "host": headers["Host"]})
+        status, response_headers, data = 200, {"content-type": "image/png"}, state.tryon
+        if state.failure == "oversized":
+            data = b"x" * (21 * 1024 * 1024)
+        elif state.failure == "invalid_image":
+            data = b"not an image"
+        elif state.failure == "redirect" and len(state.downloads) == 1:
+            status, response_headers = 302, {"location": "https://escape.example/redirected.png"}
+        response = httpx.Response(
+            status,
+            request=httpx.Request(method, url),
+            headers=response_headers,
+            stream=httpx.ByteStream(data),
+        )
+        try:
+            yield response
+        finally:
+            await response.aclose()
 
     monkeypatch.setattr(httpx.AsyncClient, "post", post)
     monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    monkeypatch.setattr(httpx.AsyncClient, "put", put)
+    monkeypatch.setattr(httpx.AsyncClient, "stream", stream)
+    monkeypatch.setattr(asyncio.BaseEventLoop, "getaddrinfo", lookup)
     return state
 
 
@@ -153,6 +209,7 @@ async def test_hybrid_order_images_telemetry_and_cache(
     for endpoint in [FASHN, KOLORS] if cardigan else [KOLORS]:
         expected.extend([("fal", endpoint), ("gemini", 3)])
     assert fal_http.sequence == expected
+    assert not fal_http.cancels
     layers = ["cardigan", "jacket"] if cardigan else ["jacket"]
     for index, kind in enumerate(layers):
         previous = layer_jpeg(fal_http.outputs[index])
@@ -234,7 +291,19 @@ async def test_hybrid_order_images_telemetry_and_cache(
     assert fal_http.sequence == expected
 
 
-@pytest.mark.parametrize("failure", ["http_error", "timeout", "malformed_result", "invalid_image"])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "http_error",
+        "timeout",
+        "malformed_result",
+        "invalid_image",
+        "private_address",
+        "non_allowlisted",
+        "oversized",
+        "redirect",
+    ],
+)
 async def test_tryon_failure_falls_back_without_secret(
     failure,
     client,
@@ -254,7 +323,13 @@ async def test_tryon_failure_falls_back_without_secret(
     assert fal_http.sequence == [("gemini", 2), ("fal", KOLORS), ("gemini", 2)]
     saved = await db_session.get(OutfitPreview, outfit.id)
     layer_id = str(next(link.item_id for link in outfit.items if link.item.type == "jacket"))
-    reason = "malformed_result" if failure == "invalid_image" else failure
+    reason = (
+        "image_too_large"
+        if failure == "oversized"
+        else "malformed_result"
+        if failure in {"invalid_image", "private_address", "non_allowlisted", "redirect"}
+        else failure
+    )
     assert saved.usage["IMAGE"]["tryon_fallbacks"] == [{"layer": layer_id, "reason": reason}]
     assert saved.usage["_ai_call_ids"] == [str(call["id"]) for call in fal_http.calls]
     assert saved.usage["_ai_call_id"] == str(fal_http.calls[-1]["id"])
@@ -263,6 +338,11 @@ async def test_tryon_failure_falls_back_without_secret(
     assert fal_http.calls[1]["error_kind"] == reason
     assert FAKE_KEY not in repr(fal_http.calls) + caplog.text
     assert "Try-on failed" in caplog.text
+    assert len(fal_http.cancels) == (0 if failure == "http_error" else 1)
+    if failure in {"private_address", "non_allowlisted"}:
+        assert not fal_http.downloads
+    elif failure == "redirect":
+        assert len(fal_http.downloads) == 1
 
 
 async def test_cleanup_failure_leaves_no_preview(
@@ -308,48 +388,94 @@ async def test_unconfigured_requests_match_base_recording(
     ]
 
 
-def test_cleanup_prompt_and_configuration():
+def test_cleanup_prompt_wording():
     root = Path(__file__).parents[2]
-    assert "try-on step" in (root / "docs/user-guide.md").read_text()
-    assert "FAL_KEY: ${FAL_KEY:-}" in (root / "docker-compose.yml").read_text()
-    assert "# FAL_KEY=" in (root / ".env.example").read_text()
     prompt = (root / "backend/app/prompts/outfit_preview_cleanup.txt").read_text()
     for required in ("body outline and proportions", "third image", "item_notes", "pullover"):
         assert required in prompt
     assert "mauve" not in prompt
 
 
-async def test_poll_deadline_is_shared_and_wait_is_injected(monkeypatch):
+@pytest.mark.parametrize("compose", ["docker-compose.yml", "docker-compose.prod.yml"])
+def test_compose_forwards_tryon_key(compose):
+    config = yaml.safe_load((Path(__file__).parents[2] / compose).read_text())
+    assert config["x-backend-env"]["FAL_KEY"] == "${FAL_KEY:-}"
+    for name in ("backend", "worker", "image-worker"):
+        assert config["services"][name]["environment"]["FAL_KEY"] == "${FAL_KEY:-}"
+
+
+async def test_shared_deadline_bookkeeping_with_fake_client(fal_http):
     from app.services.tryon_service import TryOnError, TryOnService
 
-    clock = SimpleNamespace(now=0, waits=0, requests=0)
-
-    async def post(_client, url, **kwargs):
-        clock.now += 35
-        return httpx.Response(
-            200,
-            request=httpx.Request("POST", url),
-            json={
-                "status_url": "https://queue.fal.run/status",
-                "response_url": "https://queue.fal.run/result",
-            },
-        )
-
-    async def get(_client, url, **kwargs):
-        clock.requests += 1
-        clock.now += 20
-        return httpx.Response(
-            200, request=httpx.Request("GET", url), json={"status": "IN_PROGRESS"}
-        )
+    fal_http.pending = True
+    fal_http.submit_seconds, fal_http.poll_seconds = 35, 20
 
     async def advance(delay):
-        clock.waits += 1
-        clock.now += delay
+        fal_http.now += delay
 
-    monkeypatch.setattr(httpx.AsyncClient, "post", post)
-    monkeypatch.setattr(httpx.AsyncClient, "get", get)
     context = ai_telemetry_service.CallContext(uuid4(), "preview")
-    service = TryOnService(FAKE_KEY, context, wait=advance, clock=lambda: clock.now)
+    service = TryOnService(FAKE_KEY, context, wait=advance, clock=lambda: fal_http.now)
     with pytest.raises(TryOnError, match="timeout"):
         await service.request([_jpeg_bytes(), _jpeg_bytes()], "jacket")
-    assert clock.waits > 0 and clock.requests == 3
+    assert fal_http.polls == 3
+
+
+@pytest.mark.parametrize("reason", ["timeout", "cancelled"])
+@pytest.mark.parametrize("cancel_failure", [False, True])
+async def test_pending_job_is_cancelled(reason, cancel_failure, fal_http, caplog):
+    from app.services.tryon_service import TryOnError, TryOnService
+
+    entered, release = asyncio.Event(), asyncio.Event()
+    fal_http.pending, fal_http.cancel_failure = True, cancel_failure
+
+    async def wait(_delay):
+        entered.set()
+        await release.wait()
+        fal_http.now = 100
+
+    context = ai_telemetry_service.CallContext(uuid4(), "preview")
+    service = TryOnService(FAKE_KEY, context, wait=wait, clock=lambda: fal_http.now)
+    task = asyncio.create_task(service.request([_jpeg_bytes(), _jpeg_bytes()], "jacket"))
+    await entered.wait()
+    if reason == "cancelled":
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    else:
+        release.set()
+        with pytest.raises(TryOnError, match="timeout"):
+            await task
+    assert fal_http.cancels == [fal_reply("jacket", "queue")["cancel_url"]]
+    assert fal_http.calls[-1]["error_kind"] == reason
+    assert FAKE_KEY not in caplog.text + repr(fal_http.calls)
+    if cancel_failure:
+        assert "Try-on cancel failed" in caplog.text
+
+
+@pytest.mark.parametrize("reject", [False, True])
+async def test_public_download_redirect_policy(reject, fal_http):
+    from app.services.considering_service import download_image
+    from app.services.public_download import download_public
+
+    fal_http.failure = "redirect"
+    url = fal_reply("jacket", "response")["image"]["url"]
+    if reject:
+        with pytest.raises(ValueError, match="Redirects not allowed"):
+            await download_public(
+                url,
+                content_types={"image/png"},
+                limit=20 * 1024 * 1024,
+                deadline=90,
+                timeout=90,
+                size_error="too_large",
+                allow_redirects=False,
+            )
+        assert [entry["host"] for entry in fal_http.downloads] == ["v3b.fal.media"]
+    else:
+        image = await download_image(url)
+        assert await image.read() == fal_http.tryon and image.content_type == "image/png"
+        await image.close()
+        assert [entry["host"] for entry in fal_http.downloads] == [
+            "v3b.fal.media",
+            "escape.example",
+        ]

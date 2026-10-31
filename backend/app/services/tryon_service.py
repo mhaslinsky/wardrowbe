@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import logging
 from datetime import UTC, datetime
 from time import monotonic
 from urllib.parse import urlsplit
@@ -13,13 +14,17 @@ from fastapi import HTTPException
 from app.services import ai_telemetry_service
 from app.services.ai_telemetry_service import CallContext
 from app.services.image_service import ImageService
+from app.services.public_download import download_public
 
+logger = logging.getLogger(__name__)
 QUEUE_URL = "https://queue.fal.run"
 KOLORS_ENDPOINT = "fal-ai/kling/v1-5/kolors-virtual-try-on"
 FASHN_ENDPOINT = "fal-ai/fashn/tryon/v1.6"
 TRYON_ENDPOINTS = {"cardigan": FASHN_ENDPOINT}
 TRYON_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
+TRYON_IMAGE_MAX_BYTES = 20 * 1024 * 1024
+CANCEL_TIMEOUT = 3.0
 
 
 class TryOnError(ValueError):
@@ -51,6 +56,48 @@ class TryOnService:
         self.telemetry = telemetry
         self.wait = wait
         self.clock = clock
+
+    async def _download(self, url: str, deadline: float) -> bytes:
+        parsed = urlsplit(url)
+        host = parsed.hostname or ""
+        if (
+            parsed.scheme != "https"
+            or not (host.endswith(".fal.media") or host == "cdn.fashn.ai")
+            or parsed.username
+            or parsed.password
+            or self._key in url
+        ):
+            raise ValueError("Invalid image URL")
+        try:
+            data, _, _ = await download_public(
+                url,
+                content_types={"image/png", "image/jpeg", "image/webp"},
+                limit=TRYON_IMAGE_MAX_BYTES,
+                deadline=deadline,
+                timeout=deadline,
+                size_error="TRYON_IMAGE_TOO_LARGE",
+                allow_redirects=False,
+            )
+        except HTTPException as error:
+            if error.status_code == 413:
+                raise TryOnError("image_too_large") from None
+            raise
+        await asyncio.to_thread(validate_image, data)
+        return data
+
+    async def _cancel(self, url: str) -> None:
+        try:
+            target = queue_url(url)
+            async with asyncio.timeout(CANCEL_TIMEOUT):
+                async with httpx.AsyncClient(timeout=CANCEL_TIMEOUT) as client:
+                    response = await client.put(
+                        target,
+                        headers={"Authorization": "Key " + self._key},
+                        timeout=CANCEL_TIMEOUT,
+                    )
+                    response.raise_for_status()
+        except Exception as error:
+            logger.warning("Try-on cancel failed: %s", type(error).__name__)
 
     async def request(self, images: list[bytes], garment_type: str) -> bytes:
         endpoint = TRYON_ENDPOINTS.get(garment_type, KOLORS_ENDPOINT)
@@ -93,6 +140,7 @@ class TryOnService:
         started = self.clock()
         deadline = started + TRYON_TIMEOUT
         reason, output, http_status = None, None, None
+        cancel_url = None
 
         def remaining():
             seconds = deadline - self.clock()
@@ -110,6 +158,7 @@ class TryOnService:
                     http_status = response.status_code
                     response.raise_for_status()
                     queued = response.json()
+                    cancel_url = queued.get("cancel_url")
                     status_url = queue_url(queued["status_url"])
                     result_url = queue_url(queued["response_url"])
                     while True:
@@ -129,28 +178,17 @@ class TryOnService:
                     response.raise_for_status()
                     payload = response.json()
                     image = payload["images"][0] if endpoint == FASHN_ENDPOINT else payload["image"]
-                    image_url = image["url"]
-                    parsed = urlsplit(image_url)
-                    if (
-                        parsed.scheme != "https"
-                        or not parsed.hostname
-                        or parsed.username
-                        or parsed.password
-                        or self._key in image_url
-                    ):
-                        raise ValueError("Invalid image URL")
-                    response = await client.get(image_url, timeout=remaining())
-                    http_status = response.status_code
-                    response.raise_for_status()
-                    output = response.content
-                    await asyncio.to_thread(validate_image, output)
+                    output = await self._download(image["url"], remaining())
                     remaining()
         except (TimeoutError, httpx.TimeoutException):
             reason = "timeout"
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as error:
             reason = "http_error"
+            http_status = error.response.status_code
         except httpx.RequestError:
             reason = "network_error"
+        except TryOnError as error:
+            reason = error.reason
         except (
             ValueError,
             KeyError,
@@ -168,26 +206,35 @@ class TryOnService:
             raise
         finally:
             try:
-                ai_telemetry_service._enqueue(
-                    {
-                        **record,
-                        "latency_ms": (self.clock() - started) * 1000,
-                        "outcome": "error" if reason else "success",
-                        "error_kind": reason,
-                        "http_status": http_status,
-                        "answer": {
-                            "structured": [],
-                            "text": [],
-                            "images": (
-                                [ai_telemetry_service._fingerprint(output)]
-                                if output and not reason
-                                else []
-                            ),
-                        },
-                    }
-                )
-            except Exception:
-                ai_telemetry_service._failed("serialization")
+                if cancel_url and reason in {
+                    "timeout",
+                    "cancelled",
+                    "malformed_result",
+                    "image_too_large",
+                }:
+                    await self._cancel(cancel_url)
+            finally:
+                try:
+                    ai_telemetry_service._enqueue(
+                        {
+                            **record,
+                            "latency_ms": (self.clock() - started) * 1000,
+                            "outcome": "error" if reason else "success",
+                            "error_kind": reason,
+                            "http_status": http_status,
+                            "answer": {
+                                "structured": [],
+                                "text": [],
+                                "images": (
+                                    [ai_telemetry_service._fingerprint(output)]
+                                    if output and not reason
+                                    else []
+                                ),
+                            },
+                        }
+                    )
+                except Exception:
+                    ai_telemetry_service._failed("serialization")
         if reason:
             raise TryOnError(reason)
         return output

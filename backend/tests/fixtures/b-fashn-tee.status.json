@@ -1,0 +1,11 @@
+{
+  "status": "COMPLETED",
+  "request_id": "00000000-0000-4000-8000-000000000292",
+  "response_url": "https://queue.fal.run/fal-ai/fashn/requests/00000000-0000-4000-8000-000000000292",
+  "status_url": "https://queue.fal.run/fal-ai/fashn/requests/00000000-0000-4000-8000-000000000292/status",
+  "cancel_url": "https://queue.fal.run/fal-ai/fashn/requests/00000000-0000-4000-8000-000000000292/cancel",
+  "logs": null,
+  "metrics": {
+    "inference_time": 16.73099994659424
+  }
+}
