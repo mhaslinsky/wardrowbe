@@ -190,6 +190,8 @@ Open an outfit and select **See it on me**. Preview generation requires referenc
 
 Layered outfits are drawn in stages: the base outfit first, then up to two outer layers from the inside out. Each layer edit requires another image-generation call. If the connection times out, the preview keeps checking for the finished image.
 
+When configured, layered outfits use a try-on step for fit before the image model refines each garment's details.
+
 When the outfit has a real photo and an AI preview, select **Compare with my photo** and confirm the paid call. The visible differences fill **What should change?**. Edit the note, then select **Redraw**. Comparison never runs automatically. The photo-informed flag belongs to each feedback entry; a later comment on the same AI call does not carry it.
 
 Use **Comment** and the **Comments** field to say what worked and what did not, then press **Save**. The comment appears below the preview controls. Clear the field and save to remove it. Use **Redraw** and **What should change?** to request a correction, such as a longer hem or a different shade. If the interface says **Preview is out of date**, your clothes, photos, measurements, or preferences have changed since it was made. Generate a current preview before judging the result.

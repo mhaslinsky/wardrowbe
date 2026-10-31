@@ -13,6 +13,7 @@ from PIL import ImageOps
 from sqlalchemy import select, text, update
 from sqlalchemy.orm import selectinload, undefer
 
+from app.config import get_settings
 from app.models.outfit import Outfit, OutfitItem
 from app.models.preference import UserPreference
 from app.models.preview import OutfitPreview, PreviewFeedback, PreviewPhoto, delete_preview_files
@@ -26,6 +27,7 @@ from app.services.photo_redraw_service import (
     response_parts,
 )
 from app.services.preview_face import face_reference, reference_hash
+from app.services.tryon_service import TryOnError, TryOnService
 from app.utils.garment_vocabulary import CAN_BE_MID_LAYER_TYPES, ITEM_ROLE
 from app.utils.photo_urls import image_url
 from app.utils.prompts import load_prompt
@@ -205,8 +207,8 @@ def split_preview_layers(images, records, positions):
     return [image for image, _ in base], [garment for _, garment in base], layers
 
 
-def layer_prompt(garment, item, measurements, style_notes, note, preferences):
-    prompt = load_prompt("outfit_preview_layer")
+def layer_prompt(garment, item, measurements, style_notes, note, preferences, *, cleanup=False):
+    prompt = load_prompt("outfit_preview_cleanup" if cleanup else "outfit_preview_layer")
     blocks = {
         "garment_data": {
             field: garment[field]
@@ -700,9 +702,37 @@ class PreviewService:
                 )
             )
             usage, call_ids = {}, []
+            fal_key = (get_settings().fal_key or "").strip()
+            tryon = (
+                TryOnService(
+                    fal_key,
+                    CallContext(user_id, provider.telemetry.feature, "outfit", outfit_id),
+                )
+                if fal_key and layers
+                else None
+            )
             output = await request_preview_image(provider, images, prompt, usage, call_ids)
             for garment_image, garment in layers:
                 previous = await asyncio.to_thread(layer_jpeg, output)
+                layer_images = [previous, garment_image]
+                cleanup = False
+                if tryon is not None:
+                    try:
+                        fitted = await tryon.request(layer_images, garment["type"])
+                        layer_images = [
+                            await asyncio.to_thread(layer_jpeg, fitted),
+                            garment_image,
+                            previous,
+                        ]
+                        cleanup = True
+                    except TryOnError as error:
+                        usage.setdefault("tryon_fallbacks", []).append(
+                            {"layer": garment["id"], "reason": error.reason}
+                        )
+                        logger.warning("Try-on failed: %s; using layer edit", error.reason)
+                    finally:
+                        if tryon.telemetry.last_call_id:
+                            call_ids.append(str(tryon.telemetry.last_call_id))
                 prompt = layer_prompt(
                     garment,
                     layer_items[garment["id"]],
@@ -710,9 +740,10 @@ class PreviewService:
                     outfit.style_notes,
                     note,
                     preferences,
+                    cleanup=cleanup,
                 )
                 output = await request_preview_image(
-                    provider, [previous, garment_image], prompt, usage, call_ids
+                    provider, layer_images, prompt, usage, call_ids
                 )
             pending_store = asyncio.create_task(
                 asyncio.to_thread(store_photo, user_id, output, "preview.png")

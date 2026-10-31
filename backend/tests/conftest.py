@@ -10,6 +10,7 @@ os.environ["STORAGE_PATH"] = "/tmp/wardrobe_test"
 os.environ.pop("OIDC_ISSUER_URL", None)
 os.environ.pop("OIDC_CLIENT_ID", None)
 os.environ.pop("OIDC_CLIENT_SECRET", None)
+os.environ.pop("FAL_KEY", None)
 
 from collections.abc import AsyncGenerator
 from types import SimpleNamespace
@@ -32,6 +33,9 @@ from app.main import app
 from app.models import User, UserIdentity, UserPreference
 from app.services.weather_service import WeatherService
 from tests.identity_helpers import add_users_with_identities
+
+# Imports before conftest can populate the settings cache.
+get_settings().fal_key = None
 
 # Test database URL from environment — set in docker-compose.dev.yml, never falls back to DATABASE_URL.
 TEST_DATABASE_URL = os.environ["TEST_DATABASE_URL"]
@@ -122,6 +126,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 def _disable_ai_recording(monkeypatch):
     from app.services import ai_telemetry_service
 
+    monkeypatch.setattr(get_settings(), "fal_key", None)
     monkeypatch.setattr(ai_telemetry_service, "_enqueue", lambda record: None)
 
 

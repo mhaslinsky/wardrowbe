@@ -1,0 +1,12 @@
+{
+  "status": "IN_QUEUE",
+  "request_id": "00000000-0000-4000-8000-000000000292",
+  "response_url": "https://queue.fal.run/fal-ai/fashn/requests/00000000-0000-4000-8000-000000000292",
+  "status_url": "https://queue.fal.run/fal-ai/fashn/requests/00000000-0000-4000-8000-000000000292/status",
+  "cancel_url": "https://queue.fal.run/fal-ai/fashn/requests/00000000-0000-4000-8000-000000000292/cancel",
+  "logs": null,
+  "metrics": {},
+  "queue_position": 0,
+  "user_queue_position": 0,
+  "user_queued_count": 1
+}

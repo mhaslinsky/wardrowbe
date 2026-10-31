@@ -14,6 +14,7 @@ async def download_public(
     deadline: float,
     timeout: float,
     size_error: str,
+    allow_redirects: bool = True,
 ) -> tuple[bytes, str, str]:
     async with asyncio.timeout(deadline):
         parsed = httpx.URL(url)
@@ -41,6 +42,8 @@ async def download_public(
                     extensions={"sni_hostname": parsed.host},
                 ) as response:
                     if response.is_redirect:
+                        if not allow_redirects:
+                            raise ValueError("Redirects not allowed")
                         parsed = parsed.join(response.headers["location"])
                         continue
                     response.raise_for_status()
