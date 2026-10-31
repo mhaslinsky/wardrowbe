@@ -18,6 +18,7 @@ from app.models.outfit import (
     UserFeedback,
 )
 from app.models.user import User
+from app.utils.washing import never_washed
 
 
 @dataclass
@@ -216,7 +217,11 @@ class OutfitService:
 
         if filters.ready_to_wear:
             clauses.append(
-                ~Outfit.items.any(OutfitItem.item.has(ClothingItem.needs_wash.is_(True)))
+                ~Outfit.items.any(
+                    OutfitItem.item.has(
+                        ClothingItem.needs_wash.is_(True) & ~never_washed(ClothingItem)
+                    )
+                )
             )
 
         if filters.family_member_view:

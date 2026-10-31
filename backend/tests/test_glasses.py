@@ -2,7 +2,6 @@ import json
 import shutil
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -10,16 +9,17 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, select, text
 
-from app.config import get_settings
 from app.models import ClothingItem, OutfitItem, User
 from app.models.considering import ItemPurchase
 from app.models.item import WashHistory
+from app.models.preference import UserPreference
 from app.models.preview import OutfitPreview
+from app.schemas.item import ItemUpdate
 from app.services.image_service import ImageService
-from app.services.item_scorer import score_items
-from app.services.preview_service import PreviewService, layer_prompt
+from app.services.item_scorer import MIN_CANDIDATES_PER_ESSENTIAL_ROLE, TOP_N, score_items
+from app.services.item_service import ItemService
+from app.services.preview_service import PreviewService
 from app.services.recommendation_service import RecommendationService
-from app.services.tryon_service import TryOnError, TryOnService
 from app.services.undo_wear_service import UndoWearService
 from app.services.wear_service import WearService
 from app.utils.garment_vocabulary import ITEM_ROLE, NEAR_FACE_TYPES, render_outfit_prompt
@@ -28,6 +28,7 @@ from app.utils.washing import wash_interval
 from tests.migration_helpers import migration_downgrade
 from tests.test_ha_actions import LAUNDRY_DONE, TOKEN, _ha_settings
 from tests.test_image_undo_replace import _jpeg_bytes, _make_item
+from tests.test_item_scorer import _item as scoring_item
 from tests.test_item_scorer import _weather
 from tests.test_outfit_preview import (
     configure_layers,
@@ -37,6 +38,8 @@ from tests.test_outfit_preview import (
 )
 from tests.test_outfit_preview import layer_transport as layer_transport
 from tests.test_outfit_preview import preview_setup as preview_setup
+from tests.test_preview_tryon import KOLORS
+from tests.test_preview_tryon import fal_http as fal_http
 from tests.test_wear_service import source
 
 BASE_REQUEST = Path(__file__).parent / "fixtures" / "glasses-preview-base.json"
@@ -211,19 +214,43 @@ async def test_switch_api_default_update_reset_and_null(
     assert response.status_code == 422
 
 
-@pytest.mark.parametrize("count", [1, 51])
-async def test_glasses_are_not_suggestion_candidates_or_prompt_types(db_session, test_user, count):
+async def test_glasses_are_not_suggestion_candidates_or_prompt_types(db_session, test_user):
     item = await glasses_item(db_session, test_user)
     service = RecommendationService(db_session)
     assert await service.get_candidate_items(test_user, _weather(), "casual", None, []) == []
-    assert (
-        score_items([item] * count, _weather(), "casual", None, date.today(), "fall", None, {}, {})
-        == []
-    )
+    assert score_items([item], _weather(), "casual", None, date.today(), "fall", None, {}, {}) == []
     for name in ("recommendation", "item_pairing"):
         assert "glasses" not in render_outfit_prompt(load_prompt(name))
     assert ITEM_ROLE["glasses"] == "accessory"
     assert "glasses" in NEAR_FACE_TYPES
+
+
+def test_large_mixed_wardrobe_reserves_accessory_minimum_for_belts():
+    tops = [scoring_item(type="shirt", wear_count=0) for _index in range(TOP_N + 1)]
+    belts = [
+        scoring_item(type="belt", colors=["orange"], primary_color="orange", wear_count=0)
+        for _index in range(MIN_CANDIDATES_PER_ESSENTIAL_ROLE)
+    ]
+    glasses = [
+        scoring_item(type="glasses", wear_count=0)
+        for _index in range(MIN_CANDIDATES_PER_ESSENTIAL_ROLE)
+    ]
+    wardrobe = tops + belts + glasses
+    assert len({item.id for item in wardrobe}) == len(wardrobe) > TOP_N
+    preferences = UserPreference(color_avoid=["orange"], prefer_underused_items=False)
+    scored = score_items(
+        wardrobe, _weather(), "casual", preferences, date.today(), "fall", None, {}, {}
+    )
+    selected = {entry.item.id for entry in scored}
+    assert len(selected) == TOP_N
+    assert selected.isdisjoint(item.id for item in glasses)
+    assert {item.id for item in belts} <= selected
+    assert sum(ITEM_ROLE[entry.item.type] == "accessory" for entry in scored) == len(belts)
+    assert all(
+        entry.preference_score < 1
+        for entry in scored
+        if entry.item.id in {item.id for item in belts}
+    )
 
 
 async def test_forced_glasses_are_rejected_before_provider_call(db_session, test_user):
@@ -244,10 +271,12 @@ async def test_forced_glasses_are_rejected_before_provider_call(db_session, test
 
 
 @pytest.mark.parametrize("dirty", [False, True])
+@pytest.mark.parametrize("item_type", ["glasses", " GlAsSeS "])
 async def test_wear_undo_and_laundry_preserve_glasses_wash_state(
-    client, auth_headers, db_session, test_user, dirty
+    client, auth_headers, db_session, test_user, dirty, item_type
 ):
     item = await glasses_item(db_session, test_user)
+    item.type = item_type
     item.wash_interval, item.wears_since_wash = 1, 7
     item.needs_wash, item.manually_needs_wash = dirty, dirty
     item.last_washed_at = date(2026, 1, 1)
@@ -291,21 +320,6 @@ async def test_wear_undo_and_laundry_preserve_glasses_wash_state(
     )
 
 
-@pytest.mark.parametrize("cleanup", [False, True])
-def test_layer_prompts_keep_glasses(cleanup):
-    prompt = layer_prompt(
-        {"type": "jacket", "colors": [], "primary_color": None},
-        SimpleNamespace(notes=None, tags={}),
-        None,
-        None,
-        None,
-        {"lines": []},
-        cleanup=cleanup,
-        keep_glasses=True,
-    )
-    assert "glasses, watch" in prompt
-
-
 @pytest.mark.parametrize("tryon_result", ["success", "fallback"])
 @pytest.mark.parametrize("enabled", [False, True])
 async def test_layer_and_cleanup_requests_keep_glasses(
@@ -314,8 +328,7 @@ async def test_layer_and_cleanup_requests_keep_glasses(
     db_session,
     test_user,
     preview_setup,
-    layer_transport,
-    monkeypatch,
+    fal_http,
     tryon_result,
     enabled,
 ):
@@ -325,18 +338,182 @@ async def test_layer_and_cleanup_requests_keep_glasses(
         db_session.add(OutfitItem(outfit_id=preview_setup["outfit"], item_id=item.id, position=2))
         await db_session.commit()
     await upload(client, auth_headers)
-    monkeypatch.setattr(get_settings(), "fal_key", "fake-key")
-
-    async def fake_tryon(*args):
-        if tryon_result == "fallback":
-            raise TryOnError("provider_error")
-        return _jpeg_bytes()
-
-    monkeypatch.setattr(TryOnService, "request", fake_tryon)
+    fal_http.failure = "http_error" if tryon_result == "fallback" else None
     await PreviewService(db_session).generate(preview_setup["outfit"], test_user.id, False)
-    assert len(layer_transport.requests) == 2
-    assert ("frame sitting naturally" in request_prompt(layer_transport.requests[0])) is enabled
-    assert ("glasses, watch" in request_prompt(layer_transport.requests[1])) is enabled
+    assert len(fal_http.gemini) == 2
+    assert ("frame sitting naturally" in request_prompt(fal_http.gemini[0])) is enabled
+    assert ("glasses, watch" in request_prompt(fal_http.gemini[1])) is enabled
+    assert fal_http.sequence == [
+        ("gemini", 3),
+        ("fal", KOLORS),
+        ("gemini", 3 if tryon_result == "success" else 2),
+    ]
+    assert len(fal_http.fal) == 1
+    assert fal_http.fal[0]["human_image_url"].startswith("data:image/jpeg;base64,")
+    assert len(fal_http.downloads) == (1 if tryon_result == "success" else 0)
+
+
+async def test_favorite_patch_preserves_enabled_glasses(
+    client, auth_headers, db_session, test_user
+):
+    item = await glasses_item(db_session, test_user)
+    response = await client.patch(
+        f"/api/v1/items/{item.id}", headers=auth_headers, json={"favorite": True}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["favorite"] is True
+    assert response.json()["always_in_preview"] is True
+    await db_session.refresh(item)
+    assert item.always_in_preview is True
+
+
+@pytest.mark.parametrize("change_type", [False, True])
+async def test_preview_switch_rejects_non_glasses_type(
+    client, auth_headers, db_session, test_user, change_type
+):
+    item = (
+        await glasses_item(db_session, test_user)
+        if change_type
+        else await _make_item(db_session, test_user)
+    )
+    before = (item.type, item.always_in_preview)
+    response = await client.patch(
+        f"/api/v1/items/{item.id}",
+        headers=auth_headers,
+        json={"always_in_preview": True, **({"type": "shirt"} if change_type else {})},
+    )
+    assert response.status_code == 422, response.text
+    await db_session.refresh(item)
+    assert (item.type, item.always_in_preview) == before
+
+
+@pytest.mark.parametrize("writer", ["api", "service"])
+async def test_retyping_glasses_clears_preview_switch(
+    client, auth_headers, db_session, test_user, writer
+):
+    item = await glasses_item(db_session, test_user)
+    for kind in ("shirt", "glasses"):
+        if writer == "api":
+            response = await client.patch(
+                f"/api/v1/items/{item.id}", headers=auth_headers, json={"type": kind}
+            )
+            assert response.status_code == 200, response.text
+        else:
+            await ItemService(db_session).update(item, ItemUpdate(type=kind))
+            await db_session.commit()
+        await db_session.refresh(item)
+        assert item.type == kind
+        assert item.always_in_preview is False
+
+
+async def test_retyping_dirty_accessory_clears_wash_state(
+    client, auth_headers, db_session, test_user
+):
+    item = await _make_item(db_session, test_user)
+    item.type, item.needs_wash, item.manually_needs_wash, item.wears_since_wash = (
+        "accessories",
+        True,
+        True,
+        7,
+    )
+    item.last_washed_at = date(2026, 1, 1)
+    await db_session.commit()
+    response = await client.patch(
+        f"/api/v1/items/{item.id}", headers=auth_headers, json={"type": "glasses"}
+    )
+    assert response.status_code == 200, response.text
+    await db_session.refresh(item)
+    assert (item.needs_wash, item.manually_needs_wash, item.wears_since_wash) == (False, False, 0)
+    assert item.last_washed_at == date(2026, 1, 1)
+
+
+@pytest.mark.parametrize("endpoint", ["suggestion", "pairing"])
+async def test_authored_outfits_reject_glasses(
+    client, auth_headers, db_session, test_user, endpoint
+):
+    shirt = await _make_item(db_session, test_user)
+    glasses = await glasses_item(db_session, test_user)
+    route = (
+        "/api/v1/outfits/suggestions"
+        if endpoint == "suggestion"
+        else f"/api/v1/pairings/item/{shirt.id}"
+    )
+    response = await client.post(
+        route,
+        headers=auth_headers,
+        json={
+            "items": [str(glasses.id)],
+            **({"occasion": "casual"} if endpoint == "suggestion" else {}),
+        },
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "Glasses aren't used in outfit suggestions"
+
+
+@pytest.mark.parametrize("state", ["considering", "passed", "bought"])
+async def test_preview_adds_only_owned_glasses(
+    client, auth_headers, db_session, test_user, preview_setup, layer_transport, state
+):
+    item = await glasses_item(db_session, test_user)
+    db_session.add(ItemPurchase(item_id=item.id, state=state))
+    await db_session.commit()
+    await upload(client, auth_headers)
+    await PreviewService(db_session).generate(preview_setup["outfit"], test_user.id, False)
+    assert ("glasses" in block(request_prompt(layer_transport.requests[0]), "present_slots")) is (
+        state == "bought"
+    )
+
+
+@pytest.mark.parametrize("action", ["wash", "in-the-wash"])
+@pytest.mark.parametrize("dirty", [False, True])
+async def test_wash_actions_reject_never_washed_items(
+    client, auth_headers, db_session, test_user, action, dirty
+):
+    item = await glasses_item(db_session, test_user)
+    item.type, item.needs_wash, item.wears_since_wash = " GlAsSeS ", dirty, 7 if dirty else 0
+    await db_session.commit()
+    response = await client.post(f"/api/v1/items/{item.id}/{action}", headers=auth_headers, json={})
+    assert response.status_code == 422, response.text
+
+
+async def test_dirty_glasses_do_not_block_ready_to_wear(
+    client, auth_headers, db_session, test_user
+):
+    glasses = await glasses_item(db_session, test_user)
+    shirt = await _make_item(db_session, test_user)
+    glasses.needs_wash = shirt.needs_wash = True
+    wearable = await source(db_session, test_user, [glasses.id])
+    await source(db_session, test_user, [shirt.id])
+    await db_session.commit()
+    response = await client.get(
+        "/api/v1/outfits", headers=auth_headers, params={"ready_to_wear": True}
+    )
+    assert response.status_code == 200, response.text
+    assert {outfit["id"] for outfit in response.json()["outfits"]} == {str(wearable.id)}
+
+
+async def test_wash_reminder_ignores_dirty_glasses(db_session, test_user):
+    from app.workers.notifications import _check_wash_reminders_inner
+
+    glasses = await glasses_item(db_session, test_user)
+    shirt = await _make_item(db_session, test_user)
+    glasses.needs_wash = shirt.needs_wash = True
+    glasses.name, shirt.name = "Glasses", "Blue shirt"
+    await db_session.commit()
+    with (
+        patch("app.workers.notifications.get_db_session", return_value=db_session),
+        patch.object(db_session, "close", AsyncMock()),
+        patch("app.workers.notifications.NotificationDispatcher") as dispatcher,
+    ):
+        dispatcher.return_value.deliver = AsyncMock(return_value=[])
+        await _check_wash_reminders_inner({})
+        messages = [
+            call.args[1]
+            for call in dispatcher.return_value.deliver.call_args_list
+            if call.args[0] == str(test_user.id)
+        ]
+        assert len(messages) == 1
+        assert messages[0].body == "1 item needs washing: Blue shirt"
 
 
 async def test_migration_column_default_and_rollback(db_session, test_user):

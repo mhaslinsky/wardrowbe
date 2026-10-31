@@ -23,6 +23,7 @@ from app.services.learning_service import LearningService
 from app.services.wear_service import AlreadyThis, DayLogged, WearService, map_wear_error, wear_http
 from app.utils.garment_vocabulary import types_for_role
 from app.utils.timezone import get_user_today
+from app.utils.washing import never_washed
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -116,7 +117,8 @@ async def laundry_done(request: Request, db: DbSession) -> JSONResponse:
             ClothingItem.user_id == user.id,
             ClothingItem.is_archived.is_(False),
             ClothingItem.needs_wash.is_(True),
-            ClothingItem.type.not_in(FOOTWEAR_TYPES | {"glasses"}),
+            ClothingItem.type.not_in(FOOTWEAR_TYPES),
+            ~never_washed(ClothingItem),
         )
         .order_by(ClothingItem.id)
         .with_for_update()

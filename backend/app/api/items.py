@@ -71,6 +71,7 @@ from app.utils.photo_urls import optional_image_url
 from app.utils.rate_limit import rate_limit_by_user
 from app.utils.timezone import get_user_today
 from app.utils.uploads import UploadTooLargeError, read_upload_within_limit
+from app.utils.washing import never_washed
 from app.workers.queues import IMAGE_QUEUE, TAGGING_QUEUE, queue_for_kind
 from app.workers.settings import get_redis_settings
 
@@ -1564,7 +1565,7 @@ async def put_item_in_the_wash(
     )
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
-    if item.type == "glasses":
+    if never_washed(item):
         raise HTTPException(422, "Glasses do not need washing")
     item.manually_needs_wash = True
     item.needs_wash = True
@@ -1595,6 +1596,8 @@ async def log_item_wash(
             detail="Item not found",
         )
 
+    if never_washed(item):
+        raise HTTPException(422, "Glasses do not need washing")
     if item.wears_since_wash == 0 and not item.needs_wash:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

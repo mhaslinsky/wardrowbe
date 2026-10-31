@@ -227,6 +227,13 @@ class ItemService:
 
     async def update(self, item: ClothingItem, item_data: ItemUpdate) -> ClothingItem:
         update_data = item_data.model_dump(exclude_unset=True)
+        effective_type = update_data.get("type", item.type)
+        if "always_in_preview" in update_data and update_data["always_in_preview"] is None:
+            raise HTTPException(422, "Preview setting must be true or false")
+        if effective_type != "glasses":
+            if update_data.get("always_in_preview") is True:
+                raise HTTPException(422, "Only glasses can always appear in previews")
+            update_data["always_in_preview"] = False
 
         incoming: dict = {}
         if "tags" in update_data and update_data["tags"] is not None:
@@ -252,6 +259,12 @@ class ItemService:
 
         for field, value in update_data.items():
             setattr(item, field, value)
+
+        # Retyped eyewear has no wash action to clear an old dirty flag.
+        if never_washed(item):
+            item.needs_wash = False
+            item.manually_needs_wash = False
+            item.wears_since_wash = 0
 
         if "tags" in update_data:
             attributes.flag_modified(item, "tags")

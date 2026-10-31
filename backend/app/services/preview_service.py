@@ -14,6 +14,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.orm import selectinload, undefer
 
 from app.config import get_settings
+from app.models.considering import owned_item
 from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit, OutfitItem
 from app.models.preference import UserPreference
@@ -301,6 +302,7 @@ class PreviewService:
                     select(ClothingItem)
                     .where(
                         ClothingItem.user_id == user_id,
+                        owned_item(),
                         ClothingItem.always_in_preview.is_(True),
                         ClothingItem.type == "glasses",
                         ClothingItem.is_archived.is_(False),

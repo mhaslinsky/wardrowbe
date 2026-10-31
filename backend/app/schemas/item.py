@@ -66,7 +66,7 @@ class ItemUpdate(BaseModel):
     purchase_date: date | None = None
     purchase_price: Decimal | None = Field(None, ge=0)
     favorite: bool | None = None
-    always_in_preview: bool = False
+    always_in_preview: bool | None = None
     tags: ItemTags | None = None
     colors: ColorList | None = None
     primary_color: ColorName | None = None
