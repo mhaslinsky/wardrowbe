@@ -255,7 +255,8 @@
     "tights": "타이츠",
     "underwear": "속옷",
     "top": "상의",
-    "vest": "조끼"
+    "vest": "조끼",
+    "glasses": "안경"
   },
   "weatherConditions": {
     "clear": "맑음",

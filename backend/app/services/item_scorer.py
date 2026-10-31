@@ -12,7 +12,7 @@ from app.utils.garment_vocabulary import (
     FORMALITY,
     NEAR_FACE_TYPES,
     OCCASION_FORMALITY,
-    is_outfit_type,
+    is_suggestion_type,
 )
 from app.utils.preference_defaults import DEFAULT_PREFER_UNDERUSED_ITEMS
 from app.utils.scales import (
@@ -476,7 +476,7 @@ def score_items(
     wear_counts_30_days: dict[UUID, int] | None = None,
     usage_reference_items: list[ClothingItem] | None = None,
 ) -> list[ScoredItem]:
-    items = [item for item in items if is_outfit_type(item.type)]
+    items = [item for item in items if is_suggestion_type(item.type)]
     if len(items) < MIN_ITEMS_FOR_SCORING:
         scored = [ScoredItem(item=item) for item in items]
         if preferences and stored_color_season(preferences.style_profile):

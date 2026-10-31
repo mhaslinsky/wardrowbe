@@ -17,7 +17,7 @@ from app.models.item import (
     WashHistory,
 )
 from app.schemas.item import ItemCreate, ItemFilter, ItemUpdate
-from app.utils.washing import wash_interval
+from app.utils.washing import never_washed, wash_interval
 
 
 class ItemService:
@@ -477,10 +477,12 @@ class ItemService:
                         func.coalesce(ClothingItem.last_worn_at, worn_at), worn_at
                     ),
                     wears_since_wash=case(
+                        (never_washed(item), ClothingItem.wears_since_wash),
                         (ClothingItem.last_washed_at > worn_at, ClothingItem.wears_since_wash),
                         else_=ClothingItem.wears_since_wash + 1,
                     ),
                     needs_wash=case(
+                        (never_washed(item), ClothingItem.needs_wash),
                         (ClothingItem.last_washed_at > worn_at, ClothingItem.needs_wash),
                         else_=or_(
                             ClothingItem.manually_needs_wash,
@@ -511,6 +513,8 @@ class ItemService:
         method: str | None = None,
         notes: str | None = None,
     ) -> WashHistory:
+        if never_washed(item):
+            raise HTTPException(422, "Glasses do not need washing")
         wash = WashHistory(
             item_id=item.id,
             created_at=datetime.now(UTC),

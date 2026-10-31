@@ -236,7 +236,8 @@
       "wearsSinceWash": "Ports depuis le lavage : {current}/{max}",
       "wornCount": "{count, plural, one {Porté # fois} other {Porté # fois}}"
     },
-    "washInterval": "Intervalle de lavage"
+    "washInterval": "Intervalle de lavage",
+    "alwaysInPreview": "Toujours porter dans les aperçus"
   },
   "lightbox": {
     "openInWardrobe": "Ouvrir dans la garde-robe"

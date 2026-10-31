@@ -60,6 +60,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { useUpdateItem, useDeleteItem, useReanalyzeItem, useRotateImage, useRemoveBackground, useRestoreOriginal, useReplaceItemImage, useLogWear, useLogWash, usePutInWash, useWashHistory, useItemWearStats, useItemWearHistory, useAddItemImage, useDeleteItemImage, useSetPrimaryImage } from '@/lib/hooks/use-items';
@@ -103,6 +104,7 @@ interface EditForm {
   primary_color: string;
   notes: string;
   favorite: boolean;
+  always_in_preview: boolean;
   wash_interval: number | null;
   wash_interval_bad_input: boolean;
 }
@@ -118,6 +120,7 @@ function editFormFromItem(item: Item): EditForm {
     primary_color: item.primary_color || '',
     notes: item.notes || '',
     favorite: item.favorite,
+    always_in_preview: item.always_in_preview ?? false,
     wash_interval: item.wash_interval ?? null,
     wash_interval_bad_input: false,
   };
@@ -154,6 +157,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     primary_color: '',
     notes: '',
     favorite: false,
+    always_in_preview: false,
     wash_interval: null,
     wash_interval_bad_input: false,
   });
@@ -210,6 +214,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           primary_color: editForm.primary_color || undefined,
           notes: editForm.notes || undefined,
           favorite: editForm.favorite,
+          always_in_preview: editForm.type === 'glasses' && editForm.always_in_preview,
           // A blank interval must reach the server as null to remove the override.
           wash_interval: editForm.wash_interval,
         },
@@ -390,7 +395,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     }`}
                   />
                 </Button>
-                {ITEM_ROLE[(item.type ?? '').trim().toLowerCase()] !== 'underwear' && (
+                {item.type !== 'glasses' && ITEM_ROLE[(item.type ?? '').trim().toLowerCase()] !== 'underwear' && (
                   <>
                     <Button
                       variant="ghost"
@@ -785,7 +790,16 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       rows={3}
                     />
                   </div>
-                  <div className="space-y-2">
+                  {editForm.type === 'glasses' ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="always-in-preview">{t('alwaysInPreview')}</Label>
+                      <Switch
+                        id="always-in-preview"
+                        checked={editForm.always_in_preview}
+                        onCheckedChange={(checked) => setEditForm({ ...editForm, always_in_preview: checked })}
+                      />
+                    </div>
+                  ) : <div className="space-y-2">
                     <Label>{t('washInterval')} ({t('view.wears')})</Label>
                     <Input
                       type="number"
@@ -804,7 +818,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     <p className="text-xs text-muted-foreground">
                       {t('view.washIntervalHint')}
                     </p>
-                  </div>
+                  </div>}
                   <div className="flex gap-2 pt-2">
                     <Button
                       variant="outline"
@@ -878,7 +892,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                   </div>
 
                   {/* Wash Status */}
-                  <div className="space-y-2 pt-2 border-t">
+                  {item.type !== 'glasses' && <div className="space-y-2 pt-2 border-t">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Droplets className={`h-4 w-4 ${item.needs_wash ? 'text-amber-500' : 'text-muted-foreground'}`} />
@@ -951,7 +965,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                         </CollapsibleContent>
                       </Collapsible>
                     )}
-                  </div>
+                  </div>}
 
                   {/* Wear History */}
                   {item.wear_count > 0 && wearStats && (

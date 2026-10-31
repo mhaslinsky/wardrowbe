@@ -43,6 +43,8 @@ The item dialog also lets you rotate or replace photos, remove a background, cho
 
 You can select several wardrobe items for bulk actions, including redraw. The confirmation warns that each selected photo may incur an AI charge. Paid retries can incur another charge; include them only when you intend to retry those photos. Redraw requires an image model, an API key, and background removal configured by the operator.
 
+Choose **Glasses** as the item type to keep eyewear out of outfit suggestions and laundry. Edit the glasses and turn on **Always wear in previews** to include them in every outfit preview.
+
 Sources: [upload form](../frontend/components/add-item-dialog.tsx), [accepted image types](../frontend/lib/image-types.ts), [wardrobe page](../frontend/app/dashboard/wardrobe/page.tsx), [item dialog](../frontend/components/item-detail-dialog.tsx), [English wardrobe labels](../frontend/messages/en/wardrobe.json), [redraw controls](../frontend/components/photo-redraw-controls.tsx), [redraw service](../backend/app/services/photo_redraw_service.py).
 
 ## Get outfit ideas

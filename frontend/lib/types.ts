@@ -38,6 +38,7 @@ export interface Item {
   purchase_date?: string;
   purchase_price?: number;
   favorite: boolean;
+  always_in_preview?: boolean;
   image_path: string;
   thumbnail_path?: string;
   medium_path?: string;

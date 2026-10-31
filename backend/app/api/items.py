@@ -1564,6 +1564,8 @@ async def put_item_in_the_wash(
     )
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
+    if item.type == "glasses":
+        raise HTTPException(422, "Glasses do not need washing")
     item.manually_needs_wash = True
     item.needs_wash = True
     await db.flush()

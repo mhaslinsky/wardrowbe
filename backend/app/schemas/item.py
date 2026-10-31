@@ -66,6 +66,7 @@ class ItemUpdate(BaseModel):
     purchase_date: date | None = None
     purchase_price: Decimal | None = Field(None, ge=0)
     favorite: bool | None = None
+    always_in_preview: bool = False
     tags: ItemTags | None = None
     colors: ColorList | None = None
     primary_color: ColorName | None = None
@@ -77,6 +78,7 @@ class ItemUpdate(BaseModel):
 
 class ItemResponse(ItemBase):
     model_config = ConfigDict(from_attributes=True)
+    always_in_preview: bool = False
     type_wash_interval: int | None = Field(
         default=None,
         exclude=True,

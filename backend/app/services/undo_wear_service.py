@@ -9,7 +9,7 @@ from app.models.learning import OutfitPerformance
 from app.models.outfit import Outfit, OutfitStatus
 from app.models.user import User
 from app.services.wear_service import WearService
-from app.utils.washing import wash_interval
+from app.utils.washing import never_washed, wash_interval
 
 
 def undo_conflict(code: str, message: str, **details: object) -> HTTPException:
@@ -101,7 +101,7 @@ class UndoWearService:
             item.wear_count -= 1
             if item.last_worn_at == undone_date:
                 item.last_worn_at = max((history.worn_at for history in remaining), default=None)
-            if item.id not in confirmed:
+            if item.id not in confirmed and not never_washed(item):
                 item.manually_needs_wash = item.manually_needs_wash or any(
                     wash.manually_needed_wash for wash in later_washes[item.id]
                 )

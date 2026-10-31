@@ -14,6 +14,7 @@ from sqlalchemy import select, text, update
 from sqlalchemy.orm import selectinload, undefer
 
 from app.config import get_settings
+from app.models.item import ClothingItem, ItemStatus
 from app.models.outfit import Outfit, OutfitItem
 from app.models.preference import UserPreference
 from app.models.preview import OutfitPreview, PreviewFeedback, PreviewPhoto, delete_preview_files
@@ -110,26 +111,32 @@ def with_preferences(key, preferences_key):
     return hashlib.sha256((key + preferences_key).encode()).hexdigest() if preferences_key else key
 
 
-def snapshot(outfit):
+def snapshot(outfit, always_items=()):
     service, records, images = ImageService(), [], []
-    for link in sorted(outfit.items, key=lambda link: str(link.item_id)):
-        item = link.item
+    always_ids = {item.id for item in always_items}
+    outfit_ids = {link.item_id for link in outfit.items}
+    pieces = [
+        (link.item_id, link.item, link.layer_type)
+        for link in sorted(outfit.items, key=lambda link: str(link.item_id))
+    ] + [(item.id, item, "base") for item in always_items if item.id not in outfit_ids]
+    for item_id, item, layer in pieces:
         path = item.medium_path or item.image_path
         image = jpeg(path, 800) if path and service.get_image_path(path).is_file() else None
         images.append(image)
         size = garment_size(item.notes)
         records.append(
             {
-                "id": str(link.item_id),
+                "id": str(item_id),
                 "image_path": item.image_path,
                 "medium_path": item.medium_path,
                 "type": item.type,
                 "colors": item.colors,
                 "primary_color": item.primary_color,
-                "layer": link.layer_type,
+                "layer": layer,
                 "fit": (item.tags or {}).get("fit"),
                 **({"size": size} if size else {}),
                 "content_hash": hashlib.sha256(image).hexdigest() if image else None,
+                **({"always_in_preview": True} if item_id in always_ids else {}),
             }
         )
     key = hashlib.sha256(
@@ -207,8 +214,21 @@ def split_preview_layers(images, records, positions):
     return [image for image, _ in base], [garment for _, garment in base], layers
 
 
-def layer_prompt(garment, item, measurements, style_notes, note, preferences, *, cleanup=False):
+def layer_prompt(
+    garment,
+    item,
+    measurements,
+    style_notes,
+    note,
+    preferences,
+    *,
+    cleanup=False,
+    keep_glasses=False,
+):
     prompt = load_prompt("outfit_preview_cleanup" if cleanup else "outfit_preview_layer")
+    prompt = prompt.replace(
+        "{glasses}", ("glasses, watch, " if cleanup else "glasses, ") if keep_glasses else ""
+    )
     blocks = {
         "garment_data": {
             field: garment[field]
@@ -273,6 +293,25 @@ async def request_preview_image(provider, images, prompt, usage, call_ids):
 class PreviewService:
     def __init__(self, db):
         self.db = db
+
+    async def snapshot(self, outfit, user_id):
+        always_items = list(
+            (
+                await self.db.scalars(
+                    select(ClothingItem)
+                    .where(
+                        ClothingItem.user_id == user_id,
+                        ClothingItem.always_in_preview.is_(True),
+                        ClothingItem.type == "glasses",
+                        ClothingItem.is_archived.is_(False),
+                        ClothingItem.status != ItemStatus.archived,
+                    )
+                    .order_by(ClothingItem.id)
+                    .execution_options(populate_existing=True)
+                )
+            ).all()
+        )
+        return await asyncio.to_thread(snapshot, outfit, always_items)
 
     async def lock_user(self, user_id, key_share=False):
         found = await self.db.scalar(
@@ -421,7 +460,7 @@ class PreviewService:
         )
         if record is None or not record.paths:
             raise HTTPException(404, "NO_PREVIEW")
-        key, _, _ = await asyncio.to_thread(snapshot, outfit)
+        key = (await self.snapshot(outfit, user_id))[0]
         reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
         paths = reference.paths if reference else {}
         measurements, _, face_hash = await self.person_inputs(user_id, paths, include_face=False)
@@ -543,7 +582,7 @@ class PreviewService:
                 reference = await self.reference(user_id)
             except HTTPException as error:
                 raise HTTPException(409, "NO_PREVIEW_PHOTO") from error
-            key, images, records = await asyncio.to_thread(snapshot, outfit)
+            key, images, records = await self.snapshot(outfit, user_id)
             measurements, face, face_hash = await self.person_inputs(user_id, reference.paths)
             preferences = await self.preview_preferences(user_id)
             preferences_key = preferences_hash(preferences)
@@ -588,6 +627,7 @@ class PreviewService:
             images, records, layers = split_preview_layers(
                 images, records, {str(link.item_id): link.position for link in outfit.items}
             )
+            keep_glasses = any(garment.get("always_in_preview") for garment in records)
             images = reference_images + images
             layer_items = {str(link.item_id): link.item for link in outfit.items}
             if record is None:
@@ -631,6 +671,11 @@ class PreviewService:
                 + data
                 + "\n</garment_data>"
             )
+            if keep_glasses:
+                prompt += (
+                    "\nDraw the glasses on the face exactly as in their photo, the frame sitting "
+                    "naturally on the nose, without changing the face behind them."
+                )
             if any(
                 ITEM_ROLE.get((garment["type"] or "").strip().lower()) == "underwear"
                 for garment in garments
@@ -741,6 +786,7 @@ class PreviewService:
                     note,
                     preferences,
                     cleanup=cleanup,
+                    keep_glasses=keep_glasses,
                 )
                 output = await request_preview_image(
                     provider, layer_images, prompt, usage, call_ids
@@ -764,7 +810,7 @@ class PreviewService:
             )
             if record is None or record.claim_id != claim_id:
                 raise HTTPException(409, "Preview changed")
-            current_key, _, _ = await asyncio.to_thread(snapshot, outfit)
+            current_key = (await self.snapshot(outfit, user_id))[0]
             current_reference = await self.db.get(PreviewPhoto, user_id, populate_existing=True)
             current_paths = current_reference.paths if current_reference else {}
             current_measurements, _, current_face_hash = await self.person_inputs(
