@@ -132,6 +132,7 @@ class Settings(BaseSettings):
     buy_check_fallback_model: str = "typesafe/jev-1.14"
     ai_base_url: str = Field(default="")
     ai_api_key: str | None = Field(default=None)
+    fal_key: str | None = Field(default=None, repr=False)
     ai_image_model: str = Field(default="")
     ai_vision_model: str = Field(default="gpt-4o")  # comma-separated for model rotation
     ai_text_model: str = Field(default="gpt-4o")  # comma-separated for model rotation
