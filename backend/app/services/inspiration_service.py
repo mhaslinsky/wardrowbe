@@ -20,7 +20,7 @@ from app.services.recommendation_service import RecommendationService
 from app.services.studio_service import validate_item_ownership
 from app.services.weather_service import wearing_hours
 from app.utils.clothing import canonical_item_order, repair_top_layers
-from app.utils.garment_vocabulary import ITEM_ROLE, TYPES, is_outfit_type
+from app.utils.garment_vocabulary import ITEM_ROLE, TYPES, is_suggestion_type
 from app.utils.photo_urls import image_url
 from app.utils.prompts import load_prompt
 from app.utils.timezone import get_user_today
@@ -55,7 +55,7 @@ def match_slots(
     available = {
         item.id: item
         for item in candidates
-        if item.id in analysis.allowed_item_ids and is_outfit_type(item.type)
+        if item.id in analysis.allowed_item_ids and is_suggestion_type(item.type)
     }
     selected = []
     for slot in analysis.slots:
@@ -156,7 +156,7 @@ class InspirationService:
         prompt = (
             load_prompt("inspiration")
             + "\nTypes: "
-            + json.dumps([item_type for item_type in TYPES if is_outfit_type(item_type)])
+            + json.dumps([item_type for item_type in TYPES if is_suggestion_type(item_type)])
         )
         prompt += (
             "\n<WARDROBE>\n"

@@ -255,7 +255,8 @@
     "tights": "Collant",
     "underwear": "Biancheria intima",
     "top": "Top",
-    "vest": "Gilet"
+    "vest": "Gilet",
+    "glasses": "Occhiali"
   },
   "weatherConditions": {
     "clear": "Sereno",

@@ -58,7 +58,7 @@ from app.utils.clothing import (
 from app.utils.garment_vocabulary import (
     ITEM_ROLE,
     NEAR_FACE_TYPES,
-    is_outfit_type,
+    is_suggestion_type,
     render_outfit_prompt,
 )
 from app.utils.preference_defaults import (
@@ -233,7 +233,7 @@ class RecommendationService:
         return [
             outfit
             for outfit in result.scalars().all()
-            if all(is_outfit_type(link.item.type) for link in outfit.items)
+            if all(is_suggestion_type(link.item.type) for link in outfit.items)
         ]
 
     async def top_up_day(
@@ -351,7 +351,11 @@ class RecommendationService:
             return []
 
         items = [i for i in items if not i.needs_wash]
-        items = [i for i in items if i.type and i.type != "unknown" and is_outfit_type(i.type)]
+        items = [
+            item
+            for item in items
+            if item.type and item.type != "unknown" and is_suggestion_type(item.type)
+        ]
 
         if exclude_items:
             exclude_set = set(exclude_items)
@@ -1019,9 +1023,11 @@ class RecommendationService:
         ).all()
         item_type_map = {row.id: (row.type or "").lower() for row in items_result}
         item_subtype_map = {row.id: (row.subtype or "").lower() for row in items_result}
-        valid_ids = [item_id for item_id in valid_ids if is_outfit_type(item_type_map.get(item_id))]
+        valid_ids = [
+            item_id for item_id in valid_ids if is_suggestion_type(item_type_map.get(item_id))
+        ]
         ranked_ids = [
-            item_id for item_id in ranked_ids if is_outfit_type(item_type_map.get(item_id))
+            item_id for item_id in ranked_ids if is_suggestion_type(item_type_map.get(item_id))
         ]
         valid_ids = prefer_ranked_layers(valid_ids, ranked_ids, item_type_map, mandatory_item_ids)
         valid_ids = deduplicate_by_body_slot(
@@ -1131,8 +1137,12 @@ class RecommendationService:
                 user.id, considering_anchor_id, [], allow_bought=True
             )
             anchor = await self.db.get(ClothingItem, considering_anchor_id)
-            if not is_outfit_type(anchor.type):
-                raise ValueError("Underwear can't be part of an outfit")
+            if not is_suggestion_type(anchor.type):
+                raise ValueError(
+                    "Glasses aren't used in outfit suggestions"
+                    if (anchor.type or "").strip().lower() == "glasses"
+                    else "Underwear can't be part of an outfit"
+                )
             if include_items and set(include_items) != {considering_anchor_id}:
                 raise ValueError("Choose one considering anchor")
             include_items = [considering_anchor_id]
@@ -1231,8 +1241,14 @@ class RecommendationService:
                     )
                 )
                 forced_items = list(result.scalars().all())
-                if any(not is_outfit_type(item.type) for item in forced_items):
-                    raise ValueError("Underwear can't be part of an outfit")
+                if any(not is_suggestion_type(item.type) for item in forced_items):
+                    raise ValueError(
+                        "Glasses aren't used in outfit suggestions"
+                        if any(
+                            (item.type or "").strip().lower() == "glasses" for item in forced_items
+                        )
+                        else "Underwear can't be part of an outfit"
+                    )
                 candidates.extend(forced_items)
                 logger.info(f"Force-included {len(forced_items)} items in recommendation")
 

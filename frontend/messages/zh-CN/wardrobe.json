@@ -236,7 +236,8 @@
       "wearsSinceWash": "清洗后穿着次数：{current}/{max}",
       "wornCount": "{count, plural, one {已穿着 # 次} other {已穿着 # 次}}"
     },
-    "washInterval": "清洗间隔"
+    "washInterval": "清洗间隔",
+    "alwaysInPreview": "始终在预览中佩戴"
   },
   "lightbox": {
     "openInWardrobe": "在衣橱中打开"

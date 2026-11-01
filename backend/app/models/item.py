@@ -173,6 +173,9 @@ class ClothingItem(Base):
     purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     notes: Mapped[str | None] = mapped_column(Text)
     favorite: Mapped[bool] = mapped_column(Boolean, default=False)
+    always_in_preview: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
     # Lifecycle
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -14,7 +14,7 @@ from app.models.user import User
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
 from app.services.ai_telemetry_service import CallContext
 from app.utils.clothing import covered_body_slots, deduplicate_by_body_slot, repair_top_layers
-from app.utils.garment_vocabulary import is_outfit_type, render_outfit_prompt
+from app.utils.garment_vocabulary import is_suggestion_type, render_outfit_prompt
 from app.utils.prompts import load_prompt
 from app.utils.timezone import get_user_today
 
@@ -54,7 +54,7 @@ class PairingService:
             query = query.where(owned_item())
         result = await self.db.execute(query)
         item = result.scalar_one_or_none()
-        return item if item is not None and is_outfit_type(item.type) else None
+        return item if item is not None and is_suggestion_type(item.type) else None
 
     async def get_available_items(self, user: User, exclude_item_id: UUID) -> list[ClothingItem]:
         query = select(ClothingItem).where(
@@ -67,7 +67,7 @@ class PairingService:
             )
         )
         result = await self.db.execute(query)
-        return [item for item in result.scalars().all() if is_outfit_type(item.type)]
+        return [item for item in result.scalars().all() if is_suggestion_type(item.type)]
 
     def _format_item_description(self, item: ClothingItem) -> str:
         parts = []

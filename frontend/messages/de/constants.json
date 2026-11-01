@@ -255,7 +255,8 @@
     "tights": "Strumpfhose",
     "underwear": "Unterwäsche",
     "top": "Top",
-    "vest": "Weste"
+    "vest": "Weste",
+    "glasses": "Brille"
   },
   "weatherConditions": {
     "clear": "Klar",

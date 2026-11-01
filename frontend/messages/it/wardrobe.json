@@ -236,7 +236,8 @@
       "wearsSinceWash": "Utilizzi dal lavaggio: {current}/{max}",
       "wornCount": "{count, plural, one {Indossato # volta} other {Indossato # volte}}"
     },
-    "washInterval": "Intervallo lavaggio"
+    "washInterval": "Intervallo lavaggio",
+    "alwaysInPreview": "Indossa sempre nelle anteprime"
   },
   "lightbox": {
     "openInWardrobe": "Apri nel guardaroba"

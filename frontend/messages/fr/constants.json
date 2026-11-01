@@ -255,7 +255,8 @@
     "tights": "Collants",
     "underwear": "Sous-vêtements",
     "top": "Haut",
-    "vest": "Gilet sans manches"
+    "vest": "Gilet sans manches",
+    "glasses": "Lunettes"
   },
   "weatherConditions": {
     "clear": "Dégagé",

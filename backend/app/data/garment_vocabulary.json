@@ -34,6 +34,7 @@
     {"value": "scarf", "role": "accessory", "wash_interval": 10, "near_face": true},
     {"value": "belt", "role": "accessory", "wash_interval": 20},
     {"value": "bag", "role": "accessory", "wash_interval": 20},
+    {"value": "glasses", "role": "accessory", "wash_interval": 999, "never_washed": true, "near_face": true},
     {"value": "accessories", "role": "accessory", "wash_interval": 20}
   ],
   "materials": ["cotton", "denim", "leather", "wool", "polyester", "silk", "linen", "knit", "fleece", "suede", "velvet", "nylon", "canvas", "down", "shearling"],

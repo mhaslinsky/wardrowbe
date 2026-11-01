@@ -22,6 +22,7 @@ from app.services.recommendation_service import RecommendationService
 from app.services.weather_service import WeatherService, wearing_hours
 from app.utils.redis_lock import distributed_lock
 from app.utils.timezone import get_user_timezone, get_user_today
+from app.utils.washing import never_washed
 from app.workers.db import get_db_session
 
 logger = logging.getLogger(__name__)
@@ -356,6 +357,7 @@ async def _check_wash_reminders_inner(ctx: dict):
                 and_(
                     owned_item(),
                     ClothingItem.needs_wash == True,  # noqa: E712
+                    ~never_washed(ClothingItem),
                     ClothingItem.is_archived == False,  # noqa: E712
                 )
             )

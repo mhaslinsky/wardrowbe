@@ -38,6 +38,9 @@ THIN_BASE_SUBTYPES = {
 DEFAULT_WASH_INTERVALS: dict[str, int] = {
     entry["value"]: entry["wash_interval"] for entry in _DATA["types"]
 }
+NEVER_WASHED_TYPES = frozenset(
+    entry["value"] for entry in _DATA["types"] if entry.get("never_washed")
+)
 MATERIALS: tuple[str, ...] = tuple(_DATA["materials"])
 # Ordered from least to most formal; the scorer measures distance along this scale.
 FORMALITY: tuple[str, ...] = tuple(_DATA["formality"])
@@ -95,6 +98,10 @@ def is_outfit_type(item_type: str | None) -> bool:
     return ITEM_ROLE.get((item_type or "").strip().lower()) != "underwear"
 
 
+def is_suggestion_type(item_type: str | None) -> bool:
+    return is_outfit_type(item_type) and (item_type or "").strip().lower() != "glasses"
+
+
 def types_for_role(role: str) -> list[str]:
     # Derived from the vocabulary rather than restated, so an outfit prompt cannot drift from the
     # taxonomy the tagger validates against. For example, base_top is everything a separates top
@@ -115,5 +122,8 @@ def render_outfit_prompt(template: str) -> str:
     # Outfit prompts name the garments that fill each role; <<ROLE_TYPES>> tokens are filled from
     # ITEM_ROLE so separates, one-piece and legwear lists stay in step with the vocabulary.
     for role in ROLES:
-        template = template.replace(f"<<{role.upper()}_TYPES>>", ", ".join(types_for_role(role)))
+        template = template.replace(
+            f"<<{role.upper()}_TYPES>>",
+            ", ".join(kind for kind in types_for_role(role) if is_suggestion_type(kind)),
+        )
     return template.replace("<<CAN_BE_MID_LAYER_TYPES>>", ", ".join(sorted(CAN_BE_MID_LAYER_TYPES)))

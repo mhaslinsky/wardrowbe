@@ -13,7 +13,7 @@ from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus
 from app.models.user import User
 from app.services.pairing_service import PAIRING_OCCASION
 from app.services.studio_service import load_full_outfit, validate_item_ownership
-from app.utils.garment_vocabulary import is_outfit_type
+from app.utils.garment_vocabulary import is_suggestion_type
 from app.utils.timezone import get_user_today
 
 
@@ -41,8 +41,13 @@ class ExternalOutfitService:
         notes: str | None,
     ) -> Outfit:
         items = await validate_item_ownership(self.db, user.id, ordered_item_ids)
-        if any(not is_outfit_type(item.type) for item in items):
-            raise HTTPException(422, "Underwear can't be part of an outfit")
+        if any(not is_suggestion_type(item.type) for item in items):
+            raise HTTPException(
+                422,
+                "Glasses aren't used in outfit suggestions"
+                if any((item.type or "").strip().lower() == "glasses" for item in items)
+                else "Underwear can't be part of an outfit",
+            )
 
         outfit = Outfit(
             user_id=user.id,
