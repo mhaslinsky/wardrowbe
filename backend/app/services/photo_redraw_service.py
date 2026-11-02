@@ -185,10 +185,12 @@ async def edit_photo(db, item, *, fresh_copy=False):
                 raise ValueError(f"Image not found: {item.image_path}")
             paths = {field: getattr(item, field) for field in PHOTO_FIELDS}
             backup = f"{item.image_path.rsplit('.', 1)[0]}_orig.jpg"
-            created = service.copy_photo(paths)
+            created = await asyncio.to_thread(service.copy_photo, paths)
             if service.get_image_path(backup).exists():
                 new_backup = f"{created['image_path'].rsplit('.', 1)[0]}_orig.jpg"
-                shutil.copy2(service.get_image_path(backup), service.get_image_path(new_backup))
+                await asyncio.to_thread(
+                    shutil.copy2, service.get_image_path(backup), service.get_image_path(new_backup)
+                )
                 if item.original_image_path == backup:
                     item.original_image_path = new_backup
             set_active_photo(item, created, "custom")

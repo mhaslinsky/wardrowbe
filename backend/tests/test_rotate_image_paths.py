@@ -1,3 +1,4 @@
+import threading
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -203,3 +204,37 @@ async def test_rotation_accepts_redraw_claim_without_files(
     assert item.photo_redraw["claim_id"] == "pending-claim"
     assert all(paths_of(item)[field] != path for field, path in previous.items())
     assert set(previous.values()) <= set(item.photo_redraw.get("files", []))
+
+
+@pytest.mark.parametrize("worker", [False, True])
+async def test_rotation_copies_photos_and_backup_off_event_loop(
+    client, auth_headers, db_session, test_user, worker
+):
+    item = await _make_item(db_session, test_user)
+    service = ImageService()
+    backup = item.image_path.rsplit(".", 1)[0] + "_orig.jpg"
+    Image.new("RGB", (400, 600), "blue").save(service.get_image_path(backup))
+    item.original_image_path = backup
+    await db_session.commit()
+    event_loop_thread = threading.get_ident()
+    copy_threads = {}
+    copy_file = photos.shutil.copy2
+
+    def observe_copy(source, destination, *args, **kwargs):
+        copy_threads[str(destination)] = threading.get_ident()
+        return copy_file(source, destination, *args, **kwargs)
+
+    with patch.object(photos.shutil, "copy2", observe_copy):
+        assert await rotate(client, auth_headers, db_session, item.id, worker)
+    await db_session.refresh(item)
+    copied_paths = [*paths_of(item).values(), item.original_image_path]
+    assert all(
+        copy_threads[str(service.get_image_path(path))] != event_loop_thread
+        for path in copied_paths
+    )
+    assert all(service.get_image_path(path).is_file() for path in copied_paths)
+    assert item.original_image_path != backup
+    with Image.open(service.get_image_path(item.image_path)) as image:
+        assert image.size == (600, 400)
+    with Image.open(service.get_image_path(item.original_image_path)) as image:
+        assert image.size == (600, 400)
