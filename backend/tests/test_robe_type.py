@@ -25,6 +25,7 @@ from app.utils.garment_vocabulary import (
     render_tagging_prompt,
 )
 from app.utils.prompts import load_prompt
+from app.utils.timezone import get_user_today
 from app.utils.washing import never_washed, wash_interval
 from tests.test_ha_actions import LAUNDRY_DONE, TOKEN, _ha_settings
 from tests.test_image_undo_replace import _make_item
@@ -139,7 +140,7 @@ async def test_robe_wear_and_laundry_reset(client, db_session, test_user, kind):
     robe_id = robe.id
     for offset in range(3):
         await db_session.refresh(test_user)
-        day = date.today() - timedelta(days=2 - offset)
+        day = get_user_today(test_user) - timedelta(days=2 - offset)
         outfit = await source(db_session, test_user, [robe_id], day=day)
         await WearService(db_session).log_worn(test_user, outfit, day, caller="test")
         await db_session.commit()
