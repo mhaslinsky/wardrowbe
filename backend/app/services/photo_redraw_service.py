@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import logging
+import shutil
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -170,12 +171,36 @@ def prepare_photo_edit(item) -> dict[str, str]:
 
 
 @asynccontextmanager
-async def edit_photo(db, item):
+async def edit_photo(db, item, *, fresh_copy=False):
     """Commit an edit's ownership or remove its newly created working files."""
     item_id = item.id
     created = {}
     try:
-        created = prepare_photo_edit(item)
+        if fresh_copy:
+            # Fresh filenames keep browser caches from serving the previous rotation.
+            service = ImageService()
+            if not item.image_path:
+                raise ValueError("Item has no image")
+            if not service.get_image_path(item.image_path).is_file():
+                raise ValueError(f"Image not found: {item.image_path}")
+            paths = {field: getattr(item, field) for field in PHOTO_FIELDS}
+            backup = f"{item.image_path.rsplit('.', 1)[0]}_orig.jpg"
+            created = await asyncio.to_thread(service.copy_photo, paths)
+            if service.get_image_path(backup).exists():
+                new_backup = f"{created['image_path'].rsplit('.', 1)[0]}_orig.jpg"
+                await asyncio.to_thread(
+                    shutil.copy2, service.get_image_path(backup), service.get_image_path(new_backup)
+                )
+                if item.original_image_path == backup:
+                    item.original_image_path = new_backup
+            set_active_photo(item, created, "custom")
+            if item.photo_redraw:
+                item.photo_redraw = {
+                    **item.photo_redraw,
+                    "live": created,
+                }
+        else:
+            created = prepare_photo_edit(item)
         yield
         await db.commit()
     except BaseException:

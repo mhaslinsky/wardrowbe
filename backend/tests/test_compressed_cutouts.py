@@ -169,7 +169,7 @@ async def test_backfill_updates_gallery_after_primary_swap(
     "operation",
     ["rotate", "rotate_worker", "remove-background", "remove_worker", "restore-original"],
 )
-async def test_edits_preserve_stored_paths_and_update_content(
+async def test_edits_preserve_formats_and_update_content(
     db_session, test_user, client, auth_headers, backfilled, operation
 ):
     service, item = await persisted_cutout(db_session, test_user)
@@ -202,7 +202,11 @@ async def test_edits_preserve_stored_paths_and_update_content(
             )
             assert response.status_code == 200, response.text
     await db_session.refresh(item)
-    assert paths_of(item) == paths
+    if operation.startswith("rotate"):
+        assert all(paths_of(item)[field] != path for field, path in paths.items())
+        assert all(service.get_image_path(path).exists() for path in paths.values())
+    else:
+        assert paths_of(item) == paths
     assert service.get_image_path(item.medium_path).read_bytes() != before
     with Image.open(service.get_image_path(item.medium_path)) as preview:
         assert preview.format == ("WEBP" if backfilled else "PNG")

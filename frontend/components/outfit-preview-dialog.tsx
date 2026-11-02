@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, ChevronLeft, ChevronRight, X, RotateCcw, RotateCw, Loader2, Users, Star, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { type Outfit } from '@/lib/hooks/use-outfits';
 import { useCurrentFamilyMember, useFamily } from '@/lib/hooks/use-family';
 import { useRotateImage } from '@/lib/hooks/use-items';
+import type { Item } from '@/lib/types';
 import { FamilyRatingForm, FamilyRatingsDisplay } from '@/components/family-ratings';
 import { toast } from 'sonner';
 import Image from 'next/image';
@@ -50,15 +51,19 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
   const subtypeLabel = useSubtypeLabel();
   const occasionLabel = useOccasionLabel();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [imageKey, setImageKey] = useState(0); // Force image reload after rotation
+  const [rotatedItems, setRotatedItems] = useState<Record<string, Item>>({});
   const [showRatingForm, setShowRatingForm] = useState(false);
-  const items = outfit.items;
+  const items = outfit.items.map((item) => rotatedItems[item.id] ?? item);
   const rotateImage = useRotateImage();
   const { data: family } = useFamily();
   const { member: currentMember } = useCurrentFamilyMember(family);
   const isInFamily = !!family && !!currentMember;
   const canRate = isInFamily && !isOwner;
   const myRating = outfit.family_ratings?.find((r) => r.user_id === currentMember?.id);
+
+  useEffect(() => {
+    setRotatedItems({});
+  }, [outfit, open]);
 
   const currentItem = items[currentIndex];
 
@@ -72,8 +77,8 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
 
   const handleRotate = async (direction: 'cw' | 'ccw') => {
     try {
-      await rotateImage.mutateAsync({ id: currentItem.id, direction });
-      setImageKey((k) => k + 1); // Force image reload
+      const rotated = await rotateImage.mutateAsync({ id: currentItem.id, direction });
+      setRotatedItems((previous) => ({ ...previous, [rotated.id]: rotated }));
       toast.success(t('imageRotated'));
     } catch {
       toast.error(t('rotateFailed'));
@@ -115,7 +120,7 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
               <div className="relative aspect-square w-full max-h-[280px] sm:max-h-[350px]">
                 {garmentImageUrl(currentItem, 'detail') ? (
                   <Image
-                    key={`${currentItem.id}-${imageKey}`}
+                    key={currentItem.id}
                     src={garmentImageUrl(currentItem, 'detail')!}
                     alt={currentItem.name || typeLabel(currentItem.type)}
                     fill

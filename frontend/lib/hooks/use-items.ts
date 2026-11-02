@@ -569,7 +569,12 @@ export function useRotateImage() {
       applySessionToken(session);
       return api.post<Item>(`/items/${id}/rotate?direction=${direction}`);
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (item, variables) => {
+      queryClient.setQueryData(queryKeys.item(variables.id), item);
+      queryClient.setQueriesData<ItemListResponse>({ queryKey: queryKeys.items.all }, (previous) => {
+        if (!previous) return previous;
+        return { ...previous, items: previous.items.map((cached) => cached.id === item.id ? item : cached) };
+      });
       invalidatePrimaryImageQueries(queryClient, variables.id);
     },
   });
