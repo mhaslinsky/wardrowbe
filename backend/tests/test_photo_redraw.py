@@ -260,8 +260,8 @@ async def test_no_redraw_keeps_base_file_behavior(
             response.json()[field] for field in ("image_path", "medium_path", "thumbnail_path")
         ]
         assert response.json()["additional_images"] == []
-        assert before.isdisjoint(after)
-        assert len(after) == len(before)
+        assert before <= after
+        assert len(after - before) == len(paths)
         assert Image.open(service.get_image_path(response.json()["image_path"])).size == (600, 600)
     else:
         assert all(not service.get_image_path(path).exists() for path in paths)

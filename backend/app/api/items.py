@@ -2235,11 +2235,8 @@ async def set_primary_image(
             detail="Item not found",
         )
 
-    item = await photos.lock_photo(db, item)
     result = await db.execute(
-        select(ItemImage)
-        .where(ItemImage.id == image_id, ItemImage.item_id == item_id)
-        .execution_options(populate_existing=True)
+        select(ItemImage).where(ItemImage.id == image_id, ItemImage.item_id == item_id)
     )
     item_image = result.scalar_one_or_none()
 
@@ -2248,6 +2245,9 @@ async def set_primary_image(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Image not found",
         )
+
+    if item.photo_redraw:
+        item = await photos.lock_photo(db, item)
 
     # Swap paths: current primary -> additional, additional -> primary
     old_primary = {

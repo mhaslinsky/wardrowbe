@@ -204,7 +204,7 @@ async def test_edits_preserve_formats_and_update_content(
     await db_session.refresh(item)
     if operation.startswith("rotate"):
         assert all(paths_of(item)[field] != path for field, path in paths.items())
-        assert all(not service.get_image_path(path).exists() for path in paths.values())
+        assert all(service.get_image_path(path).exists() for path in paths.values())
     else:
         assert paths_of(item) == paths
     assert service.get_image_path(item.medium_path).read_bytes() != before

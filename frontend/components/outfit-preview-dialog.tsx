@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, ChevronLeft, ChevronRight, X, RotateCcw, RotateCw, Loader2, Users, Star, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { type Outfit } from '@/lib/hooks/use-outfits';
 import { useCurrentFamilyMember, useFamily } from '@/lib/hooks/use-family';
 import { useRotateImage } from '@/lib/hooks/use-items';
-import { queryKeys } from '@/lib/hooks/query-keys';
 import type { Item } from '@/lib/types';
 import { FamilyRatingForm, FamilyRatingsDisplay } from '@/components/family-ratings';
 import { toast } from 'sonner';
@@ -53,8 +51,9 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
   const subtypeLabel = useSubtypeLabel();
   const occasionLabel = useOccasionLabel();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [rotatedItems, setRotatedItems] = useState<Record<string, Item>>({});
   const [showRatingForm, setShowRatingForm] = useState(false);
-  const items = outfit.items;
+  const items = outfit.items.map((item) => rotatedItems[item.id] ?? item);
   const rotateImage = useRotateImage();
   const { data: family } = useFamily();
   const { member: currentMember } = useCurrentFamilyMember(family);
@@ -62,12 +61,11 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
   const canRate = isInFamily && !isOwner;
   const myRating = outfit.family_ratings?.find((r) => r.user_id === currentMember?.id);
 
-  const snapshotItem = items[currentIndex];
-  const { data: cachedItem } = useQuery<Item>({
-    queryKey: queryKeys.item(snapshotItem?.id ?? ''),
-    enabled: false,
-  });
-  const currentItem = cachedItem ?? snapshotItem;
+  useEffect(() => {
+    setRotatedItems({});
+  }, [outfit, open]);
+
+  const currentItem = items[currentIndex];
 
   const goToPrev = () => {
     setCurrentIndex((prev) => (prev === 0 ? items.length - 1 : prev - 1));
@@ -79,7 +77,8 @@ export function OutfitPreviewDialog({ outfit, open, onClose, isOwner = true }: O
 
   const handleRotate = async (direction: 'cw' | 'ccw') => {
     try {
-      await rotateImage.mutateAsync({ id: currentItem.id, direction });
+      const rotated = await rotateImage.mutateAsync({ id: currentItem.id, direction });
+      setRotatedItems((previous) => ({ ...previous, [rotated.id]: rotated }));
       toast.success(t('imageRotated'));
     } catch {
       toast.error(t('rotateFailed'));

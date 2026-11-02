@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 async def rotate_item_image_job(ctx: dict, item_id: str, direction: str) -> dict:
-    """Rotate fresh photo copies and commit their paths before deleting old files."""
+    """Rotate fresh photo copies and commit their paths."""
     db = get_db_session(ctx)
     try:
         result = await db.execute(select(ClothingItem).where(ClothingItem.id == UUID(item_id)))

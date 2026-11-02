@@ -139,13 +139,14 @@ it('renders the rotated URL in the real outfit dialog while the outfit snapshot 
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   const previous: OutfitItem = {
     id: 'item-1', name: 'Shirt', type: 'shirt', image_url: '/old.jpg',
-    image_path: 'old.jpg', thumbnail_path: null, thumbnail_url: null,
+    image_path: 'old.jpg', thumbnail_path: 'old-thumb.jpg', thumbnail_url: '/old-thumb.jpg',
     subtype: null, primary_color: null, colors: [], layer_type: null,
     position: 0, needs_wash: false,
   }
-  const rotated = { ...previous, image_url: '/rotated.jpg' }
+  const rotated = { ...previous, image_url: '/rotated.jpg', thumbnail_url: '/rotated-thumb.jpg' }
+  const second = { ...previous, id: 'item-2', name: 'Pants', image_url: '/pants.jpg', thumbnail_url: '/pants-thumb.jpg' }
   const outfit = {
-    id: 'outfit-1', items: [previous], occasion: 'casual', scheduled_for: null,
+    id: 'outfit-1', items: [previous, second], occasion: 'casual', scheduled_for: null,
     reasoning: null, style_notes: null, highlights: null, family_ratings: null,
     family_rating_average: null, family_rating_count: null,
   }
@@ -154,9 +155,34 @@ it('renders the rotated URL in the real outfit dialog while the outfit snapshot 
   render(<QueryClientProvider client={client}>
     <OutfitPreviewDialog outfit={outfit} open onClose={() => {}} />
   </QueryClientProvider>)
-  expect(screen.getByAltText('Shirt')).toHaveAttribute('src', '/old.jpg')
+  expect(screen.getAllByAltText('Shirt').map(image => image.getAttribute('src'))).toEqual(['/old.jpg', '/old-thumb.jpg'])
   fireEvent.click(screen.getByTitle('rotateRight'))
-  await waitFor(() => expect(screen.getByAltText('Shirt')).toHaveAttribute('src', '/rotated.jpg'))
+  await waitFor(() => expect(screen.getAllByAltText('Shirt').map(image => image.getAttribute('src'))).toEqual(['/rotated.jpg', '/rotated-thumb.jpg']))
+  fireEvent.click(screen.getByAltText('Pants'))
+  expect(screen.getByAltText('Shirt')).toHaveAttribute('src', '/rotated-thumb.jpg')
+  expect(screen.getAllByAltText('Pants').map(image => image.getAttribute('src'))).toEqual(['/pants.jpg', '/pants-thumb.jpg'])
   expect(outfit.items[0].image_url).toBe('/old.jpg')
+  client.clear()
+})
+
+it('opens a current outfit snapshot without replacing it with an older item cache', async () => {
+  const { OutfitPreviewDialog } = await import('@/components/outfit-preview-dialog')
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
+  const item: OutfitItem = {
+    id: 'item-1', name: 'Shirt', type: 'shirt', image_url: '/current.jpg',
+    image_path: 'current.jpg', thumbnail_path: null, thumbnail_url: null,
+    subtype: null, primary_color: null, colors: [], layer_type: null,
+    position: 0, needs_wash: false,
+  }
+  client.setQueryData(queryKeys.item(item.id), { ...item, image_url: '/older.jpg' })
+  const outfit = {
+    id: 'outfit-1', items: [item], occasion: 'casual', scheduled_for: null,
+    reasoning: null, style_notes: null, highlights: null, family_ratings: null,
+    family_rating_average: null, family_rating_count: null,
+  }
+  render(<QueryClientProvider client={client}>
+    <OutfitPreviewDialog outfit={outfit} open onClose={() => {}} />
+  </QueryClientProvider>)
+  expect(screen.getByAltText('Shirt')).toHaveAttribute('src', '/current.jpg')
   client.clear()
 })
