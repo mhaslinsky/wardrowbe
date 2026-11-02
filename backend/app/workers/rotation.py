@@ -19,11 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 async def rotate_item_image_job(ctx: dict, item_id: str, direction: str) -> dict:
-    """Rotate one item's stored image and regenerate its size variants.
-
-    Rotation overwrites in place, so the item's three paths are unchanged and
-    only status bookkeeping is written back.
-    """
+    """Rotate fresh photo copies and commit their paths before deleting old files."""
     db = get_db_session(ctx)
     try:
         result = await db.execute(select(ClothingItem).where(ClothingItem.id == UUID(item_id)))
@@ -37,7 +33,7 @@ async def rotate_item_image_job(ctx: dict, item_id: str, direction: str) -> dict
 
         try:
             item = await lock_photo(db, item)
-            async with edit_photo(db, item):
+            async with edit_photo(db, item, fresh_copy=True):
                 image_service = ImageService()
                 await asyncio.to_thread(
                     image_service.rotate_image,

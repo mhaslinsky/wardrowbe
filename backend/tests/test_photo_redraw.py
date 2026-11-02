@@ -59,7 +59,7 @@ async def image_action(client, headers, item, action):
             ).status_code == 200
         response = await client.post(prefix + "/" + action, json={}, headers=headers)
         if action in ("rotate", "remove-background"):
-            assert locked.await_count == 1
+            assert locked.await_count == (2 if action == "rotate" else 1)
         return response
 
 
@@ -261,10 +261,11 @@ async def test_no_redraw_keeps_base_file_behavior(
     if action == "rotate":
         assert [
             response.json()[field] for field in ("image_path", "medium_path", "thumbnail_path")
-        ] == paths
+        ] != paths
         assert response.json()["additional_images"] == []
-        assert before == after
-        assert Image.open(service.get_image_path(paths[0])).size == (600, 600)
+        assert before.isdisjoint(after)
+        assert len(after) == len(before)
+        assert Image.open(service.get_image_path(response.json()["image_path"])).size == (600, 600)
     else:
         assert all(not service.get_image_path(path).exists() for path in paths)
         assert len(after - before) == (3 if action == "replace" else 0)

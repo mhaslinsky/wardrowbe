@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
@@ -8,12 +8,16 @@ import {
   useReplaceItemImage,
   useRestoreOriginal,
   useRotateImage,
+  useItem,
+  useItems,
   useSetPrimaryImage,
 } from '@/lib/hooks/use-items'
+import { queryKeys } from '@/lib/hooks/query-keys'
+import type { Item } from '@/lib/types'
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
-  api: { post: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue(undefined) },
+  api: { get: vi.fn(), post: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue(undefined) },
   getAccessToken: vi.fn(() => null),
 }))
 
@@ -46,8 +50,51 @@ function invalidatedKeys(invalidate: ReturnType<typeof setup>['invalidate']) {
 }
 
 afterEach(() => {
+  cleanup()
   vi.mocked(api.post).mockClear()
   vi.restoreAllMocks()
+})
+
+it('renders the rotated URL in item and wardrobe queries before refetch finishes', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
+  const previous = { id: 'item-1', image_url: '/old.jpg', medium_url: '/old-medium.jpg' } as Item
+  const rotated = { ...previous, image_url: '/rotated.jpg', medium_url: '/rotated-medium.jpg' }
+  client.setQueryData(queryKeys.item(previous.id), previous)
+  client.setQueryData(queryKeys.items.list({}, 1, 24), { items: [previous], total: 1 })
+  vi.mocked(api.get).mockImplementation(() => new Promise(() => {}))
+  vi.mocked(api.post).mockResolvedValueOnce(rotated)
+  let finished!: () => void
+  const completed = new Promise<void>((resolve) => { finished = resolve })
+
+  function Photos() {
+    const { data: item } = useItem(previous.id)
+    const { data: wardrobe } = useItems({}, 1, 24)
+    const mutation = useRotateImage()
+    return <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img alt="Item" src={item?.medium_url || ''} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img alt="Wardrobe" src={wardrobe?.items[0].image_url || ''} />
+      <button onClick={async () => {
+        await mutation.mutateAsync({ id: previous.id, direction: 'cw' })
+        finished()
+      }}>Rotate</button>
+    </>
+  }
+
+  render(<QueryClientProvider client={client}><Photos /></QueryClientProvider>)
+  expect(screen.getByAltText('Item')).toHaveAttribute('src', '/old-medium.jpg')
+  expect(screen.getByAltText('Wardrobe')).toHaveAttribute('src', '/old.jpg')
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate' }))
+    await completed
+  })
+  expect(client.getQueryData(queryKeys.item(previous.id))).toEqual(rotated)
+  await waitFor(() => {
+    expect(screen.getByAltText('Item')).toHaveAttribute('src', rotated.medium_url)
+    expect(screen.getByAltText('Wardrobe')).toHaveAttribute('src', rotated.image_url)
+  })
+  client.clear()
 })
 
 describe('mutations that change an item primary image', () => {

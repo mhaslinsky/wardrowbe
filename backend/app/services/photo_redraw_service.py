@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import logging
+import shutil
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
@@ -170,12 +171,42 @@ def prepare_photo_edit(item) -> dict[str, str]:
 
 
 @asynccontextmanager
-async def edit_photo(db, item):
+async def edit_photo(db, item, *, fresh_copy=False):
     """Commit an edit's ownership or remove its newly created working files."""
     item_id = item.id
     created = {}
+    outgoing = {}
     try:
-        created = prepare_photo_edit(item)
+        if fresh_copy:
+            # Fresh filenames keep browser caches from serving the previous rotation.
+            service = ImageService()
+            outgoing = {field: getattr(item, field) for field in PHOTO_FIELDS}
+            backup = f"{item.image_path.rsplit('.', 1)[0]}_orig.jpg"
+            saved = set((item.photo_redraw or {}).get("retained", []))
+            for choice in ("original", "redrawn"):
+                paths = (item.photo_redraw or {}).get(choice, {})
+                saved.update(paths.values())
+            created = service.copy_photo(outgoing)
+            if service.get_image_path(backup).exists():
+                outgoing["backup"] = backup
+                new_backup = f"{created['image_path'].rsplit('.', 1)[0]}_orig.jpg"
+                shutil.copy2(service.get_image_path(backup), service.get_image_path(new_backup))
+                if item.original_image_path == backup:
+                    item.original_image_path = new_backup
+            if item.original_image_path:
+                saved.add(item.original_image_path)
+            outgoing = {field: path for field, path in outgoing.items() if path not in saved}
+            set_active_photo(item, created, "custom")
+            if item.photo_redraw:
+                item.photo_redraw = {
+                    **item.photo_redraw,
+                    "live": created,
+                    "files": [
+                        path for path in item.photo_redraw["files"] if path not in outgoing.values()
+                    ],
+                }
+        else:
+            created = prepare_photo_edit(item)
         yield
         await db.commit()
     except BaseException:
@@ -192,6 +223,12 @@ async def edit_photo(db, item):
                 {field: path for field, path in candidates.items() if path not in owned}
             )
         raise
+    if outgoing:
+        current = await lock_photo(db, item, missing_ok=True)
+        owned = set(retained_paths(current).values()) if current is not None else set()
+        ImageService().delete_images(
+            {field: path for field, path in outgoing.items() if path not in owned}
+        )
 
 
 def cutout(image: Image.Image) -> Image.Image:

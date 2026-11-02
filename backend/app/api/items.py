@@ -1844,7 +1844,7 @@ async def rotate_item_image(
     item = await photos.lock_photo(db, item)
     try:
         image_service = ImageService()
-        async with photos.edit_photo(db, item):
+        async with photos.edit_photo(db, item, fresh_copy=True):
             # to_thread because rotate_image is a blocking decode/resize/encode
             # cycle; calling it directly stalls the whole event loop for its
             # duration, which on a large image is seconds of dead API.

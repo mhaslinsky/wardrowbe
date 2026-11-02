@@ -35,6 +35,8 @@ Open an item, choose **Edit item**, correct its details, then save. Add useful f
 
 The item dialog also lets you rotate or replace photos, remove a background, choose a primary image, retry AI analysis, toggle a favorite, and delete an item. Deletion asks for confirmation and cannot be undone.
 
+Use Rotate left or Rotate right to turn a photo 90 degrees. The photo updates without a page refresh, including after a bulk rotation finishes.
+
 ### Clean up a clothing photo
 
 **Remove background** cuts out the garment. **Undo background removal** restores the original. Background removal needs the server's local image model or a configured HTTP provider.
