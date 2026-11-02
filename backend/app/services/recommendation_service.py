@@ -60,6 +60,7 @@ from app.utils.garment_vocabulary import (
     NEAR_FACE_TYPES,
     is_suggestion_type,
     render_outfit_prompt,
+    suggestion_rejection_message,
 )
 from app.utils.preference_defaults import (
     DEFAULT_LAYERING_PREFERENCE,
@@ -1138,11 +1139,7 @@ class RecommendationService:
             )
             anchor = await self.db.get(ClothingItem, considering_anchor_id)
             if not is_suggestion_type(anchor.type):
-                raise ValueError(
-                    "Glasses aren't used in outfit suggestions"
-                    if (anchor.type or "").strip().lower() == "glasses"
-                    else "Underwear can't be part of an outfit"
-                )
+                raise ValueError(suggestion_rejection_message([anchor.type]))
             if include_items and set(include_items) != {considering_anchor_id}:
                 raise ValueError("Choose one considering anchor")
             include_items = [considering_anchor_id]
@@ -1243,11 +1240,7 @@ class RecommendationService:
                 forced_items = list(result.scalars().all())
                 if any(not is_suggestion_type(item.type) for item in forced_items):
                     raise ValueError(
-                        "Glasses aren't used in outfit suggestions"
-                        if any(
-                            (item.type or "").strip().lower() == "glasses" for item in forced_items
-                        )
-                        else "Underwear can't be part of an outfit"
+                        suggestion_rejection_message(item.type for item in forced_items)
                     )
                 candidates.extend(forced_items)
                 logger.info(f"Force-included {len(forced_items)} items in recommendation")

@@ -20,6 +20,7 @@ from app.utils.garment_vocabulary import (
     NEEDS_BASE_TOP_TYPES,
     THIN_BASE_SUBTYPES,
     THIN_BASE_TOP_TYPES,
+    is_suggestion_type,
 )
 
 
@@ -89,7 +90,7 @@ def outfit_pool(owned: list[ClothingItem]) -> tuple[list[ClothingItem], int]:
     eligible = [
         item
         for item in owned
-        if normalize(item.type) in ITEM_ROLE and ITEM_ROLE[normalize(item.type)] != "underwear"
+        if normalize(item.type) in ITEM_ROLE and is_suggestion_type(normalize(item.type))
     ]
     selected = []
     for role in ("base_top", "bottom", "full_body", "footwear"):
@@ -126,7 +127,7 @@ def outfit_ideas(
     }
     if normalize(anchor.type) not in ITEM_ROLE:
         return {**result, "status": "unknown"}
-    if ITEM_ROLE[normalize(anchor.type)] == "underwear":
+    if not is_suggestion_type(normalize(anchor.type)):
         return {**result, "status": "not_applicable"}
     items = {item.id: item for item in [anchor, *pool]}
     types = {item.id: normalize(item.type) for item in items.values()}

@@ -1,5 +1,6 @@
 import json
 import re
+from collections.abc import Iterable
 from pathlib import Path
 
 _VOCABULARY_PATH = Path(__file__).parent.parent / "data" / "garment_vocabulary.json"
@@ -98,8 +99,22 @@ def is_outfit_type(item_type: str | None) -> bool:
     return ITEM_ROLE.get((item_type or "").strip().lower()) != "underwear"
 
 
+SUGGESTION_EXCLUDED_TYPES = frozenset({"glasses", "robe"})
+
+
 def is_suggestion_type(item_type: str | None) -> bool:
-    return is_outfit_type(item_type) and (item_type or "").strip().lower() != "glasses"
+    return (
+        is_outfit_type(item_type)
+        and (item_type or "").strip().lower() not in SUGGESTION_EXCLUDED_TYPES
+    )
+
+
+def suggestion_rejection_message(item_types: Iterable[str | None]) -> str:
+    if any(
+        (item_type or "").strip().lower() in SUGGESTION_EXCLUDED_TYPES for item_type in item_types
+    ):
+        return "This item type isn't used in outfit suggestions"
+    return "Underwear can't be part of an outfit"
 
 
 def types_for_role(role: str) -> list[str]:
