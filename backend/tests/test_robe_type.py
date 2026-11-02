@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.models import ClothingItem
+from app.models import OutfitItem
 from app.models.considering import ItemPurchase
 from app.services.inspiration_service import match_slots
 from app.services.item_scorer import score_items
@@ -167,11 +167,22 @@ def test_shared_rejection_and_existing_type_controls():
 async def test_manual_robe_preview(
     client, auth_headers, db_session, test_user, preview_setup, layer_transport
 ):
-    robe = await db_session.get(ClothingItem, preview_setup["items"][0])
-    robe.type = "robe"
+    robe = await robe_item(db_session, test_user)
+    db_session.add(
+        OutfitItem(
+            outfit_id=preview_setup["outfit"],
+            item_id=robe.id,
+            position=2,
+            layer_type="outer",
+        )
+    )
     await db_session.commit()
     await upload(client, auth_headers)
     await PreviewService(db_session).generate(preview_setup["outfit"], test_user.id, False)
-    prompt = request_prompt(layer_transport.requests[0])
-    garments = json.loads(prompt.split("<garment_data>\n")[1].split("\n</garment_data>")[0])
-    assert any(entry["type"] == "robe" for entry in garments)
+    assert len(layer_transport.requests) == 2
+    base_prompt = request_prompt(layer_transport.requests[0])
+    base_garments = json.loads(
+        base_prompt.split("<garment_data>\n")[1].split("\n</garment_data>")[0]
+    )
+    assert {entry["type"] for entry in base_garments} == {"shirt", "pants"}
+    assert '"type": "robe"' in request_prompt(layer_transport.requests[1])
