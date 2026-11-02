@@ -256,7 +256,8 @@
     "underwear": "Unterwäsche",
     "top": "Top",
     "vest": "Weste",
-    "glasses": "Brille"
+    "glasses": "Brille",
+    "robe": "Bademantel"
   },
   "weatherConditions": {
     "clear": "Klar",

@@ -3,6 +3,7 @@ import logging
 import re
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,7 +15,12 @@ from app.models.user import User
 from app.services.ai_service import AIResponseTruncatedError, AIService, require_internal_ai
 from app.services.ai_telemetry_service import CallContext
 from app.utils.clothing import covered_body_slots, deduplicate_by_body_slot, repair_top_layers
-from app.utils.garment_vocabulary import is_suggestion_type, render_outfit_prompt
+from app.utils.garment_vocabulary import (
+    is_outfit_type,
+    is_suggestion_type,
+    render_outfit_prompt,
+    suggestion_rejection_message,
+)
 from app.utils.prompts import load_prompt
 from app.utils.timezone import get_user_today
 
@@ -54,7 +60,11 @@ class PairingService:
             query = query.where(owned_item())
         result = await self.db.execute(query)
         item = result.scalar_one_or_none()
-        return item if item is not None and is_suggestion_type(item.type) else None
+        if item is None or not is_outfit_type(item.type):
+            return None
+        if not is_suggestion_type(item.type):
+            raise HTTPException(422, suggestion_rejection_message([item.type]))
+        return item
 
     async def get_available_items(self, user: User, exclude_item_id: UUID) -> list[ClothingItem]:
         query = select(ClothingItem).where(
