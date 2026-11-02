@@ -11,6 +11,7 @@
     {"value": "jumpsuit", "role": "full_body", "wash_interval": 2, "near_face": true},
     {"value": "skirt", "role": "bottom", "wash_interval": 3},
     {"value": "jacket", "role": "outer_layer", "wash_interval": 8, "near_face": true},
+    {"value": "robe", "role": "outer_layer", "wash_interval": 3, "near_face": true},
     {"value": "coat", "role": "outer_layer", "wash_interval": 10, "near_face": true},
     {"value": "sweater", "role": "base_top", "wash_interval": 5, "can_be_mid_layer": true, "needs_base_top": true, "near_face": true},
     {"value": "hoodie", "role": "outer_layer", "wash_interval": 4, "can_be_mid_layer": true, "needs_base_top": true, "near_face": true},

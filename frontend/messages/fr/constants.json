@@ -256,7 +256,8 @@
     "underwear": "Sous-vêtements",
     "top": "Haut",
     "vest": "Gilet sans manches",
-    "glasses": "Lunettes"
+    "glasses": "Lunettes",
+    "robe": "Peignoir"
   },
   "weatherConditions": {
     "clear": "Dégagé",

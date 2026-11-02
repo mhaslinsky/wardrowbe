@@ -266,7 +266,7 @@ async def test_forced_glasses_are_rejected_before_provider_call(db_session, test
         patch.object(service, "get_candidate_items", AsyncMock(return_value=[])),
         patch("app.services.recommendation_service.AIService") as provider,
     ):
-        with pytest.raises(ValueError, match="Glasses aren't used in outfit suggestions"):
+        with pytest.raises(ValueError, match="This item type isn't used in outfit suggestions"):
             await service.generate_recommendations(
                 test_user, "casual", weather_override=_weather(), include_items=[item.id]
             )
@@ -516,7 +516,7 @@ async def test_authored_outfits_reject_glasses(
         },
     )
     assert response.status_code == 422, response.text
-    assert response.json()["detail"] == "Glasses aren't used in outfit suggestions"
+    assert response.json()["detail"] == "This item type isn't used in outfit suggestions"
 
 
 @pytest.mark.parametrize("state", ["considering", "passed", "bought"])

@@ -256,7 +256,8 @@
     "underwear": "속옷",
     "top": "상의",
     "vest": "조끼",
-    "glasses": "안경"
+    "glasses": "안경",
+    "robe": "가운"
   },
   "weatherConditions": {
     "clear": "맑음",

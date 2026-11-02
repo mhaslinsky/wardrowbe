@@ -256,7 +256,8 @@
     "underwear": "Biancheria intima",
     "top": "Top",
     "vest": "Gilet",
-    "glasses": "Occhiali"
+    "glasses": "Occhiali",
+    "robe": "Accappatoio"
   },
   "weatherConditions": {
     "clear": "Sereno",
