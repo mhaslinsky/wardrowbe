@@ -106,6 +106,18 @@ def retained_paths(item) -> dict[str, str]:
     return {str(index): path for index, path in enumerate(dict.fromkeys(paths)) if path}
 
 
+async def lock_owned_photo_paths(db, item) -> set[str]:
+    item_id = item.id if isinstance(item, ClothingItem) else item
+    current = await lock_photo(db, item_id, missing_ok=True)
+    if current is None:
+        return set()
+    paths = list(retained_paths(current).values())
+    paths.extend(
+        getattr(image, field) for image in current.additional_images for field in PHOTO_FIELDS
+    )
+    return {path for path in paths if path}
+
+
 def set_active_photo(item, new_paths, selected) -> None:
     """Register outgoing and incoming files before changing the active photo."""
     if item.photo_redraw:
@@ -176,10 +188,15 @@ async def edit_photo(db, item, *, fresh_copy=False):
     item_id = item.id
     created = {}
     outgoing = {}
+    new_backup = None
     try:
         if fresh_copy:
             # Fresh filenames keep browser caches from serving the previous rotation.
             service = ImageService()
+            if not item.image_path:
+                raise ValueError("Item has no image")
+            if not service.get_image_path(item.image_path).is_file():
+                raise ValueError(f"Image not found: {item.image_path}")
             outgoing = {field: getattr(item, field) for field in PHOTO_FIELDS}
             backup = f"{item.image_path.rsplit('.', 1)[0]}_orig.jpg"
             saved = set((item.photo_redraw or {}).get("retained", []))
@@ -188,10 +205,10 @@ async def edit_photo(db, item, *, fresh_copy=False):
                 saved.update(paths.values())
             created = service.copy_photo(outgoing)
             if service.get_image_path(backup).exists():
-                outgoing["backup"] = backup
                 new_backup = f"{created['image_path'].rsplit('.', 1)[0]}_orig.jpg"
                 shutil.copy2(service.get_image_path(backup), service.get_image_path(new_backup))
                 if item.original_image_path == backup:
+                    outgoing["backup"] = backup
                     item.original_image_path = new_backup
             if item.original_image_path:
                 saved.add(item.original_image_path)
@@ -213,8 +230,7 @@ async def edit_photo(db, item, *, fresh_copy=False):
         await db.rollback()
         if created:
             # A failed commit acknowledgement can still leave committed owners.
-            current = await lock_photo(db, item_id, missing_ok=True)
-            owned = set(retained_paths(current).values()) if current is not None else set()
+            owned = await lock_owned_photo_paths(db, item_id)
             candidates = {
                 **created,
                 "backup": f"{created['image_path'].rsplit('.', 1)[0]}_orig.jpg",
@@ -224,11 +240,17 @@ async def edit_photo(db, item, *, fresh_copy=False):
             )
         raise
     if outgoing:
-        current = await lock_photo(db, item, missing_ok=True)
-        owned = set(retained_paths(current).values()) if current is not None else set()
-        ImageService().delete_images(
-            {field: path for field, path in outgoing.items() if path not in owned}
-        )
+        try:
+            # Cleanup errors must not abort the response transaction for a committed rotation.
+            async with db.begin_nested():
+                owned = await lock_owned_photo_paths(db, item)
+                if outgoing.get("backup") and item.original_image_path != new_backup:
+                    del outgoing["backup"]
+                ImageService().delete_images(
+                    {field: path for field, path in outgoing.items() if path not in owned}
+                )
+        except Exception:
+            logger.exception("Failed to clean up outgoing rotation files for item %s", item_id)
 
 
 def cutout(image: Image.Image) -> Image.Image:

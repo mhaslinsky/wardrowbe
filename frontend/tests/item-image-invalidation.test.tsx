@@ -13,7 +13,15 @@ import {
   useSetPrimaryImage,
 } from '@/lib/hooks/use-items'
 import { queryKeys } from '@/lib/hooks/query-keys'
-import type { Item } from '@/lib/types'
+import type { Item, OutfitItem } from '@/lib/types'
+
+vi.mock('next/image', () => ({
+  default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
+}))
+vi.mock('@/lib/hooks/use-family', () => ({
+  useFamily: () => ({ data: null }),
+  useCurrentFamilyMember: () => ({ member: null }),
+}))
 
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
@@ -124,4 +132,31 @@ describe('mutations that change an item primary image', () => {
     await run(wrapper)
     expect(invalidatedKeys(invalidate)).toEqual(expect.arrayContaining(PRIMARY_IMAGE_KEYS))
   })
+})
+
+it('renders the rotated URL in the real outfit dialog while the outfit snapshot stays unchanged', async () => {
+  const { OutfitPreviewDialog } = await import('@/components/outfit-preview-dialog')
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
+  const previous: OutfitItem = {
+    id: 'item-1', name: 'Shirt', type: 'shirt', image_url: '/old.jpg',
+    image_path: 'old.jpg', thumbnail_path: null, thumbnail_url: null,
+    subtype: null, primary_color: null, colors: [], layer_type: null,
+    position: 0, needs_wash: false,
+  }
+  const rotated = { ...previous, image_url: '/rotated.jpg' }
+  const outfit = {
+    id: 'outfit-1', items: [previous], occasion: 'casual', scheduled_for: null,
+    reasoning: null, style_notes: null, highlights: null, family_ratings: null,
+    family_rating_average: null, family_rating_count: null,
+  }
+  vi.mocked(api.get).mockImplementation(() => new Promise(() => {}))
+  vi.mocked(api.post).mockResolvedValueOnce(rotated)
+  render(<QueryClientProvider client={client}>
+    <OutfitPreviewDialog outfit={outfit} open onClose={() => {}} />
+  </QueryClientProvider>)
+  expect(screen.getByAltText('Shirt')).toHaveAttribute('src', '/old.jpg')
+  fireEvent.click(screen.getByTitle('rotateRight'))
+  await waitFor(() => expect(screen.getByAltText('Shirt')).toHaveAttribute('src', '/rotated.jpg'))
+  expect(outfit.items[0].image_url).toBe('/old.jpg')
+  client.clear()
 })

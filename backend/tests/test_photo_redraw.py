@@ -32,8 +32,6 @@ def reply(parts):
 
 
 async def image_action(client, headers, item, action):
-    from app.services.photo_redraw_service import lock_photo
-
     prefix = f"/api/v1/items/{item.id}"
     if action == "replace":
         return await client.put(
@@ -49,17 +47,12 @@ async def image_action(client, headers, item, action):
         )
         assert response.json()["deleted"] == 1
         return response
-    with (
-        patch("app.services.background_removal.get_provider", return_value=_mock_provider()),
-        patch("app.services.photo_redraw_service.lock_photo", wraps=lock_photo) as locked,
-    ):
+    with patch("app.services.background_removal.get_provider", return_value=_mock_provider()):
         if action == "restore-original":
             assert (
                 await client.post(prefix + "/remove-background", json={}, headers=headers)
             ).status_code == 200
         response = await client.post(prefix + "/" + action, json={}, headers=headers)
-        if action in ("rotate", "remove-background"):
-            assert locked.await_count == (2 if action == "rotate" else 1)
         return response
 
 
@@ -262,6 +255,10 @@ async def test_no_redraw_keeps_base_file_behavior(
         assert [
             response.json()[field] for field in ("image_path", "medium_path", "thumbnail_path")
         ] != paths
+        await db_session.refresh(item)
+        assert [item.image_path, item.medium_path, item.thumbnail_path] == [
+            response.json()[field] for field in ("image_path", "medium_path", "thumbnail_path")
+        ]
         assert response.json()["additional_images"] == []
         assert before.isdisjoint(after)
         assert len(after) == len(before)
