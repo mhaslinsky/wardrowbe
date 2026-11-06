@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import type { PostHog } from 'posthog-js';
-import { useSession } from 'next-auth/react';
-import { useUserProfile } from '@/lib/hooks/use-user';
+import { useAuth } from '@/lib/hooks/use-auth';
 import { initializePostHog, type PostHogRuntimeConfig } from '@/lib/posthog';
 
 export function PostHogProvider({ config }: { config: PostHogRuntimeConfig }) {
   const [client, setClient] = useState<PostHog>();
-  const { status } = useSession();
-  const { data: user } = useUserProfile();
+  const { user, sessionStatus: status } = useAuth();
 
   useEffect(() => {
     let active = true;
