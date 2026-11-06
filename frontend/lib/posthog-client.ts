@@ -1,3 +1,3 @@
-import 'posthog-js/dist/recorder';
+import 'posthog-js/dist/posthog-recorder';
 
 export { default } from 'posthog-js';
