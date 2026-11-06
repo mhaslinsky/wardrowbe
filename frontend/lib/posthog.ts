@@ -27,7 +27,16 @@ export async function initializePostHog(config: PostHogRuntimeConfig, hostname: 
   if (!client) {
     const options: Partial<PostHogConfig> = {
       api_host: config.host || 'https://us.i.posthog.com',
+      autocapture: false,
+      capture_dead_clicks: false,
+      rageclick: false,
+      capture_heatmaps: false,
+      capture_performance: false,
+      capture_pageview: true,
       capture_exceptions: true,
+      disable_surveys: true,
+      disable_product_tours: true,
+      disable_conversations: true,
       disable_session_recording: false,
       session_recording: {
         maskAllInputs: true,

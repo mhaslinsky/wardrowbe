@@ -9,7 +9,7 @@ it('without a key PostHog does not initialize', async () => {
   expect(init).not.toHaveBeenCalled();
 });
 
-it('unmasked hosts keep defaults; other hosts block images and mask measurements', () => {
+it('unmasked hosts keep defaults; other hosts block images and mask measurements', async () => {
   expect(recordingOptions('allowed.example', ' other.example, ALLOWED.example ')).toEqual({});
   for (const hosts of ['', 'allowed.example', 'masked.example.evil']) {
     const options = recordingOptions('masked.example', hosts);
@@ -19,4 +19,9 @@ it('unmasked hosts keep defaults; other hosts block images and mask measurements
     expect(document.querySelector('span')!.matches(options.maskTextSelector!)).toBe(true);
     expect(document.querySelector('input')!.matches(options.maskTextSelector!)).toBe(true);
   }
+  await initializePostHog({ key: 'test-key' }, 'masked.example');
+  expect(init).toHaveBeenCalledWith('test-key', expect.objectContaining({
+    autocapture: false, capture_dead_clicks: false, rageclick: false, capture_heatmaps: false,
+    capture_performance: false, capture_pageview: true, capture_exceptions: true,
+  }));
 });
