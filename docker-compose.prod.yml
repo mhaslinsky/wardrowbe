@@ -187,6 +187,9 @@ services:
       PUID: ${PUID:-1001}
       PGID: ${PGID:-1001}
       NEXTAUTH_URL: ${NEXTAUTH_URL:-https://localhost:3000}
+      POSTHOG_KEY: ${POSTHOG_KEY:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-}
+      POSTHOG_UNMASKED_HOSTS: ${POSTHOG_UNMASKED_HOSTS:-}
       PUBLIC_HOSTS: ${PUBLIC_HOSTS:-}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
       # NEXT_PUBLIC_API_URL is the pre-1.6 name, still honored so existing .env files keep working.

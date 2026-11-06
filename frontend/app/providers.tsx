@@ -7,9 +7,11 @@ import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/components/auth-provider';
 import { ProfileLocaleSync } from '@/components/profile-locale-sync';
+import { PostHogProvider } from '@/components/posthog-provider';
+import type { PostHogRuntimeConfig } from '@/lib/posthog';
 import { createQueryClient } from '@/lib/query-client';
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, posthog }: { children: React.ReactNode; posthog: PostHogRuntimeConfig }) {
   const [queryClient] = useState(createQueryClient);
 
   return (
@@ -17,6 +19,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
           <ProfileLocaleSync />
+          {posthog.key && <PostHogProvider config={posthog} />}
           <ThemeProvider
             attribute="class"
             defaultTheme="system"

@@ -361,3 +361,7 @@ Operator setup: [AI configuration and notifications](../README.md#configuration)
 Sign in to view photos. A copied photo link works only for someone with access to that photo. Family members can view item photos. Reference photos, AI previews, outfit selfies, and inspiration photos are visible only to their owner.
 
 Sources: [item photo access](../backend/app/api/images.py), [preview and selfie access](../backend/app/api/users.py), [inspiration photo access](../backend/app/api/inspiration.py), [browser photo route](../frontend/app/photos/[...path]/route.ts).
+
+## Session replay and error reporting
+
+Your server operator can enable PostHog for session replay and client error reporting. Input values stay masked on every host. Unless the operator explicitly allows your host, replay also blocks images and masks the body measurements and fit profile sections. Users are identified by their Wardrowbe ID. Signing out resets that identity.
