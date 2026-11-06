@@ -364,4 +364,6 @@ Sources: [item photo access](../backend/app/api/images.py), [preview and selfie 
 
 ## Session replay and error reporting
 
+The replay recorder loads with the app's analytics code instead of a separate recorder script.
+
 Your server operator can enable PostHog for session replay and client error reporting. Input values stay masked on every host. Unless the operator explicitly allows your host, replay also blocks images and masks the body measurements and fit profile sections. Users are identified by their Wardrowbe ID. Signing out resets that identity.

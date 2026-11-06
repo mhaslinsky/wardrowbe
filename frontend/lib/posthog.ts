@@ -23,7 +23,7 @@ let client: PostHog | undefined;
 
 export async function initializePostHog(config: PostHogRuntimeConfig, hostname: string) {
   if (!config.key) return;
-  const { default: posthog } = await import('posthog-js');
+  const { default: posthog } = await import('./posthog-client');
   if (!client) {
     const options: Partial<PostHogConfig> = {
       api_host: config.host || 'https://us.i.posthog.com',
