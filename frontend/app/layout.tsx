@@ -50,7 +50,11 @@ export default async function RootLayout({
       </head>
       <body className={`${inter.variable} font-sans`}>
         <NextIntlClientProvider messages={messages} locale={locale}>
-          <Providers>{children}</Providers>
+          <Providers posthog={{
+            key: process.env.POSTHOG_KEY,
+            host: process.env.POSTHOG_HOST,
+            unmaskedHosts: process.env.POSTHOG_UNMASKED_HOSTS,
+          }}>{children}</Providers>
         </NextIntlClientProvider>
       </body>
     </html>

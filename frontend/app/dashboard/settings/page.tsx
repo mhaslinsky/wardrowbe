@@ -749,7 +749,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Body Measurements */}
-        <Card>
+        <Card data-posthog-measurements>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Ruler className="h-5 w-5" />

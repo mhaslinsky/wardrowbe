@@ -27,7 +27,7 @@ export function FitProfileSettings() {
   };
   const notice = error ?? (query.isError ? 'failed' : null);
   function edit(profile: FitProfile) { setDraft(profile); setDirty(true); setError(null); }
-  return <Card id="fit-profile">
+  return <Card id="fit-profile" data-posthog-measurements>
     <CardHeader><CardTitle>{t('title')}</CardTitle></CardHeader>
     <CardContent>
       <form className="space-y-4" onSubmit={async (event) => {
