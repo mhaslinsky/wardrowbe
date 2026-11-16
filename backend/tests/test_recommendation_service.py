@@ -22,6 +22,8 @@ from app.services.recommendation_service import (
     suggestion_context,
 )
 from app.services.weather_service import WeatherData
+from tests.recommendation_helpers import generation_fakes
+from tests.recommendation_helpers import weather as _weather
 
 
 def _make_user(timezone: str = "UTC") -> User:
@@ -314,36 +316,6 @@ class TestPromptTemplate:
                 mandatory_items_section="",
             )
             assert tod in formatted
-
-
-def _weather(
-    temp=20,
-    temp_min=None,
-    temp_max=None,
-    is_day=True,
-    window_min=None,
-    window_max=None,
-    condition="clear",
-    feels_like=None,
-    precipitation=0,
-) -> WeatherData:
-    return WeatherData(
-        temperature=temp,
-        feels_like=temp if feels_like is None else feels_like,
-        humidity=50,
-        precipitation_chance=precipitation,
-        precipitation_mm=0,
-        wind_speed=10,
-        condition=condition,
-        condition_code=0,
-        is_day=is_day,
-        uv_index=5,
-        timestamp=datetime(2026, 3, 8, 12, 0),
-        temp_min=temp_min,
-        temp_max=temp_max,
-        window_min=window_min,
-        window_max=window_max,
-    )
 
 
 class TestPromptTemplateTempRange:
@@ -1086,14 +1058,6 @@ class TestHotDayLegwear:
         await db_session.commit()
         number_map = {n: item.id for n, item in enumerate(items, start=1)}
         user.preferences = None
-        ai = MagicMock()
-        ai.generate_text = AsyncMock(
-            return_value=MagicMock(
-                content=json.dumps({"outfits": [{"items": o} for o in ai_outfits]}),
-                model="m",
-                endpoint="e",
-            )
-        )
         weather = _weather(temp=35)
         if cached is not None:
             cached = {
@@ -1106,14 +1070,9 @@ class TestHotDayLegwear:
             cached = json.loads(json.dumps(cached))
         rejected = {items[3].id} if unavailable == "rejected" else set()
         service = RecommendationService(db_session)
+        payload = {"outfits": [{"items": o} for o in ai_outfits]}
         with (
-            patch("app.services.recommendation_service.AIService", return_value=ai),
-            patch(
-                "app.services.recommendation_service.pop_suggestion",
-                AsyncMock(side_effect=[cached, None]),
-            ) as pop,
-            patch("app.services.recommendation_service.push_suggestions", AsyncMock()) as push,
-            patch.object(service, "_format_items_for_prompt", return_value=("", number_map)),
+            generation_fakes(service, payload, number_map, cached=cached) as (ai, pop, push),
             patch.object(service, "_get_today_rejected_item_ids", AsyncMock(return_value=rejected)),
         ):
             outfits = await service.generate_recommendations(
@@ -1275,20 +1234,9 @@ class TestOvershirtNeedsATopUnderIt:
                     _weather(temp=12), TimeOfDay.afternoon, None, user.body_measurements
                 ),
             }
-        ai = MagicMock()
-        ai.generate_text = AsyncMock(
-            return_value=MagicMock(content=json.dumps(ai_content), model="m", endpoint="e")
-        )
-        self.ai = ai
         service = RecommendationService(db_session)
         with (
-            patch("app.services.recommendation_service.AIService", return_value=ai),
-            patch(
-                "app.services.recommendation_service.pop_suggestion",
-                AsyncMock(side_effect=[cached, None]),
-            ),
-            patch("app.services.recommendation_service.push_suggestions", AsyncMock()),
-            patch.object(service, "_format_items_for_prompt", return_value=("", number_map)),
+            generation_fakes(service, ai_content, number_map, cached=cached) as (ai, _, _),
             patch.object(
                 service,
                 "_get_today_rejected_item_ids",
@@ -1301,6 +1249,7 @@ class TestOvershirtNeedsATopUnderIt:
                 ),
             ),
         ):
+            self.ai = ai
             outfits = await service.generate_recommendations(
                 user=user,
                 occasion="casual",
