@@ -70,6 +70,9 @@ class TestDressinessClash:
             _item("suit", "formal"), _item("boots", "formal"), _item("coat", "casual")
         )
 
+    def test_a_suit_with_casual_sneakers_clashes(self):
+        assert _clash(_item("suit", "formal"), _item("sneakers", "casual"))
+
     def test_accessories_do_not_count(self):
         assert not _clash(
             _item("t-shirt", "casual"), _item("jeans", "casual"), _item("bag", "very-formal")
@@ -270,6 +273,7 @@ class TestThumbsButtonsReachPairScores:
         stored.responded_at = long_ago
         await db_session.commit()
         db_session.expunge_all()
+        before = datetime.now(UTC)
 
         response = await client.post(
             f"/api/v1/outfits/{outfit.id}/feedback",
@@ -279,7 +283,8 @@ class TestThumbsButtonsReachPairScores:
 
         assert response.status_code == 200, response.text
         db_session.expire_all()
-        assert (await db_session.get(Outfit, outfit.id)).responded_at > long_ago
+        responded_at = (await db_session.get(Outfit, outfit.id)).responded_at
+        assert before <= responded_at <= datetime.now(UTC)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("comment", ["   ", "already said"], ids=["blank", "unchanged"])

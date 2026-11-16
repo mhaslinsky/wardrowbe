@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -1062,7 +1062,7 @@ async def submit_feedback(
     if request.accepted is not None and not feedback.worn_at:
         feedback.accepted = request.accepted
         outfit.status = OutfitStatus.accepted if request.accepted else OutfitStatus.rejected
-        outfit.responded_at = datetime.utcnow()
+        outfit.responded_at = datetime.now(UTC)
 
     if request.rating is not None:
         feedback.rating = request.rating
@@ -1073,7 +1073,7 @@ async def submit_feedback(
     if request.comment is not None:
         # A new note counts as an answer, so the hourly learning job regenerates insights for it.
         if request.comment.strip() and request.comment != feedback.comment:
-            outfit.responded_at = datetime.utcnow()
+            outfit.responded_at = datetime.now(UTC)
         feedback.comment = request.comment
     if request.worn_with_modifications is not None:
         feedback.worn_with_modifications = request.worn_with_modifications
