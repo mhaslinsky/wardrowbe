@@ -102,5 +102,10 @@
     "reset": "초기화",
     "temperature": "기온"
   },
-  "yourOutfit": "오늘의 코디"
+  "yourOutfit": "오늘의 코디",
+  "rejectNote": {
+    "title": "무엇이 별로였나요?",
+    "placeholder": "메모 (선택)",
+    "confirm": "거절"
+  }
 }

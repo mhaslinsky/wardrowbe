@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ItemPicker } from '@/components/shared/item-picker';
 import { OccasionChips } from '@/components/shared/occasion-chips';
+import { RejectNoteDialog } from '@/components/reject-note-dialog';
 import { useOccasionLabel, useWeatherConditionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
 import { useItem } from '@/lib/hooks/use-items';
 import { api, ApiError } from '@/lib/api';
@@ -602,6 +603,7 @@ function SuggestContent() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [activeOptionIndex, setActiveOptionIndex] = useState<number>(0);
   const [isCompareAll, setIsCompareAll] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<Outfit | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -681,14 +683,12 @@ function SuggestContent() {
     handleGenerate();
   };
 
-  const handleReject = async (targetOutfit?: Outfit) => {
-    const outfitToReject = targetOutfit || outfits[activeOptionIndex];
-    if (!outfitToReject) return;
-
+  const handleReject = async (outfitToReject: Outfit, note: string) => {
+    setRejectTarget(null);
     applySessionToken(session);
 
     try {
-      await api.post(`/outfits/${outfitToReject.id}/reject`);
+      await api.post(`/outfits/${outfitToReject.id}/reject`, note ? { comment: note } : undefined);
     } catch (err) {
       console.error('Reject error:', err);
     }
@@ -888,12 +888,18 @@ function SuggestContent() {
           temperatureUnit={temperatureUnit}
           baseItemId={selectedItem?.id}
           onAccept={handleAccept}
-          onReject={handleReject}
+          onReject={(outfit) => setRejectTarget(outfit || outfits[activeOptionIndex] || null)}
           onTryAnother={handleTryAnother}
           onNewRequest={handleNewRequest}
           t={t}
         />
       )}
+
+      <RejectNoteDialog
+        open={rejectTarget !== null}
+        onCancel={() => setRejectTarget(null)}
+        onConfirm={(note) => rejectTarget && handleReject(rejectTarget, note)}
+      />
 
       {/* Item Picker Dialog */}
       <Dialog open={isItemPickerOpen} onOpenChange={setIsItemPickerOpen}>
