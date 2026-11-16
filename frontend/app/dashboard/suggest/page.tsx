@@ -715,7 +715,11 @@ function SuggestContent() {
 
     try {
       const current = await api.get<Outfit>(`/outfits/${outfitToReject.id}`);
-      if (current.feedback?.worn_at) { closeRejectDialog(); setOutfits([]); return; }
+      if (current.feedback?.worn_at) {
+        if (rejectTargetId.current === outfitToReject.id) closeRejectDialog();
+        setOutfits([]);
+        return;
+      }
       await api.post(`/outfits/${outfitToReject.id}/reject`, note ? { comment: note } : undefined);
     } catch (err) {
       console.error('Reject error:', err);
@@ -727,7 +731,8 @@ function SuggestContent() {
     } finally {
       setIsRejecting(false);
     }
-    closeRejectDialog();
+    // Cancel stays available while a reject is sending, so only close the dialog it came from.
+    if (rejectTargetId.current === outfitToReject.id) closeRejectDialog();
 
     const remaining = outfits.filter((o) => o.id !== outfitToReject.id);
     if (remaining.length > 0) {

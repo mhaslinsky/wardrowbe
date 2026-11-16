@@ -64,7 +64,7 @@ You can use **Override weather** to try a different temperature or condition. **
 
 Suggestions skip shoes and bottoms worn twice in seven days, except for pieces you include and those needed to keep at least four choices per category.
 
-Suggestions keep every piece at about the same level of dressiness, and options that mix very casual pieces with dressy ones are listed last. Two pieces you reject together in two different outfits, and never wear or keep as a pair, are not suggested together again.
+Suggestions keep every piece at about the same level of dressiness, and options that mix very casual pieces with dressy ones are listed last. When you reject two pieces together in two different outfits, and never wear or keep them as a pair, the AI is told not to pair them again.
 
 ### Build around a piece with Pairings
 

@@ -204,14 +204,15 @@ def has_dressiness_clash(item_ids: list[UUID], items_by_id: dict[UUID, ClothingI
     """Whether an outfit's pieces sit two or more formality steps apart.
 
     Tops, mid layers, bottoms, one-pieces, suits and shoes always count, and so does an outer
-    layer when the options hold no top or one-piece (a hoodie the AI picked as the top). Otherwise
+    layer when the outfit has no top, one-piece or suit (a hoodie picked as the top). Otherwise
     an outer layer counts only when it is the dressier piece. Items with no known formality are
     ignored.
     """
     items = [items_by_id[item_id] for item_id in item_ids if item_id in items_by_id]
     item_types = {item.id: (item.type or "").lower() for item in items}
     has_inner_top = any(
-        ITEM_ROLE.get(item_type) in ("base_top", "full_body") for item_type in item_types.values()
+        ITEM_ROLE.get(item_type) in ("base_top", "full_body", "suit")
+        for item_type in item_types.values()
     )
     core_levels, outer_levels = [], []
     for item in items:
@@ -228,6 +229,12 @@ def has_dressiness_clash(item_ids: list[UUID], items_by_id: dict[UUID, ClothingI
     if not core_levels:
         return False
     return max(core_levels + outer_levels) - min(core_levels) >= 2
+
+
+def outfit_has_dressiness_clash(outfit: Outfit) -> bool:
+    return has_dressiness_clash(
+        [link.item_id for link in outfit.items], {link.item_id: link.item for link in outfit.items}
+    )
 
 
 @dataclass
@@ -284,11 +291,20 @@ class RecommendationService:
             )
             .execution_options(populate_existing=True)
         )
-        return [
+        outfits = [
             outfit
             for outfit in result.scalars().all()
             if all(is_suggestion_type(link.item.type) for link in outfit.items)
         ]
+        # Options saved in one request share created_at, so the clash order is applied here,
+        # on the saved items, with scheduled outfits still first.
+        outfits.sort(
+            key=lambda outfit: (
+                outfit.source != OutfitSource.scheduled,
+                outfit_has_dressiness_clash(outfit),
+            )
+        )
+        return outfits
 
     async def top_up_day(
         self,
@@ -1526,7 +1542,8 @@ class RecommendationService:
             # Multi-outfit parse
             outfit_list = self._parse_multi_outfit_response(result.content)
             # Options that mix very casual and dressy pieces go last rather than being dropped,
-            # so a wardrobe that can only make such outfits still gets one.
+            # so a wardrobe that can only make such outfits still gets one. Saving can change an
+            # option's pieces, so the saved outfits are ordered again below.
             items_by_id = {item.id: item for item in candidates}
             outfit_list.sort(
                 key=lambda od: has_dressiness_clash(picked_item_ids(od, number_map), items_by_id)
@@ -1560,6 +1577,7 @@ class RecommendationService:
                 outfits.append(outfit)
             if not outfits:
                 raise AIRecommendationError("AI did not select any valid items")
+            outfits.sort(key=outfit_has_dressiness_clash)
 
             # Cache remaining outfits for "Try Another"
             if use_cache and len(outfit_list) > consumed:

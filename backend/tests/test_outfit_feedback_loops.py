@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -63,6 +63,11 @@ class TestDressinessClash:
             _item("shirt", "business-casual"),
             _item("pants", "business-casual"),
             _item("coat", "casual"),
+        )
+
+    def test_a_casual_coat_over_a_suit_is_fine(self):
+        assert not _clash(
+            _item("suit", "formal"), _item("boots", "formal"), _item("coat", "casual")
         )
 
     def test_accessories_do_not_count(self):
@@ -379,6 +384,29 @@ class TestPromptCarriesFeedback:
         assert "- Pairings the user rejected (do not put these together): [2, 3]\n" in prompt
 
     @pytest.mark.asyncio
+    async def test_a_reject_note_reaches_the_prompt_once(
+        self, client, db_session, test_user, auth_headers
+    ):
+        async def setup(db_session, user, items):
+            outfit = Outfit(user_id=user.id, occasion="casual", source=OutfitSource.on_demand)
+            db_session.add(outfit)
+            await db_session.flush()
+            for position, item in enumerate(items[:3]):
+                db_session.add(OutfitItem(outfit_id=outfit.id, item_id=item.id, position=position))
+            await db_session.commit()
+            db_session.expunge(outfit)
+            response = await client.post(
+                f"/api/v1/outfits/{outfit.id}/reject",
+                json={"comment": "no boots with sweats"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 200, response.text
+
+        prompt = await self._prompt(db_session, test_user, setup)
+
+        assert prompt.count("no boots with sweats") == 1
+
+    @pytest.mark.asyncio
     async def test_no_feedback_adds_no_lines(self, db_session, test_user):
         async def setup(db_session, user, items):
             return None
@@ -495,3 +523,48 @@ class TestInsightsAfterAnswers:
             )
         )
         assert newer > 0
+
+
+class TestDaySuggestionOrder:
+    @pytest.mark.asyncio
+    async def test_a_clashing_option_is_listed_after_the_others(self, db_session, test_user):
+        tee, sweats, boots, jeans, sneakers = items = [
+            ClothingItem(
+                user_id=test_user.id,
+                type=item_type,
+                formality=formality,
+                image_path=f"test/{uuid4()}.jpg",
+                status=ItemStatus.ready,
+                primary_color="black",
+            )
+            for item_type, formality in (
+                ("t-shirt", "casual"),
+                ("pants", "very-casual"),
+                ("boots", "smart-casual"),
+                ("jeans", "casual"),
+                ("sneakers", "casual"),
+            )
+        ]
+        db_session.add_all(items)
+        day = date(2026, 11, 20)
+        now = datetime.now(UTC)
+        outfits = []
+        for age, pieces in ((2, (tee, sweats, boots)), (1, (tee, jeans, sneakers))):
+            outfit = Outfit(
+                user_id=test_user.id,
+                occasion="casual",
+                source=OutfitSource.on_demand,
+                scheduled_for=day,
+                created_at=now - timedelta(minutes=age),
+            )
+            db_session.add(outfit)
+            await db_session.flush()
+            for position, item in enumerate(pieces):
+                db_session.add(OutfitItem(outfit_id=outfit.id, item_id=item.id, position=position))
+            outfits.append(outfit)
+        await db_session.commit()
+        clashing, matching = outfits
+
+        listed = await RecommendationService(db_session)._day_suggestions(test_user.id, day)
+
+        assert [outfit.id for outfit in listed] == [matching.id, clashing.id]

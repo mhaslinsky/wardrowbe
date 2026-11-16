@@ -1071,7 +1071,7 @@ async def submit_feedback(
     if request.style_rating is not None:
         feedback.style_rating = request.style_rating
     if request.comment is not None:
-        # A new note is an answer too; dating it keeps it in the notes the AI reads.
+        # A new note counts as an answer, so the hourly learning job regenerates insights for it.
         if request.comment.strip() and request.comment != feedback.comment:
             outfit.responded_at = datetime.utcnow()
         feedback.comment = request.comment
