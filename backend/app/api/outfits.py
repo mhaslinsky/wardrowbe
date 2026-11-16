@@ -243,6 +243,10 @@ class BulkDeleteOutfitsResponse(BaseModel):
     has_more: bool = False
 
 
+class RejectRequest(BaseModel):
+    comment: str | None = Field(None, max_length=1000, description="What was wrong with it")
+
+
 class FeedbackRequest(BaseModel):
     accepted: bool | None = Field(None, description="Whether outfit was accepted")
     rating: int | None = Field(
@@ -909,12 +913,18 @@ async def accept_outfit(
 ) -> OutfitResponse:
     outfit = await OutfitService(db).set_status(outfit_id, current_user.id, OutfitStatus.accepted)
 
-    return await outfit_response(
+    if outfit.feedback is not None:
+        outfit.feedback.accepted = True
+        await db.commit()
+
+    response = await outfit_response(
         db,
         outfit,
         await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id),
         viewer_id=current_user.id,
     )
+    await _run_learning_safely(db, outfit.id, current_user.id)
+    return response
 
 
 @router.post("/{outfit_id}/reject", response_model=OutfitResponse)
@@ -922,16 +932,28 @@ async def reject_outfit(
     outfit_id: UUID,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
+    request: RejectRequest | None = None,
 ) -> OutfitResponse:
     outfit = await OutfitService(db).set_status(outfit_id, current_user.id, OutfitStatus.rejected)
+    comment = (request.comment or "").strip() if request else ""
+    if comment and outfit.feedback is None:
+        outfit.feedback = UserFeedback(outfit_id=outfit.id)
+        db.add(outfit.feedback)
+    if outfit.feedback is not None:
+        outfit.feedback.accepted = False
+        if comment:
+            outfit.feedback.comment = comment
+        await db.commit()
     await clear_suggestions(current_user.id, outfit.occasion)
 
-    return await outfit_response(
+    response = await outfit_response(
         db,
         outfit,
         await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id),
         viewer_id=current_user.id,
     )
+    await _run_learning_safely(db, outfit.id, current_user.id)
+    return response
 
 
 @router.post("/{outfit_id}/skip", response_model=OutfitResponse)
@@ -1049,6 +1071,9 @@ async def submit_feedback(
     if request.style_rating is not None:
         feedback.style_rating = request.style_rating
     if request.comment is not None:
+        # A new note is an answer too; dating it keeps it in the notes the AI reads.
+        if request.comment.strip() and request.comment != feedback.comment:
+            outfit.responded_at = datetime.utcnow()
         feedback.comment = request.comment
     if request.worn_with_modifications is not None:
         feedback.worn_with_modifications = request.worn_with_modifications

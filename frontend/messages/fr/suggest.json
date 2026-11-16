@@ -104,5 +104,10 @@
     "reset": "Réinitialiser",
     "temperature": "Température"
   },
-  "yourOutfit": "Votre tenue"
+  "yourOutfit": "Votre tenue",
+  "rejectNote": {
+    "title": "Qu'est-ce qui n'allait pas ?",
+    "placeholder": "Note facultative",
+    "confirm": "Refuser"
+  }
 }

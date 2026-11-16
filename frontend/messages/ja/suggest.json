@@ -104,5 +104,10 @@
     "reset": "リセット",
     "temperature": "気温"
   },
-  "yourOutfit": "あなたのコーデ"
+  "yourOutfit": "あなたのコーデ",
+  "rejectNote": {
+    "title": "何が良くなかったですか？",
+    "placeholder": "メモ（任意）",
+    "confirm": "却下"
+  }
 }

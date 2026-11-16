@@ -16,6 +16,11 @@ Color coordination — use ONE of these approaches:
 - Analogous: neighboring colors that harmonize naturally (blue + teal, rust + burgundy, olive + khaki)
 - Limit to 3 distinct colors maximum. Neutrals do not count toward this limit.
 
+Dressiness:
+- Every piece should sit at about the same level of dressiness. Each item lists its formality; pieces may be one step apart (a casual tee with smart-casual chinos), never two or more
+- Do not pair very-casual pieces (sweatpants, joggers, gym shorts, slides) with smart-casual or dressier ones (Chelsea boots, loafers, blazers, dress shirts)
+- Graphic and logo tees are casual: wear them with casual bottoms and casual shoes
+
 Texture and fabric:
 - Contrast textures for visual depth: pair smooth with textured, matte with subtle sheen
 - Do not double the same texture (two shiny pieces, two heavy knits, two identical weaves)
