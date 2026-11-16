@@ -329,6 +329,29 @@ class TestThumbsButtonsReachPairScores:
         assert (await db_session.get(Outfit, outfit.id)).responded_at > long_ago
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("comment", ["   ", "already said"], ids=["blank", "unchanged"])
+    async def test_a_blank_or_unchanged_note_keeps_the_answer_date(
+        self, client, db_session, test_user, auth_headers, comment
+    ):
+        outfit = await _two_item_outfit(db_session, test_user.id, status=OutfitStatus.accepted)
+        long_ago = datetime.now(UTC) - timedelta(days=90)
+        db_session.add(UserFeedback(outfit_id=outfit.id, accepted=True, comment="already said"))
+        stored = await db_session.get(Outfit, outfit.id)
+        stored.responded_at = long_ago
+        await db_session.commit()
+        db_session.expunge_all()
+
+        response = await client.post(
+            f"/api/v1/outfits/{outfit.id}/feedback",
+            json={"comment": comment},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200, response.text
+        db_session.expire_all()
+        assert (await db_session.get(Outfit, outfit.id)).responded_at == long_ago
+
+    @pytest.mark.asyncio
     async def test_a_recompute_counts_rejections_made_before_this_change(
         self, db_session, test_user
     ):
@@ -493,6 +516,26 @@ class TestPromptCarriesFeedback:
         assert self.headlines == ["AI 1"]
 
     @pytest.mark.asyncio
+    async def test_the_same_note_on_two_outfits_is_sent_once(self, db_session, test_user):
+        async def setup(db_session, user, items):
+            for status in (OutfitStatus.rejected, OutfitStatus.accepted):
+                outfit = Outfit(
+                    user_id=user.id,
+                    occasion="casual",
+                    status=status,
+                    source=OutfitSource.on_demand,
+                    responded_at=datetime.now(UTC),
+                )
+                db_session.add(outfit)
+                await db_session.flush()
+                db_session.add(UserFeedback(outfit_id=outfit.id, comment="Wore the  navy instead"))
+            await db_session.commit()
+
+        prompt = await self._prompt(db_session, test_user, setup)
+
+        assert prompt.lower().count("wore the") == 1
+
+    @pytest.mark.asyncio
     async def test_a_note_is_dated_by_the_latest_answer(self, db_session, test_user):
         async def setup(db_session, user, items):
             now = datetime.now(UTC)
@@ -504,7 +547,7 @@ class TestPromptCarriesFeedback:
                 outfit = Outfit(
                     user_id=user.id,
                     occasion="casual",
-                    status=OutfitStatus.rejected,
+                    status=OutfitStatus.pending if answered_age is None else OutfitStatus.rejected,
                     source=OutfitSource.on_demand,
                     responded_at=None
                     if answered_age is None
@@ -606,7 +649,16 @@ class TestInsightsAfterAnswers:
 
     @pytest.mark.asyncio
     async def test_insights_older_than_the_latest_answer_are_refreshed(self, db_session, test_user):
-        count = await self._insights_after_worker(
+        await self._insights_after_worker(
             db_session, test_user, recent_insight=True, insight_age=timedelta(minutes=30)
         )
-        assert count > 1
+
+        newer = await db_session.scalar(
+            select(func.count())
+            .select_from(StyleInsight)
+            .where(
+                StyleInsight.user_id == test_user.id,
+                StyleInsight.created_at > datetime.now(UTC) - timedelta(minutes=5),
+            )
+        )
+        assert newer > 0

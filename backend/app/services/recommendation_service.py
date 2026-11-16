@@ -736,15 +736,25 @@ class RecommendationService:
                 .selectinload(OutfitItem.item)
             )
         )
-        notes = (
-            feedback_note(
+        # "Wore something else" copies the comment onto the replacement outfit, so the same note
+        # can arrive twice, but it is only sent once.
+        seen: set[str] = set()
+        notes: list[str] = []
+        for feedback in result.scalars().all():
+            key = " ".join((feedback.comment or "").split()).casefold()
+            if key in seen:
+                continue
+            note = feedback_note(
                 feedback.comment,
                 [oi.item for oi in sorted(feedback.outfit.items, key=lambda oi: oi.position)],
                 verdict_of(feedback.outfit.status, feedback),
             )
-            for feedback in result.scalars().all()
-        )
-        return [note for note in notes if note][:FEEDBACK_NOTE_LIMIT]
+            if note:
+                seen.add(key)
+                notes.append(note)
+            if len(notes) == FEEDBACK_NOTE_LIMIT:
+                break
+        return notes
 
     async def _get_good_item_pairs(self, user_id: UUID) -> dict[UUID, list[UUID]]:
         result = await self.db.execute(
