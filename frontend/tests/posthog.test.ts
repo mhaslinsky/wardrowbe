@@ -9,10 +9,12 @@ it('without a key PostHog does not initialize', async () => {
   expect(init).not.toHaveBeenCalled();
 });
 
-it('unmasked hosts keep defaults; other hosts block images and mask measurements', async () => {
-  expect(recordingOptions('allowed.example', ' other.example, ALLOWED.example ')).toEqual({});
+it('unmasked hosts embed photos; other hosts block images and mask measurements', async () => {
+  expect(recordingOptions('allowed.example', ' other.example, ALLOWED.example ')).toEqual({ inlineImages: true, dataURLOptions: { type: 'image/webp', quality: 0.6 } });
   for (const hosts of ['', 'allowed.example', 'masked.example.evil']) {
     const options = recordingOptions('masked.example', hosts);
+    expect(options).not.toHaveProperty('inlineImages');
+    expect(options).not.toHaveProperty('dataURLOptions');
     document.body.innerHTML = '<img><picture></picture><canvas></canvas><video></video><section data-posthog-measurements><span>178 cm</span><input value="178"></section>';
     expect(Array.from(document.querySelectorAll(options.blockSelector!)).map((node) => node.tagName))
       .toEqual(['IMG', 'PICTURE', 'CANVAS', 'VIDEO']);

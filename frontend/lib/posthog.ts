@@ -13,7 +13,10 @@ export function recordingOptions(hostname: string, unmaskedHosts = '') {
   const unmasked = unmaskedHosts.split(',').some((host) =>
     host.trim().toLowerCase() === hostname.toLowerCase(),
   );
-  return unmasked ? {} : {
+  return unmasked ? {
+    inlineImages: true,
+    dataURLOptions: { type: 'image/webp', quality: 0.6 },
+  } : {
     blockSelector: imageSelector,
     maskTextSelector: `${measurementSelector}, ${measurementSelector} *`,
   };
