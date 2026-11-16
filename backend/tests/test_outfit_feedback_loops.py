@@ -514,6 +514,17 @@ class TestInsightsAfterAnswers:
         assert count == 1
 
     @pytest.mark.asyncio
+    async def test_refreshed_insights_replace_the_ones_showing(self, db_session, test_user):
+        await self._insights_after_worker(
+            db_session, test_user, recent_insight=True, insight_age=timedelta(minutes=30)
+        )
+
+        showing = await LearningService(db_session).get_active_insights(test_user.id)
+
+        titles = [insight.title for insight in showing]
+        assert titles and "Navy suits you" not in titles
+
+    @pytest.mark.asyncio
     async def test_insights_older_than_the_latest_answer_are_refreshed(self, db_session, test_user):
         await self._insights_after_worker(
             db_session, test_user, recent_insight=True, insight_age=timedelta(minutes=30)

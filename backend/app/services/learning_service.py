@@ -17,7 +17,7 @@ from decimal import Decimal
 from itertools import combinations
 from uuid import UUID
 
-from sqlalchemy import and_, delete, func, or_, select, tuple_
+from sqlalchemy import and_, delete, func, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -859,7 +859,17 @@ class LearningService:
                     )
                 )
 
-        # Save insights to database
+        # A new set replaces the one still showing, so regenerating never stacks duplicates.
+        if insights:
+            await self.db.execute(
+                update(StyleInsight)
+                .where(
+                    StyleInsight.user_id == user_id,
+                    StyleInsight.is_acknowledged.is_(False),
+                    (StyleInsight.expires_at.is_(None)) | (StyleInsight.expires_at > now),
+                )
+                .values(expires_at=now)
+            )
         for insight in insights:
             self.db.add(insight)
 
