@@ -39,6 +39,24 @@ describe('RejectNoteDialog', () => {
     expect(onConfirm).not.toHaveBeenCalled()
   })
 
+  it.each([{ metaKey: true }, { ctrlKey: true }])('sends the note on %o + Enter', (modifier) => {
+    const { onConfirm } = renderDialog()
+    const box = screen.getByRole('textbox', { name: 'title' })
+
+    fireEvent.change(box, { target: { value: 'too dressy' } })
+    fireEvent.keyDown(box, { key: 'Enter', ...modifier })
+
+    expect(onConfirm).toHaveBeenCalledWith('too dressy')
+  })
+
+  it('plain Enter adds a line instead of sending', () => {
+    const { onConfirm } = renderDialog()
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'title' }), { key: 'Enter' })
+
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
   it('caps the note at the length the server accepts', () => {
     renderDialog()
 

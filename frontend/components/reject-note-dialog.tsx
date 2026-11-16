@@ -31,12 +31,13 @@ export function RejectNoteDialog({ open, onCancel, onConfirm }: RejectNoteDialog
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && close()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
         <Textarea
           autoFocus
+          aria-label={t('title')}
           value={note}
           maxLength={MAX_NOTE_LENGTH}
           placeholder={t('placeholder')}
