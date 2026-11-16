@@ -2,14 +2,14 @@ import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.models.considering import owned_item
 from app.models.item import ClothingItem
-from app.models.learning import UserLearningProfile
+from app.models.learning import StyleInsight, UserLearningProfile
 from app.models.notification import Notification, NotificationStatus
 from app.models.outfit import Outfit, OutfitSource, OutfitStatus, TimeOfDay
 from app.models.schedule import Schedule
@@ -476,14 +476,31 @@ async def update_learning_profiles(ctx: dict):
                     or profile.last_computed_at < one_hour_ago
                 )
 
+                # Answering a suggestion recomputes the profile straight away, so insights are
+                # regenerated whenever they predate the latest answer, not when the profile is old.
+                latest_answer = await db.scalar(
+                    select(func.max(Outfit.responded_at)).where(
+                        Outfit.user_id == user_id,
+                        Outfit.status.in_([OutfitStatus.accepted, OutfitStatus.rejected]),
+                    )
+                )
+                latest_insight = await db.scalar(
+                    select(func.max(StyleInsight.created_at)).where(StyleInsight.user_id == user_id)
+                )
+
                 if needs_update:
                     await learning_service.recompute_learning_profile(user_id)
+                if latest_insight is None or (
+                    latest_answer is not None and latest_insight < latest_answer
+                ):
                     await learning_service.generate_insights(user_id)
                     updated_count += 1
                     logger.info(f"Updated learning profile for user {user_id}")
 
             except Exception as e:
                 logger.warning(f"Failed to update learning profile for user {user_id}: {e}")
+                # One user's failed write must not leave the shared session unusable for others.
+                await db.rollback()
                 continue
 
         logger.info(f"Completed learning profile updates: {updated_count} profiles updated")

@@ -56,6 +56,7 @@ from app.utils.clothing import (
     repair_top_layers,
 )
 from app.utils.garment_vocabulary import (
+    FORMALITY,
     ITEM_ROLE,
     NEAR_FACE_TYPES,
     is_suggestion_type,
@@ -80,6 +81,13 @@ WEEKLY_WEAR_CAP = 2
 WEEKLY_WEAR_WINDOW_DAYS = 7
 USAGE_WEAR_WINDOW_DAYS = 30
 WEEKLY_ROTATION_ROLES = ("footwear", "bottom")
+# One rejected outfit marks every pair in it, including the innocent ones, so a pair has to be
+# rejected in two outfits, and never accepted or worn, before the AI is told to avoid it.
+REJECTED_PAIR_MIN_REJECTIONS = 2
+REJECTED_PAIR_PROMPT_LIMIT = 15
+# A casual coat over a dressier outfit is normal, so an outer layer counts only when it is the
+# dressier piece (a blazer over joggers). Legwear, socks and accessories never count.
+_DRESSINESS_ROLES = frozenset({"base_top", "mid_layer", "suit", "full_body", "bottom", "footwear"})
 
 SINGLE_OUTFIT_FORMAT = (
     "Respond with valid JSON:\n"
@@ -177,6 +185,58 @@ def cached_suggestion_fits(
     )
 
 
+def picked_item_ids(outfit_data: dict, number_map: dict[int, UUID]) -> list[UUID]:
+    picked: list[UUID] = []
+    for num in outfit_data.get("items", []):
+        try:
+            num_int = int(num)
+        except (ValueError, TypeError):
+            logger.warning(f"AI returned non-numeric item: {num}")
+            continue
+        if num_int not in number_map:
+            logger.warning(f"AI selected invalid item number: {num}")
+        elif number_map[num_int] not in picked:
+            picked.append(number_map[num_int])
+    return picked
+
+
+def has_dressiness_clash(item_ids: list[UUID], items_by_id: dict[UUID, ClothingItem]) -> bool:
+    """Whether an outfit's pieces sit two or more formality steps apart.
+
+    Tops, mid layers, bottoms, one-pieces, suits and shoes always count, and so does an outer
+    layer when the outfit has no top, one-piece or suit (a hoodie picked as the top). Otherwise
+    an outer layer counts only when it is the dressier piece. Items with no known formality are
+    ignored.
+    """
+    items = [items_by_id[item_id] for item_id in item_ids if item_id in items_by_id]
+    item_types = {item.id: (item.type or "").lower() for item in items}
+    has_inner_top = any(
+        ITEM_ROLE.get(item_type) in ("base_top", "full_body", "suit")
+        for item_type in item_types.values()
+    )
+    core_levels, outer_levels = [], []
+    for item in items:
+        formality = (item.formality or "").lower()
+        if formality not in FORMALITY:
+            continue
+        item_type = item_types[item.id]
+        role = ITEM_ROLE.get(item_type)
+        worn_as_top = role == "outer_layer" and not has_inner_top
+        if role in _DRESSINESS_ROLES or worn_as_top:
+            core_levels.append(FORMALITY.index(formality))
+        elif role == "outer_layer":
+            outer_levels.append(FORMALITY.index(formality))
+    if not core_levels:
+        return False
+    return max(core_levels + outer_levels) - min(core_levels) >= 2
+
+
+def outfit_has_dressiness_clash(outfit: Outfit) -> bool:
+    return has_dressiness_clash(
+        [link.item_id for link in outfit.items], {link.item_id: link.item for link in outfit.items}
+    )
+
+
 @dataclass
 class RecommendationContext:
     user: User
@@ -231,11 +291,20 @@ class RecommendationService:
             )
             .execution_options(populate_existing=True)
         )
-        return [
+        outfits = [
             outfit
             for outfit in result.scalars().all()
             if all(is_suggestion_type(link.item.type) for link in outfit.items)
         ]
+        # Options saved in one request share created_at, so the clash order is applied here,
+        # on the saved items, with scheduled outfits still first.
+        outfits.sort(
+            key=lambda outfit: (
+                outfit.source != OutfitSource.scheduled,
+                outfit_has_dressiness_clash(outfit),
+            )
+        )
+        return outfits
 
     async def top_up_day(
         self,
@@ -686,8 +755,10 @@ class RecommendationService:
         number_map: dict[int, UUID] | None = None,
         occasion: str | None = None,
         body_measurements: dict | None = None,
+        rejected_pairs: list[frozenset[UUID]] | None = None,
     ) -> str:
         lines = []
+        uuid_to_number = {uuid: num for num, uuid in (number_map or {}).items()}
 
         if body_measurements:
             m = body_measurements
@@ -794,7 +865,6 @@ class RecommendationService:
                         )
 
         if worn_combinations and number_map:
-            uuid_to_number = {uuid: num for num, uuid in number_map.items()}
             worn_sets = []
             for combo in worn_combinations:
                 numbers = sorted([uuid_to_number[uuid] for uuid in combo if uuid in uuid_to_number])
@@ -804,6 +874,16 @@ class RecommendationService:
                 lines.append(
                     f"- Recently worn or suggested outfits (prefer variety, do not repeat identical combinations): {', '.join(worn_sets)}"
                 )
+
+        rejected_refs = [
+            "[" + ", ".join(map(str, sorted(uuid_to_number[item_id] for item_id in pair))) + "]"
+            for pair in rejected_pairs or []
+            if len(pair) == 2 and pair <= uuid_to_number.keys()
+        ][:REJECTED_PAIR_PROMPT_LIMIT]
+        if rejected_refs:
+            lines.append(
+                f"- Pairings the user rejected (do not put these together): {', '.join(rejected_refs)}"
+            )
 
         if lines:
             return "\nUSER PREFERENCES:\n" + "\n".join(lines)
@@ -851,6 +931,19 @@ class RecommendationService:
                 preferences["occasion_insights"] = {occasion: occ_data}
 
         return preferences
+
+    async def _get_rejected_item_pairs(self, user_id: UUID) -> list[frozenset[UUID]]:
+        result = await self.db.execute(
+            select(ItemPairScore.item1_id, ItemPairScore.item2_id)
+            .where(
+                ItemPairScore.user_id == user_id,
+                ItemPairScore.times_rejected >= REJECTED_PAIR_MIN_REJECTIONS,
+                ItemPairScore.times_accepted == 0,
+                func.coalesce(ItemPairScore.wear_bonus, 0) == 0,
+            )
+            .order_by(ItemPairScore.times_rejected.desc(), ItemPairScore.updated_at.desc())
+        )
+        return [frozenset(row) for row in result.all()]
 
     async def _get_good_item_pairs(self, user_id: UUID) -> dict[UUID, list[UUID]]:
         result = await self.db.execute(
@@ -1360,6 +1453,7 @@ class RecommendationService:
             number_map,
             occasion=occasion,
             body_measurements=getattr(user, "body_measurements", None),
+            rejected_pairs=await self._get_rejected_item_pairs(user.id),
         )
 
         wearer_preferences = self._format_wearer_preferences(preferences, outfit_notes)
@@ -1447,6 +1541,13 @@ class RecommendationService:
 
             # Multi-outfit parse
             outfit_list = self._parse_multi_outfit_response(result.content)
+            # Options that mix very casual and dressy pieces go last rather than being dropped,
+            # so a wardrobe that can only make such outfits still gets one. Saving can change an
+            # option's pieces, so the saved outfits are ordered again below.
+            items_by_id = {item.id: item for item in candidates}
+            outfit_list.sort(
+                key=lambda od: has_dressiness_clash(picked_item_ids(od, number_map), items_by_id)
+            )
 
             outfits = []
             consumed = 0
@@ -1476,6 +1577,7 @@ class RecommendationService:
                 outfits.append(outfit)
             if not outfits:
                 raise AIRecommendationError("AI did not select any valid items")
+            outfits.sort(key=outfit_has_dressiness_clash)
 
             # Cache remaining outfits for "Try Another"
             if use_cache and len(outfit_list) > consumed:

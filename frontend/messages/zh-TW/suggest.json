@@ -104,5 +104,10 @@
     "reset": "重設",
     "temperature": "溫度"
   },
-  "yourOutfit": "你的穿搭"
+  "yourOutfit": "你的穿搭",
+  "rejectNote": {
+    "title": "哪裡不合適？",
+    "placeholder": "備註（選填）",
+    "confirm": "拒絕"
+  }
 }

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -181,7 +181,7 @@ class OutfitService:
 
         await self.require_owned(outfit_id, user_id)
         outfit.status = new_status
-        outfit.responded_at = datetime.utcnow()
+        outfit.responded_at = datetime.now(UTC)
         await self.db.commit()
 
         refreshed = await self.db.execute(

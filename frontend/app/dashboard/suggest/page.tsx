@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ItemPicker } from '@/components/shared/item-picker';
 import { OccasionChips } from '@/components/shared/occasion-chips';
+import { RejectNoteDialog } from '@/components/reject-note-dialog';
 import { useOccasionLabel, useWeatherConditionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
 import { useItem } from '@/lib/hooks/use-items';
 import { api } from '@/lib/api';
@@ -621,6 +622,10 @@ function SuggestContent() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [activeOptionIndex, setActiveOptionIndex] = useState<number>(0);
   const [isCompareAll, setIsCompareAll] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<Outfit | null>(null);
+  const [rejectError, setRejectError] = useState<string | null>(null);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const rejectTargetId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -680,21 +685,54 @@ function SuggestContent() {
     handleGenerate();
   };
 
-  const handleReject = async (targetOutfit?: Outfit) => {
-    const outfitToReject = targetOutfit || outfits[activeOptionIndex];
-    if (!outfitToReject || wearPending || outfitToReject.feedback?.worn_at) return;
+  const showRejectDialog = (target: Outfit | null) => {
+    rejectTargetId.current = target?.id ?? null;
+    setRejectTarget(target);
+    setRejectError(null);
+  };
 
+  const closeRejectDialog = () => showRejectDialog(null);
+
+  const openRejectDialog = async (target: Outfit | null) => {
+    if (!target || wearPending || target.feedback?.worn_at) return;
     applySessionToken(session);
-
     try {
-      const current = await api.get<Outfit>(`/outfits/${outfitToReject.id}`);
+      const current = await api.get<Outfit>(`/outfits/${target.id}`);
       if (current.feedback?.worn_at) { setOutfits([]); return; }
-      await api.post(`/outfits/${outfitToReject.id}/reject`);
     } catch (err) {
       setError(dayMessages('failed'));
       console.error('Reject error:', err);
       return;
     }
+    showRejectDialog(target);
+  };
+
+  const handleReject = async (outfitToReject: Outfit, note: string) => {
+    if (isRejecting) return;
+    setIsRejecting(true);
+    setRejectError(null);
+    applySessionToken(session);
+
+    try {
+      const current = await api.get<Outfit>(`/outfits/${outfitToReject.id}`);
+      if (current.feedback?.worn_at) {
+        if (rejectTargetId.current === outfitToReject.id) closeRejectDialog();
+        setOutfits([]);
+        return;
+      }
+      await api.post(`/outfits/${outfitToReject.id}/reject`, note ? { comment: note } : undefined);
+    } catch (err) {
+      console.error('Reject error:', err);
+      // A failure that lands after the dialog closes must not show up on the next one.
+      if (rejectTargetId.current === outfitToReject.id) {
+        setRejectError(t('feedback.submitError'));
+      }
+      return;
+    } finally {
+      setIsRejecting(false);
+    }
+    // Cancel stays available while a reject is sending, so only close the dialog it came from.
+    if (rejectTargetId.current === outfitToReject.id) closeRejectDialog();
 
     const remaining = outfits.filter((o) => o.id !== outfitToReject.id);
     if (remaining.length > 0) {
@@ -895,7 +933,7 @@ function SuggestContent() {
           occasion={selectedOccasion || 'casual'}
           temperatureUnit={temperatureUnit}
           baseItemId={selectedItem?.id}
-          onReject={handleReject}
+          onReject={(outfit) => openRejectDialog(outfit || outfits[activeOptionIndex] || null)}
           onTryAnother={handleTryAnother}
           onNewRequest={handleNewRequest}
           date={date}
@@ -905,6 +943,14 @@ function SuggestContent() {
           t={t}
         />
       )}
+
+      <RejectNoteDialog
+        open={rejectTarget !== null}
+        pending={isRejecting}
+        error={rejectError}
+        onCancel={closeRejectDialog}
+        onConfirm={(note) => rejectTarget && handleReject(rejectTarget, note)}
+      />
 
       {/* Item Picker Dialog */}
       <Dialog open={isItemPickerOpen} onOpenChange={setIsItemPickerOpen}>

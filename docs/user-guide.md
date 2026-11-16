@@ -58,11 +58,13 @@ Sources: [upload form](../frontend/components/add-item-dialog.tsx), [accepted im
 1. Open **Suggest Outfit**. Set your location in Settings first if weather is missing.
 2. Choose the occasion. To include a particular piece, open **Build around a specific piece (optional)** and choose it from your wardrobe.
 3. Select **Get Suggestion**. Compare the options with **Compare All**, or look at one with **Focus View**. Read the weather information and styling advice before choosing.
-4. Use **Generate 3 New Looks** or **Try Another** when you want other options. **Dismiss outfit** passes on an option.
+4. Use **Generate 3 New Looks** or **Try Another** when you want other options. **Dismiss outfit** passes on an option and asks **What was wrong?** Add an optional note, such as "too dressy for sweatpants", then choose **Reject**. Ctrl+Enter or Cmd+Enter also sends it. Later suggestions take the note into account.
 
 You can use **Override weather** to try a different temperature or condition. **Reset** clears that override.
 
 Suggestions skip shoes and bottoms worn twice in seven days, except for pieces you include and those needed to keep at least four choices per category.
+
+Suggestions aim for pieces at about the same level of dressiness, and options that mix very casual pieces with dressy ones are listed last. When you reject two pieces together in two different outfits, and never wear or keep them as a pair, the AI is told not to pair them again.
 
 ### Build around a piece with Pairings
 

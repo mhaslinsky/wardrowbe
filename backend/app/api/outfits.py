@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -241,6 +241,10 @@ class BulkDeleteOutfitsResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     next_cursor: UUID | None = None
     has_more: bool = False
+
+
+class RejectRequest(BaseModel):
+    comment: str | None = Field(None, max_length=1000, description="What was wrong with it")
 
 
 class FeedbackRequest(BaseModel):
@@ -909,12 +913,18 @@ async def accept_outfit(
 ) -> OutfitResponse:
     outfit = await OutfitService(db).set_status(outfit_id, current_user.id, OutfitStatus.accepted)
 
-    return await outfit_response(
+    if outfit.feedback is not None:
+        outfit.feedback.accepted = True
+        await db.commit()
+
+    response = await outfit_response(
         db,
         outfit,
         await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id),
         viewer_id=current_user.id,
     )
+    await _run_learning_safely(db, outfit.id, current_user.id)
+    return response
 
 
 @router.post("/{outfit_id}/reject", response_model=OutfitResponse)
@@ -922,16 +932,28 @@ async def reject_outfit(
     outfit_id: UUID,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
+    request: RejectRequest | None = None,
 ) -> OutfitResponse:
     outfit = await OutfitService(db).set_status(outfit_id, current_user.id, OutfitStatus.rejected)
+    comment = (request.comment or "").strip() if request else ""
+    if comment and outfit.feedback is None:
+        outfit.feedback = UserFeedback(outfit_id=outfit.id)
+        db.add(outfit.feedback)
+    if outfit.feedback is not None:
+        outfit.feedback.accepted = False
+        if comment:
+            outfit.feedback.comment = comment
+        await db.commit()
     await clear_suggestions(current_user.id, outfit.occasion)
 
-    return await outfit_response(
+    response = await outfit_response(
         db,
         outfit,
         await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id),
         viewer_id=current_user.id,
     )
+    await _run_learning_safely(db, outfit.id, current_user.id)
+    return response
 
 
 @router.post("/{outfit_id}/skip", response_model=OutfitResponse)
@@ -1040,7 +1062,7 @@ async def submit_feedback(
     if request.accepted is not None and not feedback.worn_at:
         feedback.accepted = request.accepted
         outfit.status = OutfitStatus.accepted if request.accepted else OutfitStatus.rejected
-        outfit.responded_at = datetime.utcnow()
+        outfit.responded_at = datetime.now(UTC)
 
     if request.rating is not None:
         feedback.rating = request.rating
@@ -1049,6 +1071,9 @@ async def submit_feedback(
     if request.style_rating is not None:
         feedback.style_rating = request.style_rating
     if request.comment is not None:
+        # A new note counts as an answer, so the hourly learning job regenerates insights for it.
+        if request.comment.strip() and request.comment != feedback.comment:
+            outfit.responded_at = datetime.now(UTC)
         feedback.comment = request.comment
     if request.worn_with_modifications is not None:
         feedback.worn_with_modifications = request.worn_with_modifications
