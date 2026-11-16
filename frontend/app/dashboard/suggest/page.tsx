@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -605,6 +605,8 @@ function SuggestContent() {
   const [isCompareAll, setIsCompareAll] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<Outfit | null>(null);
   const [rejectError, setRejectError] = useState<string | null>(null);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const rejectTargetId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -684,20 +686,31 @@ function SuggestContent() {
     handleGenerate();
   };
 
-  const closeRejectDialog = () => {
-    setRejectTarget(null);
+  const openRejectDialog = (target: Outfit | null) => {
+    rejectTargetId.current = target?.id ?? null;
+    setRejectTarget(target);
     setRejectError(null);
   };
 
+  const closeRejectDialog = () => openRejectDialog(null);
+
   const handleReject = async (outfitToReject: Outfit, note: string) => {
+    if (isRejecting) return;
+    setIsRejecting(true);
+    setRejectError(null);
     applySessionToken(session);
 
     try {
       await api.post(`/outfits/${outfitToReject.id}/reject`, note ? { comment: note } : undefined);
     } catch (err) {
       console.error('Reject error:', err);
-      setRejectError(t('feedback.submitError'));
+      // A failure that lands after the dialog closes must not show up on the next one.
+      if (rejectTargetId.current === outfitToReject.id) {
+        setRejectError(t('feedback.submitError'));
+      }
       return;
+    } finally {
+      setIsRejecting(false);
     }
     closeRejectDialog();
 
@@ -896,7 +909,7 @@ function SuggestContent() {
           temperatureUnit={temperatureUnit}
           baseItemId={selectedItem?.id}
           onAccept={handleAccept}
-          onReject={(outfit) => setRejectTarget(outfit || outfits[activeOptionIndex] || null)}
+          onReject={(outfit) => openRejectDialog(outfit || outfits[activeOptionIndex] || null)}
           onTryAnother={handleTryAnother}
           onNewRequest={handleNewRequest}
           t={t}
@@ -905,6 +918,7 @@ function SuggestContent() {
 
       <RejectNoteDialog
         open={rejectTarget !== null}
+        pending={isRejecting}
         error={rejectError}
         onCancel={closeRejectDialog}
         onConfirm={(note) => rejectTarget && handleReject(rejectTarget, note)}

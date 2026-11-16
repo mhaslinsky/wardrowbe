@@ -87,6 +87,19 @@ describe('RejectNoteDialog', () => {
     expect(screen.getByRole('textbox', { name: 'title' })).toHaveProperty('value', '')
   })
 
+  it('does not send again while a reject is pending', () => {
+    const onConfirm = vi.fn()
+    render(<RejectNoteDialog open pending onCancel={vi.fn()} onConfirm={onConfirm} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'confirm' }))
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'title' }), {
+      key: 'Enter',
+      ctrlKey: true,
+    })
+
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
   it('caps the note at the length the server accepts', () => {
     renderDialog()
 

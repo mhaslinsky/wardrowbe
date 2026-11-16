@@ -10,12 +10,19 @@ const MAX_NOTE_LENGTH = 1000;
 
 interface RejectNoteDialogProps {
   open: boolean;
+  pending?: boolean;
   error?: string | null;
   onCancel: () => void;
   onConfirm: (note: string) => void;
 }
 
-export function RejectNoteDialog({ open, error, onCancel, onConfirm }: RejectNoteDialogProps) {
+export function RejectNoteDialog({
+  open,
+  pending = false,
+  error,
+  onCancel,
+  onConfirm,
+}: RejectNoteDialogProps) {
   const t = useTranslations('suggest.rejectNote');
   const tCommon = useTranslations('common');
   const [note, setNote] = useState('');
@@ -30,7 +37,7 @@ export function RejectNoteDialog({ open, error, onCancel, onConfirm }: RejectNot
   };
 
   const confirm = () => {
-    onConfirm(note.trim());
+    if (!pending) onConfirm(note.trim());
   };
 
   return (
@@ -60,7 +67,7 @@ export function RejectNoteDialog({ open, error, onCancel, onConfirm }: RejectNot
           <Button variant="ghost" onClick={close}>
             {tCommon('cancel')}
           </Button>
-          <Button variant="destructive" onClick={confirm}>
+          <Button variant="destructive" onClick={confirm} disabled={pending}>
             {t('confirm')}
           </Button>
         </div>
