@@ -604,6 +604,7 @@ function SuggestContent() {
   const [activeOptionIndex, setActiveOptionIndex] = useState<number>(0);
   const [isCompareAll, setIsCompareAll] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<Outfit | null>(null);
+  const [rejectError, setRejectError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -683,15 +684,22 @@ function SuggestContent() {
     handleGenerate();
   };
 
-  const handleReject = async (outfitToReject: Outfit, note: string) => {
+  const closeRejectDialog = () => {
     setRejectTarget(null);
+    setRejectError(null);
+  };
+
+  const handleReject = async (outfitToReject: Outfit, note: string) => {
     applySessionToken(session);
 
     try {
       await api.post(`/outfits/${outfitToReject.id}/reject`, note ? { comment: note } : undefined);
     } catch (err) {
       console.error('Reject error:', err);
+      setRejectError(t('feedback.submitError'));
+      return;
     }
+    closeRejectDialog();
 
     const remaining = outfits.filter((o) => o.id !== outfitToReject.id);
     if (remaining.length > 0) {
@@ -897,7 +905,8 @@ function SuggestContent() {
 
       <RejectNoteDialog
         open={rejectTarget !== null}
-        onCancel={() => setRejectTarget(null)}
+        error={rejectError}
+        onCancel={closeRejectDialog}
         onConfirm={(note) => rejectTarget && handleReject(rejectTarget, note)}
       />
 

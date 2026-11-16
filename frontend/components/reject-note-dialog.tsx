@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -10,23 +10,27 @@ const MAX_NOTE_LENGTH = 1000;
 
 interface RejectNoteDialogProps {
   open: boolean;
+  error?: string | null;
   onCancel: () => void;
   onConfirm: (note: string) => void;
 }
 
-export function RejectNoteDialog({ open, onCancel, onConfirm }: RejectNoteDialogProps) {
+export function RejectNoteDialog({ open, error, onCancel, onConfirm }: RejectNoteDialogProps) {
   const t = useTranslations('suggest.rejectNote');
   const tCommon = useTranslations('common');
   const [note, setNote] = useState('');
 
+  // The note survives a failed reject so it can be sent again; it clears once the dialog closes.
+  useEffect(() => {
+    if (!open) setNote('');
+  }, [open]);
+
   const close = () => {
-    setNote('');
     onCancel();
   };
 
   const confirm = () => {
     onConfirm(note.trim());
-    setNote('');
   };
 
   return (
@@ -47,6 +51,11 @@ export function RejectNoteDialog({ open, onCancel, onConfirm }: RejectNoteDialog
           }}
           rows={3}
         />
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={close}>
             {tCommon('cancel')}
