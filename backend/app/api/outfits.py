@@ -218,6 +218,10 @@ class BulkDeleteOutfitsResponse(BaseModel):
     has_more: bool = False
 
 
+class RejectRequest(BaseModel):
+    comment: str | None = Field(None, max_length=1000, description="What was wrong with it")
+
+
 class FeedbackRequest(BaseModel):
     accepted: bool | None = Field(None, description="Whether outfit was accepted")
     rating: int | None = Field(
@@ -804,9 +808,11 @@ async def accept_outfit(
     await db.commit()
     await db.refresh(outfit)
 
-    return outfit_to_response(
+    response = outfit_to_response(
         outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
     )
+    await _run_learning_safely(db, outfit.id, current_user.id)
+    return response
 
 
 @router.post("/{outfit_id}/reject", response_model=OutfitResponse)
@@ -814,6 +820,7 @@ async def reject_outfit(
     outfit_id: UUID,
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
+    request: RejectRequest | None = None,
 ) -> OutfitResponse:
     query = (
         select(Outfit)
@@ -836,14 +843,23 @@ async def reject_outfit(
 
     outfit.status = OutfitStatus.rejected
     outfit.responded_at = datetime.utcnow()
+    comment = (request.comment or "").strip() if request else ""
+    if comment:
+        if outfit.feedback is None:
+            outfit.feedback = UserFeedback(outfit_id=outfit.id)
+            db.add(outfit.feedback)
+        outfit.feedback.accepted = False
+        outfit.feedback.comment = comment
     await db.commit()
     await db.refresh(outfit)
 
     await clear_suggestions(current_user.id, outfit.occasion)
 
-    return outfit_to_response(
+    response = outfit_to_response(
         outfit, await fetch_wore_instead_items_map(db, [outfit], user_id=current_user.id)
     )
+    await _run_learning_safely(db, outfit.id, current_user.id)
+    return response
 
 
 @router.post("/{outfit_id}/skip", response_model=OutfitResponse)

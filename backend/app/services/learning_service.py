@@ -69,13 +69,20 @@ _HAS_PROFILE_SIGNAL = or_(
 )
 
 
-def _outfit_accepted(outfit: Outfit) -> bool:
+def _outfit_verdict(outfit: Outfit) -> bool | None:
     if outfit.status in (OutfitStatus.accepted, OutfitStatus.rejected):
         return outfit.status == OutfitStatus.accepted
-    return bool(outfit.feedback and outfit.feedback.accepted)
+    return outfit.feedback.accepted if outfit.feedback else None
 
 
+def _outfit_accepted(outfit: Outfit) -> bool:
+    return _outfit_verdict(outfit) is True
+
+
+# The thumbs up and down buttons set only the status, so a status counts as a verdict even with
+# no feedback row; queries using this must outer-join the feedback.
 _HAS_PAIR_SIGNAL = or_(
+    Outfit.status.in_([OutfitStatus.accepted, OutfitStatus.rejected]),
     UserFeedback.accepted.is_not(None),
     UserFeedback.worn_at.is_not(None),
     UserFeedback.rating.is_not(None),
@@ -90,13 +97,13 @@ def _item_pairs(item_ids: Iterable[UUID]) -> set[tuple[UUID, UUID]]:
     return {tuple(sorted(pair)) for pair in combinations(set(item_ids), 2)}
 
 
-def _is_positive_pair_signal(feedback: UserFeedback) -> bool:
-    if feedback.worn_at is not None:
+def _is_positive_pair_signal(verdict: bool | None, feedback: UserFeedback | None) -> bool:
+    if feedback is not None and feedback.worn_at is not None:
         return True
-    if feedback.rating is not None:
-        intent = {True: 0.3, False: -0.3}.get(feedback.accepted, 0.0)
+    if feedback is not None and feedback.rating is not None:
+        intent = {True: 0.3, False: -0.3}.get(verdict, 0.0)
         return intent + rating_to_signed(feedback.rating) * 0.3 > 0
-    return feedback.accepted is True
+    return verdict is True
 
 
 @dataclass
@@ -110,19 +117,22 @@ class _PairTally:
     occasion_performance: dict[str, dict[str, int]] = field(default_factory=dict)
     weather_performance: dict[str, dict[str, int]] = field(default_factory=dict)
 
-    def add(self, feedback: UserFeedback, occasion: str, temp_bucket: str | None) -> None:
+    def add(self, outfit: Outfit, temp_bucket: str | None) -> None:
+        feedback = outfit.feedback
+        verdict = _outfit_verdict(outfit)
+        occasion = outfit.occasion
         self.times_paired += 1
-        if feedback.accepted is True:
+        if verdict is True:
             self.times_accepted += 1
-        elif feedback.accepted is False:
+        elif verdict is False:
             self.times_rejected += 1
-        if feedback.rating is not None:
+        if feedback is not None and feedback.rating is not None:
             self.total_rating_sum += feedback.rating
             self.rating_count += 1
-        if feedback.worn_at is not None:
+        if feedback is not None and feedback.worn_at is not None:
             self.times_worn += 1
 
-        positive = int(_is_positive_pair_signal(feedback))
+        positive = int(_is_positive_pair_signal(verdict, feedback))
         for performance, key in (
             (self.occasion_performance, occasion),
             (self.weather_performance, temp_bucket),
@@ -216,10 +226,11 @@ class LearningService:
         )
         outfit = result.scalar_one_or_none()
 
-        if not outfit or not outfit.feedback:
+        if not outfit:
             return
 
-        await self._update_outfit_performance(outfit)
+        if outfit.feedback:
+            await self._update_outfit_performance(outfit)
         await self.rebuild_pair_scores(
             outfit.user_id, _item_pairs(oi.item_id for oi in outfit.items)
         )
@@ -331,7 +342,7 @@ class LearningService:
 
         result = await self.db.execute(
             select(Outfit)
-            .join(Outfit.feedback)
+            .outerjoin(Outfit.feedback)
             .where(
                 Outfit.user_id == user_id,
                 _HAS_PAIR_SIGNAL,
@@ -344,7 +355,7 @@ class LearningService:
             temp = (outfit.weather_data or {}).get("temperature")
             bucket = self._get_temp_bucket(temp) if temp is not None else None
             for pair in _item_pairs(outfit_item_ids) & tallies.keys():
-                tallies[pair].add(outfit.feedback, outfit.occasion, bucket)
+                tallies[pair].add(outfit, bucket)
 
         empty = [pair for pair, tally in tallies.items() if tally.times_paired == 0]
         for start in range(0, len(empty), _PAIR_WRITE_BATCH):
@@ -402,7 +413,7 @@ class LearningService:
 
         result = await self.db.execute(
             select(Outfit)
-            .join(Outfit.feedback)
+            .outerjoin(Outfit.feedback)
             .where(Outfit.user_id == user_id, _HAS_PAIR_SIGNAL)
             .options(selectinload(Outfit.items))
         )
