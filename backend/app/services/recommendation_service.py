@@ -34,6 +34,7 @@ from app.services.item_scorer import (
     stays_above_hot_threshold,
     temperature_band,
 )
+from app.services.learning_service import verdict_of
 from app.services.suggestion_cache import pop_suggestion, push_suggestions
 from app.services.weather_service import (
     GeocodingServiceError,
@@ -50,7 +51,12 @@ from app.utils.clothing import (
     missing_regions,
     remove_legwear,
 )
-from app.utils.garment_vocabulary import FORMALITY, ITEM_ROLE, render_outfit_prompt
+from app.utils.garment_vocabulary import (
+    FORMALITY,
+    ITEM_ROLE,
+    WORN_ALONE_TYPES,
+    render_outfit_prompt,
+)
 from app.utils.preference_defaults import (
     DEFAULT_LAYERING_PREFERENCE,
     DEFAULT_TEMPERATURE_SENSITIVITY,
@@ -71,6 +77,7 @@ REJECTED_PAIR_PROMPT_LIMIT = 15
 FEEDBACK_NOTE_LIMIT = 5
 FEEDBACK_NOTE_MAX_CHARS = 200
 FEEDBACK_NOTE_MAX_AGE_DAYS = 60
+ITEM_LABEL_MAX_CHARS = 60
 # A casual coat over a dressier outfit is normal, so an outer layer counts only when it is the
 # dressier piece (a blazer over joggers). Legwear, socks and accessories never count.
 _DRESSINESS_ROLES = frozenset({"base_top", "mid_layer", "suit", "full_body", "bottom", "footwear"})
@@ -187,14 +194,26 @@ def resolve_outfit_items(
 
 
 def has_dressiness_clash(item_ids: list[UUID], items_by_id: dict[UUID, ClothingItem]) -> bool:
+    """Whether an outfit's pieces sit two or more formality steps apart.
+
+    Tops, mid layers, bottoms, one-pieces, suits and shoes always count, and so does a layer worn
+    as the only top (a hoodie). Any other outer layer counts only when it is the dressier piece.
+    Items with no known formality are ignored.
+    """
+    items = [items_by_id[item_id] for item_id in item_ids if item_id in items_by_id]
+    item_types = {item.id: (item.type or "").lower() for item in items}
+    has_inner_top = any(
+        ITEM_ROLE.get(item_type) in ("base_top", "full_body") for item_type in item_types.values()
+    )
     core_levels, outer_levels = [], []
-    for item_id in item_ids:
-        item = items_by_id.get(item_id)
-        formality = ((item.formality if item else None) or "").lower()
+    for item in items:
+        formality = (item.formality or "").lower()
         if formality not in FORMALITY:
             continue
-        role = ITEM_ROLE.get((item.type or "").lower())
-        if role in _DRESSINESS_ROLES:
+        item_type = item_types[item.id]
+        role = ITEM_ROLE.get(item_type)
+        worn_as_top = item_type in WORN_ALONE_TYPES and not has_inner_top
+        if role in _DRESSINESS_ROLES or worn_as_top:
             core_levels.append(FORMALITY.index(formality))
         elif role == "outer_layer":
             outer_levels.append(FORMALITY.index(formality))
@@ -203,19 +222,37 @@ def has_dressiness_clash(item_ids: list[UUID], items_by_id: dict[UUID, ClothingI
     return max(core_levels + outer_levels) - min(core_levels) >= 2
 
 
+# Notes and item names are user text inside a quoted prompt line, so control characters
+# and line breaks are removed and double quotes swapped to keep each note on its own line.
+def _prompt_safe(text: str | None, max_chars: int) -> str:
+    visible = "".join(
+        ch for ch in text or "" if ch.isspace() or not unicodedata.category(ch).startswith("C")
+    )
+    cleaned = " ".join(visible.split()).replace('"', "'")
+    if len(cleaned) > max_chars:
+        cleaned = cleaned[: max_chars - 3].rstrip() + "..."
+    return cleaned
+
+
 def _item_label(item: ClothingItem) -> str:
-    return item.name or " ".join(filter(None, [item.primary_color, item.subtype or item.type]))
+    label = item.name or " ".join(filter(None, [item.primary_color, item.subtype or item.type]))
+    return _prompt_safe(label, ITEM_LABEL_MAX_CHARS)
 
 
-def feedback_note(comment: str | None, items: list[ClothingItem]) -> str | None:
-    visible = "".join(ch for ch in comment or "" if unicodedata.category(ch) != "Cf")
-    text = " ".join(visible.split()).replace('"', "'")
+def feedback_note(
+    comment: str | None, items: list[ClothingItem], verdict: bool | None = None
+) -> str | None:
+    """One prompt line for a user's note, naming the outfit and whether they liked it.
+
+    Returns None when the note has no visible text.
+    """
+    text = _prompt_safe(comment, FEEDBACK_NOTE_MAX_CHARS)
     if not text:
         return None
-    if len(text) > FEEDBACK_NOTE_MAX_CHARS:
-        text = text[: FEEDBACK_NOTE_MAX_CHARS - 3].rstrip() + "..."
     labels = ", ".join(label for label in map(_item_label, items) if label)
-    return f'"{text}" (outfit: {labels})' if labels else f'"{text}"'
+    note = f'"{text}" (outfit: {labels})' if labels else f'"{text}"'
+    prefix = {True: "Liked: ", False: "Rejected: "}.get(verdict, "")
+    return prefix + note
 
 
 def fill_best_partial(
@@ -673,15 +710,18 @@ class RecommendationService:
 
     async def _get_feedback_notes(self, user_id: UUID) -> list[str]:
         cutoff = datetime.now(UTC) - timedelta(days=FEEDBACK_NOTE_MAX_AGE_DAYS)
+        # A note can be added to a feedback row long after it was created; the user's
+        # latest answer on the outfit dates it better than the row does.
+        noted_at = func.coalesce(Outfit.responded_at, UserFeedback.created_at)
         result = await self.db.execute(
             select(UserFeedback)
             .join(Outfit, UserFeedback.outfit_id == Outfit.id)
             .where(
                 Outfit.user_id == user_id,
-                UserFeedback.created_at >= cutoff,
+                noted_at >= cutoff,
                 UserFeedback.comment.regexp_match(r"\S"),
             )
-            .order_by(UserFeedback.created_at.desc())
+            .order_by(noted_at.desc())
             # Room for notes that turn out blank once invisible characters are removed.
             .limit(FEEDBACK_NOTE_LIMIT * 2)
             .options(
@@ -694,6 +734,7 @@ class RecommendationService:
             feedback_note(
                 feedback.comment,
                 [oi.item for oi in sorted(feedback.outfit.items, key=lambda oi: oi.position)],
+                verdict_of(feedback.outfit.status, feedback),
             )
             for feedback in result.scalars().all()
         )

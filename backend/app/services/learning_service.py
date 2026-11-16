@@ -69,10 +69,15 @@ _HAS_PROFILE_SIGNAL = or_(
 )
 
 
+def verdict_of(status: OutfitStatus | None, feedback: UserFeedback | None) -> bool | None:
+    """The user's verdict on an outfit: its status when answered, else the feedback flag."""
+    if status in (OutfitStatus.accepted, OutfitStatus.rejected):
+        return status == OutfitStatus.accepted
+    return feedback.accepted if feedback else None
+
+
 def _outfit_verdict(outfit: Outfit) -> bool | None:
-    if outfit.status in (OutfitStatus.accepted, OutfitStatus.rejected):
-        return outfit.status == OutfitStatus.accepted
-    return outfit.feedback.accepted if outfit.feedback else None
+    return verdict_of(outfit.status, outfit.feedback)
 
 
 def _outfit_accepted(outfit: Outfit) -> bool:

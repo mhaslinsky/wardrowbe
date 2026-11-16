@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.models.item import ClothingItem
-from app.models.learning import UserLearningProfile
+from app.models.learning import StyleInsight, UserLearningProfile
 from app.models.notification import Notification, NotificationStatus
 from app.models.outfit import Outfit, OutfitSource, OutfitStatus, TimeOfDay
 from app.models.schedule import Schedule
@@ -462,8 +462,20 @@ async def update_learning_profiles(ctx: dict):
                     or profile.last_computed_at < one_hour_ago
                 )
 
+                # Answering a suggestion recomputes the profile straight away; a fresh profile
+                # does not mean the insights have caught up with the latest answers.
+                recent_insight = await db.scalar(
+                    select(StyleInsight.id)
+                    .where(
+                        StyleInsight.user_id == user_id,
+                        StyleInsight.created_at >= one_hour_ago,
+                    )
+                    .limit(1)
+                )
+
                 if needs_update:
                     await learning_service.recompute_learning_profile(user_id)
+                if needs_update or recent_insight is None:
                     await learning_service.generate_insights(user_id)
                     updated_count += 1
                     logger.info(f"Updated learning profile for user {user_id}")

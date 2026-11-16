@@ -805,6 +805,8 @@ async def accept_outfit(
 
     outfit.status = OutfitStatus.accepted
     outfit.responded_at = datetime.utcnow()
+    if outfit.feedback is not None:
+        outfit.feedback.accepted = True
     await db.commit()
     await db.refresh(outfit)
 
@@ -844,12 +846,13 @@ async def reject_outfit(
     outfit.status = OutfitStatus.rejected
     outfit.responded_at = datetime.utcnow()
     comment = (request.comment or "").strip() if request else ""
-    if comment:
-        if outfit.feedback is None:
-            outfit.feedback = UserFeedback(outfit_id=outfit.id)
-            db.add(outfit.feedback)
+    if comment and outfit.feedback is None:
+        outfit.feedback = UserFeedback(outfit_id=outfit.id)
+        db.add(outfit.feedback)
+    if outfit.feedback is not None:
         outfit.feedback.accepted = False
-        outfit.feedback.comment = comment
+        if comment:
+            outfit.feedback.comment = comment
     await db.commit()
     await db.refresh(outfit)
 
@@ -1234,6 +1237,9 @@ async def _run_learning_safely(db: AsyncSession, outfit_id: UUID, user_id: UUID)
         await LearningService(db).process_feedback(outfit_id, user_id)
     except Exception as e:
         logger.exception("learning process_feedback failed for outfit %s: %s", outfit_id, e)
+        # The request's own changes are already committed; without this, the session stays in a
+        # failed transaction and the closing commit turns a swallowed error into a 500.
+        await db.rollback()
 
 
 @router.post("/studio", response_model=OutfitResponse, status_code=status.HTTP_201_CREATED)
