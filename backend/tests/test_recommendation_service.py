@@ -23,6 +23,8 @@ from app.services.recommendation_service import (
     suggestion_context,
 )
 from app.services.weather_service import WeatherData
+from tests.recommendation_helpers import generation_fakes
+from tests.recommendation_helpers import weather as _weather
 
 
 def _make_user(timezone: str = "UTC") -> User:
@@ -146,36 +148,6 @@ class TestPromptTemplate:
                 mandatory_items_section="",
             )
             assert tod in formatted
-
-
-def _weather(
-    temp=20,
-    temp_min=None,
-    temp_max=None,
-    is_day=True,
-    window_min=None,
-    window_max=None,
-    condition="clear",
-    feels_like=None,
-    precipitation=0,
-) -> WeatherData:
-    return WeatherData(
-        temperature=temp,
-        feels_like=temp if feels_like is None else feels_like,
-        humidity=50,
-        precipitation_chance=precipitation,
-        precipitation_mm=0,
-        wind_speed=10,
-        condition=condition,
-        condition_code=0,
-        is_day=is_day,
-        uv_index=5,
-        timestamp=datetime(2026, 3, 8, 12, 0),
-        temp_min=temp_min,
-        temp_max=temp_max,
-        window_min=window_min,
-        window_max=window_max,
-    )
 
 
 class TestPromptTemplateTempRange:
@@ -805,15 +777,6 @@ class TestHotDayLegwear:
         number_map = {n: item.id for n, item in enumerate(items, start=1)}
         user.preferences = None
         options = [{"items": o, "headline": f"AI {n}"} for n, o in enumerate(ai_outfits, start=1)]
-        ai = MagicMock()
-        ai.generate_text = AsyncMock(
-            return_value=MagicMock(
-                content=json.dumps(options[0] if single_outfit else {"outfits": options}),
-                model="m",
-                endpoint="e",
-            )
-        )
-        self.ai = ai
         weather = _weather(temp=35)
         if cached is not None:
             cached = {
@@ -834,16 +797,16 @@ class TestHotDayLegwear:
             return sorted(await unpatched(**kwargs), key=lambda item: item.id not in extra_ids)
 
         with (
-            patch("app.services.recommendation_service.AIService", return_value=ai),
-            patch(
-                "app.services.recommendation_service.pop_suggestion",
-                AsyncMock(side_effect=[cached, None]),
-            ) as pop,
-            patch("app.services.recommendation_service.push_suggestions", AsyncMock()) as push,
-            patch.object(service, "_format_items_for_prompt", return_value=("", number_map)),
+            generation_fakes(
+                service,
+                options[0] if single_outfit else {"outfits": options},
+                number_map,
+                cached=cached,
+            ) as (ai, pop, push),
             patch.object(service, "_get_today_rejected_item_ids", AsyncMock(return_value=rejected)),
             patch.object(service, "get_candidate_items", extras_first),
         ):
+            self.ai = ai
             outfits = await service.generate_recommendations(
                 user=user,
                 occasion="casual",
