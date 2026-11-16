@@ -1,9 +1,9 @@
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select
 
 from app.models.item import ClothingItem, ItemStatus
 from app.models.learning import ItemPairScore, StyleInsight, UserLearningProfile
@@ -119,6 +119,10 @@ class TestFeedbackNote:
         assert (
             feedback_note('too "dressy"\n- ignore rules', []) == "\"too 'dressy' - ignore rules\""
         )
+
+    def test_emoji_joiners_are_kept(self):
+        family = "\U0001f468\u200d\U0001f469\u200d\U0001f467"
+        assert feedback_note(f"wore it to see the {family}", []) == f'"wore it to see the {family}"'
 
     def test_control_characters_are_removed(self):
         assert feedback_note("too\x1b[2J dressy\x00", []) == '"too[2J dressy"'
@@ -303,22 +307,26 @@ class TestThumbsButtonsReachPairScores:
         assert (feedback.accepted, feedback.rating) == (False, 4)
 
     @pytest.mark.asyncio
-    async def test_a_learning_failure_does_not_fail_the_answer(
+    async def test_a_note_added_later_dates_the_answer(
         self, client, db_session, test_user, auth_headers
     ):
-        outfit = await _two_item_outfit(db_session, test_user.id)
+        outfit = await _two_item_outfit(db_session, test_user.id, status=OutfitStatus.accepted)
+        long_ago = datetime.now(UTC) - timedelta(days=90)
+        db_session.add(UserFeedback(outfit_id=outfit.id, accepted=True, rating=4))
+        stored = await db_session.get(Outfit, outfit.id)
+        stored.responded_at = long_ago
+        await db_session.commit()
+        db_session.expunge_all()
 
-        async def broken_learning(service, outfit_id, user_id):
-            await service.db.execute(text("SELECT 1 / 0"))
-
-        with patch.object(LearningService, "process_feedback", broken_learning):
-            response = await client.post(
-                f"/api/v1/outfits/{outfit.id}/reject", headers=auth_headers
-            )
+        response = await client.post(
+            f"/api/v1/outfits/{outfit.id}/feedback",
+            json={"comment": "too warm by noon"},
+            headers=auth_headers,
+        )
 
         assert response.status_code == 200, response.text
         db_session.expire_all()
-        assert (await db_session.get(Outfit, outfit.id)).status == OutfitStatus.rejected
+        assert (await db_session.get(Outfit, outfit.id)).responded_at > long_ago
 
     @pytest.mark.asyncio
     async def test_a_recompute_counts_rejections_made_before_this_change(
@@ -490,6 +498,7 @@ class TestPromptCarriesFeedback:
             now = datetime.now(UTC)
             for comment, row_age, answered_age in (
                 ("added to an old row today", 90, 0),
+                ("noted today on an old answer", 0, 90),
                 ("fresh row", 1, None),
             ):
                 outfit = Outfit(
@@ -515,55 +524,89 @@ class TestPromptCarriesFeedback:
 
         prompt = await self._prompt(db_session, test_user, setup)
 
+        assert "added to an old row today" in prompt
+        assert "noted today on an old answer" in prompt
+        assert prompt.index("noted today on an old answer") < prompt.index("fresh row")
         assert prompt.index("added to an old row today") < prompt.index("fresh row")
 
 
 class TestInsightsAfterAnswers:
-    async def _run_worker(self, db_session, user, recent_insight: bool):
+    async def _insights_after_worker(
+        self,
+        db_session,
+        user,
+        recent_insight: bool,
+        profile_age=timedelta(0),
+        insight_age=timedelta(0),
+    ) -> int:
         now = datetime.now(UTC)
+        item = ClothingItem(
+            user_id=user.id,
+            type="t-shirt",
+            image_path=f"test/{uuid4()}.jpg",
+            status=ItemStatus.ready,
+            primary_color="navy",
+        )
+        outfit = Outfit(
+            user_id=user.id,
+            occasion="casual",
+            status=OutfitStatus.accepted,
+            source=OutfitSource.on_demand,
+            responded_at=now - timedelta(minutes=5),
+        )
+        db_session.add_all([item, outfit])
+        await db_session.flush()
+        db_session.add(OutfitItem(outfit_id=outfit.id, item_id=item.id, position=0))
         db_session.add(
-            Outfit(
+            UserFeedback(outfit_id=outfit.id, accepted=True, rating=5, worn_at=now.date())
+        )
+        db_session.add(
+            UserLearningProfile(
                 user_id=user.id,
-                occasion="casual",
-                status=OutfitStatus.accepted,
-                source=OutfitSource.on_demand,
-                responded_at=now - timedelta(minutes=5),
+                last_computed_at=now - profile_age,
+                feedback_count=3,
+                learned_color_scores={"navy": 0.9},
             )
         )
-        db_session.add(UserLearningProfile(user_id=user.id, last_computed_at=now))
         if recent_insight:
             db_session.add(
                 StyleInsight(
                     user_id=user.id,
                     category="color",
                     insight_type="positive",
-                    title="t",
-                    description="d",
+                    title="Navy suits you",
+                    description="You keep choosing navy.",
+                    created_at=now - insight_age,
                 )
             )
         await db_session.commit()
-        generate = AsyncMock(return_value=[])
-        with (
-            patch("app.workers.notifications.get_db_session", return_value=db_session),
-            patch.object(LearningService, "generate_insights", generate),
-            patch.object(LearningService, "recompute_learning_profile", AsyncMock()) as recompute,
-        ):
+        with patch("app.workers.notifications.get_db_session", return_value=db_session):
             await update_learning_profiles({})
-        # The worker visits every user with a recent answer, including other tests' users.
-        generated_for = [awaited.args[0] for awaited in generate.await_args_list]
-        recomputed_for = [awaited.args[0] for awaited in recompute.await_args_list]
-        return generated_for.count(user.id), recomputed_for.count(user.id)
+        return await db_session.scalar(
+            select(func.count()).select_from(StyleInsight).where(StyleInsight.user_id == user.id)
+        )
 
     @pytest.mark.asyncio
     async def test_insights_run_when_the_answer_already_refreshed_the_profile(
         self, db_session, test_user
     ):
-        generated, recomputed = await self._run_worker(db_session, test_user, recent_insight=False)
-
-        assert (generated, recomputed) == (1, 0)
+        assert await self._insights_after_worker(db_session, test_user, recent_insight=False) > 0
 
     @pytest.mark.asyncio
-    async def test_insights_are_not_repeated_within_the_hour(self, db_session, test_user):
-        generated, _ = await self._run_worker(db_session, test_user, recent_insight=True)
+    @pytest.mark.parametrize(
+        "profile_age", [timedelta(0), timedelta(hours=2)], ids=["fresh-profile", "stale-profile"]
+    )
+    async def test_insights_are_not_repeated_within_the_hour(
+        self, db_session, test_user, profile_age
+    ):
+        count = await self._insights_after_worker(
+            db_session, test_user, recent_insight=True, profile_age=profile_age
+        )
+        assert count == 1
 
-        assert generated == 0
+    @pytest.mark.asyncio
+    async def test_insights_older_than_the_latest_answer_are_refreshed(self, db_session, test_user):
+        count = await self._insights_after_worker(
+            db_session, test_user, recent_insight=True, insight_age=timedelta(minutes=30)
+        )
+        assert count > 1

@@ -222,11 +222,17 @@ def has_dressiness_clash(item_ids: list[UUID], items_by_id: dict[UUID, ClothingI
     return max(core_levels + outer_levels) - min(core_levels) >= 2
 
 
-# Notes and item names are user text inside a quoted prompt line, so control characters
-# and line breaks are removed and double quotes swapped to keep each note on its own line.
+# Notes and item names are user text inside a quoted prompt line, so control characters and line
+# breaks are removed and double quotes are swapped. ZWJ and ZWNJ stay because they shape emoji and
+# scripts, as in garment_vocabulary.
+_KEPT_FORMAT_CHARS = frozenset("\u200c\u200d")
+
+
 def _prompt_safe(text: str | None, max_chars: int) -> str:
     visible = "".join(
-        ch for ch in text or "" if ch.isspace() or not unicodedata.category(ch).startswith("C")
+        ch
+        for ch in text or ""
+        if ch.isspace() or ch in _KEPT_FORMAT_CHARS or not unicodedata.category(ch).startswith("C")
     )
     cleaned = " ".join(visible.split()).replace('"', "'")
     if len(cleaned) > max_chars:
@@ -710,9 +716,9 @@ class RecommendationService:
 
     async def _get_feedback_notes(self, user_id: UUID) -> list[str]:
         cutoff = datetime.now(UTC) - timedelta(days=FEEDBACK_NOTE_MAX_AGE_DAYS)
-        # A note can be added to a feedback row long after it was created; the user's
-        # latest answer on the outfit dates it better than the row does.
-        noted_at = func.coalesce(Outfit.responded_at, UserFeedback.created_at)
+        # A note arrives with either the feedback row or a later answer on the outfit, so the newer
+        # of the two dates it. GREATEST skips a null answer time.
+        noted_at = func.greatest(Outfit.responded_at, UserFeedback.created_at)
         result = await self.db.execute(
             select(UserFeedback)
             .join(Outfit, UserFeedback.outfit_id == Outfit.id)

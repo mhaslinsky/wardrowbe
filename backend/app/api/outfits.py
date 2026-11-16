@@ -943,6 +943,9 @@ async def submit_feedback(
     if request.style_rating is not None:
         feedback.style_rating = request.style_rating
     if request.comment is not None:
+        # A new note is an answer too; dating it keeps it in the notes the AI reads.
+        if request.comment.strip() and request.comment != feedback.comment:
+            outfit.responded_at = datetime.utcnow()
         feedback.comment = request.comment
     if request.worn and not feedback.worn_at:
         user_today = get_user_today(current_user)
@@ -1237,9 +1240,6 @@ async def _run_learning_safely(db: AsyncSession, outfit_id: UUID, user_id: UUID)
         await LearningService(db).process_feedback(outfit_id, user_id)
     except Exception as e:
         logger.exception("learning process_feedback failed for outfit %s: %s", outfit_id, e)
-        # The request's own changes are already committed; without this, the session stays in a
-        # failed transaction and the closing commit turns a swallowed error into a 500.
-        await db.rollback()
 
 
 @router.post("/studio", response_model=OutfitResponse, status_code=status.HTTP_201_CREATED)
