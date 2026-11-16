@@ -102,5 +102,10 @@
     "reset": "Zurücksetzen",
     "temperature": "Temperatur"
   },
-  "yourOutfit": "Dein Outfit"
+  "yourOutfit": "Dein Outfit",
+  "rejectNote": {
+    "title": "Was hat nicht gepasst?",
+    "placeholder": "Optionale Notiz",
+    "confirm": "Ablehnen"
+  }
 }

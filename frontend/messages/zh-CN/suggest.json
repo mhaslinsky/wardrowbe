@@ -102,5 +102,10 @@
     "reset": "重置",
     "temperature": "温度"
   },
-  "yourOutfit": "你的穿搭"
+  "yourOutfit": "你的穿搭",
+  "rejectNote": {
+    "title": "哪里不合适？",
+    "placeholder": "备注（可选）",
+    "confirm": "拒绝"
+  }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/collapsible';
 import { ItemPicker } from '@/components/shared/item-picker';
 import { OccasionChips } from '@/components/shared/occasion-chips';
+import { RejectNoteDialog } from '@/components/reject-note-dialog';
 import { useOccasionLabel, useWeatherConditionLabel, useTypeLabel } from '@/lib/hooks/use-translated-constants';
 import { useItem } from '@/lib/hooks/use-items';
 import { api, ApiError } from '@/lib/api';
@@ -602,6 +603,10 @@ function SuggestContent() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [activeOptionIndex, setActiveOptionIndex] = useState<number>(0);
   const [isCompareAll, setIsCompareAll] = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<Outfit | null>(null);
+  const [rejectError, setRejectError] = useState<string | null>(null);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const rejectTargetId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -681,17 +686,33 @@ function SuggestContent() {
     handleGenerate();
   };
 
-  const handleReject = async (targetOutfit?: Outfit) => {
-    const outfitToReject = targetOutfit || outfits[activeOptionIndex];
-    if (!outfitToReject) return;
+  const openRejectDialog = (target: Outfit | null) => {
+    rejectTargetId.current = target?.id ?? null;
+    setRejectTarget(target);
+    setRejectError(null);
+  };
 
+  const closeRejectDialog = () => openRejectDialog(null);
+
+  const handleReject = async (outfitToReject: Outfit, note: string) => {
+    if (isRejecting) return;
+    setIsRejecting(true);
+    setRejectError(null);
     applySessionToken(session);
 
     try {
-      await api.post(`/outfits/${outfitToReject.id}/reject`);
+      await api.post(`/outfits/${outfitToReject.id}/reject`, note ? { comment: note } : undefined);
     } catch (err) {
       console.error('Reject error:', err);
+      // A failure that lands after the dialog closes must not show up on the next one.
+      if (rejectTargetId.current === outfitToReject.id) {
+        setRejectError(t('feedback.submitError'));
+      }
+      return;
+    } finally {
+      setIsRejecting(false);
     }
+    closeRejectDialog();
 
     const remaining = outfits.filter((o) => o.id !== outfitToReject.id);
     if (remaining.length > 0) {
@@ -888,12 +909,20 @@ function SuggestContent() {
           temperatureUnit={temperatureUnit}
           baseItemId={selectedItem?.id}
           onAccept={handleAccept}
-          onReject={handleReject}
+          onReject={(outfit) => openRejectDialog(outfit || outfits[activeOptionIndex] || null)}
           onTryAnother={handleTryAnother}
           onNewRequest={handleNewRequest}
           t={t}
         />
       )}
+
+      <RejectNoteDialog
+        open={rejectTarget !== null}
+        pending={isRejecting}
+        error={rejectError}
+        onCancel={closeRejectDialog}
+        onConfirm={(note) => rejectTarget && handleReject(rejectTarget, note)}
+      />
 
       {/* Item Picker Dialog */}
       <Dialog open={isItemPickerOpen} onOpenChange={setIsItemPickerOpen}>

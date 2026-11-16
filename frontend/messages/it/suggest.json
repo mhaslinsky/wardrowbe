@@ -102,5 +102,10 @@
     "reset": "Ripristina",
     "temperature": "Temperatura"
   },
-  "yourOutfit": "Il tuo outfit"
+  "yourOutfit": "Il tuo outfit",
+  "rejectNote": {
+    "title": "Cosa non andava?",
+    "placeholder": "Nota facoltativa",
+    "confirm": "Rifiuta"
+  }
 }
