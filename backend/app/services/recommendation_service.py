@@ -2,11 +2,12 @@ import hashlib
 import json
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -49,7 +50,7 @@ from app.utils.clothing import (
     missing_regions,
     remove_legwear,
 )
-from app.utils.garment_vocabulary import render_outfit_prompt
+from app.utils.garment_vocabulary import FORMALITY, ITEM_ROLE, render_outfit_prompt
 from app.utils.preference_defaults import (
     DEFAULT_LAYERING_PREFERENCE,
     DEFAULT_TEMPERATURE_SENSITIVITY,
@@ -63,6 +64,16 @@ logger = logging.getLogger(__name__)
 # reading, is regenerated rather than served.
 CACHED_SUGGESTION_TEMP_TOLERANCE = 3.0
 INCOMPLETE_OUTFIT_ERROR = "AI suggested an outfit that cannot be completed from your wardrobe"
+# One rejected outfit marks every pair in it, including the innocent ones, so a pair has to be
+# rejected in two outfits, and never accepted or worn, before the AI is told to avoid it.
+REJECTED_PAIR_MIN_REJECTIONS = 2
+REJECTED_PAIR_PROMPT_LIMIT = 15
+FEEDBACK_NOTE_LIMIT = 5
+FEEDBACK_NOTE_MAX_CHARS = 200
+FEEDBACK_NOTE_MAX_AGE_DAYS = 60
+# A casual coat over a dressier outfit is normal, so an outer layer counts only when it is the
+# dressier piece (a blazer over joggers). Legwear, socks and accessories never count.
+_DRESSINESS_ROLES = frozenset({"base_top", "mid_layer", "suit", "full_body", "bottom", "footwear"})
 
 SINGLE_OUTFIT_FORMAT = (
     "Respond with valid JSON:\n"
@@ -173,6 +184,38 @@ def resolve_outfit_items(
     if drop_legwear:
         valid_ids = remove_legwear(valid_ids, item_type_map, mandatory_item_ids or set())
     return valid_ids
+
+
+def has_dressiness_clash(item_ids: list[UUID], items_by_id: dict[UUID, ClothingItem]) -> bool:
+    core_levels, outer_levels = [], []
+    for item_id in item_ids:
+        item = items_by_id.get(item_id)
+        formality = ((item.formality if item else None) or "").lower()
+        if formality not in FORMALITY:
+            continue
+        role = ITEM_ROLE.get((item.type or "").lower())
+        if role in _DRESSINESS_ROLES:
+            core_levels.append(FORMALITY.index(formality))
+        elif role == "outer_layer":
+            outer_levels.append(FORMALITY.index(formality))
+    if not core_levels:
+        return False
+    return max(core_levels + outer_levels) - min(core_levels) >= 2
+
+
+def _item_label(item: ClothingItem) -> str:
+    return item.name or " ".join(filter(None, [item.primary_color, item.subtype or item.type]))
+
+
+def feedback_note(comment: str | None, items: list[ClothingItem]) -> str | None:
+    visible = "".join(ch for ch in comment or "" if unicodedata.category(ch) != "Cf")
+    text = " ".join(visible.split()).replace('"', "'")
+    if not text:
+        return None
+    if len(text) > FEEDBACK_NOTE_MAX_CHARS:
+        text = text[: FEEDBACK_NOTE_MAX_CHARS - 3].rstrip() + "..."
+    labels = ", ".join(label for label in map(_item_label, items) if label)
+    return f'"{text}" (outfit: {labels})' if labels else f'"{text}"'
 
 
 def fill_best_partial(
@@ -454,8 +497,11 @@ class RecommendationService:
         number_map: dict[int, UUID] | None = None,
         occasion: str | None = None,
         body_measurements: dict | None = None,
+        rejected_pairs: list[frozenset[UUID]] | None = None,
+        feedback_notes: list[str] | None = None,
     ) -> str:
         lines = []
+        uuid_to_number = {uuid: num for num, uuid in (number_map or {}).items()}
 
         if body_measurements:
             m = body_measurements
@@ -541,7 +587,6 @@ class RecommendationService:
                         )
 
         if worn_combinations and number_map:
-            uuid_to_number = {uuid: num for num, uuid in number_map.items()}
             worn_sets = []
             for combo in worn_combinations:
                 numbers = sorted([uuid_to_number[uuid] for uuid in combo if uuid in uuid_to_number])
@@ -551,6 +596,20 @@ class RecommendationService:
                 lines.append(
                     f"- Recently worn or suggested outfits (prefer variety, do not repeat identical combinations): {', '.join(worn_sets)}"
                 )
+
+        rejected_refs = [
+            "[" + ", ".join(map(str, sorted(uuid_to_number[item_id] for item_id in pair))) + "]"
+            for pair in rejected_pairs or []
+            if len(pair) == 2 and pair <= uuid_to_number.keys()
+        ][:REJECTED_PAIR_PROMPT_LIMIT]
+        if rejected_refs:
+            lines.append(
+                f"- Pairings the user rejected (do not put these together): {', '.join(rejected_refs)}"
+            )
+
+        if feedback_notes:
+            lines.append("- The user's notes on past suggestions (follow them):")
+            lines.extend(f"  - {note}" for note in feedback_notes)
 
         if lines:
             return "\nUSER PREFERENCES:\n" + "\n".join(lines)
@@ -598,6 +657,47 @@ class RecommendationService:
                 preferences["occasion_insights"] = {occasion: occ_data}
 
         return preferences
+
+    async def _get_rejected_item_pairs(self, user_id: UUID) -> list[frozenset[UUID]]:
+        result = await self.db.execute(
+            select(ItemPairScore.item1_id, ItemPairScore.item2_id)
+            .where(
+                ItemPairScore.user_id == user_id,
+                ItemPairScore.times_rejected >= REJECTED_PAIR_MIN_REJECTIONS,
+                ItemPairScore.times_accepted == 0,
+                func.coalesce(ItemPairScore.wear_bonus, 0) == 0,
+            )
+            .order_by(ItemPairScore.times_rejected.desc(), ItemPairScore.updated_at.desc())
+        )
+        return [frozenset(row) for row in result.all()]
+
+    async def _get_feedback_notes(self, user_id: UUID) -> list[str]:
+        cutoff = datetime.now(UTC) - timedelta(days=FEEDBACK_NOTE_MAX_AGE_DAYS)
+        result = await self.db.execute(
+            select(UserFeedback)
+            .join(Outfit, UserFeedback.outfit_id == Outfit.id)
+            .where(
+                Outfit.user_id == user_id,
+                UserFeedback.created_at >= cutoff,
+                UserFeedback.comment.regexp_match(r"\S"),
+            )
+            .order_by(UserFeedback.created_at.desc())
+            # Room for notes that turn out blank once invisible characters are removed.
+            .limit(FEEDBACK_NOTE_LIMIT * 2)
+            .options(
+                selectinload(UserFeedback.outfit)
+                .selectinload(Outfit.items)
+                .selectinload(OutfitItem.item)
+            )
+        )
+        notes = (
+            feedback_note(
+                feedback.comment,
+                [oi.item for oi in sorted(feedback.outfit.items, key=lambda oi: oi.position)],
+            )
+            for feedback in result.scalars().all()
+        )
+        return [note for note in notes if note][:FEEDBACK_NOTE_LIMIT]
 
     async def _get_good_item_pairs(self, user_id: UUID) -> dict[UUID, list[UUID]]:
         result = await self.db.execute(
@@ -971,6 +1071,8 @@ class RecommendationService:
             number_map,
             occasion=occasion,
             body_measurements=getattr(user, "body_measurements", None),
+            rejected_pairs=await self._get_rejected_item_pairs(user.id),
+            feedback_notes=await self._get_feedback_notes(user.id),
         )
 
         prompt = RECOMMENDATION_PROMPT.format(
@@ -1062,6 +1164,10 @@ class RecommendationService:
                 else:
                     complete.append((od, item_ids))
 
+            # Options that mix very casual and dressy pieces go last rather than being dropped,
+            # so a wardrobe that can only make such outfits still gets one.
+            items_by_id = {item.id: item for item in candidates}
+            complete.sort(key=lambda option: has_dressiness_clash(option[1], items_by_id))
             chosen = complete[:count]
             # Filling in a piece the AI did not choose is a last resort, because the AI's
             # own complete options are better matched than anything added here.
