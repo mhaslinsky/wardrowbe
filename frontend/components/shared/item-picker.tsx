@@ -27,6 +27,8 @@ const SLOT_ROLES = {
   accessories: ['accessory', 'neckwear'],
 } satisfies Record<string, string[]>;
 type Slot = keyof typeof SLOT_ROLES;
+// Hoodies keep the outer_layer role for the layering rules, but people look for them with sweaters, not jackets.
+const TYPE_SLOT: Partial<Record<string, Slot>> = { hoodie: 'layers' };
 
 interface ItemPickerProps {
   selectedIds: Set<string>;
@@ -102,9 +104,11 @@ export function ItemPicker({
   }, [itemsData?.items, page, accVersion]);
 
   const matchesSlot = useCallback((item: Item) => {
-    const role = ITEM_ROLE[(item.type ?? '').trim().toLowerCase()];
-    return (!outfitTypesOnly || role !== 'underwear') &&
-      (!slotFilters || slot === 'all' || (SLOT_ROLES[slot] as string[]).includes(role));
+    const itemType = (item.type ?? '').trim().toLowerCase();
+    const role = ITEM_ROLE[itemType];
+    const itemSlot = TYPE_SLOT[itemType];
+    const inSlot = itemSlot ? itemSlot === slot : (SLOT_ROLES[slot] as string[]).includes(role);
+    return (!outfitTypesOnly || role !== 'underwear') && (!slotFilters || slot === 'all' || inSlot);
   }, [outfitTypesOnly, slotFilters, slot]);
   const items = (accumulatedItems.length > 0 ? accumulatedItems : itemsData?.items ?? [])
     .filter(matchesSlot);
