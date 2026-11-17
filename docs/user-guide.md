@@ -57,6 +57,8 @@ Sources: [upload form](../frontend/components/add-item-dialog.tsx), [accepted im
 
 ### Suggest an outfit
 
+In **Settings > Recommendation Settings > Outfit options per day**, choose 1 to 5. Changes save automatically. Scheduled runs generate that many options with one notification, and **Get options** fills the chosen day to that number. **Default (1 scheduled, 3 on request)** preserves the original counts. If the AI returns fewer options, those options are saved.
+
 1. Open **Suggest Outfit**. Set your location in Settings first if weather is missing.
 2. Choose the occasion. To include a particular piece, open **Build around a specific piece (optional)** and choose it from your wardrobe.
 3. Select **Get Suggestion**. Compare the options with **Compare All**, or look at one with **Focus View**. Read the weather information and styling advice before choosing.
@@ -267,7 +269,7 @@ In **Settings**, choices and color picks save immediately, sliders save when rel
 - **Temperature & Comfort**: choose temperature units, sensitivity, layering, and your hot and cold thresholds.
 - **Active hours**: choose **Start** and **End** in local time. The end must be at least two hours after the start. Changes save automatically. Outfit suggestions use the hourly weather within these hours (including the end hour) for scheduled outfits, a chosen date, and inspiration. Today uses only the remaining hours; the weather card shows the current reading. Trips use your hours when set; otherwise, they default to 10 AM to 6 PM. If the hourly forecast is unavailable, future dates use the whole-day forecast. **Reset** restores the server defaults.
 - **Washing**: set wears before washing by clothing type; see [laundry](#keep-laundry-up-to-date).
-- **Recommendation Settings**: choose a default occasion, variety, repeat avoidance, and whether to prefer underused items.
+- **Recommendation Settings**: choose a default occasion, outfit options per day, variety, repeat avoidance, and whether to prefer underused items.
 - **Standing rules**: add one instruction per line, up to 20 rules of 300 characters each.
 - **Body Measurements**: choose metric or imperial units, enter the measurements you know and usual clothing sizes. Unit changes wait for pending saves.
 

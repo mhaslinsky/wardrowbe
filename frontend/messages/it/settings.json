@@ -112,6 +112,8 @@
     "useMyLocation": "Usa la mia posizione"
   },
   "recommendations": {
+    "optionsPerDay": "Opzioni di outfit al giorno",
+    "optionsPerDayDefault": "Predefinito (1 programmata, 3 su richiesta)",
     "avoidRepeatDays": "Evita ripetizioni capi entro (giorni)",
     "defaultOccasion": "Occasione predefinita",
     "description": "Personalizza come vengono generati i suggerimenti di outfit",

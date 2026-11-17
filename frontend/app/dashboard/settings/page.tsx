@@ -1119,6 +1119,23 @@ export default function SettingsPage() {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="options-per-day">{t('recommendations.optionsPerDay')}</Label>
+                <Select
+                  value={formData.options_per_day == null ? 'default' : String(formData.options_per_day)}
+                  onValueChange={(value) => updateField('options_per_day', value === 'default' ? null : Number(value))}
+                >
+                  <SelectTrigger id="options-per-day">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">{t('recommendations.optionsPerDayDefault')}</SelectItem>
+                    {[1, 2, 3, 4, 5].map((count) => (
+                      <SelectItem key={count} value={String(count)}>{count}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label>{t('recommendations.varietyLevel')}</Label>
                 <Select
                   value={formData.variety_level || PREFERENCE_DEFAULTS.variety_level}

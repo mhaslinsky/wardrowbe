@@ -628,3 +628,184 @@ async def test_day_lock_survives_savepoint_until_commit(
             )
             == 3
         )
+
+
+@pytest.mark.parametrize("target", [1, 2, 4, 5])
+async def test_options_per_day_topup_target(
+    db_session, test_user, client, auth_headers, day_generation, forecast, target
+):
+    await client.patch(
+        "/api/v1/users/me/preferences", headers=auth_headers, json={"options_per_day": target}
+    )
+    await prepare(db_session, test_user)
+    day = get_user_today(test_user) + timedelta(days=1)
+    service = RecommendationService(db_session)
+    forecast(service, day)
+    db_session.add(Outfit(user_id=test_user.id, occasion="casual", scheduled_for=day))
+    await db_session.commit()
+    assert len(await service.top_up_day(test_user, day, "casual")) == target
+    assert len(await service.top_up_day(test_user, day, "casual")) == target
+    assert len(day_generation) == (0 if target == 1 else 1)
+    if target > 1:
+        assert day_generation[0]["count"] == target - 1
+
+
+@pytest.mark.parametrize("target,returned", [(None, 1), (1, 1), (3, 3), (5, 2)])
+async def test_scheduled_options_saved_with_one_notification(
+    db_session, test_user, client, auth_headers, http_ai, target, returned
+):
+    from datetime import time
+
+    from app.models.schedule import Schedule
+    from app.services.notification_service import NotificationDispatcher
+    from app.workers.notifications import process_scheduled_notification
+    from tests.recommendation_helpers import generation_fakes
+
+    await client.patch(
+        "/api/v1/users/me/preferences", headers=auth_headers, json={"options_per_day": target}
+    )
+    await db_session.refresh(test_user, ["preferences"])
+    schedule = Schedule(
+        user_id=test_user.id,
+        day_of_week=0,
+        notification_time=time(8),
+        occasion="casual",
+        notify_day_before=True,
+        notify=True,
+    )
+    db_session.add(schedule)
+    await db_session.commit()
+    items = list(
+        await db_session.scalars(
+            select(ClothingItem)
+            .where(ClothingItem.user_id == test_user.id)
+            .order_by(ClothingItem.type)
+        )
+    )
+    number_map = {number: item.id for number, item in enumerate(items, start=1)}
+    option = {"items": [1, 2], "headline": "An option"}
+    payload = (
+        option if target in (None, 1) else {"outfits": [option.copy() for _ in range(returned)]}
+    )
+    service = RecommendationService(db_session)
+    with (
+        generation_fakes(service, payload, number_map) as (ai, pop, push),
+        patch("app.workers.notifications.get_db_session", return_value=db_session),
+        patch.object(db_session, "close", new_callable=AsyncMock),
+        patch("app.workers.notifications.RecommendationService", return_value=service),
+        patch.object(NotificationDispatcher, "enabled_channels", AsyncMock(return_value=["ntfy"])),
+        patch.object(NotificationDispatcher, "send_outfit_notification", AsyncMock()) as send,
+    ):
+        result = await process_scheduled_notification({}, str(schedule.id))
+    assert result["status"] == "sent"
+    day = get_user_today(test_user) + timedelta(days=1)
+    outfits = list(await db_session.scalars(select(Outfit).where(Outfit.user_id == test_user.id)))
+    assert len(outfits) == returned
+    assert all(
+        outfit.scheduled_for == day and outfit.source == OutfitSource.scheduled
+        for outfit in outfits
+    )
+    send.assert_awaited_once_with(user_id=str(test_user.id), outfit_id=result["outfit_id"])
+    ai.generate_text.assert_awaited_once()
+    pop.assert_not_awaited()
+    push.assert_not_awaited()
+
+
+@pytest_asyncio.fixture
+async def scheduled_batch(db_session, test_user, client, auth_headers, http_ai):
+    from datetime import time
+
+    from app.models.schedule import Schedule
+    from app.services.notification_service import NotificationDispatcher
+
+    async def configure(target):
+        response = await client.patch(
+            "/api/v1/users/me/preferences",
+            headers=auth_headers,
+            json={"options_per_day": target},
+        )
+        assert response.status_code == 200
+        await db_session.refresh(test_user, ["preferences"])
+        schedule = Schedule(
+            user_id=test_user.id,
+            day_of_week=0,
+            notification_time=time(8),
+            occasion="casual",
+            notify_day_before=True,
+            notify=True,
+        )
+        db_session.add(schedule)
+        await db_session.commit()
+        return str(schedule.id)
+
+    service = RecommendationService(db_session)
+    with (
+        patch("app.workers.notifications.get_db_session", return_value=db_session),
+        patch.object(db_session, "close", new_callable=AsyncMock),
+        patch("app.workers.notifications.RecommendationService", return_value=service),
+        patch.object(NotificationDispatcher, "enabled_channels", AsyncMock(return_value=["ntfy"])),
+        patch.object(NotificationDispatcher, "send_outfit_notification", AsyncMock()) as send,
+    ):
+        yield configure, service, send
+
+
+async def test_scheduled_five_options_prompt(scheduled_batch, http_ai, db_session, test_user):
+    from app.workers.notifications import process_scheduled_notification
+
+    configure, _, send = scheduled_batch
+    schedule_id = await configure(5)
+    http_ai["count"] = 5
+    result = await process_scheduled_notification({}, schedule_id)
+    assert result["status"] == "sent"
+    assert len(http_ai["prompts"]) == 1
+    assert "exactly 5 distinct outfit options" in http_ai["prompts"][0]
+    day = get_user_today(test_user) + timedelta(days=1)
+    outfits = list(
+        await db_session.scalars(
+            select(Outfit).where(
+                Outfit.user_id == test_user.id,
+                Outfit.scheduled_for == day,
+            )
+        )
+    )
+    assert len(outfits) == 5
+    send.assert_awaited_once()
+
+
+async def test_scheduled_batch_failure_rolls_back_options(
+    scheduled_batch, test_user, session_maker
+):
+    from app.services.recommendation_service import AIRecommendationError
+    from app.workers.notifications import process_scheduled_notification
+
+    configure, service, send = scheduled_batch
+    schedule_id = await configure(3)
+    user_id = test_user.id
+    day = get_user_today(test_user) + timedelta(days=1)
+    materialize = service._materialize_outfit
+    attempts = 0
+
+    async def fail_later(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 3:
+            raise RuntimeError("Saving the third option failed")
+        return await materialize(*args, **kwargs)
+
+    with patch.object(service, "_materialize_outfit", side_effect=fail_later):
+        with pytest.raises(AIRecommendationError):
+            await process_scheduled_notification({}, schedule_id)
+    assert attempts == 3
+    async with session_maker() as observer:
+        assert (
+            list(
+                await observer.scalars(
+                    select(Outfit).where(
+                        Outfit.user_id == user_id,
+                        Outfit.scheduled_for == day,
+                    )
+                )
+            )
+            == []
+        )
+    send.assert_not_awaited()

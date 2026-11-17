@@ -112,6 +112,8 @@
     "useMyLocation": "내 위치 사용"
   },
   "recommendations": {
+    "optionsPerDay": "하루 코디 선택지 수",
+    "optionsPerDayDefault": "기본값 (예약 1개, 요청 시 3개)",
     "avoidRepeatDays": "반복 착용 제한 기간 (일)",
     "defaultOccasion": "기본 상황",
     "description": "코디 추천이 만들어지는 방식을 조정하세요",

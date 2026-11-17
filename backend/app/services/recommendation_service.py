@@ -315,7 +315,7 @@ class RecommendationService:
         exclude_items: list[UUID] | None = None,
         include_items: list[UUID] | None = None,
     ) -> list[Outfit]:
-        """Top up a day to three options, or return existing options on lock timeout.
+        """Top up a day to the preferred number of options, or return existing options on lock timeout.
 
         Past days are read-only; invalid dates or unavailable forecasts raise ValueError.
         """
@@ -339,6 +339,12 @@ class RecommendationService:
             return await self._day_suggestions(user.id, day)
 
         try:
+            preferences = await PreferenceService(self.db).get_preferences(user.id)
+            target_count = (
+                preferences.options_per_day
+                if preferences and preferences.options_per_day is not None
+                else 3
+            )
             existing = await self._day_suggestions(user.id, day)
             logged = await self.db.scalar(
                 select(UserFeedback.id)
@@ -346,7 +352,7 @@ class RecommendationService:
                 .where(Outfit.user_id == user.id, UserFeedback.worn_at == day)
                 .limit(1)
             )
-            if logged is not None or len(existing) >= 3:
+            if logged is not None or len(existing) >= target_count:
                 await self.db.commit()
                 return existing
             lat, lon = user.location_lat, user.location_lon
@@ -369,7 +375,6 @@ class RecommendationService:
             if forecast is None:
                 raise ValueError("Forecast unavailable for this date")
             # Pick-a-day outfits must exclude temperatures outside the user's active hours.
-            preferences = await PreferenceService(self.db).get_preferences(user.id)
             weather = await self.weather_service.get_forecast_weather(
                 float(lat),
                 float(lon),
@@ -385,7 +390,7 @@ class RecommendationService:
                 time_of_day=TimeOfDay.full_day,
                 exclude_items=exclude_items,
                 include_items=include_items,
-                count=3 - len(existing),
+                count=target_count - len(existing),
             )
             await self.db.flush()
             outfits = await self._day_suggestions(user.id, day)

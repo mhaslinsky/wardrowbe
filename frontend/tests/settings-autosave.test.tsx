@@ -455,3 +455,14 @@ it('retains an invalid rules draft without sending it when a queued rule is edit
   fireEvent.blur(editor);
   await waitFor(() => expect(state.save).toHaveBeenLastCalledWith({ standing_rules: ['Valid latest rule'] }));
 });
+
+
+it('autosaves outfit options per day and restores the choice on reload', async () => {
+  const view = render(<SettingsPage />);
+  fireEvent.change(selectFor('recommendations.optionsPerDay'), { target: { value: '4' } });
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({ options_per_day: 4 }));
+  view.unmount();
+  state.preferences = { ...state.persisted };
+  render(<SettingsPage />);
+  expect(selectFor('recommendations.optionsPerDay')).toHaveValue('4');
+});

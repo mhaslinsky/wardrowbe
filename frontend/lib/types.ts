@@ -184,6 +184,7 @@ export interface Preferences {
   cold_threshold: number;
   hot_threshold: number;
   layering_preference: 'minimal' | 'moderate' | 'heavy';
+  options_per_day?: number | null;
   avoid_repeat_days: number;
   prefer_underused_items: boolean;
   variety_level: 'low' | 'moderate' | 'high';

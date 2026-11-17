@@ -112,6 +112,8 @@
     "useMyLocation": "使用我的位置"
   },
   "recommendations": {
+    "optionsPerDay": "每天的穿搭選項數",
+    "optionsPerDayDefault": "預設（定時產生1套，按需產生3套）",
     "avoidRepeatDays": "避免重複單品的間隔天數",
     "defaultOccasion": "預設場合",
     "description": "自訂穿搭推薦的產生方式",
