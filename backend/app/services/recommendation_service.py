@@ -56,6 +56,7 @@ from app.utils.clothing import (
     repair_top_layers,
 )
 from app.utils.garment_vocabulary import (
+    DEFAULT_FORMALITY,
     FORMALITY,
     ITEM_ROLE,
     NEAR_FACE_TYPES,
@@ -205,8 +206,8 @@ def has_dressiness_clash(item_ids: list[UUID], items_by_id: dict[UUID, ClothingI
 
     Tops, mid layers, bottoms, one-pieces, suits and shoes always count, and so does an outer
     layer when the outfit has no top, one-piece or suit (a hoodie picked as the top). Otherwise
-    an outer layer counts only when it is the dressier piece. Items with no known formality are
-    ignored.
+    an outer layer counts only when it is the dressier piece. An item with no known formality
+    uses its type's default formality, and is ignored when the type has none.
     """
     items = [items_by_id[item_id] for item_id in item_ids if item_id in items_by_id]
     item_types = {item.id: (item.type or "").lower() for item in items}
@@ -216,10 +217,10 @@ def has_dressiness_clash(item_ids: list[UUID], items_by_id: dict[UUID, ClothingI
     )
     core_levels, outer_levels = [], []
     for item in items:
-        formality = (item.formality or "").lower()
+        item_type = item_types[item.id]
+        formality = (item.formality or DEFAULT_FORMALITY.get(item_type) or "").lower()
         if formality not in FORMALITY:
             continue
-        item_type = item_types[item.id]
         role = ITEM_ROLE.get(item_type)
         worn_as_top = role == "outer_layer" and not has_inner_top
         if role in _DRESSINESS_ROLES or worn_as_top:

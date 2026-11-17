@@ -8,7 +8,11 @@ TYPE (required, pick one):
 SUBTYPE (optional): A more specific name within the type. Examples:
 - overshirt → utility, shirt-jacket, shacket, chore-jacket
 - shirt → henley, button-down, oxford, flannel, hawaiian, camp-collar
-- pants → chinos, joggers, cargo, trousers, leggings, sweatpants
+- pants → cargo, leggings, wide-leg, culottes
+- chinos → slim, straight, pleated
+- trousers → slacks, pleated, flat-front, tailored
+- joggers → cargo, athletic, cuffed
+- sweatpants → cuffed, open-hem, athletic
 - dress → sundress, slip-dress, maxi, midi, wrap, shirt-dress, a-line
 - jacket → denim-jacket, bomber, parka, windbreaker, trucker, anorak
 - shoes → loafers, oxfords, mules, flats, heels, platforms
@@ -21,6 +25,7 @@ SUBTYPE (optional): A more specific name within the type. Examples:
 - underwear → boxer-briefs, briefs, boxers, trunks, compression, long-underwear
 - tie → necktie, bow-tie, bolo
 Classify shirt jackets, utility overshirts and shackets as overshirt, not shirt or jacket.
+Classify slacks and dress pants as trousers, cotton twill casual pants as chinos, tapered athletic pants with cuffed ankles as joggers, and loose fleece or jersey lounge pants as sweatpants. Use pants for other long bottoms, such as cargo pants and leggings.
 Classify underwear, including athletic and compression underwear, as underwear, never tights.
 Classify as underwear only garments made as undergarments: briefs, boxers, boxer briefs, trunks, compression shorts made as underwear, and long johns or thermal base-layer bottoms. This rule takes precedence over the length rules below. Pantyhose and sheer, opaque or thermal tights stay tights; leggings stay pants; athletic shorts worn on their own stay shorts.
 

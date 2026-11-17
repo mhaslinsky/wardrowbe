@@ -171,3 +171,12 @@ it('keeps the day view outside the narrow Suggest form', () => {
   expect(narrowForm).not.toBeNull()
   expect(dayView.parentElement).toBe(narrowForm.parentElement)
 })
+
+it('offers each bottom type as a base item filter', async () => {
+  render(<SuggestPage />, { wrapper })
+  await act(async () => { fireEvent.click(screen.getByText('baseItem.chooseItem')) })
+  const dialog = screen.getByRole('dialog')
+  for (const bottom of ['pants', 'jeans', 'chinos', 'trousers', 'joggers', 'sweatpants']) {
+    expect(within(dialog).getByRole('button', { name: bottom })).toBeVisible()
+  }
+})

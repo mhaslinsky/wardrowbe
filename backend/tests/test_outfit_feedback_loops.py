@@ -100,6 +100,17 @@ class TestDressinessClash:
             _item("boots", "smart-casual"),
         )
 
+    def test_trousers_without_formality_sit_dressier_than_chinos(self):
+        assert _clash(_item("trousers", None), _item("t-shirt", "casual"))
+        assert not _clash(_item("chinos", None), _item("t-shirt", "casual"))
+        assert not _clash(_item("trousers", "casual"), _item("t-shirt", "casual"))
+
+    @pytest.mark.parametrize("item_type", ["joggers", "sweatpants"])
+    def test_joggers_and_sweatpants_without_formality_are_very_casual(self, item_type):
+        assert _clash(_item(item_type, None), _item("shirt", "smart-casual"))
+        assert not _clash(_item(item_type, None), _item("t-shirt", "casual"))
+        assert not _clash(_item("pants", None), _item("shirt", "smart-casual"))
+
 
 class TestPreferencesPrompt:
     def _prefs(self, **kwargs) -> str:

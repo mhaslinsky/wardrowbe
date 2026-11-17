@@ -202,7 +202,16 @@
     "turtleneck": "Col roulé",
     "v-neck": "Col V",
     "windbreaker": "Coupe-vent",
-    "wrap": "Portefeuille"
+    "wrap": "Portefeuille",
+    "wide-leg": "Jambe large",
+    "culottes": "Jupe-culotte",
+    "slim": "Slim",
+    "straight": "Droit",
+    "slacks": "Pantalon de ville",
+    "flat-front": "Sans pinces",
+    "tailored": "Ajusté",
+    "cuffed": "Resserré aux chevilles",
+    "open-hem": "Ourlet ouvert"
   },
   "timezones": {
     "America/Chicago": "Heure centrale (É.-U.)",
@@ -257,7 +266,11 @@
     "top": "Haut",
     "vest": "Gilet sans manches",
     "glasses": "Lunettes",
-    "robe": "Peignoir"
+    "robe": "Peignoir",
+    "chinos": "Chino",
+    "trousers": "Pantalon habillé",
+    "joggers": "Jogging",
+    "sweatpants": "Pantalon de survêtement"
   },
   "weatherConditions": {
     "clear": "Dégagé",

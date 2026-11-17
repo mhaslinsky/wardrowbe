@@ -202,7 +202,16 @@
     "turtleneck": "高领",
     "v-neck": "V领",
     "windbreaker": "防风衣",
-    "wrap": "裹身"
+    "wrap": "裹身",
+    "wide-leg": "阔腿",
+    "culottes": "裙裤",
+    "slim": "修身",
+    "straight": "直筒",
+    "slacks": "西裤",
+    "flat-front": "平前",
+    "tailored": "剪裁合身",
+    "cuffed": "束口",
+    "open-hem": "开口裤脚"
   },
   "timezones": {
     "America/Chicago": "美国中部时间",
@@ -257,7 +266,11 @@
     "top": "上装",
     "vest": "马甲",
     "glasses": "眼镜",
-    "robe": "浴袍"
+    "robe": "浴袍",
+    "chinos": "卡其裤",
+    "trousers": "西裤",
+    "joggers": "束脚裤",
+    "sweatpants": "运动裤"
   },
   "weatherConditions": {
     "clear": "晴天",

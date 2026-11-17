@@ -202,7 +202,16 @@
     "turtleneck": "Turtleneck",
     "v-neck": "V-neck",
     "windbreaker": "Windbreaker",
-    "wrap": "Wrap"
+    "wrap": "Wrap",
+    "wide-leg": "Wide-leg",
+    "culottes": "Culottes",
+    "slim": "Slim",
+    "straight": "Straight",
+    "slacks": "Slacks",
+    "flat-front": "Flat-front",
+    "tailored": "Tailored",
+    "cuffed": "Cuffed",
+    "open-hem": "Open hem"
   },
   "timezones": {
     "America/Chicago": "Central Time (US)",
@@ -257,7 +266,11 @@
     "top": "Top",
     "vest": "Vest",
     "glasses": "Glasses",
-    "robe": "Robe"
+    "robe": "Robe",
+    "chinos": "Chinos",
+    "trousers": "Trousers",
+    "joggers": "Joggers",
+    "sweatpants": "Sweatpants"
   },
   "weatherConditions": {
     "clear": "Clear",

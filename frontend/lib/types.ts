@@ -204,7 +204,11 @@ export type ClothingTypeValue = (typeof CLOTHING_TYPE_VALUES)[number];
 export const CLOTHING_SUBTYPES: Record<string, readonly string[]> = {
   overshirt: ['utility', 'shirt-jacket', 'shacket', 'chore-jacket'],
   shirt: ['henley', 'button-down', 'oxford', 'flannel', 'hawaiian', 'camp-collar'],
-  pants: ['chinos', 'joggers', 'cargo', 'trousers', 'leggings', 'sweatpants'],
+  pants: ['cargo', 'leggings', 'wide-leg', 'culottes'],
+  chinos: ['slim', 'straight', 'pleated'],
+  trousers: ['slacks', 'pleated', 'flat-front', 'tailored'],
+  joggers: ['cargo', 'athletic', 'cuffed'],
+  sweatpants: ['cuffed', 'open-hem', 'athletic'],
   dress: ['sundress', 'slip-dress', 'maxi', 'midi', 'wrap', 'shirt-dress', 'a-line'],
   jacket: ['denim-jacket', 'bomber', 'parka', 'windbreaker', 'trucker', 'anorak'],
   shoes: ['loafers', 'oxfords', 'mules', 'flats', 'heels', 'platforms'],

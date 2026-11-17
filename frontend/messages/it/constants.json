@@ -202,7 +202,16 @@
     "turtleneck": "Dolcevita",
     "v-neck": "Scollo a V",
     "windbreaker": "Giacca a vento",
-    "wrap": "Portafoglio"
+    "wrap": "Portafoglio",
+    "wide-leg": "Gamba larga",
+    "culottes": "Culottes",
+    "slim": "Slim",
+    "straight": "Dritto",
+    "slacks": "Pantaloni classici",
+    "flat-front": "Senza pinces",
+    "tailored": "Sartoriale",
+    "cuffed": "Con polsino",
+    "open-hem": "Orlo aperto"
   },
   "timezones": {
     "America/Chicago": "Ora centrale (USA)",
@@ -257,7 +266,11 @@
     "top": "Top",
     "vest": "Gilet",
     "glasses": "Occhiali",
-    "robe": "Accappatoio"
+    "robe": "Accappatoio",
+    "chinos": "Chino",
+    "trousers": "Pantaloni eleganti",
+    "joggers": "Joggers",
+    "sweatpants": "Pantaloni della tuta"
   },
   "weatherConditions": {
     "clear": "Sereno",

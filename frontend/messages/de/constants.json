@@ -202,7 +202,16 @@
     "turtleneck": "Rollkragen",
     "v-neck": "V-Ausschnitt",
     "windbreaker": "Windjacke",
-    "wrap": "Wickel"
+    "wrap": "Wickel",
+    "wide-leg": "Weites Bein",
+    "culottes": "Culottes",
+    "slim": "Schmal",
+    "straight": "Gerade",
+    "slacks": "Anzughose",
+    "flat-front": "Ohne Bundfalten",
+    "tailored": "Maßgeschneidert",
+    "cuffed": "Mit Bündchen",
+    "open-hem": "Offener Saum"
   },
   "timezones": {
     "America/Chicago": "Central Time (USA)",
@@ -257,7 +266,11 @@
     "top": "Top",
     "vest": "Weste",
     "glasses": "Brille",
-    "robe": "Bademantel"
+    "robe": "Bademantel",
+    "chinos": "Chinos",
+    "trousers": "Stoffhose",
+    "joggers": "Jogginghose",
+    "sweatpants": "Sweathose"
   },
   "weatherConditions": {
     "clear": "Klar",
