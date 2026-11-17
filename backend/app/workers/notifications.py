@@ -211,6 +211,7 @@ async def process_scheduled_notification(ctx: dict, schedule_id: str):
                 **generation_args, single_outfit=True
             )
         else:
+            recommendation_service._defer_commit = True
             outfits = await recommendation_service.generate_recommendations(
                 **generation_args, count=count
             )

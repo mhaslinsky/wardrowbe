@@ -709,3 +709,103 @@ async def test_scheduled_options_saved_with_one_notification(
     ai.generate_text.assert_awaited_once()
     pop.assert_not_awaited()
     push.assert_not_awaited()
+
+
+@pytest_asyncio.fixture
+async def scheduled_batch(db_session, test_user, client, auth_headers, http_ai):
+    from datetime import time
+
+    from app.models.schedule import Schedule
+    from app.services.notification_service import NotificationDispatcher
+
+    async def configure(target):
+        response = await client.patch(
+            "/api/v1/users/me/preferences",
+            headers=auth_headers,
+            json={"options_per_day": target},
+        )
+        assert response.status_code == 200
+        await db_session.refresh(test_user, ["preferences"])
+        schedule = Schedule(
+            user_id=test_user.id,
+            day_of_week=0,
+            notification_time=time(8),
+            occasion="casual",
+            notify_day_before=True,
+            notify=True,
+        )
+        db_session.add(schedule)
+        await db_session.commit()
+        return str(schedule.id)
+
+    service = RecommendationService(db_session)
+    with (
+        patch("app.workers.notifications.get_db_session", return_value=db_session),
+        patch.object(db_session, "close", new_callable=AsyncMock),
+        patch("app.workers.notifications.RecommendationService", return_value=service),
+        patch.object(NotificationDispatcher, "enabled_channels", AsyncMock(return_value=["ntfy"])),
+        patch.object(NotificationDispatcher, "send_outfit_notification", AsyncMock()) as send,
+    ):
+        yield configure, service, send
+
+
+async def test_scheduled_five_options_prompt(scheduled_batch, http_ai, db_session, test_user):
+    from app.workers.notifications import process_scheduled_notification
+
+    configure, _, send = scheduled_batch
+    schedule_id = await configure(5)
+    http_ai["count"] = 5
+    result = await process_scheduled_notification({}, schedule_id)
+    assert result["status"] == "sent"
+    assert len(http_ai["prompts"]) == 1
+    assert "exactly 5 distinct outfit options" in http_ai["prompts"][0]
+    day = get_user_today(test_user) + timedelta(days=1)
+    outfits = list(
+        await db_session.scalars(
+            select(Outfit).where(
+                Outfit.user_id == test_user.id,
+                Outfit.scheduled_for == day,
+            )
+        )
+    )
+    assert len(outfits) == 5
+    send.assert_awaited_once()
+
+
+async def test_scheduled_batch_failure_rolls_back_options(
+    scheduled_batch, test_user, session_maker
+):
+    from app.services.recommendation_service import AIRecommendationError
+    from app.workers.notifications import process_scheduled_notification
+
+    configure, service, send = scheduled_batch
+    schedule_id = await configure(3)
+    user_id = test_user.id
+    day = get_user_today(test_user) + timedelta(days=1)
+    materialize = service._materialize_outfit
+    attempts = 0
+
+    async def fail_later(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 3:
+            raise RuntimeError("Saving the third option failed")
+        return await materialize(*args, **kwargs)
+
+    with patch.object(service, "_materialize_outfit", side_effect=fail_later):
+        with pytest.raises(AIRecommendationError):
+            await process_scheduled_notification({}, schedule_id)
+    assert attempts == 3
+    async with session_maker() as observer:
+        assert (
+            list(
+                await observer.scalars(
+                    select(Outfit).where(
+                        Outfit.user_id == user_id,
+                        Outfit.scheduled_for == day,
+                    )
+                )
+            )
+            == []
+        )
+    send.assert_not_awaited()

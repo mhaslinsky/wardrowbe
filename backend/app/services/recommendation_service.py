@@ -1252,11 +1252,7 @@ class RecommendationService:
 
         # Determine cache eligibility before auto-merge
         use_cache = (
-            anchor is None
-            and source != OutfitSource.scheduled
-            and not exclude_items
-            and not single_outfit
-            and not self._defer_commit
+            anchor is None and not exclude_items and not single_outfit and not self._defer_commit
         )
 
         # Auto-exclude today's rejected items for this occasion
