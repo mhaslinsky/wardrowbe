@@ -6,7 +6,7 @@ This guide uses the English interface names. Open your Wardrowbe address in your
 
 ## Sign in and get started
 
-1. Follow the sign-in screen at your Wardrowbe address. Depending on the server, this opens a sign-in provider or continues through a sign-in proxy. Follow that provider's instructions; an email code is not required on every installation. A development installation instead asks for an email and display name.
+1. Your Wardrowbe address and the installed app open straight to **Dashboard**, or to the sign-in screen when you are signed out. Follow the sign-in screen. Depending on the server, this opens a sign-in provider or continues through a sign-in proxy. Follow that provider's instructions; an email code is not required on every installation. A development installation instead asks for an email and display name.
 2. The setup runs in this order: Welcome, Family, Location, Style, First Item. Use **Skip for now** for optional steps you want to return to later.
 3. Set your location for weather-aware suggestions. Choose favorite colors, colors to avoid, and how strongly you prefer different styles. Family setup is optional.
 4. Add a first item, then choose **Go to Dashboard**. You can change your preferences in **Settings**.
