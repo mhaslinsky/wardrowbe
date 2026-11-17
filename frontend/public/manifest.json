@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Wardrowbe",
   "short_name": "Wardrowbe",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "theme_color": "#1a1a1a",

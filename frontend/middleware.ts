@@ -68,6 +68,9 @@ export async function middleware(request: NextRequest) {
   // Unsafe callback paths must reach session handling even when they contain a dot.
   if (pathname.startsWith('/api/v1/') || pathname.startsWith('/_next/') ||
       (!pathname.startsWith(NEXTAUTH_PREFIX) && pathname.includes('.') && callbackUrl === requestPath) || pathname === '/auth/logout') return next();
+  // Redirected here rather than in app/page.tsx so the health check above still gets the landing
+  // page's 200: it follows redirects, and /dashboard on localhost fails the host check.
+  if (pathname === '/') return NextResponse.redirect(new URL(`/dashboard${search}`, origin || request.nextUrl.origin));
   if (pathname === LOGIN_PATH) {
     const response = next();
     if (request.nextUrl.searchParams.get('loggedOut') === '1') clearSessionCookies(request, response);

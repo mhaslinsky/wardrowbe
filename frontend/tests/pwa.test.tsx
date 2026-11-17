@@ -14,7 +14,7 @@ const publicRoot = resolve(__dirname, '../public');
 describe('installable app', () => {
   it('declares standalone launch and correctly sized icons', async () => {
     const manifest = JSON.parse(readFileSync(resolve(publicRoot, 'manifest.json'), 'utf8'));
-    expect(manifest).toMatchObject({ name: 'Wardrowbe', short_name: 'Wardrowbe', start_url: '/', scope: '/', display: 'standalone', theme_color: '#1a1a1a', background_color: '#1a1a1a' });
+    expect(manifest).toMatchObject({ name: 'Wardrowbe', short_name: 'Wardrowbe', start_url: '/dashboard', scope: '/', display: 'standalone', theme_color: '#1a1a1a', background_color: '#1a1a1a' });
     expect(manifest.icons).toEqual(expect.arrayContaining([
       expect.objectContaining({ sizes: '192x192', purpose: 'any' }),
       expect.objectContaining({ sizes: '512x512', purpose: 'any' }),
