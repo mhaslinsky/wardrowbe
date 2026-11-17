@@ -92,7 +92,7 @@ Sources: [suggest page](../frontend/app/dashboard/suggest/page.tsx), [pairings p
 ### Build an outfit or use your lookbook
 
 1. In **Outfits**, choose **New Outfit**.
-2. Select pieces from **Your Wardrobe**. Use the clothing slots and search to find them; review the selected pieces on **Canvas**.
+2. Select pieces from **Your Wardrobe**. Use the clothing slots and search to find them (hoodies are under **Layers**, not **Jackets**); review the selected pieces on **Canvas**.
 3. Under **Details**, choose an occasion and give the look a name. With an occasion and at least one piece other than underwear selected, **Let AI finish this** can suggest additions.
 4. Choose **Save to Lookbook** to keep a reusable look, or **Wear Today** to save and log it as worn.
 

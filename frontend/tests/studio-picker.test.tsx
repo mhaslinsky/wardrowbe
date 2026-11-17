@@ -74,7 +74,7 @@ it('gives the studio picker remaining height instead of a fixed box', () => {
 });
 
 it.each([
-  ['tops', 'dress'], ['tops', 'shirt'], ['layers', 'cardigan'], ['jackets', 'suit'],
+  ['tops', 'dress'], ['tops', 'shirt'], ['layers', 'cardigan'], ['layers', 'hoodie'], ['jackets', 'suit'],
   ['jackets', 'coat'], ['bottoms', 'pants'], ['bottoms', 'tights'],
   ['underwear', 'underwear'], ['socks', 'socks'], ['shoes', 'boots'],
   ['accessories', 'tie'], ['accessories', 'hat'],
@@ -85,6 +85,14 @@ it.each([
   fireEvent.click(screen.getByRole('button', { name: `slots.${slot}` }));
   expect(screen.getByText('Match')).toBeInTheDocument();
   expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+});
+it('lists hoodies under Layers and keeps them out of Jackets', () => {
+  mock.pages = [[{ id: 'hoodie', name: 'Waffle hoodie', type: 'hoodie' },
+    { id: 'jacket', name: 'Bomber', type: 'jacket' }]];
+  picker();
+  fireEvent.click(screen.getByRole('button', { name: 'slots.jackets' }));
+  expect(screen.getByText('Bomber')).toBeInTheDocument();
+  expect(screen.queryByText('Waffle hoodie')).not.toBeInTheDocument();
 });
 it('renders an empty wardrobe without requesting another page', () => {
   mock.pages = [[]];
