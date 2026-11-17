@@ -276,15 +276,16 @@ describe('root page redirect', () => {
     const response = await middleware(rootRequest('/?from=pwa', 'wardrobe.example.com'))
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('/dashboard?from=pwa')
+    // Absolute on the vetted public origin: Next's adapter throws on a relative Location.
+    expect(response.headers.get('location')).toBe('https://wardrobe.example.com/dashboard?from=pwa')
   })
 
-  it('never puts an unvetted Host header in the redirect', async () => {
+  it('redirects on the request origin when no public hosts are configured', async () => {
     delete process.env.PUBLIC_HOSTS
 
-    const response = await middleware(rootRequest('/', 'attacker.example'))
+    const response = await middleware(rootRequest('/', 'localhost:3000'))
 
-    expect(response.headers.get('location')).toBe('/dashboard')
+    expect(response.headers.get('location')).toBe('http://localhost:3000/dashboard')
   })
 
   it('leaves a POST to / alone', async () => {

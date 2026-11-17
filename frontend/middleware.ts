@@ -69,10 +69,10 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/api/v1/') || pathname.startsWith('/_next/') ||
       (!pathname.startsWith(NEXTAUTH_PREFIX) && pathname.includes('.') && callbackUrl === requestPath) || pathname === '/auth/logout') return next();
   // Here, not in app/page.tsx, so the health check above keeps the landing page's 200 (it follows
-  // redirects, and /dashboard on localhost fails the host check). The Location is relative so it
-  // never echoes an unvetted Host header.
+  // redirects, and /dashboard on localhost fails the host check). Next's middleware adapter throws
+  // on a relative Location, so the redirect is absolute, like the login redirect below.
   if (pathname === '/' && (request.method === 'GET' || request.method === 'HEAD')) {
-    return new NextResponse(null, { status: 307, headers: { Location: `/dashboard${search}` } });
+    return NextResponse.redirect(new URL(`/dashboard${search}`, origin || request.nextUrl.origin));
   }
   if (pathname === LOGIN_PATH) {
     const response = next();
