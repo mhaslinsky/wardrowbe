@@ -47,6 +47,8 @@ You can select several wardrobe items for bulk actions, including redraw. The co
 
 Choose **Glasses** as the item type to clear its wash status and keep it out of outfit suggestions and laundry. For glasses you own, turn on **Always wear in previews** in the item editor to include them in every outfit preview.
 
+Long bottoms have their own types: **Chinos**, **Trousers** (slacks and dress pants), **Joggers**, **Sweatpants**, and **Jeans**. Use **Pants** for anything else, such as cargo pants or leggings. An outfit gets only one bottom. When an item has no formality set, suggestions treat trousers as dressier than chinos and joggers and sweatpants as very casual. New uploads are tagged with these types; change older items with **Edit item**.
+
 Choose **Robe** for loungewear. Robes stay out of outfit suggestions, pairings, and buying-check outfit ideas. You can add them to a manual outfit and its preview. The default wash interval is three wears, adjustable in **Settings**.
 
 Sources: [upload form](../frontend/components/add-item-dialog.tsx), [accepted image types](../frontend/lib/image-types.ts), [wardrobe page](../frontend/app/dashboard/wardrobe/page.tsx), [item dialog](../frontend/components/item-detail-dialog.tsx), [outfit preview dialog](../frontend/components/outfit-preview-dialog.tsx), [English wardrobe labels](../frontend/messages/en/wardrobe.json), [redraw controls](../frontend/components/photo-redraw-controls.tsx), [redraw service](../backend/app/services/photo_redraw_service.py).
