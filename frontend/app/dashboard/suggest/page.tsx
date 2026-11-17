@@ -591,7 +591,8 @@ async function discardAlternatives(outfits: Outfit[]) {
 }
 
 const BASE_ITEM_FILTER_TYPES = [
-  'shirt', 't-shirt', 'pants', 'jeans', 'shoes', 'sneakers', 'jacket', 'dress',
+  'shirt', 't-shirt', 'pants', 'jeans', 'chinos', 'trousers', 'joggers', 'sweatpants', 'shoes',
+  'sneakers', 'jacket', 'dress',
 ] as const satisfies readonly ClothingTypeValue[];
 
 function SuggestContent() {
