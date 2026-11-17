@@ -258,3 +258,49 @@ describe('middleware matcher', () => {
     expect(matches(path)).toBe(false)
   })
 })
+
+describe('root page redirect', () => {
+  const originalEnv = { ...process.env }
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+  })
+
+  function rootRequest(path: string, host: string, method = 'GET') {
+    return new NextRequest(new URL(path, `http://${host}`), { headers: { host }, method })
+  }
+
+  it('sends / to the dashboard on the public host, keeping the query', async () => {
+    process.env.PUBLIC_HOSTS = 'wardrobe.example.com'
+
+    const response = await middleware(rootRequest('/?from=pwa', 'wardrobe.example.com'))
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('/dashboard?from=pwa')
+  })
+
+  it('never puts an unvetted Host header in the redirect', async () => {
+    delete process.env.PUBLIC_HOSTS
+
+    const response = await middleware(rootRequest('/', 'attacker.example'))
+
+    expect(response.headers.get('location')).toBe('/dashboard')
+  })
+
+  it('leaves a POST to / alone', async () => {
+    delete process.env.PUBLIC_HOSTS
+
+    const response = await middleware(rootRequest('/', 'localhost:3000', 'POST'))
+
+    expect(response.headers.get('location')).toBeNull()
+  })
+
+  it('still serves the landing page to the container health check', async () => {
+    process.env.PUBLIC_HOSTS = 'wardrobe.example.com'
+
+    const response = await middleware(rootRequest('/', 'localhost:3000'))
+
+    expect(response.headers.get('x-middleware-next')).toBe('1')
+    expect(response.headers.get('location')).toBeNull()
+  })
+})
