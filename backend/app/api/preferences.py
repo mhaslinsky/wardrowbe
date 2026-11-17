@@ -46,6 +46,7 @@ async def get_color_season_palettes(
 
 def _build_preference_response(preferences, preview_preferences) -> PreferenceResponse:
     return PreferenceResponse(
+        options_per_day=preferences.options_per_day,
         active_start_hour=preferences.active_start_hour,
         active_end_hour=preferences.active_end_hour,
         wash_intervals=stored_wash_intervals(preferences.wash_intervals),

@@ -197,15 +197,24 @@ async def process_scheduled_notification(ctx: dict, schedule_id: str):
         target_date = user_today + timedelta(days=1) if is_for_tomorrow else user_today
 
         recommendation_service = RecommendationService(db)
-        outfit = await recommendation_service.generate_recommendation(
-            user=user,
-            occasion=schedule.occasion,
-            source=OutfitSource.scheduled,
-            weather_override=weather_override,
-            time_of_day=TimeOfDay.full_day if is_for_tomorrow else None,
-            single_outfit=True,
-            scheduled_date=target_date,
-        )
+        count = user.preferences.options_per_day if user.preferences else None
+        generation_args = {
+            "user": user,
+            "occasion": schedule.occasion,
+            "source": OutfitSource.scheduled,
+            "weather_override": weather_override,
+            "time_of_day": TimeOfDay.full_day if is_for_tomorrow else None,
+            "scheduled_date": target_date,
+        }
+        if count is None or count == 1:
+            outfit = await recommendation_service.generate_recommendation(
+                **generation_args, single_outfit=True
+            )
+        else:
+            outfits = await recommendation_service.generate_recommendations(
+                **generation_args, count=count
+            )
+            outfit = outfits[0]
 
         if schedule.notify:
             await dispatcher.send_outfit_notification(

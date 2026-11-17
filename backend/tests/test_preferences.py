@@ -9,6 +9,7 @@ from app.models import User, UserPreference
 from app.utils.garment_vocabulary import DEFAULT_WASH_INTERVALS
 
 DEFAULT_PREFERENCES_RESPONSE = {
+    "options_per_day": None,
     "active_start_hour": None,
     "active_end_hour": None,
     "default_active_start_hour": 0,
@@ -425,3 +426,23 @@ async def test_r1_preview_save_preserves_standing_rules(client, test_user, auth_
     assert response.status_code == 200
     assert response.json()["standing_rules"] == rules
     assert (await client.get(url, headers=auth_headers)).json()["standing_rules"] == rules
+
+
+@pytest.mark.parametrize("value", [1, 2, 3, 4, 5, None])
+async def test_options_per_day_save_reload_and_reset(client, auth_headers, value):
+    path = "/api/v1/users/me/preferences"
+    response = await client.patch(path, headers=auth_headers, json={"options_per_day": value})
+    assert response.status_code == 200
+    assert response.json()["options_per_day"] == value
+    assert (await client.get(path, headers=auth_headers)).json()["options_per_day"] == value
+    assert (await client.post(path + "/reset", headers=auth_headers)).json()[
+        "options_per_day"
+    ] is None
+
+
+@pytest.mark.parametrize("value", [0, 6, 1.5, "3", True])
+async def test_options_per_day_rejects_invalid_values(client, auth_headers, value):
+    response = await client.patch(
+        "/api/v1/users/me/preferences", headers=auth_headers, json={"options_per_day": value}
+    )
+    assert response.status_code == 422

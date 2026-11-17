@@ -112,6 +112,8 @@
     "useMyLocation": "Use My Location"
   },
   "recommendations": {
+    "optionsPerDay": "Outfit options per day",
+    "optionsPerDayDefault": "Default (1 scheduled, 3 on request)",
     "avoidRepeatDays": "Avoid Repeat Items Within (days)",
     "defaultOccasion": "Default Occasion",
     "description": "Customize how outfit recommendations are generated",

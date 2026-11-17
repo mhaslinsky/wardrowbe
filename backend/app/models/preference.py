@@ -29,6 +29,9 @@ class UserPreference(Base):
     __tablename__ = "user_preferences"
     __table_args__ = (
         CheckConstraint(
+            "options_per_day BETWEEN 1 AND 5", name="ck_user_preferences_options_per_day"
+        ),
+        CheckConstraint(
             "(active_start_hour IS NULL AND active_end_hour IS NULL) OR "
             "(active_start_hour IS NOT NULL AND active_end_hour IS NOT NULL "
             "AND active_start_hour BETWEEN 0 AND 23 AND active_end_hour BETWEEN 0 AND 23 "
@@ -36,6 +39,8 @@ class UserPreference(Base):
             name="ck_user_preferences_active_hours",
         ),
     )
+
+    options_per_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     wash_intervals: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
     active_start_hour: Mapped[int | None] = mapped_column(Integer, nullable=True)

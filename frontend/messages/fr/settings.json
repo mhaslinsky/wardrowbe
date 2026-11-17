@@ -112,6 +112,8 @@
     "useMyLocation": "Utiliser ma localisation"
   },
   "recommendations": {
+    "optionsPerDay": "Tenues proposées par jour",
+    "optionsPerDayDefault": "Par défaut (1 programmée, 3 sur demande)",
     "avoidRepeatDays": "Éviter les répétitions d'articles dans (jours)",
     "defaultOccasion": "Occasion par défaut",
     "description": "Personnalisez la façon dont les recommandations de tenues sont générées",

@@ -112,6 +112,8 @@
     "useMyLocation": "現在地を使用"
   },
   "recommendations": {
+    "optionsPerDay": "1日あたりのコーデ候補数",
+    "optionsPerDayDefault": "既定（定期生成1件、リクエスト時3件）",
     "avoidRepeatDays": "同じアイテムを避ける期間（日）",
     "defaultOccasion": "デフォルトのシーン",
     "description": "コーデのおすすめの生成方法をカスタマイズします",

@@ -137,6 +137,7 @@ class ActiveHours(BaseModel):
 
 
 class PreferenceBase(ActiveHours):
+    options_per_day: int | None = Field(default=None, ge=1, le=5, strict=True)
     wash_intervals: WashIntervals = Field(default_factory=dict)
     color_season: ColorSeason | None = None
     standing_rules: StandingRules = Field(default_factory=list)
@@ -210,6 +211,7 @@ class PreferenceCreate(PreferenceBase):
 
 
 class PreferenceUpdate(ActiveHours):
+    options_per_day: int | None = Field(default=None, ge=1, le=5, strict=True)
     wash_intervals: WashIntervals = Field(default_factory=dict)
     color_season: ColorSeason | None = None
     preview_preferences: PreviewPreferences | None = None

@@ -57,6 +57,8 @@ Sources: [upload form](../frontend/components/add-item-dialog.tsx), [accepted im
 
 ### Suggest an outfit
 
+In **Settings > Recommendation Settings > Outfit options per day**, choose 1 to 5. Changes save automatically. Scheduled runs generate that many options with one notification, and **Get options** fills the chosen day to that number. **Default (1 scheduled, 3 on request)** preserves the original counts. If the AI returns fewer options, those options are saved.
+
 1. Open **Suggest Outfit**. Set your location in Settings first if weather is missing.
 2. Choose the occasion. To include a particular piece, open **Build around a specific piece (optional)** and choose it from your wardrobe.
 3. Select **Get Suggestion**. Compare the options with **Compare All**, or look at one with **Focus View**. Read the weather information and styling advice before choosing.

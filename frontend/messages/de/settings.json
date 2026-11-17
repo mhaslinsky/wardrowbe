@@ -112,6 +112,8 @@
     "useMyLocation": "Meinen Standort verwenden"
   },
   "recommendations": {
+    "optionsPerDay": "Outfit-Optionen pro Tag",
+    "optionsPerDayDefault": "Standard (1 geplant, 3 auf Anfrage)",
     "avoidRepeatDays": "Wiederholungen vermeiden für (Tage)",
     "defaultOccasion": "Standardanlass",
     "description": "Passe an, wie Outfit-Empfehlungen erstellt werden",
