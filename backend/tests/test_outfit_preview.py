@@ -2715,8 +2715,8 @@ async def test_underwear_preview_inputs_and_visible_cut(
         json.dumps(underwear_type)
         in prompt.split("<present_slots>\n")[1].split("\n</present_slots>")[0]
     )
-    assert "If trousers or shorts are present" in prompt
-    assert "never over trousers or shorts" in prompt
+    assert "If long bottoms or shorts are present" in prompt
+    assert "never over long bottoms or shorts" in prompt
     assert (
         "Otherwise, draw underwear as the visible bottom garment on the person in the base photo"
         in prompt
