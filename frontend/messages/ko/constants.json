@@ -202,7 +202,16 @@
     "turtleneck": "터틀넥",
     "v-neck": "브이넥",
     "windbreaker": "윈드브레이커",
-    "wrap": "랩"
+    "wrap": "랩",
+    "wide-leg": "와이드 레그",
+    "culottes": "큘롯",
+    "slim": "슬림",
+    "straight": "스트레이트",
+    "slacks": "슬랙스",
+    "flat-front": "노턱",
+    "tailored": "테일러드",
+    "cuffed": "밴딩 밑단",
+    "open-hem": "오픈 밑단"
   },
   "timezones": {
     "America/Chicago": "미국 중부 시간",
@@ -257,7 +266,11 @@
     "top": "상의",
     "vest": "조끼",
     "glasses": "안경",
-    "robe": "가운"
+    "robe": "가운",
+    "chinos": "치노 팬츠",
+    "trousers": "슬랙스",
+    "joggers": "조거 팬츠",
+    "sweatpants": "스웨트팬츠"
   },
   "weatherConditions": {
     "clear": "맑음",

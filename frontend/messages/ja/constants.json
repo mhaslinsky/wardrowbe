@@ -202,7 +202,16 @@
     "turtleneck": "タートルネック",
     "v-neck": "Vネック",
     "windbreaker": "ウインドブレーカー",
-    "wrap": "ラップ"
+    "wrap": "ラップ",
+    "wide-leg": "ワイドレッグ",
+    "culottes": "キュロット",
+    "slim": "スリム",
+    "straight": "ストレート",
+    "slacks": "スラックス",
+    "flat-front": "ノータック",
+    "tailored": "テーラード",
+    "cuffed": "裾リブ",
+    "open-hem": "裾ストレート"
   },
   "timezones": {
     "America/Chicago": "中部標準時（米国）",
@@ -257,7 +266,11 @@
     "top": "トップス",
     "vest": "ベスト",
     "glasses": "眼鏡",
-    "robe": "バスローブ"
+    "robe": "バスローブ",
+    "chinos": "チノパン",
+    "trousers": "スラックス",
+    "joggers": "ジョガーパンツ",
+    "sweatpants": "スウェットパンツ"
   },
   "weatherConditions": {
     "clear": "晴れ",

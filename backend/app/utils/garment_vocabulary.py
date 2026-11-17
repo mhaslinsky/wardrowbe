@@ -45,6 +45,12 @@ NEVER_WASHED_TYPES = frozenset(
 MATERIALS: tuple[str, ...] = tuple(_DATA["materials"])
 # Ordered from least to most formal; the scorer measures distance along this scale.
 FORMALITY: tuple[str, ...] = tuple(_DATA["formality"])
+# Read only where an item has no formality of its own, so a tagged item always keeps its value.
+DEFAULT_FORMALITY: dict[str, str] = {
+    entry["value"]: entry["default_formality"]
+    for entry in _DATA["types"]
+    if entry.get("default_formality")
+}
 OCCASIONS: tuple[str, ...] = tuple(entry["value"] for entry in _DATA["occasions"])
 OCCASION_FORMALITY: dict[str, tuple[str, ...]] = {
     entry["value"]: tuple(entry["formality"]) for entry in _DATA["occasions"]
