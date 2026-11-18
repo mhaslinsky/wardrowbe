@@ -43,7 +43,7 @@ async def test_suggestion_follows_underwear_switch(
             status=ItemStatus.ready,
             primary_color="black",
         )
-        for kind in ("t-shirt", "jeans", "sneakers", "underwear", "underwear")
+        for kind in ("t-shirt", "jeans", "sneakers", "underwear", " Underwear ")
     ]
     db_session.add_all(items)
     await db_session.commit()
@@ -56,7 +56,14 @@ async def test_suggestion_follows_underwear_switch(
         scored = service._format_items_for_prompt.call_args.args[0]
     assert ("underwear" in {entry.item.type for entry in scored}) is switch
     assert ("underwear" in ai.generate_text.call_args.args[0]) is switch
-    chosen_underwear = [link.item_id for link in outfit.items if link.item.type == "underwear"]
+    chosen_underwear = [
+        link.item_id for link in outfit.items if link.item.type.strip().lower() == "underwear"
+    ]
     assert chosen_underwear == ([items[4].id] if switch else [])
     saved = await service._day_suggestions(test_user.id, outfit.scheduled_for)
     assert [entry.id for entry in saved] == [outfit.id]
+    if switch:
+        await client.patch(
+            "/api/v1/users/me/preferences", headers=auth_headers, json={"suggest_underwear": False}
+        )
+        assert await service._day_suggestions(test_user.id, outfit.scheduled_for) == []

@@ -1140,7 +1140,7 @@ class RecommendationService:
                 )
             )
         ).all()
-        item_type_map = {row.id: (row.type or "").lower() for row in items_result}
+        item_type_map = {row.id: (row.type or "").strip().lower() for row in items_result}
         item_subtype_map = {row.id: (row.subtype or "").lower() for row in items_result}
         valid_ids = [
             item_id
@@ -1253,6 +1253,8 @@ class RecommendationService:
         scheduled_date: date | None = None,
         considering_anchor_id: UUID | None = None,
     ) -> list[Outfit]:
+        preferences = user.preferences
+        include_underwear = suggests_underwear(preferences)
         anchor = None
         if considering_anchor_id is not None:
             from app.services.considering_preview_service import ConsideringPreviewService
@@ -1261,7 +1263,7 @@ class RecommendationService:
                 user.id, considering_anchor_id, [], allow_bought=True
             )
             anchor = await self.db.get(ClothingItem, considering_anchor_id)
-            if not is_suggestion_type(anchor.type):
+            if not is_suggestion_type(anchor.type, include_underwear=include_underwear):
                 raise ValueError(suggestion_rejection_message([anchor.type]))
             if include_items and set(include_items) != {considering_anchor_id}:
                 raise ValueError("Choose one considering anchor")
@@ -1314,8 +1316,6 @@ class RecommendationService:
                     "Could not fetch weather data. Please try again or provide weather manually."
                 ) from e
 
-        preferences = user.preferences
-        include_underwear = suggests_underwear(preferences)
         drop_legwear = stays_above_hot_threshold(weather, preferences)
         outfit_notes = await self._get_recent_outfit_notes(user)
         context = suggestion_context(
