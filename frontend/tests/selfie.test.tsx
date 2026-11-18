@@ -59,8 +59,11 @@ describe('selfie analysis', () => {
     requestMock.mockResolvedValue(reply({ matches: [{ id: 'shirt', name: 'Blue shirt' }], considered: 1 }));
     mount();
     const camera = screen.getByLabelText('takePhoto');
+    const cameraClick = vi.spyOn(camera, 'click');
     expect(camera).toHaveAttribute('capture', 'environment');
     expect(screen.getByLabelText('choosePhoto')).not.toHaveAttribute('capture');
+    fireEvent.click(screen.getByRole('button', { name: 'takePhoto' }));
+    expect(cameraClick).toHaveBeenCalledTimes(1);
     const file = new File(['photo'], 'camera.jpg', { type: 'image/jpeg' });
     fireEvent.change(camera, { target: { files: [file] } });
     expect(await screen.findByText('Blue shirt')).toBeInTheDocument();
@@ -84,11 +87,15 @@ describe('selfie analysis', () => {
     const view = mount(); choose();
     await screen.findByText('Old shirt');
     choose();
-    await waitFor(() => expect(screen.getByLabelText('choosePhoto')).toBeDisabled());
+    const photoControls = () => [
+      screen.getByRole('button', { name: 'takePhoto' }), screen.getByRole('button', { name: 'choosePhoto' }),
+      screen.getByLabelText('takePhoto'), screen.getByLabelText('choosePhoto'),
+    ];
+    await waitFor(() => photoControls().forEach((control) => expect(control).toBeDisabled()));
     expect(screen.queryByText('Old shirt')).not.toBeInTheDocument();
     resolve(reply({ matches: [], considered: 1 }));
     await screen.findByText('noneFound');
-    expect(screen.getByLabelText('choosePhoto')).toBeEnabled();
+    photoControls().forEach((control) => expect(control).toBeEnabled());
     view.unmount();
     expect(revoke).toHaveBeenCalledWith('blob:selfie');
   });

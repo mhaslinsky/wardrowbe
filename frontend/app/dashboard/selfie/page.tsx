@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -28,6 +28,9 @@ export default function SelfiePage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const wardrobe = useItems({ is_archived: false }, wardrobePage);
   const locked = confirm.isPending || confirm.isSuccess;
+  const busy = recognise.isPending || confirm.isPending;
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
   const changeSelection = (items: Item[]) => {
     setSelected(items);
     setRequestId(crypto.randomUUID());
@@ -94,30 +97,32 @@ export default function SelfiePage() {
               </>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {/* Android opens only the photo picker for an input without capture, so the camera gets its own input. */}
-            {([['takePhoto', Camera, 'environment'], ['choosePhoto', ImageIcon, undefined]] as const).map(
-              ([labelKey, Icon, capture]) => (
-                <Button key={labelKey} asChild variant="outline" className="cursor-pointer">
-                  <label>
-                    <Icon className="mr-2 h-4 w-4" />
-                    {t(labelKey)}
-                    <input
-                      type="file"
-                      disabled={recognise.isPending || confirm.isPending}
-                      aria-label={t(labelKey)}
-                      accept={ACCEPTED_IMAGE_INPUT}
-                      capture={capture}
-                      className="hidden"
-                      onChange={(event) => {
-                        choose(event.target.files?.[0] ?? null);
-                        event.target.value = '';
-                      }}
-                    />
-                  </label>
+            {[
+              { name: 'camera', label: t('takePhoto'), Icon: Camera, inputRef: cameraInputRef, capture: 'environment' as const },
+              { name: 'library', label: t('choosePhoto'), Icon: ImageIcon, inputRef: libraryInputRef, capture: undefined },
+            ].map(({ name, label, Icon, inputRef, capture }) => (
+              <div key={name}>
+                <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => inputRef.current?.click()}>
+                  <Icon className="mr-2 h-4 w-4 shrink-0" />
+                  {label}
                 </Button>
-              ),
-            )}
+                <input
+                  ref={inputRef}
+                  type="file"
+                  disabled={busy}
+                  aria-label={label}
+                  accept={ACCEPTED_IMAGE_INPUT}
+                  capture={capture}
+                  className="hidden"
+                  onChange={(event) => {
+                    choose(event.target.files?.[0] ?? null);
+                    event.target.value = '';
+                  }}
+                />
+              </div>
+            ))}
           </div>
 
           {recognise.isPending && (
