@@ -82,6 +82,7 @@ def _build_preference_response(preferences, preview_preferences) -> PreferenceRe
         prefer_underused_items=preferences.prefer_underused_items
         if preferences.prefer_underused_items is not None
         else DEFAULT_PREFER_UNDERUSED_ITEMS,
+        suggest_underwear=bool(preferences.suggest_underwear),
         variety_level=preferences.variety_level
         if preferences.variety_level is not None
         else DEFAULT_VARIETY_LEVEL,

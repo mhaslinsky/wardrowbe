@@ -475,8 +475,11 @@ def score_items(
     mandatory_item_ids: set[UUID] | None = None,
     wear_counts_30_days: dict[UUID, int] | None = None,
     usage_reference_items: list[ClothingItem] | None = None,
+    include_underwear: bool = False,
 ) -> list[ScoredItem]:
-    items = [item for item in items if is_suggestion_type(item.type)]
+    items = [
+        item for item in items if is_suggestion_type(item.type, include_underwear=include_underwear)
+    ]
     if len(items) < MIN_ITEMS_FOR_SCORING:
         scored = [ScoredItem(item=item) for item in items]
         if preferences and stored_color_season(preferences.style_profile):

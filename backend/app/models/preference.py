@@ -86,6 +86,9 @@ class UserPreference(Base):
     prefer_underused_items: Mapped[bool] = mapped_column(
         Boolean, default=DEFAULT_PREFER_UNDERUSED_ITEMS
     )
+    suggest_underwear: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     standing_rules: Mapped[list[str]] = mapped_column(
         JSONB, default=list, server_default="[]", nullable=False
     )

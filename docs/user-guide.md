@@ -269,7 +269,7 @@ In **Settings**, choices and color picks save immediately, sliders save when rel
 - **Temperature & Comfort**: choose temperature units, sensitivity, layering, and your hot and cold thresholds.
 - **Active hours**: choose **Start** and **End** in local time. The end must be at least two hours after the start. Changes save automatically. Outfit suggestions use the hourly weather within these hours (including the end hour) for scheduled outfits, a chosen date, and inspiration. Today uses only the remaining hours; the weather card shows the current reading. Trips use your hours when set; otherwise, they default to 10 AM to 6 PM. If the hourly forecast is unavailable, future dates use the whole-day forecast. **Reset** restores the server defaults.
 - **Washing**: set wears before washing by clothing type; see [laundry](#keep-laundry-up-to-date).
-- **Recommendation Settings**: choose a default occasion, outfit options per day, variety, repeat avoidance, and whether to prefer underused items.
+- **Recommendation Settings**: choose a default occasion, outfit options per day, variety, repeat avoidance, and whether to prefer underused items. Turn on **Suggest underwear** to let daily outfit suggestions include at most one underwear piece; it is off by default.
 - **Standing rules**: add one instruction per line, up to 20 rules of 300 characters each.
 - **Body Measurements**: choose metric or imperial units, enter the measurements you know and usual clothing sizes. Unit changes wait for pending saves.
 

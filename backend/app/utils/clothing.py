@@ -392,6 +392,24 @@ def remove_legwear(
     return kept
 
 
+def keep_one_underwear(
+    item_ids: list[UUID], item_type_map: dict[UUID, str], mandatory: set[UUID]
+) -> list[UUID]:
+    """Keep the first underwear piece, or the first mandatory one, and drop the rest.
+
+    Underwear has no body slot, so slot deduplication cannot catch a second piece.
+    """
+    underwear = [
+        item_id
+        for item_id in item_ids
+        if ITEM_ROLE.get(item_type_map.get(item_id, "")) == "underwear"
+    ]
+    if len(underwear) < 2:
+        return list(item_ids)
+    keep = next((item_id for item_id in underwear if item_id in mandatory), underwear[0])
+    return [item_id for item_id in item_ids if item_id == keep or item_id not in underwear]
+
+
 def canonical_item_order(item_ids: list[UUID], item_type_map: dict[UUID, str]) -> list[UUID]:
     original_positions = {iid: idx for idx, iid in enumerate(item_ids)}
 

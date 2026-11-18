@@ -29,6 +29,7 @@ DEFAULT_PREFERENCES_RESPONSE = {
     "layering_preference": "moderate",
     "avoid_repeat_days": 7,
     "prefer_underused_items": True,
+    "suggest_underwear": False,
     "variety_level": "moderate",
     "ai_endpoints": [],
 }
@@ -446,3 +447,18 @@ async def test_options_per_day_rejects_invalid_values(client, auth_headers, valu
         "/api/v1/users/me/preferences", headers=auth_headers, json={"options_per_day": value}
     )
     assert response.status_code == 422
+
+
+async def test_suggest_underwear_defaults_off_saves_and_resets(client, auth_headers):
+    path = "/api/v1/users/me/preferences"
+    assert (await client.get(path, headers=auth_headers)).json()["suggest_underwear"] is False
+    response = await client.patch(path, headers=auth_headers, json={"suggest_underwear": True})
+    assert response.json()["suggest_underwear"] is True
+    assert (await client.get(path, headers=auth_headers)).json()["suggest_underwear"] is True
+    reset = await client.post(path + "/reset", headers=auth_headers)
+    assert reset.json()["suggest_underwear"] is False
+    for invalid in (None, "yes"):
+        response = await client.patch(
+            path, headers=auth_headers, json={"suggest_underwear": invalid}
+        )
+        assert response.status_code == 422
