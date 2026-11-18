@@ -22,7 +22,7 @@ function mount(client = createQueryClient()) {
 }
 function choose() {
   const file = new File(['photo'], 'me.jpg', { type: 'image/jpeg' });
-  fireEvent.change(screen.getByLabelText('pick'), { target: { files: [file] } });
+  fireEvent.change(screen.getByLabelText('choosePhoto'), { target: { files: [file] } });
   return file;
 }
 function reply(body: unknown, status = 200) {
@@ -55,6 +55,17 @@ describe('selfie analysis', () => {
     expect(requestMock).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'confirm' })).toBeEnabled();
   });
+  it('offers the camera as its own choice and analyses a camera photo', async () => {
+    requestMock.mockResolvedValue(reply({ matches: [{ id: 'shirt', name: 'Blue shirt' }], considered: 1 }));
+    mount();
+    const camera = screen.getByLabelText('takePhoto');
+    expect(camera).toHaveAttribute('capture', 'environment');
+    expect(screen.getByLabelText('choosePhoto')).not.toHaveAttribute('capture');
+    const file = new File(['photo'], 'camera.jpg', { type: 'image/jpeg' });
+    fireEvent.change(camera, { target: { files: [file] } });
+    expect(await screen.findByText('Blue shirt')).toBeInTheDocument();
+    expect((requestMock.mock.calls[0][1]?.body as FormData).get('image')).toBe(file);
+  });
   it('shows an empty result', async () => {
     requestMock.mockResolvedValue(reply({ matches: [], considered: 0 }));
     mount(); choose();
@@ -73,17 +84,17 @@ describe('selfie analysis', () => {
     const view = mount(); choose();
     await screen.findByText('Old shirt');
     choose();
-    await waitFor(() => expect(screen.getByLabelText('pick')).toBeDisabled());
+    await waitFor(() => expect(screen.getByLabelText('choosePhoto')).toBeDisabled());
     expect(screen.queryByText('Old shirt')).not.toBeInTheDocument();
     resolve(reply({ matches: [], considered: 1 }));
     await screen.findByText('noneFound');
-    expect(screen.getByLabelText('pick')).toBeEnabled();
+    expect(screen.getByLabelText('choosePhoto')).toBeEnabled();
     view.unmount();
     expect(revoke).toHaveBeenCalledWith('blob:selfie');
   });
   it('cancelling selection clears the preview without uploading', async () => {
     mount();
-    fireEvent.change(screen.getByLabelText('pick'), { target: { files: [] } });
+    fireEvent.change(screen.getByLabelText('choosePhoto'), { target: { files: [] } });
     expect(requestMock).not.toHaveBeenCalled();
     expect(screen.queryByAltText('photoAlt')).not.toBeInTheDocument();
   });
