@@ -59,7 +59,7 @@ RULES:
   - One-piece: ONE full-body garment (<<FULL_BODY_TYPES>>) + ONE footwear (<<FOOTWEAR_TYPES>>)
   - Suit: ONE top + ONE suit (<<SUIT_TYPES>>) + ONE footwear; the suit replaces the bottom
 - OPTIONAL: legwear (<<LEGWEAR_TYPES>>) under a skirt, dress or shorts in cool or cold weather; leave it out when it is warm, and put only thermal legwear under long bottoms or a jumpsuit, only when it is very cold. Legwear does not replace the bottom, the one-piece garment or footwear
-<<IF_UNDERWEAR>>- OPTIONAL: at most ONE underwear piece (<<UNDERWEAR_TYPES>>), worn under the bottom. Never pick more than one
+<<IF_UNDERWEAR>>- OPTIONAL: at most ONE underwear piece (<<UNDERWEAR_TYPES>>), worn under the rest of the outfit. Never pick more than one
 - OPTIONAL: ONE bag if appropriate for the occasion
 - OPTIONAL: accessories (belt, scarf, hat, jewelry) that genuinely complement the outfit
 - REQUIRED when any watch band is listed: exactly ONE watch band (the wearer puts on a watch every day); pick the band whose color best fits the outfit
