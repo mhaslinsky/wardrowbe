@@ -112,6 +112,8 @@
     "useMyLocation": "Use My Location"
   },
   "recommendations": {
+    "suggestUnderwear": "Suggest underwear",
+    "suggestUnderwearHint": "Lets outfit suggestions include one underwear piece.",
     "optionsPerDay": "Outfit options per day",
     "optionsPerDayDefault": "Default (1 scheduled, 3 on request)",
     "avoidRepeatDays": "Avoid Repeat Items Within (days)",

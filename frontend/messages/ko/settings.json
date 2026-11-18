@@ -112,6 +112,8 @@
     "useMyLocation": "내 위치 사용"
   },
   "recommendations": {
+    "suggestUnderwear": "속옷 추천",
+    "suggestUnderwearHint": "코디 추천에 속옷 1개를 포함할 수 있습니다.",
     "optionsPerDay": "하루 코디 선택지 수",
     "optionsPerDayDefault": "기본값 (예약 1개, 요청 시 3개)",
     "avoidRepeatDays": "반복 착용 제한 기간 (일)",

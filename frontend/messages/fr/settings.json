@@ -112,6 +112,8 @@
     "useMyLocation": "Utiliser ma localisation"
   },
   "recommendations": {
+    "suggestUnderwear": "Suggérer des sous-vêtements",
+    "suggestUnderwearHint": "Les suggestions de tenue peuvent inclure un sous-vêtement.",
     "optionsPerDay": "Tenues proposées par jour",
     "optionsPerDayDefault": "Par défaut (1 programmée, 3 sur demande)",
     "avoidRepeatDays": "Éviter les répétitions d'articles dans (jours)",

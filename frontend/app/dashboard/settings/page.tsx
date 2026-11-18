@@ -1186,6 +1186,17 @@ export default function SettingsPage() {
                 </Select>
               </div>
             </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="suggest-underwear">{t('recommendations.suggestUnderwear')}</Label>
+                <p className="text-sm text-muted-foreground">{t('recommendations.suggestUnderwearHint')}</p>
+              </div>
+              <Switch
+                id="suggest-underwear"
+                checked={formData.suggest_underwear ?? false}
+                onCheckedChange={(checked) => updateField('suggest_underwear', checked)}
+              />
+            </div>
           </CardContent>
         </Card>
 

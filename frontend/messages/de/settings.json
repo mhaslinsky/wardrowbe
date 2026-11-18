@@ -112,6 +112,8 @@
     "useMyLocation": "Meinen Standort verwenden"
   },
   "recommendations": {
+    "suggestUnderwear": "Unterwäsche vorschlagen",
+    "suggestUnderwearHint": "Outfit-Vorschläge dürfen ein Unterwäscheteil enthalten.",
     "optionsPerDay": "Outfit-Optionen pro Tag",
     "optionsPerDayDefault": "Standard (1 geplant, 3 auf Anfrage)",
     "avoidRepeatDays": "Wiederholungen vermeiden für (Tage)",

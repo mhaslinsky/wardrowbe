@@ -466,3 +466,15 @@ it('autosaves outfit options per day and restores the choice on reload', async (
   render(<SettingsPage />);
   expect(selectFor('recommendations.optionsPerDay')).toHaveValue('4');
 });
+
+it('autosaves the underwear switch, off by default, and restores it on reload', async () => {
+  const view = render(<SettingsPage />);
+  const toggle = screen.getByRole('switch', { name: 'recommendations.suggestUnderwear' });
+  expect(toggle).not.toBeChecked();
+  fireEvent.click(toggle);
+  await waitFor(() => expect(state.save).toHaveBeenCalledWith({ suggest_underwear: true }));
+  view.unmount();
+  state.preferences = { ...state.persisted };
+  render(<SettingsPage />);
+  expect(screen.getByRole('switch', { name: 'recommendations.suggestUnderwear' })).toBeChecked();
+});

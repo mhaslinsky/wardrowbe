@@ -112,6 +112,8 @@
     "useMyLocation": "使用我的位置"
   },
   "recommendations": {
+    "suggestUnderwear": "推荐内衣",
+    "suggestUnderwearHint": "穿搭推荐可包含一件内衣。",
     "optionsPerDay": "每天的穿搭选项数",
     "optionsPerDayDefault": "默认（定时生成1套，按需生成3套）",
     "avoidRepeatDays": "避免重复单品的间隔天数",
