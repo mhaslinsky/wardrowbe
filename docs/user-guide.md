@@ -112,7 +112,7 @@ On a suggestion, **I wore this** logs the wear for the selected day in one step.
 
 ### Log from an outfit selfie
 
-1. Open **Outfit selfie** and use **Take or choose a photo**. A full-length mirror photo works best.
+1. Open **Outfit selfie** and tap **Take photo** to use the camera, or **Choose photo** to pick one you already took. A full-length mirror photo works best.
 2. Review the wardrobe pieces the AI recognized. Remove an incorrect match, use **Swap** to replace it, or **Add item** to include a missing piece.
 3. Choose **Log outfit** only after the selection is right. This saves the photo with the outfit and logs the wear. **View outfit** opens the logged result and its saved photo.
 
