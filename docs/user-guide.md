@@ -62,7 +62,7 @@ In **Settings > Recommendation Settings > Outfit options per day**, choose 1 to 
 1. Open **Suggest Outfit**. Set your location in Settings first if weather is missing.
 2. Choose the occasion. To include a particular piece, open **Build around a specific piece (optional)** and choose it from your wardrobe.
 3. Select **Get Suggestion**. Compare the options with **Compare All**, or look at one with **Focus View**. Read the weather information and styling advice before choosing.
-4. Use **Generate 3 New Looks** or **Try Another** when you want other options. **Dismiss outfit** passes on an option and asks **What was wrong?** Add an optional note, such as "too dressy for sweatpants", then choose **Reject**. Ctrl+Enter or Cmd+Enter also sends it. Later suggestions take the note into account.
+4. Use **Generate 3 New Looks** or **Try Another** when you want other options. **Dismiss outfit** passes on an option and asks **What was wrong?** Add an optional note, such as "too dressy for sweatpants", then choose **Reject**. Ctrl+Enter or Cmd+Enter also sends it. Later suggestions take the note into account. If you use Home Assistant, rejecting an outfit also removes it from the today view, and **Wore it** there logs your newest remaining option for the day.
 
 You can use **Override weather** to try a different temperature or condition. **Reset** clears that override.
 
