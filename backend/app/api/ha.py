@@ -6,9 +6,9 @@ could edit or delete the catalog (PER-160).
 """
 
 import base64
-import binascii
 import hmac
 import logging
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
@@ -22,7 +22,7 @@ from app.models.considering import owned_item
 from app.models.item import ClothingItem
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, UserFeedback
 from app.models.user import User
-from app.services.image_service import ImageService
+from app.services.image_service import IMAGE_MIME_TYPES, ImageService
 from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
 from app.services.wear_service import AlreadyThis, DayLogged, WearService, map_wear_error, wear_http
@@ -37,6 +37,8 @@ router = APIRouter(prefix="/ha", tags=["home-assistant"])
 
 FOOTWEAR_TYPES = frozenset(types_for_role("footwear"))
 TODAY_ITEM_LIMIT = 6
+# Scheduled options saved together share created_at; the id breaks ties the same way everywhere.
+NEWEST_FIRST = (Outfit.created_at.desc(), Outfit.id.desc())
 
 
 def _error(status_code: int, error: str) -> JSONResponse:
@@ -61,10 +63,10 @@ def _basic_password(request: Request) -> str | None:
     if scheme.lower() != "basic":
         return None
     try:
-        decoded = base64.b64decode(encoded, validate=True).decode()
-    except (binascii.Error, UnicodeDecodeError):
+        password = base64.b64decode(encoded, validate=True).partition(b":")[2].decode()
+    except ValueError:
         return None
-    return decoded.partition(":")[2] or None
+    return password or None
 
 
 async def _ha_user(db: DbSession) -> User | None:
@@ -94,7 +96,7 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
             Outfit.source == OutfitSource.scheduled,
             Outfit.scheduled_for == today,
         )
-        .order_by(Outfit.created_at.desc())
+        .order_by(*NEWEST_FIRST)
         .options(selectinload(Outfit.items), selectinload(Outfit.feedback))
     )
     outfits = list(result.scalars().all())
@@ -123,9 +125,8 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
     )
 
 
-async def _todays_outfit(db: DbSession, user: User) -> Outfit | None:
+async def _todays_outfit(db: DbSession, user: User, today: date) -> Outfit | None:
     """The outfit logged as worn today, else the newest one scheduled for today, as wore-today picks."""
-    today = get_user_today(user)
     for condition in (
         Outfit.feedback.has(UserFeedback.worn_at == today),
         (Outfit.source == OutfitSource.scheduled) & (Outfit.scheduled_for == today),
@@ -133,7 +134,7 @@ async def _todays_outfit(db: DbSession, user: User) -> Outfit | None:
         outfit = await db.scalar(
             select(Outfit)
             .where(Outfit.user_id == user.id, condition)
-            .order_by(Outfit.created_at.desc())
+            .order_by(*NEWEST_FIRST)
             .limit(1)
             .options(selectinload(Outfit.items).selectinload(OutfitItem.item))
         )
@@ -161,7 +162,7 @@ async def today_outfit(request: Request, db: DbSession) -> JSONResponse:
     if user is None:
         return _error(status.HTTP_404_NOT_FOUND, "user_not_found")
     today = get_user_today(user)
-    outfit = await _todays_outfit(db, user)
+    outfit = await _todays_outfit(db, user, today)
     items = _owned_items(outfit, user) if outfit is not None else []
     return JSONResponse(
         {
@@ -188,7 +189,7 @@ async def today_item_thumbnail(item_id: UUID, request: Request, db: DbSession) -
     user = await _ha_user(db)
     if user is None:
         return _error(status.HTTP_404_NOT_FOUND, "user_not_found")
-    outfit = await _todays_outfit(db, user)
+    outfit = await _todays_outfit(db, user, get_user_today(user))
     items = _owned_items(outfit, user) if outfit is not None else []
     item = next((candidate for candidate in items if candidate.id == item_id), None)
     if item is None:
@@ -203,7 +204,7 @@ async def today_item_thumbnail(item_id: UUID, request: Request, db: DbSession) -
         return _error(status.HTTP_404_NOT_FOUND, "no_photo")
     return FileResponse(
         path=str(image_path),
-        media_type="image/jpeg",
+        media_type=IMAGE_MIME_TYPES.get(image_path.suffix.lower(), "image/jpeg"),
         headers={"Cache-Control": "private, no-store"},
     )
 
