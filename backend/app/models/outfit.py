@@ -37,6 +37,15 @@ class OutfitStatus(enum.StrEnum):
     expired = "expired"
 
 
+# Statuses the day view still offers; rejected, skipped and expired options are gone from it.
+LIVE_OUTFIT_STATUSES = (
+    OutfitStatus.pending,
+    OutfitStatus.sent,
+    OutfitStatus.viewed,
+    OutfitStatus.accepted,
+)
+
+
 class TimeOfDay(enum.StrEnum):
     morning = "morning"
     afternoon = "afternoon"

@@ -17,6 +17,7 @@ from app.models.considering import owned_item, owned_outfit
 from app.models.item import ClothingItem, ItemHistory, ItemStatus
 from app.models.learning import ItemPairScore, UserLearningProfile
 from app.models.outfit import (
+    LIVE_OUTFIT_STATUSES,
     FamilyOutfitRating,
     Outfit,
     OutfitItem,
@@ -280,14 +281,7 @@ class RecommendationService:
                 Outfit.source.in_(
                     [OutfitSource.scheduled, OutfitSource.on_demand, OutfitSource.external]
                 ),
-                Outfit.status.in_(
-                    [
-                        OutfitStatus.pending,
-                        OutfitStatus.sent,
-                        OutfitStatus.viewed,
-                        OutfitStatus.accepted,
-                    ]
-                ),
+                Outfit.status.in_(LIVE_OUTFIT_STATUSES),
                 ~Outfit.feedback.has(UserFeedback.worn_at.is_not(None)),
                 (Outfit.ai_raw_response.is_(None) | ~Outfit.ai_raw_response.has_key("inspiration")),
             )

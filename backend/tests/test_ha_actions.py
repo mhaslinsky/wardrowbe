@@ -417,3 +417,24 @@ async def test_thumbnail_needs_the_token_and_an_item_in_todays_outfit(
     assert (by_basic.status_code, by_basic.content) == (200, b"webp")
     assert [no_token.status_code, wrong_basic.status_code, basic_on_today.status_code] == [401] * 3
     assert not_today.json() == {"ok": False, "error": "not_in_todays_outfit"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("older_status", [OutfitStatus.viewed, OutfitStatus.rejected])
+async def test_today_picks_skip_a_rejected_outfit(client, db_session, test_user, older_status):
+    shirts = [await _item(db_session, test_user, "shirt") for _ in range(2)]
+    older, rejected = [
+        await _outfit(db_session, test_user, date(2026, 10, 22), items=[shirt]) for shirt in shirts
+    ]
+    older.created_at, older.status = rejected.created_at - timedelta(minutes=5), older_status
+    rejected.status = OutfitStatus.rejected
+    await db_session.commit()
+    header = {"X-HA-Token": TOKEN}
+    with _ha_settings(test_user), _clock(datetime(2026, 10, 22, 15, 0, tzinfo=UTC)):
+        listed = await client.get("/api/v1/ha/today", headers=header)
+        thumb = await client.get(f"/api/v1/ha/items/{shirts[1].id}/thumbnail", headers=header)
+        worn = (await client.post(WORE_TODAY, json={}, headers=header)).json()
+    assert thumb.json() == {"ok": False, "error": "not_in_todays_outfit"}
+    expected = str(older.id) if older_status == OutfitStatus.viewed else None
+    assert listed.json()["outfit_id"] == worn.get("outfit_id") == expected
+    assert worn.get("error") == (None if expected else "no_outfit_today")
