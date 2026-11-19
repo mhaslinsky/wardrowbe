@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
@@ -14,6 +15,7 @@ from app.database import get_db
 from app.main import app
 from app.models.item import ClothingItem, ItemHistory, ItemStatus, WashHistory
 from app.models.outfit import Outfit, OutfitItem, OutfitSource, OutfitStatus, UserFeedback
+from app.services.image_service import ImageService
 from app.services.item_service import ItemService
 
 TOKEN = "ha-test-token-0123456789abcdef"
@@ -365,3 +367,50 @@ async def test_two_concurrent_laundry_done_calls_wash_each_item_once(
         select(WashHistory.item_id).where(WashHistory.item_id.in_([shirt.id, jeans.id]))
     )
     assert sorted(washes.all()) == sorted([shirt.id, jeans.id])
+
+
+@pytest.mark.asyncio
+async def test_today_lists_todays_items_in_order_and_nothing_on_an_empty_day(
+    client: AsyncClient, db_session, test_user
+):
+    shirt, jeans = [await _item(db_session, test_user, kind) for kind in ("shirt", "jeans")]
+    shirt.thumbnail_path = "test/shirt_thumb.jpg"
+    await _outfit(db_session, test_user, date(2026, 10, 22), items=[shirt, jeans])
+
+    with _ha_settings(test_user), _clock(datetime(2026, 10, 22, 15, 0, tzinfo=UTC)):
+        today = await client.get("/api/v1/ha/today", headers={"X-HA-Token": TOKEN})
+    with _ha_settings(test_user), _clock(datetime(2026, 10, 23, 15, 0, tzinfo=UTC)):
+        empty = await client.get("/api/v1/ha/today", headers={"X-HA-Token": TOKEN})
+
+    listed = [(item["id"], item["has_photo"]) for item in today.json()["items"]]
+    assert listed == [(str(shirt.id), True), (str(jeans.id), False)]
+    assert empty.json() == {"ok": True, "date": "2026-10-23", "outfit_id": None, "items": []}
+
+
+@pytest.mark.asyncio
+async def test_thumbnail_needs_the_token_and_an_item_in_todays_outfit(
+    client: AsyncClient, db_session, test_user, tmp_path
+):
+    worn, other = [await _item(db_session, test_user, kind) for kind in ("shirt", "jeans")]
+    for item in (worn, other):
+        item.thumbnail_path = f"{item.id}_thumb.jpg"
+        (tmp_path / item.thumbnail_path).write_bytes(b"jpeg")
+    await _outfit(db_session, test_user, date(2026, 10, 22), items=[worn])
+    basic = base64.b64encode(f"homeassistant:{TOKEN}".encode()).decode()
+    worn_url, other_url = (f"/api/v1/ha/items/{item.id}/thumbnail" for item in (worn, other))
+    header, basic_header = {"X-HA-Token": TOKEN}, {"Authorization": f"Basic {basic}"}
+
+    with (
+        _ha_settings(test_user),
+        _clock(datetime(2026, 10, 22, 15, 0, tzinfo=UTC)),
+        patch("app.api.ha.ImageService", lambda: ImageService(str(tmp_path))),
+    ):
+        by_header = await client.get(worn_url, headers=header)
+        by_basic = await client.get(worn_url, headers=basic_header)
+        no_token = await client.get(worn_url)
+        not_today = await client.get(other_url, headers=header)
+
+    assert (by_header.status_code, by_header.content) == (200, b"jpeg")
+    assert (by_basic.status_code, by_basic.content) == (200, b"jpeg")
+    assert no_token.status_code == 401
+    assert not_today.json() == {"ok": False, "error": "not_in_todays_outfit"}

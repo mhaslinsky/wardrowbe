@@ -23,6 +23,12 @@ PUBLIC_ROUTES = [
     ("POST", "/api/v1/auth/sync", "Validates provider identity before creating a session"),
     ("POST", "/api/v1/ha/wore-today", "Checks the Home Assistant token in the handler"),
     ("POST", "/api/v1/ha/laundry-done", "Checks the Home Assistant token in the handler"),
+    ("GET", "/api/v1/ha/today", "Checks the Home Assistant token in the handler"),
+    (
+        "GET",
+        "/api/v1/ha/items/{item_id}/thumbnail",
+        "Checks the Home Assistant token in the handler",
+    ),
 ]
 DOCS_ROUTES = [
     ("GET", "/docs", "Development Swagger UI"),
