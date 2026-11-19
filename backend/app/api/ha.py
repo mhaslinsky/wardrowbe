@@ -1,14 +1,18 @@
-"""Home Assistant actions: log today's scheduled outfit as worn, and mark laundry done.
+"""Home Assistant actions: log today's scheduled outfit as worn, mark laundry done, and read
+today's outfit with its item thumbnails for the wall tablets.
 
 HA reaches only these routes, authenticated by a shared token, so it never holds an identity that
 could edit or delete the catalog (PER-160).
 """
 
+import base64
 import hmac
 import logging
+from datetime import date
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -16,8 +20,9 @@ from app.config import get_settings
 from app.database import DbSession
 from app.models.considering import owned_item
 from app.models.item import ClothingItem
-from app.models.outfit import Outfit, OutfitSource, UserFeedback
+from app.models.outfit import Outfit, OutfitItem, OutfitSource, UserFeedback
 from app.models.user import User
+from app.services.image_service import IMAGE_MIME_TYPES, ImageService
 from app.services.item_service import ItemService
 from app.services.learning_service import LearningService
 from app.services.wear_service import AlreadyThis, DayLogged, WearService, map_wear_error, wear_http
@@ -31,6 +36,9 @@ settings = get_settings()
 router = APIRouter(prefix="/ha", tags=["home-assistant"])
 
 FOOTWEAR_TYPES = frozenset(types_for_role("footwear"))
+TODAY_ITEM_LIMIT = 6
+# Scheduled options saved together share created_at; the id breaks ties the same way everywhere.
+NEWEST_FIRST = (Outfit.created_at.desc(), Outfit.id.desc())
 
 
 def _error(status_code: int, error: str) -> JSONResponse:
@@ -38,11 +46,27 @@ def _error(status_code: int, error: str) -> JSONResponse:
 
 
 def _token_ok(request: Request) -> bool:
+    return _matches_token(request.headers.get("x-ha-token"))
+
+
+def _matches_token(supplied: str | None) -> bool:
     expected = settings.wardrowbe_ha_token
-    supplied = request.headers.get("x-ha-token")
     if not expected or not supplied:
         return False
     return hmac.compare_digest(supplied.encode(), expected.encode())
+
+
+# HA's generic camera can send only basic auth, so the thumbnail route also takes the same
+# shared token as the basic-auth password. It is still a header secret, never a signed link (PER-263).
+def _basic_password(request: Request) -> str | None:
+    scheme, _, encoded = (request.headers.get("authorization") or "").partition(" ")
+    if scheme.lower() != "basic":
+        return None
+    try:
+        password = base64.b64decode(encoded, validate=True).partition(b":")[2].decode()
+    except ValueError:
+        return None
+    return password or None
 
 
 async def _ha_user(db: DbSession) -> User | None:
@@ -72,7 +96,7 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
             Outfit.source == OutfitSource.scheduled,
             Outfit.scheduled_for == today,
         )
-        .order_by(Outfit.created_at.desc())
+        .order_by(*NEWEST_FIRST)
         .options(selectinload(Outfit.items), selectinload(Outfit.feedback))
     )
     outfits = list(result.scalars().all())
@@ -98,6 +122,90 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
             "date": today.isoformat(),
             "already_logged": isinstance(result, AlreadyThis),
         }
+    )
+
+
+async def _todays_outfit(db: DbSession, user: User, today: date) -> Outfit | None:
+    """The outfit logged as worn today, else the newest one scheduled for today, as wore-today picks."""
+    for condition in (
+        Outfit.feedback.has(UserFeedback.worn_at == today),
+        (Outfit.source == OutfitSource.scheduled) & (Outfit.scheduled_for == today),
+    ):
+        outfit = await db.scalar(
+            select(Outfit)
+            .where(Outfit.user_id == user.id, condition)
+            .order_by(*NEWEST_FIRST)
+            .limit(1)
+            .options(selectinload(Outfit.items).selectinload(OutfitItem.item))
+        )
+        if outfit is not None:
+            return outfit
+    return None
+
+
+def _owned_items(outfit: Outfit, user: User) -> list[ClothingItem]:
+    entries = sorted(outfit.items, key=lambda entry: entry.position)
+    return [entry.item for entry in entries if entry.item.user_id == user.id][:TODAY_ITEM_LIMIT]
+
+
+def _item_label(item: ClothingItem) -> str:
+    if item.name and item.name.strip():
+        return item.name.strip()
+    return " ".join(part for part in (item.primary_color, item.type) if part)
+
+
+@router.get("/today")
+async def today_outfit(request: Request, db: DbSession) -> JSONResponse:
+    if not _token_ok(request):
+        return _error(status.HTTP_401_UNAUTHORIZED, "unauthorized")
+    user = await _ha_user(db)
+    if user is None:
+        return _error(status.HTTP_404_NOT_FOUND, "user_not_found")
+    today = get_user_today(user)
+    outfit = await _todays_outfit(db, user, today)
+    items = _owned_items(outfit, user) if outfit is not None else []
+    return JSONResponse(
+        {
+            "ok": True,
+            "date": today.isoformat(),
+            "outfit_id": str(outfit.id) if outfit is not None else None,
+            "items": [
+                {
+                    "id": str(item.id),
+                    "name": _item_label(item),
+                    "has_photo": bool(item.thumbnail_path),
+                }
+                for item in items
+            ],
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/items/{item_id}/thumbnail")
+async def today_item_thumbnail(item_id: UUID, request: Request, db: DbSession) -> Response:
+    if not (_token_ok(request) or _matches_token(_basic_password(request))):
+        return _error(status.HTTP_401_UNAUTHORIZED, "unauthorized")
+    user = await _ha_user(db)
+    if user is None:
+        return _error(status.HTTP_404_NOT_FOUND, "user_not_found")
+    outfit = await _todays_outfit(db, user, get_user_today(user))
+    items = _owned_items(outfit, user) if outfit is not None else []
+    item = next((candidate for candidate in items if candidate.id == item_id), None)
+    if item is None:
+        return _error(status.HTTP_404_NOT_FOUND, "not_in_todays_outfit")
+    if not item.thumbnail_path:
+        return _error(status.HTTP_404_NOT_FOUND, "no_photo")
+    image_service = ImageService()
+    image_path = image_service.get_image_path(item.thumbnail_path)
+    if not image_path.resolve().is_relative_to(image_service.storage_path.resolve()):
+        return _error(status.HTTP_404_NOT_FOUND, "no_photo")
+    if not image_path.is_file():
+        return _error(status.HTTP_404_NOT_FOUND, "no_photo")
+    return FileResponse(
+        path=str(image_path),
+        media_type=IMAGE_MIME_TYPES.get(image_path.suffix.lower(), "image/jpeg"),
+        headers={"Cache-Control": "private, no-store"},
     )
 
 
