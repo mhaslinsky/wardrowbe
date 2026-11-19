@@ -192,9 +192,10 @@ async def test_wore_today_reports_an_already_worn_outfit_instead_of_logging_anot
 
     with _ha_settings(test_user), _clock(datetime(2026, 10, 22, 15, 0, tzinfo=UTC)):
         response = await client.post(WORE_TODAY, json={}, headers={"X-HA-Token": TOKEN})
+        listed = await client.get("/api/v1/ha/today", headers={"X-HA-Token": TOKEN})
 
     assert response.status_code == 200
-    assert response.json()["outfit_id"] == str(worn.id)
+    assert response.json()["outfit_id"] == listed.json()["outfit_id"] == str(worn.id)
     assert response.json()["already_logged"] is True
     assert await _feedback(db_session, other.id) is None
     assert await _wear_count(db_session, other.id) == 0
@@ -393,10 +394,10 @@ async def test_thumbnail_needs_the_token_and_an_item_in_todays_outfit(
 ):
     worn, other = [await _item(db_session, test_user, kind) for kind in ("shirt", "jeans")]
     for item in (worn, other):
-        item.thumbnail_path = f"{item.id}_thumb.jpg"
-        (tmp_path / item.thumbnail_path).write_bytes(b"jpeg")
+        item.thumbnail_path = f"{item.id}_thumb.webp"
+        (tmp_path / item.thumbnail_path).write_bytes(b"webp")
     await _outfit(db_session, test_user, date(2026, 10, 22), items=[worn])
-    basic = base64.b64encode(f"homeassistant:{TOKEN}".encode()).decode()
+    basic, wrong = (base64.b64encode(f"ha:{secret}".encode()).decode() for secret in (TOKEN, "pw"))
     worn_url, other_url = (f"/api/v1/ha/items/{item.id}/thumbnail" for item in (worn, other))
     header, basic_header = {"X-HA-Token": TOKEN}, {"Authorization": f"Basic {basic}"}
 
@@ -408,9 +409,11 @@ async def test_thumbnail_needs_the_token_and_an_item_in_todays_outfit(
         by_header = await client.get(worn_url, headers=header)
         by_basic = await client.get(worn_url, headers=basic_header)
         no_token = await client.get(worn_url)
+        wrong_basic = await client.get(worn_url, headers={"Authorization": f"Basic {wrong}"})
+        basic_on_today = await client.get("/api/v1/ha/today", headers=basic_header)
         not_today = await client.get(other_url, headers=header)
 
-    assert (by_header.status_code, by_header.content) == (200, b"jpeg")
-    assert (by_basic.status_code, by_basic.content) == (200, b"jpeg")
-    assert no_token.status_code == 401
+    assert (by_header.headers["content-type"], by_header.content) == ("image/webp", b"webp")
+    assert (by_basic.status_code, by_basic.content) == (200, b"webp")
+    assert [no_token.status_code, wrong_basic.status_code, basic_on_today.status_code] == [401] * 3
     assert not_today.json() == {"ok": False, "error": "not_in_todays_outfit"}
