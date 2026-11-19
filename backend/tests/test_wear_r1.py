@@ -92,8 +92,8 @@ async def test_ha_eligibility_and_envelope(client, db_session, test_user, wear_c
         assert response.json()["already_logged"] is True
         assert response.json()["outfit_id"] == str(older.id)
     else:
-        assert response.status_code == 422
-        assert response.json() == {"ok": False, "error": "Outfit cannot be worn"}
+        assert response.status_code == 404
+        assert response.json() == {"ok": False, "error": "no_outfit_today"}
 
 
 @pytest.mark.parametrize("kind", ["external", "on_demand"])

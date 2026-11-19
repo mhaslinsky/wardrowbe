@@ -13,14 +13,20 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, JSONResponse
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
 from app.database import DbSession
 from app.models.considering import owned_item
 from app.models.item import ClothingItem
-from app.models.outfit import Outfit, OutfitItem, OutfitSource, UserFeedback
+from app.models.outfit import (
+    LIVE_OUTFIT_STATUSES,
+    Outfit,
+    OutfitItem,
+    OutfitSource,
+    UserFeedback,
+)
 from app.models.user import User
 from app.services.image_service import IMAGE_MIME_TYPES, ImageService
 from app.services.item_service import ItemService
@@ -69,6 +75,20 @@ def _basic_password(request: Request) -> str | None:
     return password or None
 
 
+def _live_scheduled_today(user: User, today: date) -> Select[tuple[Outfit]]:
+    """Today's scheduled options the day view still offers, newest first; HA never picks a rejected one."""
+    return (
+        select(Outfit)
+        .where(
+            Outfit.user_id == user.id,
+            Outfit.source == OutfitSource.scheduled,
+            Outfit.scheduled_for == today,
+            Outfit.status.in_(LIVE_OUTFIT_STATUSES),
+        )
+        .order_by(*NEWEST_FIRST)
+    )
+
+
 async def _ha_user(db: DbSession) -> User | None:
     result = await db.execute(select(User).where(User.email == settings.ha_user_email))
     return result.scalar_one_or_none()
@@ -89,20 +109,14 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
     )
     if existing_id is not None:
         return map_wear_error(DayLogged([existing_id]), ha=True, worn_on=today)
-    result = await db.execute(
-        select(Outfit)
-        .where(
-            Outfit.user_id == user.id,
-            Outfit.source == OutfitSource.scheduled,
-            Outfit.scheduled_for == today,
-        )
-        .order_by(*NEWEST_FIRST)
+    scheduled = await db.scalar(
+        _live_scheduled_today(user, today)
+        .limit(1)
         .options(selectinload(Outfit.items), selectinload(Outfit.feedback))
     )
-    outfits = list(result.scalars().all())
-    if not outfits:
+    if scheduled is None:
         return _error(status.HTTP_404_NOT_FOUND, "no_outfit_today")
-    result = await WearService(db).log_worn(user, outfits[0], today, caller="ha")
+    result = await WearService(db).log_worn(user, scheduled, today, caller="ha")
     if isinstance(result, DayLogged):
         await db.commit()
         return map_wear_error(result, ha=True, worn_on=today)
@@ -126,17 +140,13 @@ async def wore_today(request: Request, db: DbSession) -> JSONResponse:
 
 
 async def _todays_outfit(db: DbSession, user: User, today: date) -> Outfit | None:
-    """The outfit logged as worn today, else the newest one scheduled for today, as wore-today picks."""
-    for condition in (
-        Outfit.feedback.has(UserFeedback.worn_at == today),
-        (Outfit.source == OutfitSource.scheduled) & (Outfit.scheduled_for == today),
-    ):
+    """The outfit logged as worn today, else the newest live one scheduled for today, as wore-today picks."""
+    worn = select(Outfit).where(
+        Outfit.user_id == user.id, Outfit.feedback.has(UserFeedback.worn_at == today)
+    )
+    for query in (worn.order_by(*NEWEST_FIRST), _live_scheduled_today(user, today)):
         outfit = await db.scalar(
-            select(Outfit)
-            .where(Outfit.user_id == user.id, condition)
-            .order_by(*NEWEST_FIRST)
-            .limit(1)
-            .options(selectinload(Outfit.items).selectinload(OutfitItem.item))
+            query.limit(1).options(selectinload(Outfit.items).selectinload(OutfitItem.item))
         )
         if outfit is not None:
             return outfit
