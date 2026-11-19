@@ -112,6 +112,8 @@
     "useMyLocation": "現在地を使用"
   },
   "recommendations": {
+    "suggestUnderwear": "下着を提案する",
+    "suggestUnderwearHint": "コーデの提案に下着を1点含められます。",
     "optionsPerDay": "1日あたりのコーデ候補数",
     "optionsPerDayDefault": "既定（定期生成1件、リクエスト時3件）",
     "avoidRepeatDays": "同じアイテムを避ける期間（日）",

@@ -187,6 +187,7 @@ export interface Preferences {
   options_per_day?: number | null;
   avoid_repeat_days: number;
   prefer_underused_items: boolean;
+  suggest_underwear?: boolean;
   variety_level: 'low' | 'moderate' | 'high';
   ai_endpoints: AIEndpoint[];
 }

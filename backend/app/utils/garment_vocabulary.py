@@ -108,11 +108,11 @@ def is_outfit_type(item_type: str | None) -> bool:
 SUGGESTION_EXCLUDED_TYPES = frozenset({"glasses", "robe"})
 
 
-def is_suggestion_type(item_type: str | None) -> bool:
-    return (
-        is_outfit_type(item_type)
-        and (item_type or "").strip().lower() not in SUGGESTION_EXCLUDED_TYPES
-    )
+def is_suggestion_type(item_type: str | None, *, include_underwear: bool = False) -> bool:
+    kind = (item_type or "").strip().lower()
+    if include_underwear and ITEM_ROLE.get(kind) == "underwear":
+        return True
+    return is_outfit_type(item_type) and kind not in SUGGESTION_EXCLUDED_TYPES
 
 
 def suggestion_rejection_message(item_types: Iterable[str | None]) -> str:
@@ -139,12 +139,25 @@ def render_tagging_prompt(template: str) -> str:
     )
 
 
-def render_outfit_prompt(template: str) -> str:
+UNDERWEAR_LINE_MARKER = "<<IF_UNDERWEAR>>"
+
+
+def render_outfit_prompt(template: str, *, include_underwear: bool = False) -> str:
     # Outfit prompts name the garments that fill each role; <<ROLE_TYPES>> tokens are filled from
     # ITEM_ROLE so separates, one-piece and legwear lists stay in step with the vocabulary.
+    # Lines starting with <<IF_UNDERWEAR>> are kept only when underwear may be suggested.
+    template = "".join(
+        line.removeprefix(UNDERWEAR_LINE_MARKER)
+        for line in template.splitlines(keepends=True)
+        if include_underwear or not line.startswith(UNDERWEAR_LINE_MARKER)
+    )
     for role in ROLES:
         template = template.replace(
             f"<<{role.upper()}_TYPES>>",
-            ", ".join(kind for kind in types_for_role(role) if is_suggestion_type(kind)),
+            ", ".join(
+                kind
+                for kind in types_for_role(role)
+                if is_suggestion_type(kind, include_underwear=include_underwear)
+            ),
         )
     return template.replace("<<CAN_BE_MID_LAYER_TYPES>>", ", ".join(sorted(CAN_BE_MID_LAYER_TYPES)))

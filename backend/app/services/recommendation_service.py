@@ -51,6 +51,7 @@ from app.services.weather_service import (
 from app.utils.clothing import (
     canonical_item_order,
     deduplicate_by_body_slot,
+    keep_one_underwear,
     prefer_ranked_layers,
     remove_legwear,
     repair_top_layers,
@@ -249,6 +250,13 @@ class RecommendationContext:
 
 
 RECOMMENDATION_PROMPT = render_outfit_prompt(load_prompt("recommendation"))
+RECOMMENDATION_PROMPT_WITH_UNDERWEAR = render_outfit_prompt(
+    load_prompt("recommendation"), include_underwear=True
+)
+
+
+def suggests_underwear(preferences: UserPreference | None) -> bool:
+    return bool(preferences and preferences.suggest_underwear)
 
 
 class RecommendationService:
@@ -259,6 +267,9 @@ class RecommendationService:
         self.telemetry_feature = "outfit_suggestion"
 
     async def _day_suggestions(self, user_id: UUID, day: date) -> list[Outfit]:
+        include_underwear = suggests_underwear(
+            await PreferenceService(self.db).get_preferences(user_id)
+        )
         result = await self.db.execute(
             select(Outfit)
             .where(
@@ -295,7 +306,10 @@ class RecommendationService:
         outfits = [
             outfit
             for outfit in result.scalars().all()
-            if all(is_suggestion_type(link.item.type) for link in outfit.items)
+            if all(
+                is_suggestion_type(link.item.type, include_underwear=include_underwear)
+                for link in outfit.items
+            )
         ]
         # Options saved in one request share created_at, so the clash order is applied here,
         # on the saved items, with scheduled outfits still first.
@@ -410,6 +424,8 @@ class RecommendationService:
         occasion: str,
         preferences: UserPreference | None,
         exclude_items: list[UUID],
+        *,
+        include_underwear: bool = False,
     ) -> list[ClothingItem]:
         query = select(ClothingItem).where(
             and_(
@@ -430,7 +446,9 @@ class RecommendationService:
         items = [
             item
             for item in items
-            if item.type and item.type != "unknown" and is_suggestion_type(item.type)
+            if item.type
+            and item.type != "unknown"
+            and is_suggestion_type(item.type, include_underwear=include_underwear)
         ]
 
         if exclude_items:
@@ -1077,6 +1095,7 @@ class RecommendationService:
         mandatory_item_ids: set[UUID] | None = None,
         drop_legwear: bool = False,
         considering_anchor_id: UUID | None = None,
+        include_underwear: bool = False,
     ) -> Outfit:
         selected_numbers = outfit_data.get("items", [])
         valid_ids = []
@@ -1121,18 +1140,23 @@ class RecommendationService:
                 )
             )
         ).all()
-        item_type_map = {row.id: (row.type or "").lower() for row in items_result}
+        item_type_map = {row.id: (row.type or "").strip().lower() for row in items_result}
         item_subtype_map = {row.id: (row.subtype or "").lower() for row in items_result}
         valid_ids = [
-            item_id for item_id in valid_ids if is_suggestion_type(item_type_map.get(item_id))
+            item_id
+            for item_id in valid_ids
+            if is_suggestion_type(item_type_map.get(item_id), include_underwear=include_underwear)
         ]
         ranked_ids = [
-            item_id for item_id in ranked_ids if is_suggestion_type(item_type_map.get(item_id))
+            item_id
+            for item_id in ranked_ids
+            if is_suggestion_type(item_type_map.get(item_id), include_underwear=include_underwear)
         ]
         valid_ids = prefer_ranked_layers(valid_ids, ranked_ids, item_type_map, mandatory_item_ids)
         valid_ids = deduplicate_by_body_slot(
             valid_ids, item_type_map, mandatory_item_ids=mandatory_item_ids
         )
+        valid_ids = keep_one_underwear(valid_ids, item_type_map, mandatory_item_ids or set())
         # Prompt wording alone does not keep small models from adding tights on a hot
         # day; tights the user asked for stay.
         if drop_legwear:
@@ -1229,6 +1253,8 @@ class RecommendationService:
         scheduled_date: date | None = None,
         considering_anchor_id: UUID | None = None,
     ) -> list[Outfit]:
+        preferences = user.preferences
+        include_underwear = suggests_underwear(preferences)
         anchor = None
         if considering_anchor_id is not None:
             from app.services.considering_preview_service import ConsideringPreviewService
@@ -1237,7 +1263,7 @@ class RecommendationService:
                 user.id, considering_anchor_id, [], allow_bought=True
             )
             anchor = await self.db.get(ClothingItem, considering_anchor_id)
-            if not is_suggestion_type(anchor.type):
+            if not is_suggestion_type(anchor.type, include_underwear=include_underwear):
                 raise ValueError(suggestion_rejection_message([anchor.type]))
             if include_items and set(include_items) != {considering_anchor_id}:
                 raise ValueError("Choose one considering anchor")
@@ -1290,7 +1316,6 @@ class RecommendationService:
                     "Could not fetch weather data. Please try again or provide weather manually."
                 ) from e
 
-        preferences = user.preferences
         drop_legwear = stays_above_hot_threshold(weather, preferences)
         outfit_notes = await self._get_recent_outfit_notes(user)
         context = suggestion_context(
@@ -1314,6 +1339,7 @@ class RecommendationService:
             occasion=occasion,
             preferences=preferences,
             exclude_items=exclude_items,
+            include_underwear=include_underwear,
         )
         if anchor is not None and anchor.id not in {item.id for item in candidates}:
             candidates.append(anchor)
@@ -1337,7 +1363,10 @@ class RecommendationService:
                     )
                 )
                 forced_items = list(result.scalars().all())
-                if any(not is_suggestion_type(item.type) for item in forced_items):
+                if any(
+                    not is_suggestion_type(item.type, include_underwear=include_underwear)
+                    for item in forced_items
+                ):
                     raise ValueError(
                         suggestion_rejection_message(item.type for item in forced_items)
                     )
@@ -1407,6 +1436,7 @@ class RecommendationService:
                         scheduled_date=scheduled_date,
                         mandatory_item_ids=set(include_items) if include_items else None,
                         drop_legwear=drop_legwear,
+                        include_underwear=include_underwear,
                     )
                 except EmptyOutfitError:
                     logger.info("Cached suggestion has nothing left to wear, skipping")
@@ -1438,6 +1468,7 @@ class RecommendationService:
             mandatory_item_ids=set(include_items) if include_items else None,
             wear_counts_30_days=wear_counts_30_days,
             usage_reference_items=usage_reference_items,
+            include_underwear=include_underwear,
         )
 
         # Format enriched prompt
@@ -1466,7 +1497,9 @@ class RecommendationService:
         if wearer_preferences:
             preferences_text = "\n".join(filter(None, (preferences_text, wearer_preferences)))
 
-        prompt_template = RECOMMENDATION_PROMPT
+        prompt_template = (
+            RECOMMENDATION_PROMPT_WITH_UNDERWEAR if include_underwear else RECOMMENDATION_PROMPT
+        )
         if self._defer_commit:
             prompt_template = prompt_template.replace(
                 "exactly 3 distinct", f"exactly {count} distinct"
@@ -1542,6 +1575,7 @@ class RecommendationService:
                     mandatory_item_ids=set(include_items) if include_items else None,
                     drop_legwear=drop_legwear,
                     considering_anchor_id=considering_anchor_id,
+                    include_underwear=include_underwear,
                 )
                 return [outfit]
 
@@ -1576,6 +1610,7 @@ class RecommendationService:
                         mandatory_item_ids=set(include_items) if include_items else None,
                         drop_legwear=drop_legwear,
                         considering_anchor_id=considering_anchor_id,
+                        include_underwear=include_underwear,
                     )
                 except EmptyOutfitError:
                     logger.warning("AI outfit option has nothing left to wear, skipping")

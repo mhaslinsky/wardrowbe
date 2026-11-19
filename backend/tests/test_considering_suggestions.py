@@ -311,3 +311,28 @@ async def test_invalid_provider_option_is_skipped_without_losing_valid_options(
         len(list(await db_session.scalars(select(Outfit.id).where(Outfit.user_id == test_user.id))))
         == 1
     )
+
+
+async def test_underwear_anchor_is_accepted_when_suggest_underwear_is_on(
+    client, auth_headers, db_session, test_user, provider
+):
+    _shirt, underwear, *_rest = await fixture_items(db_session, test_user)
+    patched = await client.patch(
+        "/api/v1/users/me/preferences", headers=auth_headers, json={"suggest_underwear": True}
+    )
+    assert patched.status_code == 200
+    await db_session.refresh(test_user, ["preferences"])
+
+    async def choose_from_prompt(prompt, **_kwargs):
+        numbers = [int(number) for number in re.findall(r"^\[(\d+)\] ", prompt, re.MULTILINE)]
+        return MagicMock(
+            content=json.dumps({"outfits": [{"items": numbers}] * 3}), model="stub", endpoint="stub"
+        )
+
+    provider[0].generate_text.side_effect = choose_from_prompt
+    response = await client.post(
+        f"/api/v1/considering/{underwear.id}/suggestions", headers=auth_headers, json={}
+    )
+    assert response.status_code == 201, response.text
+    for outfit in response.json():
+        assert str(underwear.id) in [item["id"] for item in outfit["items"]]

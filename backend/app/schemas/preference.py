@@ -193,6 +193,9 @@ class PreferenceBase(ActiveHours):
     prefer_underused_items: bool = Field(
         default=DEFAULT_PREFER_UNDERUSED_ITEMS, description="Prioritize less worn items"
     )
+    suggest_underwear: bool = Field(
+        default=False, strict=True, description="Allow one underwear piece in suggestions"
+    )
     variety_level: str = Field(
         default=DEFAULT_VARIETY_LEVEL,
         pattern="^(low|moderate|high)$",
@@ -231,6 +234,7 @@ class PreferenceUpdate(ActiveHours):
         default=None, ge=AVOID_REPEAT_DAYS_MIN, le=AVOID_REPEAT_DAYS_MAX
     )
     prefer_underused_items: bool | None = None
+    suggest_underwear: bool = Field(default=False, strict=True)
     variety_level: str | None = Field(default=None, pattern="^(low|moderate|high)$")
     ai_endpoints: list[AIEndpoint] | None = None
 
