@@ -1394,8 +1394,10 @@ async def log_item_wear(
         notes=request.notes,
     )
 
-    # Refresh to get updated wear_count
+    # A plain refresh leaves additional_images unloaded, and the response would lazy-load it
+    # outside the async context (MissingGreenlet).
     await db.refresh(item)
+    await db.refresh(item, ["additional_images"])
     return ItemResponse.model_validate(item)
 
 
@@ -1510,6 +1512,7 @@ async def log_item_wash(
     )
 
     await db.refresh(item)
+    await db.refresh(item, ["additional_images"])
     return ItemResponse.model_validate(item)
 
 

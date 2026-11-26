@@ -100,7 +100,7 @@ interface EditForm {
   notes: string;
   favorite: boolean;
   wash_interval: number | undefined;
-  quantity: number;
+  quantity: number | undefined;
 }
 
 function editFormFromItem(item: Item): EditForm {
@@ -115,7 +115,7 @@ function editFormFromItem(item: Item): EditForm {
     notes: item.notes || '',
     favorite: item.favorite,
     wash_interval: item.wash_interval ?? undefined,
-    quantity: item.quantity ?? 1,
+    quantity: item.quantity,
   };
 }
 
@@ -738,8 +738,8 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       type="number"
                       min={1}
                       max={99}
-                      value={editForm.quantity}
-                      onChange={(e) => setEditForm({ ...editForm, quantity: Math.min(99, Math.max(1, parseInt(e.target.value) || 1)) })}
+                      value={editForm.quantity ?? ''}
+                      onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value ? Math.min(99, Math.max(1, parseInt(e.target.value))) : undefined })}
                     />
                   </div>
                   <div className="space-y-2">

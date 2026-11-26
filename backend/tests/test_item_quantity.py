@@ -5,13 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.item import ClothingItem, ItemStatus
 
 
-async def _make_item(db_session: AsyncSession, user_id, quantity: int = 1) -> ClothingItem:
+async def _make_item(
+    db_session: AsyncSession, user_id, quantity: int = 1, wash_interval: int = 1
+) -> ClothingItem:
     item = ClothingItem(
         user_id=user_id,
         type="socks",
         image_path="test/socks.jpg",
         status=ItemStatus.ready,
-        wash_interval=1,
+        wash_interval=wash_interval,
         quantity=quantity,
         clean_count=quantity,
     )
@@ -107,3 +109,22 @@ async def test_non_positive_quantity_rejected(
         f"/api/v1/items/{item.id}", json={"quantity": quantity}, headers=auth_headers
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_next_copy_starts_clean_when_interval_is_above_one(
+    client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
+):
+    item = await _make_item(db_session, test_user.id, quantity=2, wash_interval=3)
+    trajectory = []
+    for _ in range(6):
+        data = await _wear(client, item.id, auth_headers)
+        trajectory.append((data["wears_since_wash"], data["clean_count"], data["needs_wash"]))
+    assert trajectory == [
+        (1, 2, False),
+        (2, 2, False),
+        (0, 1, False),
+        (1, 1, False),
+        (2, 1, False),
+        (3, 0, True),
+    ]

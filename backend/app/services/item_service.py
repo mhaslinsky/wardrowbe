@@ -543,7 +543,8 @@ class ItemService:
         item.wears_since_wash = 0
         item.last_washed_at = washed_at
         item.needs_wash = False
-        item.clean_count = item.quantity
+        # From the row, not the loaded item, so a quantity lowered since the load still fits the CHECK.
+        item.clean_count = ClothingItem.quantity
 
         await self.db.flush()
         await self.db.refresh(wash)
