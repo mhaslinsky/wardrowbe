@@ -39,6 +39,7 @@ export interface Item {
   purchase_price?: number;
   favorite: boolean;
   always_in_preview?: boolean;
+  indoor_only?: boolean;
   image_path: string;
   thumbnail_path?: string;
   medium_path?: string;

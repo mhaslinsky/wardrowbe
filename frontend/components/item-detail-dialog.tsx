@@ -50,6 +50,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -105,6 +106,7 @@ interface EditForm {
   notes: string;
   favorite: boolean;
   always_in_preview: boolean;
+  indoor_only: boolean;
   wash_interval: number | null;
   wash_interval_bad_input: boolean;
 }
@@ -121,6 +123,7 @@ function editFormFromItem(item: Item): EditForm {
     notes: item.notes || '',
     favorite: item.favorite,
     always_in_preview: item.always_in_preview ?? false,
+    indoor_only: item.indoor_only ?? false,
     wash_interval: item.wash_interval ?? null,
     wash_interval_bad_input: false,
   };
@@ -158,6 +161,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     notes: '',
     favorite: false,
     always_in_preview: false,
+    indoor_only: false,
     wash_interval: null,
     wash_interval_bad_input: false,
   });
@@ -219,6 +223,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           notes: editForm.notes || undefined,
           favorite: editForm.favorite,
           always_in_preview: editIsGlasses && editForm.always_in_preview,
+          indoor_only: editForm.indoor_only,
           // A blank interval must reach the server as null to remove the override.
           wash_interval: editForm.wash_interval,
         },
@@ -823,6 +828,14 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       {t('view.washIntervalHint')}
                     </p>
                   </div>}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="item-indoor-only">{t('indoorOnly')}</Label>
+                    <Switch
+                      id="item-indoor-only"
+                      checked={editForm.indoor_only}
+                      onCheckedChange={(checked) => setEditForm({ ...editForm, indoor_only: checked })}
+                    />
+                  </div>
                   <div className="flex gap-2 pt-2">
                     <Button
                       variant="outline"

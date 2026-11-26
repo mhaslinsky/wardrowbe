@@ -237,7 +237,8 @@
       "wornCount": "{count, plural, one {# 回着用} other {# 回着用}}"
     },
     "washInterval": "洗濯間隔",
-    "alwaysInPreview": "プレビューでは常に着用する"
+    "alwaysInPreview": "プレビューでは常に着用する",
+    "indoorOnly": "屋内のみ"
   },
   "lightbox": {
     "openInWardrobe": "ワードローブで開く"

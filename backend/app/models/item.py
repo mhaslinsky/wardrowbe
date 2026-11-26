@@ -176,6 +176,7 @@ class ClothingItem(Base):
     always_in_preview: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )
+    indoor_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     # Lifecycle
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)

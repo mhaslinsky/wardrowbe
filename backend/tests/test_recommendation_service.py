@@ -1597,3 +1597,48 @@ class TestOvershirtNeedsATopUnderIt:
             ],
         )
         assert outfits == [{items[index].id for index in [0, 2, 3, 4]}]
+
+
+class TestIndoorOnlyCandidates:
+    async def _candidate_names(self, db_session, user, occasion):
+        items = [
+            ClothingItem(
+                user_id=user.id,
+                type=kind,
+                name=name,
+                image_path=f"test/{uuid4()}.jpg",
+                status=ItemStatus.ready,
+                indoor_only=indoor,
+            )
+            for kind, name, indoor in [
+                ("pants", "sweatpants", True),
+                ("pants", "jeans", False),
+                ("shirt", "tee", False),
+            ]
+        ]
+        db_session.add_all(items)
+        await db_session.commit()
+        candidates = await RecommendationService(db_session).get_candidate_items(
+            user=user,
+            weather=_weather(),
+            occasion=occasion,
+            preferences=None,
+            exclude_items=[],
+        )
+        return {item.name for item in candidates}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("occasion", ["casual", "work", "formal", "weekend"])
+    async def test_indoor_only_item_is_excluded_outside_lounge(
+        self, db_session, test_user, occasion
+    ):
+        assert await self._candidate_names(db_session, test_user, occasion) == {"jeans", "tee"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("occasion", ["lounge", "Lounge"])
+    async def test_indoor_only_item_is_kept_for_lounge(self, db_session, test_user, occasion):
+        assert await self._candidate_names(db_session, test_user, occasion) == {
+            "sweatpants",
+            "jeans",
+            "tee",
+        }

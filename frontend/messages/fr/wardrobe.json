@@ -237,7 +237,8 @@
       "wornCount": "{count, plural, one {Porté # fois} other {Porté # fois}}"
     },
     "washInterval": "Intervalle de lavage",
-    "alwaysInPreview": "Toujours porter dans les aperçus"
+    "alwaysInPreview": "Toujours porter dans les aperçus",
+    "indoorOnly": "Intérieur uniquement"
   },
   "lightbox": {
     "openInWardrobe": "Ouvrir dans la garde-robe"

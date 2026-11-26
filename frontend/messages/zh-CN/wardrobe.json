@@ -237,7 +237,8 @@
       "wornCount": "{count, plural, one {已穿着 # 次} other {已穿着 # 次}}"
     },
     "washInterval": "清洗间隔",
-    "alwaysInPreview": "始终在预览中佩戴"
+    "alwaysInPreview": "始终在预览中佩戴",
+    "indoorOnly": "仅限室内"
   },
   "lightbox": {
     "openInWardrobe": "在衣橱中打开"
