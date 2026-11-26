@@ -1,7 +1,7 @@
 """add quantity and clean_count to clothing_items
 
 Revision ID: b8e2f4a6c1d3
-Revises: a7d3c9e1f5b2
+Revises: b8e4d0f2a6c3
 Create Date: 2026-11-25
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b8e2f4a6c1d3"
-down_revision: str | None = "a7d3c9e1f5b2"
+down_revision: str | None = "b8e4d0f2a6c3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
