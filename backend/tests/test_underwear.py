@@ -30,6 +30,7 @@ def garment(kind):
         type=kind,
         subtype=None,
         needs_wash=False,
+        indoor_only=False,
         medium_path=None,
         image_path=f"{kind}.jpg",
         notes=None,

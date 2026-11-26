@@ -802,6 +802,16 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       rows={3}
                     />
                   </div>
+                  {editIsGlasses ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="always-in-preview">{t('alwaysInPreview')}</Label>
+                      <Switch
+                        id="always-in-preview"
+                        checked={editForm.always_in_preview}
+                        onCheckedChange={(checked) => setEditForm({ ...editForm, always_in_preview: checked })}
+                      />
+                    </div>
+                  ) : <>
                   <div className="space-y-2">
                     <Label htmlFor="item-quantity">{t('quantity')}</Label>
                     <Input
@@ -816,18 +826,10 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       }}
                     />
                   </div>
-                  {editIsGlasses ? (
-                    <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="always-in-preview">{t('alwaysInPreview')}</Label>
-                      <Switch
-                        id="always-in-preview"
-                        checked={editForm.always_in_preview}
-                        onCheckedChange={(checked) => setEditForm({ ...editForm, always_in_preview: checked })}
-                      />
-                    </div>
-                  ) : <div className="space-y-2">
-                    <Label>{t('washInterval')} ({t('view.wears')})</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="item-wash-interval">{t('washInterval')} ({t('view.wears')})</Label>
                     <Input
+                      id="item-wash-interval"
                       type="number"
                       min={1}
                       max={100}
@@ -844,7 +846,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     <p className="text-xs text-muted-foreground">
                       {t('view.washIntervalHint')}
                     </p>
-                  </div>}
+                  </div></>}
                   <div className="flex items-center justify-between">
                     <Label htmlFor="item-indoor-only">{t('indoorOnly')}</Label>
                     <Switch

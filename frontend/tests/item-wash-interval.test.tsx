@@ -48,7 +48,7 @@ async function openEditor(item: Item) {
     wrapper: wrapperFor('en'),
   })
   fireEvent.click(screen.getByRole('button', { name: 'Edit item' }))
-  return screen.getByRole('spinbutton')
+  return screen.getByRole('spinbutton', { name: /Wash Interval/ })
 }
 
 async function saveInterval(expected: number | null) {
@@ -81,11 +81,11 @@ describe('wash interval editing', () => {
     fireEvent.change(input, { target: { value: '7' } })
     await saveInterval(7)
     fireEvent.click(screen.getByRole('button', { name: 'Edit item' }))
-    input = screen.getByRole('spinbutton')
+    input = screen.getByRole('spinbutton', { name: /Wash Interval/ })
     fireEvent.change(input, { target: { value: '' } })
     await saveInterval(null)
     fireEvent.click(screen.getByRole('button', { name: 'Edit item' }))
-    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } })
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Wash Interval/ }), { target: { value: '5' } })
     await saveInterval(5)
   })
 

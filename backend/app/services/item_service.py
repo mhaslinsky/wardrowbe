@@ -577,7 +577,16 @@ class ItemService:
                 manually_needs_wash=False,
             )
         )
-        self.db.expire(item)
+        await self.db.refresh(
+            item,
+            [
+                "wears_since_wash",
+                "last_washed_at",
+                "needs_wash",
+                "clean_count",
+                "manually_needs_wash",
+            ],
+        )
 
         await self.db.flush()
         await self.db.refresh(wash)

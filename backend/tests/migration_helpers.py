@@ -29,8 +29,12 @@ async def migration_downgrade(db_session: AsyncSession, revision: str) -> AsyncI
         alembic("upgrade", "head")
 
 
-async def insert_at_revision(db_session: AsyncSession, *rows: object) -> None:
+async def insert_at_revision(
+    db_session: AsyncSession, *rows: object, server_default: tuple[str, ...] = ()
+) -> None:
     """Insert ORM rows into a downgraded schema, writing only the columns that schema has.
+
+    Columns named in server_default are left out so the database default applies.
 
     session.add sends every mapped column, so a column from a later migration breaks the insert.
     """
@@ -45,7 +49,7 @@ async def insert_at_revision(db_session: AsyncSession, *rows: object) -> None:
         state = inspect(row)
         values = {}
         for col in mapped.columns:
-            if col.name not in present:
+            if col.name not in present or col.name in server_default:
                 continue
             key = state.mapper.get_property_by_column(col).key
             if key in state.dict:

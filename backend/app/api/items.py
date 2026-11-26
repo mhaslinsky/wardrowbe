@@ -224,6 +224,7 @@ async def create_item(
         primary_color,
         favorite,
         skip_ai,
+        indoor_only=indoor_only,
     )
 
 
@@ -241,6 +242,7 @@ async def create_uploaded_item(
     favorite: bool = False,
     skip_ai: bool = False,
     purchase: ItemPurchase | None = None,
+    indoor_only: bool = False,
     additional_uploads: Sequence[UploadFile] = (),
 ) -> ItemResponse:
     # Validate and process image
@@ -1602,11 +1604,7 @@ async def log_item_wash(
 
     if never_washed(item):
         raise HTTPException(422, "Glasses do not need washing")
-    if (
-        item.wears_since_wash == 0
-        and not item.needs_wash
-        and item.clean_count >= item.quantity
-    ):
+    if item.wears_since_wash == 0 and not item.needs_wash and item.clean_count >= item.quantity:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Item is already clean (0 wears since last wash)",
