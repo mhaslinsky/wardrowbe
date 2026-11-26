@@ -233,7 +233,8 @@
       "wearsSinceWash": "세탁 후 착용: {current}/{max}",
       "wornCount": "{count, plural, other {#회 착용}}"
     },
-    "washInterval": "세탁 주기"
+    "washInterval": "세탁 주기",
+    "indoorOnly": "실내 전용"
   },
   "lightbox": {
     "openInWardrobe": "옷장에서 열기"

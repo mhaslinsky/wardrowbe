@@ -73,6 +73,8 @@ INCOMPLETE_OUTFIT_ERROR = "AI suggested an outfit that cannot be completed from 
 # One rejected outfit marks every pair in it, including the innocent ones, so a pair has to be
 # rejected in two outfits, and never accepted or worn, before the AI is told to avoid it.
 REJECTED_PAIR_MIN_REJECTIONS = 2
+# Occasions where items flagged indoor_only (sweats, loungewear) may be suggested.
+INDOOR_OCCASIONS = frozenset({"lounge"})
 REJECTED_PAIR_PROMPT_LIMIT = 15
 FEEDBACK_NOTE_LIMIT = 5
 FEEDBACK_NOTE_MAX_CHARS = 200
@@ -324,6 +326,8 @@ class RecommendationService:
 
         items = [i for i in items if not i.needs_wash]
         items = [i for i in items if i.type and i.type != "unknown"]
+        if occasion.lower() not in INDOOR_OCCASIONS:
+            items = [i for i in items if not i.indoor_only]
 
         if exclude_items:
             exclude_set = set(exclude_items)

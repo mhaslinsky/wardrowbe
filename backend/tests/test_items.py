@@ -173,6 +173,35 @@ class TestItemCRUD:
         assert data["brand"] == "Test Brand"
 
     @pytest.mark.asyncio
+    async def test_indoor_only_defaults_false_and_round_trips_through_patch(
+        self, client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
+    ):
+        item = ClothingItem(
+            user_id=test_user.id,
+            type="pants",
+            image_path="test/item.jpg",
+            status=ItemStatus.ready,
+        )
+        db_session.add(item)
+        await db_session.commit()
+
+        response = await client.get(f"/api/v1/items/{item.id}", headers=auth_headers)
+        assert response.json()["indoor_only"] is False
+
+        response = await client.patch(
+            f"/api/v1/items/{item.id}", json={"indoor_only": True}, headers=auth_headers
+        )
+        assert response.status_code == 200, response.json()
+        assert response.json()["indoor_only"] is True
+        response = await client.get(f"/api/v1/items/{item.id}", headers=auth_headers)
+        assert response.json()["indoor_only"] is True
+
+        response = await client.patch(
+            f"/api/v1/items/{item.id}", json={"indoor_only": False}, headers=auth_headers
+        )
+        assert response.json()["indoor_only"] is False
+
+    @pytest.mark.asyncio
     async def test_update_item_not_found(self, client: AsyncClient, test_user, auth_headers):
         """Test updating a non-existent item."""
         response = await client.patch(
