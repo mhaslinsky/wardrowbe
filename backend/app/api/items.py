@@ -1472,8 +1472,10 @@ async def log_item_wear(
         notes=request.notes,
     )
 
-    # Refresh to get updated wear_count
+    # A plain refresh leaves additional_images unloaded, and the response would lazy-load it
+    # outside the async context (MissingGreenlet).
     await db.refresh(item)
+    await db.refresh(item, ["additional_images"])
     return ItemResponse.model_validate(item)
 
 
@@ -1600,7 +1602,11 @@ async def log_item_wash(
 
     if never_washed(item):
         raise HTTPException(422, "Glasses do not need washing")
-    if item.wears_since_wash == 0 and not item.needs_wash:
+    if (
+        item.wears_since_wash == 0
+        and not item.needs_wash
+        and item.clean_count >= item.quantity
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Item is already clean (0 wears since last wash)",
@@ -1620,6 +1626,7 @@ async def log_item_wash(
     )
 
     await db.refresh(item)
+    await db.refresh(item, ["additional_images"])
     return ItemResponse.model_validate(item)
 
 

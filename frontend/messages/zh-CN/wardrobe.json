@@ -120,6 +120,7 @@
     "confirmTitle": "删除 {count, plural, one {# 件单品} other {# 件单品}}？",
     "confirmTitleAll": "删除全部 {count, plural, one {# 件单品} other {# 件单品}}？"
   },
+  "cleanCount": "{total} 件中 {clean} 件干净",
   "clearFilters": "清除筛选",
   "colorEyedropper": {
     "buttonTitle": "从图片取色",
@@ -190,6 +191,7 @@
       "washIntervalDefault": "默认：{count}"
     },
     "primaryColor": "主要颜色",
+    "quantity": "数量",
     "subtype": "子类型",
     "titles": {
       "analysisInProgress": "分析进行中...",

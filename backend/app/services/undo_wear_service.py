@@ -9,7 +9,7 @@ from app.models.learning import OutfitPerformance
 from app.models.outfit import Outfit, OutfitStatus
 from app.models.user import User
 from app.services.wear_service import WearService
-from app.utils.washing import never_washed, wash_interval
+from app.utils.washing import never_washed, replay_copy_wears
 
 
 def undo_conflict(code: str, message: str, **details: object) -> HTTPException:
@@ -114,7 +114,7 @@ class UndoWearService:
                 ]
                 latest = kept[0] if kept else None
                 item.last_washed_at = latest.washed_at if latest else None
-                item.wears_since_wash = sum(
+                wears_left = sum(
                     1
                     for history in remaining
                     if latest is None
@@ -123,10 +123,7 @@ class UndoWearService:
                         and history.worn_at >= latest.washed_at
                     )
                 )
-                interval = wash_interval(item)
-                item.needs_wash = item.manually_needs_wash or (
-                    interval != 999 and item.wears_since_wash >= interval
-                )
+                replay_copy_wears(item, wears_left)
         for history in target_rows:
             await self.db.delete(history)
         outfit.status = OutfitStatus.skipped

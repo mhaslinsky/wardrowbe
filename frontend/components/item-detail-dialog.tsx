@@ -61,7 +61,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { useUpdateItem, useDeleteItem, useReanalyzeItem, useRotateImage, useRemoveBackground, useRestoreOriginal, useReplaceItemImage, useLogWear, useLogWash, usePutInWash, useWashHistory, useItemWearStats, useItemWearHistory, useAddItemImage, useDeleteItemImage, useSetPrimaryImage } from '@/lib/hooks/use-items';
@@ -109,6 +108,7 @@ interface EditForm {
   indoor_only: boolean;
   wash_interval: number | null;
   wash_interval_bad_input: boolean;
+  quantity: number | undefined;
 }
 
 function editFormFromItem(item: Item): EditForm {
@@ -126,6 +126,7 @@ function editFormFromItem(item: Item): EditForm {
     indoor_only: item.indoor_only ?? false,
     wash_interval: item.wash_interval ?? null,
     wash_interval_bad_input: false,
+    quantity: item.quantity,
   };
 }
 
@@ -164,6 +165,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     indoor_only: false,
     wash_interval: null,
     wash_interval_bad_input: false,
+    quantity: 1,
   });
   const [showWashHistory, setShowWashHistory] = useState(false);
   const [showWearHistory, setShowWearHistory] = useState(false);
@@ -226,6 +228,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           indoor_only: editForm.indoor_only,
           // A blank interval must reach the server as null to remove the override.
           wash_interval: editForm.wash_interval,
+          quantity: editForm.quantity,
         },
       });
       setIsEditing(false);
@@ -799,6 +802,20 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       rows={3}
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="item-quantity">{t('quantity')}</Label>
+                    <Input
+                      id="item-quantity"
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={editForm.quantity ?? ''}
+                      onChange={(e) => {
+                        const parsed = parseInt(e.target.value, 10);
+                        setEditForm({ ...editForm, quantity: Number.isNaN(parsed) ? undefined : Math.min(99, Math.max(1, parsed)) });
+                      }}
+                    />
+                  </div>
                   {editIsGlasses ? (
                     <div className="flex items-center justify-between gap-2">
                       <Label htmlFor="always-in-preview">{t('alwaysInPreview')}</Label>
@@ -949,6 +966,9 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{t('view.wearsSinceWash', { current: item.wears_since_wash, max: item.effective_wash_interval })}</span>
+                        {item.quantity > 1 && (
+                          <span>{tw('cleanCount', { clean: item.clean_count, total: item.quantity })}</span>
+                        )}
                         {item.needs_wash && (
                           <span className="text-amber-500 font-medium">{t('view.needsWashing')}</span>
                         )}

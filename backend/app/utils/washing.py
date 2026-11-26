@@ -29,3 +29,18 @@ def wash_interval(item) -> int:
     if configured is not None:
         return configured
     return DEFAULT_WASH_INTERVALS.get((item.type or "").lower(), 3)
+
+
+def replay_copy_wears(item, wears: int) -> None:
+    """Rebuild wash state from a wear count since the last wash, the way record_wears counts it."""
+    interval = wash_interval(item)
+    clean_count, wears_since_wash = item.quantity, 0
+    for _ in range(wears):
+        wears_since_wash += 1
+        if interval != 999 and wears_since_wash >= interval:
+            clean_count = max(clean_count - 1, 0)
+            if clean_count > 0:
+                wears_since_wash = 0
+    item.clean_count = clean_count
+    item.wears_since_wash = wears_since_wash
+    item.needs_wash = item.manually_needs_wash or clean_count == 0

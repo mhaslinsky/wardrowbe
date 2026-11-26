@@ -66,6 +66,8 @@ const item = {
   thumbnail_url: 'https://example.test/i1-thumb.jpg',
   wear_count: 0,
   wears_since_wash: 0,
+  quantity: 1,
+  clean_count: 1,
   effective_wash_interval: 3,
 } as unknown as Item
 

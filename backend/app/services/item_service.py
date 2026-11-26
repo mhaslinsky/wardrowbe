@@ -3,7 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import and_, case, func, or_, select, text, update
+from sqlalchemy import and_, case, func, not_, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes, selectinload
 
@@ -258,9 +258,26 @@ class ItemService:
                     merged[key] = val
             update_data["tags"] = merged
 
+        new_quantity = update_data.pop("quantity", None)
         for field, value in update_data.items():
             setattr(item, field, value)
 
+        if new_quantity is not None:
+            # Lock the row and reread the counters, so a wear or wash since the load isn't overwritten.
+            await self.db.refresh(
+                item,
+                ["quantity", "clean_count", "wears_since_wash", "needs_wash"],
+                with_for_update=True,
+            )
+        if new_quantity is not None and new_quantity != item.quantity:
+            # Added copies arrive clean; a lower quantity clamps the clean count.
+            added = max(0, new_quantity - item.quantity)
+            if item.clean_count == 0 and added:
+                # The worn count belonged to a copy now in the wash, not the new clean one.
+                item.wears_since_wash = 0
+            item.clean_count = max(0, min(new_quantity, item.clean_count + added))
+            item.quantity = new_quantity
+            item.needs_wash = item.clean_count == 0
         clear_unneeded_wash_state(item)
 
         if "tags" in update_data:
@@ -477,7 +494,12 @@ class ItemService:
         for item in items:
             effective_interval = wash_interval(item)
             # Updated in SQL so that concurrent wears both count, and last_worn_at only moves
-            # forward when an older wear is logged late.
+            # forward when an older wear is logged late. A copy that reaches its wash interval
+            # goes in the wash; the next clean copy starts at zero wears.
+            copy_dirtied = (ClothingItem.wears_since_wash + 1 >= effective_interval) & (
+                effective_interval != 999
+            )
+            next_copy_clean = ClothingItem.clean_count - 1 > 0
             await self.db.execute(
                 update(ClothingItem)
                 .where(ClothingItem.id == item.id)
@@ -489,15 +511,22 @@ class ItemService:
                     wears_since_wash=case(
                         (never_washed(item), ClothingItem.wears_since_wash),
                         (ClothingItem.last_washed_at > worn_at, ClothingItem.wears_since_wash),
+                        (and_(copy_dirtied, next_copy_clean), 0),
                         else_=ClothingItem.wears_since_wash + 1,
+                    ),
+                    clean_count=case(
+                        (never_washed(item), ClothingItem.clean_count),
+                        (ClothingItem.last_washed_at > worn_at, ClothingItem.clean_count),
+                        (copy_dirtied, func.greatest(ClothingItem.clean_count - 1, 0)),
+                        else_=ClothingItem.clean_count,
                     ),
                     needs_wash=case(
                         (never_washed(item), ClothingItem.needs_wash),
                         (ClothingItem.last_washed_at > worn_at, ClothingItem.needs_wash),
                         else_=or_(
                             ClothingItem.manually_needs_wash,
-                            (ClothingItem.wears_since_wash + 1 >= effective_interval)
-                            & (effective_interval != 999),
+                            and_(copy_dirtied, not_(next_copy_clean)),
+                            ClothingItem.clean_count <= 0,
                         ),
                     ),
                 )
@@ -535,11 +564,20 @@ class ItemService:
         )
         self.db.add(wash)
 
-        # Reset wash tracking
-        item.wears_since_wash = 0
-        item.last_washed_at = washed_at
-        item.needs_wash = False
-        item.manually_needs_wash = False
+        # One UPDATE that writes every field: ORM change tracking skips values that match the
+        # loaded item, so a wear or quantity change since the load would survive the wash.
+        await self.db.execute(
+            update(ClothingItem)
+            .where(ClothingItem.id == item.id)
+            .values(
+                wears_since_wash=0,
+                last_washed_at=washed_at,
+                needs_wash=False,
+                clean_count=ClothingItem.quantity,
+                manually_needs_wash=False,
+            )
+        )
+        self.db.expire(item)
 
         await self.db.flush()
         await self.db.refresh(wash)

@@ -120,6 +120,7 @@
     "confirmTitle": "刪除 {count, plural, one {# 件單品} other {# 件單品}}？",
     "confirmTitleAll": "刪除全部 {count, plural, one {# 件單品} other {# 件單品}}？"
   },
+  "cleanCount": "{total} 件中 {clean} 件乾淨",
   "clearFilters": "清除篩選",
   "colorEyedropper": {
     "buttonTitle": "從圖片取色",
@@ -190,6 +191,7 @@
       "washIntervalDefault": "預設：{count}"
     },
     "primaryColor": "主色",
+    "quantity": "數量",
     "subtype": "子類型",
     "titles": {
       "analysisInProgress": "分析進行中...",

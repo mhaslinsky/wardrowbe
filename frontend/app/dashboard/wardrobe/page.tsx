@@ -282,6 +282,11 @@ function ItemCard({
             {t('wearCount', { count: item.wear_count })}
           </p>
         ) : null}
+        {item.quantity > 1 && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {t('cleanCount', { clean: item.clean_count, total: item.quantity })}
+          </p>
+        )}
         {item.ai_confidence !== undefined && item.ai_confidence > 0 && item.status === 'ready' && (
           <p className="text-xs text-muted-foreground mt-1">
             {t('ai.completeness', { percent: Math.round(item.ai_confidence * 100) })}

@@ -120,6 +120,7 @@
     "confirmTitle": "{count, plural, one {# 件のアイテム} other {# 件のアイテム}}を削除しますか？",
     "confirmTitleAll": "すべての{count, plural, one {# 件のアイテム} other {# 件のアイテム}}を削除しますか？"
   },
+  "cleanCount": "{total}点中{clean}点が清潔",
   "clearFilters": "フィルターをクリア",
   "colorEyedropper": {
     "buttonTitle": "画像から色を選択",
@@ -190,6 +191,7 @@
       "washIntervalDefault": "デフォルト：{count}"
     },
     "primaryColor": "メインカラー",
+    "quantity": "数量",
     "subtype": "サブタイプ",
     "titles": {
       "analysisInProgress": "分析中...",

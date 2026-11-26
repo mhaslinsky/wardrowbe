@@ -120,6 +120,7 @@
     "confirmTitle": "Delete {count, plural, one {# item} other {# items}}?",
     "confirmTitleAll": "Delete all {count, plural, one {# item} other {# items}}?"
   },
+  "cleanCount": "{clean} of {total} clean",
   "clearFilters": "Clear filters",
   "colorEyedropper": {
     "buttonTitle": "Pick color from image",
@@ -190,6 +191,7 @@
       "washIntervalDefault": "Default: {count}"
     },
     "primaryColor": "Primary Color",
+    "quantity": "Quantity",
     "subtype": "Subtype",
     "titles": {
       "analysisInProgress": "Analysis in progress...",
