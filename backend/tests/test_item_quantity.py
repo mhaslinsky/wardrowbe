@@ -6,6 +6,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.item import ClothingItem, ItemStatus
+from app.schemas.item import ItemUpdate
 from app.services.item_service import ItemService
 
 
@@ -158,3 +159,20 @@ async def test_wash_overrides_changes_made_after_the_item_was_loaded(
         0,
         False,
     )
+
+
+@pytest.mark.asyncio
+async def test_quantity_change_uses_counters_committed_after_the_item_was_loaded(
+    test_user, db_session: AsyncSession, session_maker
+):
+    item = await _make_item(db_session, test_user.id, quantity=2)
+    async with session_maker() as other:
+        await other.execute(
+            update(ClothingItem).where(ClothingItem.id == item.id).values(clean_count=1)
+        )
+        await other.commit()
+
+    await ItemService(db_session).update(item, ItemUpdate(quantity=3))
+    await db_session.commit()
+    await db_session.refresh(item)
+    assert (item.quantity, item.clean_count, item.needs_wash) == (3, 2, False)

@@ -266,6 +266,13 @@ class ItemService:
         for field, value in update_data.items():
             setattr(item, field, value)
 
+        if new_quantity is not None:
+            # Lock the row and reread the counters, so a wear or wash since the load isn't overwritten.
+            await self.db.refresh(
+                item,
+                ["quantity", "clean_count", "wears_since_wash", "needs_wash"],
+                with_for_update=True,
+            )
         if new_quantity is not None and new_quantity != item.quantity:
             # Added copies arrive clean; a lower quantity clamps the clean count.
             added = max(0, new_quantity - item.quantity)
