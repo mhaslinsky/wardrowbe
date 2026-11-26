@@ -233,7 +233,8 @@
       "wearsSinceWash": "洗濯後の着用：{current}/{max}",
       "wornCount": "{count, plural, one {# 回着用} other {# 回着用}}"
     },
-    "washInterval": "洗濯間隔"
+    "washInterval": "洗濯間隔",
+    "indoorOnly": "屋内のみ"
   },
   "lightbox": {
     "openInWardrobe": "ワードローブで開く"

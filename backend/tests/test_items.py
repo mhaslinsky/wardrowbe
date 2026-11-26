@@ -173,6 +173,40 @@ class TestItemCRUD:
         assert data["brand"] == "Test Brand"
 
     @pytest.mark.asyncio
+    async def test_indoor_only_defaults_false_and_round_trips_through_patch(
+        self, client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
+    ):
+        item = ClothingItem(
+            user_id=test_user.id,
+            type="pants",
+            image_path="test/item.jpg",
+            status=ItemStatus.ready,
+        )
+        db_session.add(item)
+        await db_session.commit()
+
+        response = await client.get(f"/api/v1/items/{item.id}", headers=auth_headers)
+        assert response.json()["indoor_only"] is False
+
+        response = await client.patch(
+            f"/api/v1/items/{item.id}", json={"indoor_only": True}, headers=auth_headers
+        )
+        assert response.status_code == 200, response.json()
+        assert response.json()["indoor_only"] is True
+        response = await client.get(f"/api/v1/items/{item.id}", headers=auth_headers)
+        assert response.json()["indoor_only"] is True
+
+        response = await client.patch(
+            f"/api/v1/items/{item.id}", json={"name": "Sweatpants"}, headers=auth_headers
+        )
+        assert response.json()["indoor_only"] is True
+
+        response = await client.patch(
+            f"/api/v1/items/{item.id}", json={"indoor_only": False}, headers=auth_headers
+        )
+        assert response.json()["indoor_only"] is False
+
+    @pytest.mark.asyncio
     async def test_update_item_not_found(self, client: AsyncClient, test_user, auth_headers):
         """Test updating a non-existent item."""
         response = await client.patch(
@@ -1845,3 +1879,31 @@ class TestItemColorNormalisation:
 
         assert response.status_code == 200, response.text
         assert [i["id"] for i in response.json()["items"]] == [str(item.id)]
+
+
+@pytest.mark.asyncio
+async def test_patch_indoor_only_null_rejected(
+    client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
+):
+    item = ClothingItem(
+        user_id=test_user.id, type="pants", image_path="test/pants.jpg", status=ItemStatus.ready
+    )
+    db_session.add(item)
+    await db_session.commit()
+    await db_session.refresh(item)
+    response = await client.patch(
+        f"/api/v1/items/{item.id}", json={"indoor_only": None}, headers=auth_headers
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_item_stores_indoor_only(client: AsyncClient, auth_headers):
+    response = await client.post(
+        "/api/v1/items",
+        files={"image": ("sweats.jpg", _make_test_image_bytes(), "image/jpeg")},
+        data={"indoor_only": "true", "skip_ai": "true"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["indoor_only"] is True
