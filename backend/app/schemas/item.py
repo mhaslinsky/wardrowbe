@@ -63,6 +63,7 @@ class ItemUpdate(BaseModel):
     colors: ColorList | None = None
     primary_color: ColorName | None = None
     wash_interval: int | None = None
+    quantity: int | None = Field(None, ge=1, le=99)
 
 
 class ItemResponse(ItemBase):
@@ -126,6 +127,8 @@ class ItemResponse(ItemBase):
     last_washed_at: date | None = None
     wash_interval: int | None = None
     needs_wash: bool = False
+    quantity: int = 1
+    clean_count: int = 1
     additional_images: list["ItemImageResponse"] = Field(default_factory=list)
     is_archived: bool = False
     archived_at: datetime | None = None

@@ -120,6 +120,7 @@
     "confirmTitle": "{count, plural, one {# Stück} other {# Stücke}} löschen?",
     "confirmTitleAll": "Alle {count, plural, one {# Stück} other {# Stücke}} löschen?"
   },
+  "cleanCount": "{clean} von {total} sauber",
   "clearFilters": "Filter zurücksetzen",
   "colorEyedropper": {
     "buttonTitle": "Farbe aus Bild wählen",
@@ -187,6 +188,7 @@
       "washIntervalDefault": "Standard: {count}"
     },
     "primaryColor": "Hauptfarbe",
+    "quantity": "Anzahl",
     "subtype": "Untertyp",
     "titles": {
       "analysisInProgress": "Analyse läuft...",

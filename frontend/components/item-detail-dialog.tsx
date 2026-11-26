@@ -102,6 +102,7 @@ interface EditForm {
   favorite: boolean;
   indoor_only: boolean;
   wash_interval: number | undefined;
+  quantity: number | undefined;
 }
 
 function editFormFromItem(item: Item): EditForm {
@@ -117,6 +118,7 @@ function editFormFromItem(item: Item): EditForm {
     favorite: item.favorite,
     indoor_only: item.indoor_only ?? false,
     wash_interval: item.wash_interval ?? undefined,
+    quantity: item.quantity,
   };
 }
 
@@ -152,6 +154,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     favorite: false,
     indoor_only: false,
     wash_interval: undefined,
+    quantity: 1,
   });
   const [showWashHistory, setShowWashHistory] = useState(false);
   const [showWearHistory, setShowWearHistory] = useState(false);
@@ -200,6 +203,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           favorite: editForm.favorite,
           indoor_only: editForm.indoor_only,
           wash_interval: editForm.wash_interval,
+          quantity: editForm.quantity,
         },
       });
       setIsEditing(false);
@@ -733,6 +737,20 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="item-quantity">{t('quantity')}</Label>
+                    <Input
+                      id="item-quantity"
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={editForm.quantity ?? ''}
+                      onChange={(e) => {
+                        const parsed = parseInt(e.target.value, 10);
+                        setEditForm({ ...editForm, quantity: Number.isNaN(parsed) ? undefined : Math.min(99, Math.max(1, parsed)) });
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label>{t('washInterval')} ({t('view.wears')})</Label>
                     <Input
                       type="number"
@@ -863,6 +881,9 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{t('view.wearsSinceWash', { current: item.wears_since_wash, max: item.effective_wash_interval })}</span>
+                        {item.quantity > 1 && (
+                          <span>{tw('cleanCount', { clean: item.clean_count, total: item.quantity })}</span>
+                        )}
                         {item.needs_wash && (
                           <span className="text-amber-500 font-medium">{t('view.needsWashing')}</span>
                         )}

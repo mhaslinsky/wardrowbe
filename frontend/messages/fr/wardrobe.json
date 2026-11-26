@@ -120,6 +120,7 @@
     "confirmTitle": "{count, plural, one {Supprimer # article ?} other {Supprimer # articles ?}}",
     "confirmTitleAll": "{count, plural, one {Supprimer # article ?} other {Supprimer tous les # articles ?}}"
   },
+  "cleanCount": "{clean, plural, one {# sur {total} propre} other {# sur {total} propres}}",
   "clearFilters": "Effacer les filtres",
   "colorEyedropper": {
     "buttonTitle": "Choisir une couleur depuis l'image",
@@ -187,6 +188,7 @@
       "washIntervalDefault": "Par défaut : {count}"
     },
     "primaryColor": "Couleur principale",
+    "quantity": "Quantité",
     "subtype": "Sous-type",
     "titles": {
       "analysisInProgress": "Analyse en cours...",
