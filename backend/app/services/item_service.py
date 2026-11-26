@@ -269,6 +269,9 @@ class ItemService:
         if new_quantity is not None and new_quantity != item.quantity:
             # Added copies arrive clean; a lower quantity clamps the clean count.
             added = max(0, new_quantity - item.quantity)
+            if item.clean_count == 0 and added:
+                # The worn count belonged to a copy now in the wash, not the new clean one.
+                item.wears_since_wash = 0
             item.clean_count = max(0, min(new_quantity, item.clean_count + added))
             item.quantity = new_quantity
             item.needs_wash = item.clean_count == 0

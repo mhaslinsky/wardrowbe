@@ -94,6 +94,7 @@ async def test_raising_quantity_adds_clean_copies(
     )
     data = response.json()
     assert (data["quantity"], data["clean_count"], data["needs_wash"]) == (3, 2, False)
+    assert data["wears_since_wash"] == 0
 
 
 @pytest.mark.asyncio
