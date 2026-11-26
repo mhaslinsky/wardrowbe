@@ -197,6 +197,11 @@ class TestItemCRUD:
         assert response.json()["indoor_only"] is True
 
         response = await client.patch(
+            f"/api/v1/items/{item.id}", json={"name": "Sweatpants"}, headers=auth_headers
+        )
+        assert response.json()["indoor_only"] is True
+
+        response = await client.patch(
             f"/api/v1/items/{item.id}", json={"indoor_only": False}, headers=auth_headers
         )
         assert response.json()["indoor_only"] is False
@@ -1890,3 +1895,15 @@ async def test_patch_indoor_only_null_rejected(
         f"/api/v1/items/{item.id}", json={"indoor_only": None}, headers=auth_headers
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_item_stores_indoor_only(client: AsyncClient, auth_headers):
+    response = await client.post(
+        "/api/v1/items",
+        files={"image": ("sweats.jpg", _make_test_image_bytes(), "image/jpeg")},
+        data={"indoor_only": "true", "skip_ai": "true"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["indoor_only"] is True

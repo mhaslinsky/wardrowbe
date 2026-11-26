@@ -327,7 +327,7 @@ class RecommendationService:
         items = [i for i in items if not i.needs_wash]
         items = [i for i in items if i.type and i.type != "unknown"]
         if occasion.lower() not in INDOOR_OCCASIONS:
-            items = [i for i in items if not i.indoor_only]
+            items = [item for item in items if not item.indoor_only]
 
         if exclude_items:
             exclude_set = set(exclude_items)
