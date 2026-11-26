@@ -40,6 +40,7 @@ class ItemBase(BaseModel):
     purchase_date: date | None = None
     purchase_price: Decimal | None = Field(None, ge=0)
     favorite: bool = False
+    indoor_only: bool = False
 
 
 class ItemCreate(ItemBase):
@@ -57,6 +58,7 @@ class ItemUpdate(BaseModel):
     purchase_date: date | None = None
     purchase_price: Decimal | None = Field(None, ge=0)
     favorite: bool | None = None
+    indoor_only: bool = False  # explicit null would hit the NOT NULL column
     tags: ItemTags | None = None
     colors: ColorList | None = None
     primary_color: ColorName | None = None

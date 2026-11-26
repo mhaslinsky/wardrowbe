@@ -235,7 +235,8 @@
       "wearsSinceWash": "Wears since wash: {current}/{max}",
       "wornCount": "{count, plural, one {Worn # time} other {Worn # times}}"
     },
-    "washInterval": "Wash Interval"
+    "washInterval": "Wash Interval",
+    "indoorOnly": "Indoor only"
   },
   "lightbox": {
     "openInWardrobe": "Open in Wardrobe"

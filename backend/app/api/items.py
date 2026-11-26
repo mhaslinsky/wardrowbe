@@ -199,6 +199,7 @@ async def create_item(
     colors: str | None = Form(None),
     primary_color: str | None = Form(None),
     favorite: bool = Form(False),
+    indoor_only: bool = Form(False),
     skip_ai: bool = Form(False),
 ) -> ItemResponse:
     # Validate and process image
@@ -255,6 +256,7 @@ async def create_item(
         colors=color_list,
         primary_color=primary_color,
         favorite=favorite,
+        indoor_only=indoor_only,
     )
 
     item = await item_service.create(

@@ -230,6 +230,7 @@ class ItemService:
             purchase_date=item_data.purchase_date,
             purchase_price=item_data.purchase_price,
             favorite=item_data.favorite,
+            indoor_only=item_data.indoor_only,
         )
 
         self.db.add(item)

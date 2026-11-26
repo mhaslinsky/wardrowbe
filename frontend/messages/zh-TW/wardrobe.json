@@ -235,7 +235,8 @@
       "wearsSinceWash": "洗滌後穿著次數：{current}/{max}",
       "wornCount": "{count, plural, one {已穿著 # 次} other {已穿著 # 次}}"
     },
-    "washInterval": "洗滌間隔"
+    "washInterval": "洗滌間隔",
+    "indoorOnly": "僅限室內"
   },
   "lightbox": {
     "openInWardrobe": "在衣櫥中開啟"

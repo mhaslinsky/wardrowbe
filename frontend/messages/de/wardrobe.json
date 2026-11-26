@@ -235,7 +235,8 @@
       "wearsSinceWash": "Getragen seit Wäsche: {current}/{max}",
       "wornCount": "{count, plural, one {# Mal getragen} other {# Mal getragen}}"
     },
-    "washInterval": "Waschintervall"
+    "washInterval": "Waschintervall",
+    "indoorOnly": "Nur drinnen"
   },
   "lightbox": {
     "openInWardrobe": "Im Kleiderschrank öffnen"
