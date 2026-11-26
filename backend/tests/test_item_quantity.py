@@ -1,8 +1,12 @@
+from datetime import date
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.item import ClothingItem, ItemStatus
+from app.services.item_service import ItemService
 
 
 async def _make_item(
@@ -128,3 +132,29 @@ async def test_next_copy_starts_clean_when_interval_is_above_one(
         (2, 1, False),
         (3, 0, True),
     ]
+
+
+@pytest.mark.asyncio
+async def test_wash_overrides_changes_made_after_the_item_was_loaded(
+    test_user, db_session: AsyncSession, session_maker
+):
+    item = await _make_item(db_session, test_user.id, quantity=3)
+    item.clean_count = 1
+    await db_session.commit()
+    async with session_maker() as other:
+        await other.execute(
+            update(ClothingItem)
+            .where(ClothingItem.id == item.id)
+            .values(quantity=1, clean_count=0, wears_since_wash=1, needs_wash=True)
+        )
+        await other.commit()
+
+    await ItemService(db_session).log_wash(item, date(2026, 11, 26))
+    await db_session.commit()
+    await db_session.refresh(item)
+    assert (item.quantity, item.clean_count, item.wears_since_wash, item.needs_wash) == (
+        1,
+        1,
+        0,
+        False,
+    )

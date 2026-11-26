@@ -739,7 +739,10 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       min={1}
                       max={99}
                       value={editForm.quantity ?? ''}
-                      onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value ? Math.min(99, Math.max(1, parseInt(e.target.value))) : undefined })}
+                      onChange={(e) => {
+                        const parsed = parseInt(e.target.value, 10);
+                        setEditForm({ ...editForm, quantity: Number.isNaN(parsed) ? undefined : Math.min(99, Math.max(1, parsed)) });
+                      }}
                     />
                   </div>
                   <div className="space-y-2">

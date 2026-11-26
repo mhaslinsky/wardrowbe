@@ -539,12 +539,19 @@ class ItemService:
         )
         self.db.add(wash)
 
-        # Reset wash tracking
-        item.wears_since_wash = 0
-        item.last_washed_at = washed_at
-        item.needs_wash = False
-        # From the row, not the loaded item, so a quantity lowered since the load still fits the CHECK.
-        item.clean_count = ClothingItem.quantity
+        # One UPDATE that writes every field: ORM change tracking skips values that match the
+        # loaded item, so a wear or quantity change since the load would survive the wash.
+        await self.db.execute(
+            update(ClothingItem)
+            .where(ClothingItem.id == item.id)
+            .values(
+                wears_since_wash=0,
+                last_washed_at=washed_at,
+                needs_wash=False,
+                clean_count=ClothingItem.quantity,
+            )
+        )
+        self.db.expire(item)
 
         await self.db.flush()
         await self.db.refresh(wash)
