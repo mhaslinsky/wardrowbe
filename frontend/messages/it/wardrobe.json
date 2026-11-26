@@ -120,6 +120,7 @@
     "confirmTitle": "Eliminare {count, plural, one {# capo} other {# capi}}?",
     "confirmTitleAll": "{count, plural, one {Eliminare # capo?} other {Eliminare tutti i capi (#)?}}"
   },
+  "cleanCount": "{clean} su {total} puliti",
   "clearFilters": "Cancella filtri",
   "colorEyedropper": {
     "buttonTitle": "Scegli colore dall'immagine",
@@ -187,6 +188,7 @@
       "washIntervalDefault": "Predefinito: {count}"
     },
     "primaryColor": "Colore principale",
+    "quantity": "Quantità",
     "subtype": "Sottotipo",
     "titles": {
       "analysisInProgress": "Analisi in corso...",

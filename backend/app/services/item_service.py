@@ -2,7 +2,7 @@ from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy import and_, case, func, not_, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes, selectinload
 
@@ -262,8 +262,16 @@ class ItemService:
                     merged[key] = val
             update_data["tags"] = merged
 
+        new_quantity = update_data.pop("quantity", None)
         for field, value in update_data.items():
             setattr(item, field, value)
+
+        if new_quantity is not None and new_quantity != item.quantity:
+            # Added copies arrive clean; a lower quantity clamps the clean count.
+            added = max(0, new_quantity - item.quantity)
+            item.clean_count = max(0, min(new_quantity, item.clean_count + added))
+            item.quantity = new_quantity
+            item.needs_wash = item.clean_count == 0
 
         if "tags" in update_data:
             attributes.flag_modified(item, "tags")
@@ -476,7 +484,10 @@ class ItemService:
                 else DEFAULT_WASH_INTERVALS.get(item.type, 3)
             )
             # Updated in SQL so that concurrent wears both count, and last_worn_at only moves
-            # forward when an older wear is logged late.
+            # forward when an older wear is logged late. A copy that reaches its wash interval
+            # goes in the wash; the next clean copy starts at zero wears.
+            copy_dirtied = ClothingItem.wears_since_wash + 1 >= effective_interval
+            next_copy_clean = ClothingItem.clean_count - 1 > 0
             await self.db.execute(
                 update(ClothingItem)
                 .where(ClothingItem.id == item.id)
@@ -485,8 +496,16 @@ class ItemService:
                     last_worn_at=func.greatest(
                         func.coalesce(ClothingItem.last_worn_at, worn_at), worn_at
                     ),
-                    wears_since_wash=ClothingItem.wears_since_wash + 1,
-                    needs_wash=ClothingItem.wears_since_wash + 1 >= effective_interval,
+                    wears_since_wash=case(
+                        (and_(copy_dirtied, next_copy_clean), 0),
+                        else_=ClothingItem.wears_since_wash + 1,
+                    ),
+                    clean_count=case(
+                        (copy_dirtied, func.greatest(ClothingItem.clean_count - 1, 0)),
+                        else_=ClothingItem.clean_count,
+                    ),
+                    needs_wash=and_(copy_dirtied, not_(next_copy_clean))
+                    | (ClothingItem.clean_count <= 0),
                 )
             )
             history = ItemHistory(
@@ -521,6 +540,7 @@ class ItemService:
         item.wears_since_wash = 0
         item.last_washed_at = washed_at
         item.needs_wash = False
+        item.clean_count = item.quantity
 
         await self.db.flush()
         await self.db.refresh(wash)

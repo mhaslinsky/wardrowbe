@@ -100,6 +100,7 @@ interface EditForm {
   notes: string;
   favorite: boolean;
   wash_interval: number | undefined;
+  quantity: number;
 }
 
 function editFormFromItem(item: Item): EditForm {
@@ -114,6 +115,7 @@ function editFormFromItem(item: Item): EditForm {
     notes: item.notes || '',
     favorite: item.favorite,
     wash_interval: item.wash_interval ?? undefined,
+    quantity: item.quantity ?? 1,
   };
 }
 
@@ -148,6 +150,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     notes: '',
     favorite: false,
     wash_interval: undefined,
+    quantity: 1,
   });
   const [showWashHistory, setShowWashHistory] = useState(false);
   const [showWearHistory, setShowWearHistory] = useState(false);
@@ -195,6 +198,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           notes: editForm.notes || undefined,
           favorite: editForm.favorite,
           wash_interval: editForm.wash_interval,
+          quantity: editForm.quantity,
         },
       });
       setIsEditing(false);
@@ -728,6 +732,17 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="item-quantity">{t('quantity')}</Label>
+                    <Input
+                      id="item-quantity"
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={editForm.quantity}
+                      onChange={(e) => setEditForm({ ...editForm, quantity: Math.min(99, Math.max(1, parseInt(e.target.value) || 1)) })}
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label>{t('washInterval')} ({t('view.wears')})</Label>
                     <Input
                       type="number"
@@ -850,6 +865,9 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{t('view.wearsSinceWash', { current: item.wears_since_wash, max: item.effective_wash_interval })}</span>
+                        {item.quantity > 1 && (
+                          <span>{tw('cleanCount', { clean: item.clean_count, total: item.quantity })}</span>
+                        )}
                         {item.needs_wash && (
                           <span className="text-amber-500 font-medium">{t('view.needsWashing')}</span>
                         )}

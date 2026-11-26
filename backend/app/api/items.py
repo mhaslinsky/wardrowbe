@@ -1490,7 +1490,7 @@ async def log_item_wash(
             detail="Item not found",
         )
 
-    if item.wears_since_wash == 0:
+    if item.wears_since_wash == 0 and item.clean_count >= item.quantity:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Item is already clean (0 wears since last wash)",

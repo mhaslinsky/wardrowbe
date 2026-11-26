@@ -131,6 +131,10 @@ class ClothingItem(Base):
     last_washed_at: Mapped[date | None] = mapped_column(Date)
     wash_interval: Mapped[int | None] = mapped_column(Integer)
     needs_wash: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Identical copies owned (three pairs of the same socks). needs_wash is true only
+    # once clean_count reaches zero, so suggestions keep using the item until then.
+    quantity: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    clean_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 
     # AI description (human-readable caption)
     ai_description: Mapped[str | None] = mapped_column(Text)
