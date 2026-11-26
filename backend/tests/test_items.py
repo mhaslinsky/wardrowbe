@@ -1874,3 +1874,19 @@ class TestItemColorNormalisation:
 
         assert response.status_code == 200, response.text
         assert [i["id"] for i in response.json()["items"]] == [str(item.id)]
+
+
+@pytest.mark.asyncio
+async def test_patch_indoor_only_null_rejected(
+    client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
+):
+    item = ClothingItem(
+        user_id=test_user.id, type="pants", image_path="test/pants.jpg", status=ItemStatus.ready
+    )
+    db_session.add(item)
+    await db_session.commit()
+    await db_session.refresh(item)
+    response = await client.patch(
+        f"/api/v1/items/{item.id}", json={"indoor_only": None}, headers=auth_headers
+    )
+    assert response.status_code == 422
