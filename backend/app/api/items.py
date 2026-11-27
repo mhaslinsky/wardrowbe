@@ -1575,6 +1575,7 @@ async def put_item_in_the_wash(
         raise HTTPException(422, "Glasses do not need washing")
     item.manually_needs_wash = True
     item.needs_wash = True
+    item.clean_count = 0
     await db.flush()
     await db.refresh(item)
     return ItemResponse.model_validate(item)

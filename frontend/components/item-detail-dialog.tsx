@@ -182,6 +182,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
   const { data: features } = useFeatures();
   const logWear = useLogWear();
   const logWash = useLogWash();
+  const hasDirtyCopies = Boolean(item && (item.needs_wash || item.clean_count < item.quantity));
   const putInWash = usePutInWash();
   const { data: washHistory } = useWashHistory(item?.id || '');
   const { data: wearStats } = useItemWearStats(item?.id || '');
@@ -820,8 +821,8 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                       min={1}
                       max={99}
                       value={editForm.quantity ?? ''}
-                      onChange={(e) => {
-                        const parsed = parseInt(e.target.value, 10);
+                      onChange={(event) => {
+                        const parsed = parseInt(event.target.value, 10);
                         setEditForm({ ...editForm, quantity: Number.isNaN(parsed) ? undefined : Math.min(99, Math.max(1, parsed)) });
                       }}
                     />
@@ -953,7 +954,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                           variant="outline"
                           size="sm"
                           className="h-7 text-xs"
-                          onClick={item.needs_wash ? handleMarkWashed : handlePutInWash}
+                          onClick={hasDirtyCopies ? handleMarkWashed : handlePutInWash}
                           disabled={logWash.isPending || putInWash.isPending}
                         >
                           {logWash.isPending || putInWash.isPending ? (
@@ -961,7 +962,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                           ) : (
                             <Droplets className="h-3 w-3 mr-1" />
                           )}
-                          {t(item.needs_wash ? 'actions.markWashed' : 'actions.putInWash')}
+                          {t(hasDirtyCopies ? 'actions.markWashed' : 'actions.putInWash')}
                         </Button>
                       </div>
                     </div>

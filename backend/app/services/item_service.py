@@ -266,7 +266,13 @@ class ItemService:
             # Lock the row and reread the counters, so a wear or wash since the load isn't overwritten.
             await self.db.refresh(
                 item,
-                ["quantity", "clean_count", "wears_since_wash", "needs_wash"],
+                [
+                    "quantity",
+                    "clean_count",
+                    "wears_since_wash",
+                    "needs_wash",
+                    "manually_needs_wash",
+                ],
                 with_for_update=True,
             )
         if new_quantity is not None and new_quantity != item.quantity:
@@ -277,7 +283,7 @@ class ItemService:
                 item.wears_since_wash = 0
             item.clean_count = max(0, min(new_quantity, item.clean_count + added))
             item.quantity = new_quantity
-            item.needs_wash = item.clean_count == 0
+            item.needs_wash = item.manually_needs_wash or item.clean_count == 0
         clear_unneeded_wash_state(item)
 
         if "tags" in update_data:
@@ -526,7 +532,7 @@ class ItemService:
                         else_=or_(
                             ClothingItem.manually_needs_wash,
                             and_(copy_dirtied, not_(next_copy_clean)),
-                            ClothingItem.clean_count <= 0,
+                            (ClothingItem.clean_count <= 0) & (effective_interval != 999),
                         ),
                     ),
                 )

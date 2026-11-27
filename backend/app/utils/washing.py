@@ -18,6 +18,7 @@ def clear_unneeded_wash_state(item) -> None:
         item.needs_wash = False
         item.manually_needs_wash = False
         item.wears_since_wash = 0
+        item.clean_count = item.quantity
 
 
 def wash_interval(item) -> int:
@@ -41,6 +42,7 @@ def replay_copy_wears(item, wears: int) -> None:
             clean_count = max(clean_count - 1, 0)
             if clean_count > 0:
                 wears_since_wash = 0
-    item.clean_count = clean_count
+    # A manual "in the wash" covers every copy, as put_item_in_the_wash records it.
+    item.clean_count = 0 if item.manually_needs_wash else clean_count
     item.wears_since_wash = wears_since_wash
     item.needs_wash = item.manually_needs_wash or clean_count == 0

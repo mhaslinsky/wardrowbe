@@ -10,6 +10,7 @@ from app.models.item import ClothingItem, ItemStatus
 from app.schemas.item import ItemUpdate
 from app.services.item_service import ItemService
 from app.utils.washing import replay_copy_wears
+from tests.test_ha_actions import LAUNDRY_DONE, TOKEN, _ha_settings
 
 
 async def _make_item(
@@ -202,3 +203,74 @@ def test_undo_replays_wears_copy_by_copy(wears, expected):
     )
     replay_copy_wears(item, wears)
     assert (item.clean_count, item.wears_since_wash, item.needs_wash) == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("start", "new", "clean"), [(1, 2, 1), (3, 2, 0)])
+async def test_quantity_edit_keeps_an_item_put_in_the_wash(
+    client: AsyncClient, test_user, auth_headers, db_session: AsyncSession, start, new, clean
+):
+    item = await _make_item(db_session, test_user.id, quantity=start)
+    response = await client.post(f"/api/v1/items/{item.id}/in-the-wash", headers=auth_headers)
+    assert (response.json()["needs_wash"], response.json()["clean_count"]) == (True, 0)
+    response = await client.patch(
+        f"/api/v1/items/{item.id}", json={"quantity": new}, headers=auth_headers
+    )
+    body = response.json()
+    assert (body["needs_wash"], body["clean_count"]) == (True, clean)
+    response = await client.post(f"/api/v1/items/{item.id}/wash", json={}, headers=auth_headers)
+    assert response.status_code == 200, response.json()
+
+
+@pytest.mark.asyncio
+async def test_laundry_done_washes_an_item_with_some_copies_dirty(
+    client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
+):
+    item = await _make_item(db_session, test_user.id, quantity=3)
+    await _wear(client, item.id, auth_headers)
+    with _ha_settings(test_user):
+        response = await client.post(LAUNDRY_DONE, json={}, headers={"X-HA-Token": TOKEN})
+    assert response.json() == {"ok": True, "washed": 1}
+    await db_session.refresh(item)
+    assert (item.clean_count, item.needs_wash) == (3, False)
+
+
+@pytest.mark.asyncio
+async def test_retyping_as_glasses_brings_every_copy_back(
+    client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
+):
+    item = await _make_item(db_session, test_user.id, quantity=2)
+    await _wear(client, item.id, auth_headers)
+    await _wear(client, item.id, auth_headers)
+    response = await client.patch(
+        f"/api/v1/items/{item.id}", json={"type": "glasses"}, headers=auth_headers
+    )
+    body = response.json()
+    assert (body["clean_count"], body["needs_wash"]) == (2, False)
+
+
+@pytest.mark.asyncio
+async def test_a_never_wash_interval_frees_an_item_with_no_clean_copies(
+    client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
+):
+    item = await _make_item(db_session, test_user.id)
+    assert (await _wear(client, item.id, auth_headers))["needs_wash"] is True
+    response = await client.patch(
+        f"/api/v1/items/{item.id}", json={"wash_interval": 999}, headers=auth_headers
+    )
+    assert response.status_code == 200, response.json()
+    assert (await _wear(client, item.id, auth_headers))["needs_wash"] is False
+
+
+def test_undo_replay_keeps_an_item_put_in_the_wash():
+    item = SimpleNamespace(
+        type="t-shirt",
+        wash_interval=3,
+        quantity=2,
+        manually_needs_wash=True,
+        clean_count=None,
+        wears_since_wash=None,
+        needs_wash=None,
+    )
+    replay_copy_wears(item, 0)
+    assert (item.clean_count, item.needs_wash) == (0, True)
