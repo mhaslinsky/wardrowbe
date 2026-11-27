@@ -162,8 +162,8 @@ class ClothingItem(Base):
     manually_needs_wash: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
-    # Identical copies owned (three pairs of the same socks). needs_wash is true when no
-    # copy is clean or the manual wash flag is set, so suggestions keep using it until then.
+    # Identical copies owned (three pairs of the same socks). needs_wash is true while the
+    # manual wash flag is set, or when no copy is clean and the type isn't set to Never.
     quantity: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     clean_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 

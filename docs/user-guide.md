@@ -35,7 +35,7 @@ Open an item, choose **Edit item**, correct its details, then save. Add useful f
 
 If you own several identical copies of a piece, such as three pairs of the same socks, set **Quantity** (1 to 99) in **Edit item** and keep one wardrobe item for all of them. The wardrobe card and the item dialog then show how many copies are clean (for example, **2 of 3 clean**). Raising the quantity adds clean copies, and lowering it never leaves more clean copies than you own. Glasses have no quantity. See [laundry](#keep-laundry-up-to-date) for how copies are counted.
 
-Turn on **Indoor only** in **Edit item** for pieces you only wear at home, such as sweatpants or loungewear. Outfit suggestions and trip plans then use them only for the **Lounge** occasion. The web app shows **Lounge** only when it's already your saved default occasion, so on the web an indoor-only piece usually gets suggested only when you pick it under **Build around a specific piece (optional)**. Pairings ignore the setting.
+Turn on **Indoor only** in **Edit item** for pieces you only wear at home, such as sweatpants or loungewear. Wherever Wardrowbe picks clothes for you, it uses them only for the **Lounge** occasion: outfit suggestions, scheduled outfits, trip plans, **What would I wear it with?** and inspiration matches. Two exceptions: a piece you pick under **Build around a specific piece (optional)** is always used, and Pairings ignore the setting. On the web, an occasion picker shows **Lounge** only when it's already your saved default, **Trips** never offers it, and Inspiration always plans for a casual occasion.
 
 The item dialog also lets you rotate or replace photos, remove a background, choose a primary image, retry AI analysis, toggle a favorite, and delete an item. Deletion asks for confirmation and cannot be undone.
 
@@ -89,7 +89,7 @@ The **Pairings** page collects outfits built around source pieces. Filter by the
 3. Inspect the matched pieces and match percentages. **No match** means a part of the inspiration had no match; an **Added base layer** is shown separately.
 4. Use **Open outfit** to inspect the saved outfit. You can delete a saved inspiration look after confirming.
 
-Inspiration uses what is already in your wardrobe. Review missing matches before using the outfit.
+Inspiration uses what is already in your wardrobe, except pieces marked **Indoor only**. Review missing matches before using the outfit.
 
 Sources: [suggest page](../frontend/app/dashboard/suggest/page.tsx), [pairings page](../frontend/app/dashboard/pairings/page.tsx), [pairing dialog](../frontend/components/generate-pairings-dialog.tsx), [pairing card](../frontend/components/pairing-card.tsx), [inspiration page](../frontend/app/dashboard/inspiration/page.tsx), [inspiration service](../backend/app/services/inspiration_service.py).
 
@@ -166,7 +166,7 @@ Sources: [item dialog](../frontend/components/item-detail-dialog.tsx), [item upd
 
 Each day identifies whether its weather comes from a forecast or a climate average. Check that source when planning far ahead. Overlapping trips are rejected. Deleting a trip preserves worn days.
 
-Trip planning needs available clothes, working AI planning, and destination weather. If it fails, check the dates and wardrobe, then ask the operator if AI or weather is unavailable.
+Trips leave out pieces marked **Indoor only**. Trip planning needs available clothes, working AI planning, and destination weather. If it fails, check the dates and wardrobe, then ask the operator if AI or weather is unavailable.
 
 Sources: [trip planning service](../backend/app/services/trip_service.py), [trips page](../frontend/app/dashboard/trips/page.tsx), [trip labels](../frontend/messages/en/trips.json).
 
