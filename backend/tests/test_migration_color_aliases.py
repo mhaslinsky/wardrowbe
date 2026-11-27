@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ClothingItem, User, UserPreference
 from app.utils.garment_vocabulary import canonical_color
-from tests.migration_helpers import migration_downgrade
+from tests.migration_helpers import insert_at_revision, migration_downgrade
 
 REVISION = "952169051179"
 PREVIOUS = "d5e6f7a8b9c0"
@@ -55,8 +55,9 @@ async def test_remaps_and_deduplicates_colours_idempotently(
 ):
     user_id = test_user.id
     async with migration_downgrade(db_session, PREVIOUS):
-        db_session.add_all(
-            [
+        await insert_at_revision(
+            db_session,
+            *[
                 ClothingItem(
                     user_id=user_id,
                     type="pants",
@@ -99,7 +100,7 @@ async def test_remaps_and_deduplicates_colours_idempotently(
                     image_path="v.jpg",
                     primary_color="\u00a0\u200b\t ",
                 ),
-            ]
+            ],
         )
         await db_session.flush()
         await db_session.execute(

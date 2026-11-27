@@ -4,13 +4,13 @@ import pytest
 from sqlalchemy import func, select
 
 from app.main import app
-from app.models.item import ItemHistory
+from app.models.item import ClothingItem, ItemHistory, ItemStatus
 from app.models.user import User
 from app.services.recommendation_service import RecommendationService
 from app.services.wear_service import WearService
 from app.utils.auth import get_current_user
 from app.utils.timezone import get_user_today
-from tests.migration_helpers import migration_downgrade
+from tests.migration_helpers import insert_at_revision, migration_downgrade
 from tests.test_ha_actions import LAUNDRY_DONE, TOKEN, _ha_settings, _item
 from tests.test_wear_service import source
 
@@ -114,8 +114,20 @@ async def test_manual_flags_survive_migration_rollback(client, db_session, test_
     async with migration_downgrade(db_session, "e189a1b2c3d4"):
         await db_session.refresh(item, ["manually_needs_wash"])
         assert item.manually_needs_wash is True
-        another = await _item(db_session, test_user, "jeans")
-        assert another.manually_needs_wash is False
+        another = ClothingItem(
+            id=uuid4(),
+            user_id=test_user.id,
+            type="jeans",
+            image_path="test/jeans.jpg",
+            status=ItemStatus.ready,
+        )
+        await insert_at_revision(db_session, another, server_default=("manually_needs_wash",))
+        assert (
+            await db_session.scalar(
+                select(ClothingItem.manually_needs_wash).where(ClothingItem.id == another.id)
+            )
+            is False
+        )
     await db_session.refresh(item)
     assert item.id == item_id
     assert item.manually_needs_wash is True

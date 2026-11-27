@@ -208,6 +208,7 @@ async def create_item(
     colors: str | None = Form(None),
     primary_color: str | None = Form(None),
     favorite: bool = Form(False),
+    indoor_only: bool = Form(False),
     skip_ai: bool = Form(False),
 ) -> ItemResponse:
     return await create_uploaded_item(
@@ -223,6 +224,7 @@ async def create_item(
         primary_color,
         favorite,
         skip_ai,
+        indoor_only=indoor_only,
     )
 
 
@@ -240,6 +242,7 @@ async def create_uploaded_item(
     favorite: bool = False,
     skip_ai: bool = False,
     purchase: ItemPurchase | None = None,
+    indoor_only: bool = False,
     additional_uploads: Sequence[UploadFile] = (),
 ) -> ItemResponse:
     # Validate and process image
@@ -296,6 +299,7 @@ async def create_uploaded_item(
         colors=color_list,
         primary_color=primary_color,
         favorite=favorite,
+        indoor_only=indoor_only,
     )
 
     item = await item_service.create(
@@ -1470,8 +1474,10 @@ async def log_item_wear(
         notes=request.notes,
     )
 
-    # Refresh to get updated wear_count
+    # A plain refresh leaves additional_images unloaded, and the response would lazy-load it
+    # outside the async context (MissingGreenlet).
     await db.refresh(item)
+    await db.refresh(item, ["additional_images"])
     return ItemResponse.model_validate(item)
 
 
@@ -1569,6 +1575,7 @@ async def put_item_in_the_wash(
         raise HTTPException(422, "Glasses do not need washing")
     item.manually_needs_wash = True
     item.needs_wash = True
+    item.clean_count = 0
     await db.flush()
     await db.refresh(item)
     return ItemResponse.model_validate(item)
@@ -1598,7 +1605,7 @@ async def log_item_wash(
 
     if never_washed(item):
         raise HTTPException(422, "Glasses do not need washing")
-    if item.wears_since_wash == 0 and not item.needs_wash:
+    if item.wears_since_wash == 0 and not item.needs_wash and item.clean_count >= item.quantity:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Item is already clean (0 wears since last wash)",
@@ -1618,6 +1625,7 @@ async def log_item_wash(
     )
 
     await db.refresh(item)
+    await db.refresh(item, ["additional_images"])
     return ItemResponse.model_validate(item)
 
 

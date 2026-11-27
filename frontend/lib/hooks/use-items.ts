@@ -226,7 +226,7 @@ export function useUpdateItem() {
     },
     onSettled: (_data, _error, variables) => {
       invalidateItemCaches(queryClient, variables.id);
-      if (variables.data.needs_wash !== undefined) {
+      if (variables.data.needs_wash !== undefined || variables.data.quantity !== undefined) {
         queryClient.invalidateQueries({ queryKey: queryKeys.outfits.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.calendarOutfits.all });
       }

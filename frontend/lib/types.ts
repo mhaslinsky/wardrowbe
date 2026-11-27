@@ -39,6 +39,7 @@ export interface Item {
   purchase_price?: number;
   favorite: boolean;
   always_in_preview?: boolean;
+  indoor_only?: boolean;
   image_path: string;
   thumbnail_path?: string;
   medium_path?: string;
@@ -71,6 +72,8 @@ export interface Item {
   last_washed_at?: string;
   wash_interval?: number | null;
   needs_wash: boolean;
+  quantity: number;
+  clean_count: number;
   effective_wash_interval: number;
   additional_images: ItemImage[];
   is_archived: boolean;

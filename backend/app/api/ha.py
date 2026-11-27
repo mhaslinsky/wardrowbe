@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, JSONResponse
-from sqlalchemy import Select, select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.config import get_settings
@@ -227,14 +227,17 @@ async def laundry_done(request: Request, db: DbSession) -> JSONResponse:
     if user is None:
         return _error(status.HTTP_404_NOT_FOUND, "user_not_found")
 
-    # A concurrent call waits on these row locks, then rechecks needs_wash and washes nothing.
+    # A concurrent call waits on these row locks, then rechecks the dirty state and washes nothing.
     result = await db.execute(
         select(ClothingItem)
         .where(
             owned_item(),
             ClothingItem.user_id == user.id,
             ClothingItem.is_archived.is_(False),
-            ClothingItem.needs_wash.is_(True),
+            or_(
+                ClothingItem.needs_wash.is_(True),
+                ClothingItem.clean_count < ClothingItem.quantity,
+            ),
             ClothingItem.type.not_in(FOOTWEAR_TYPES),
             ~never_washed(ClothingItem),
         )

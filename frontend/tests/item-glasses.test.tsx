@@ -81,5 +81,5 @@ it('hides the switch on other types and resets an unsaved change on cancel', () 
   openItem({ ...baseItem, type: 'shirt' });
   fireEvent.click(screen.getByRole('button', { name: 'Edit item' }));
   expect(screen.queryByRole('switch', { name: 'Always wear in previews' })).not.toBeInTheDocument();
-  expect(screen.getByRole('spinbutton')).toBeInTheDocument();
+  expect(screen.getByRole('spinbutton', { name: /Wash Interval/ })).toBeInTheDocument();
 });

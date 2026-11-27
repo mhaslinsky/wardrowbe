@@ -120,6 +120,7 @@
     "confirmTitle": "{count, plural, other {아이템 #개를 삭제하시겠어요?}}",
     "confirmTitleAll": "{count, plural, other {아이템 #개 전체를 삭제하시겠어요?}}"
   },
+  "cleanCount": "{total}개 중 {clean}개 깨끗함",
   "clearFilters": "필터 초기화",
   "colorEyedropper": {
     "buttonTitle": "이미지에서 색상 추출",
@@ -190,6 +191,7 @@
       "washIntervalDefault": "기본값: {count}"
     },
     "primaryColor": "메인 색상",
+    "quantity": "수량",
     "subtype": "세부 유형",
     "titles": {
       "analysisInProgress": "분석 진행 중...",
@@ -237,7 +239,8 @@
       "wornCount": "{count, plural, other {#회 착용}}"
     },
     "washInterval": "세탁 주기",
-    "alwaysInPreview": "미리보기에서 항상 착용"
+    "alwaysInPreview": "미리보기에서 항상 착용",
+    "indoorOnly": "실내 전용"
   },
   "lightbox": {
     "openInWardrobe": "옷장에서 열기"

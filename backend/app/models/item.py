@@ -162,6 +162,10 @@ class ClothingItem(Base):
     manually_needs_wash: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
+    # Identical copies owned (three pairs of the same socks). needs_wash is true while the
+    # manual wash flag is set, or when no copy is clean and the type isn't set to Never.
+    quantity: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    clean_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 
     # AI description (human-readable caption)
     ai_description: Mapped[str | None] = mapped_column(Text)
@@ -176,6 +180,7 @@ class ClothingItem(Base):
     always_in_preview: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false", nullable=False
     )
+    indoor_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     # Lifecycle
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)

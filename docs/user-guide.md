@@ -33,6 +33,10 @@ Search by name, filter by clothing type or favorites, and change the sort order 
 
 Open an item, choose **Edit item**, correct its details, then save. Add useful fit information to **Notes**, such as “roomy through the waist” or “sleeves run short.” Correcting an incorrect type or color improves future suggestions and previews. For previews to read a garment size, put it on a separate line in Notes as `Size: M` (using the actual size).
 
+If you own several identical copies of a piece, such as three pairs of the same socks, set **Quantity** (1 to 99) in **Edit item** and keep one wardrobe item for all of them. The wardrobe card and the item dialog then show how many copies are clean (for example, **2 of 3 clean**). Raising the quantity adds clean copies, and lowering it never leaves more clean copies than you own. Glasses have no quantity. See [laundry](#keep-laundry-up-to-date) for how copies are counted.
+
+Turn on **Indoor only** in **Edit item** for pieces you only wear at home, such as sweatpants or loungewear. Wherever Wardrowbe picks clothes for you, it uses them only for the **Lounge** occasion: outfit suggestions, scheduled outfits, trip plans, **What would I wear it with?** and inspiration matches. Two exceptions: a piece you pick under **Build around a specific piece (optional)** is always used, and Pairings ignore the setting. On the web, an occasion picker shows **Lounge** only when it's already your saved default, **Trips** never offers it, and Inspiration always plans for a casual occasion.
+
 The item dialog also lets you rotate or replace photos, remove a background, choose a primary image, retry AI analysis, toggle a favorite, and delete an item. Deletion asks for confirmation and cannot be undone.
 
 Use Rotate left or Rotate right to turn a photo 90 degrees. The photo updates without a page refresh in the item and outfit dialogs.
@@ -66,6 +70,8 @@ In **Settings > Recommendation Settings > Outfit options per day**, choose 1 to 
 
 You can use **Override weather** to try a different temperature or condition. **Reset** clears that override.
 
+Pieces marked **Indoor only** are suggested only for the **Lounge** occasion, which the web app shows only when it's your saved default. A piece you choose under **Build around a specific piece (optional)** is still used for any occasion.
+
 Suggestions skip shoes and bottoms worn twice in seven days, except for pieces you include and those needed to keep at least four choices per category.
 
 Suggestions aim for pieces at about the same level of dressiness, and options that mix very casual pieces with dressy ones are listed last. When you reject two pieces together in two different outfits, and never wear or keep them as a pair, the AI is told not to pair them again.
@@ -83,7 +89,7 @@ The **Pairings** page collects outfits built around source pieces. Filter by the
 3. Inspect the matched pieces and match percentages. **No match** means a part of the inspiration had no match; an **Added base layer** is shown separately.
 4. Use **Open outfit** to inspect the saved outfit. You can delete a saved inspiration look after confirming.
 
-Inspiration uses what is already in your wardrobe. Review missing matches before using the outfit.
+Inspiration uses what is already in your wardrobe, except pieces marked **Indoor only**. Review missing matches before using the outfit.
 
 Sources: [suggest page](../frontend/app/dashboard/suggest/page.tsx), [pairings page](../frontend/app/dashboard/pairings/page.tsx), [pairing dialog](../frontend/components/generate-pairings-dialog.tsx), [pairing card](../frontend/components/pairing-card.tsx), [inspiration page](../frontend/app/dashboard/inspiration/page.tsx), [inspiration service](../backend/app/services/inspiration_service.py).
 
@@ -138,11 +144,14 @@ Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outf
 
 Each item tracks wears since its last wash. At its wash interval, it needs washing and is excluded from normal outfit recommendations.
 
+An item with a **Quantity** above 1 counts wears one copy at a time. When the copy you are wearing reaches the wash interval, that copy goes in the wash, the clean count drops by one (**2 of 3 clean** becomes **1 of 3 clean**), and the next copy starts at zero wears. The item stays in suggestions while at least one copy is clean. **Needs wash** applies only when no copy is clean, or after **Put in the wash**, which holds until **Mark Washed** even if you add a copy. With a wash interval of **Never**, copies never go in the wash from wear.
+
 In **Settings > Washing**, choose the wears before washing for each clothing type you own: 1 to 30, or **Never**. Select **Reset** beside a type to restore its built-in default. Each change saves automatically. These settings apply only to your wardrobe, starting with the next wear. Past wear counts and wash status stay as recorded.
 
 1. Open an item and edit **Wash Interval** to override its type setting. Leave it blank and save to use your type setting, including when clearing an existing override. The **Default** placeholder shows that setting.
-2. Use **Put in the wash** if it needs washing earlier.
-3. After washing, filter Wardrobe by **Needs wash**, open the clean items, and select **Mark Washed**. This resets their wash status so they can return to suggestions.
+2. Use **Put in the wash** if it needs washing earlier. This puts every copy of the item in the wash. It is offered only while no copy is in the wash.
+3. After washing, filter Wardrobe by **Needs wash**, open the clean items, and select **Mark Washed**. This resets their wash status so they can return to suggestions and makes every copy clean again.
+4. An item with only some copies in the wash from wear is not listed under **Needs wash**. Find it by its clean count on the wardrobe card (such as **1 of 3 clean**), open it, and select **Mark Washed**. The button shows **Mark Washed** whenever any copy is in the wash.
 
 Use the item's wash and wear history to check a surprising status. Logging what you actually wore keeps this count useful.
 
@@ -157,7 +166,7 @@ Sources: [item dialog](../frontend/components/item-detail-dialog.tsx), [item upd
 
 Each day identifies whether its weather comes from a forecast or a climate average. Check that source when planning far ahead. Overlapping trips are rejected. Deleting a trip preserves worn days.
 
-Trip planning needs available clothes, working AI planning, and destination weather. If it fails, check the dates and wardrobe, then ask the operator if AI or weather is unavailable.
+Trips leave out pieces marked **Indoor only**. Trip planning needs available clothes, working AI planning, and destination weather. If it fails, check the dates and wardrobe, then ask the operator if AI or weather is unavailable.
 
 Sources: [trip planning service](../backend/app/services/trip_service.py), [trips page](../frontend/app/dashboard/trips/page.tsx), [trip labels](../frontend/messages/en/trips.json).
 

@@ -50,6 +50,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -60,7 +61,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { useUpdateItem, useDeleteItem, useReanalyzeItem, useRotateImage, useRemoveBackground, useRestoreOriginal, useReplaceItemImage, useLogWear, useLogWash, usePutInWash, useWashHistory, useItemWearStats, useItemWearHistory, useAddItemImage, useDeleteItemImage, useSetPrimaryImage } from '@/lib/hooks/use-items';
@@ -105,8 +105,10 @@ interface EditForm {
   notes: string;
   favorite: boolean;
   always_in_preview: boolean;
+  indoor_only: boolean;
   wash_interval: number | null;
   wash_interval_bad_input: boolean;
+  quantity: number | undefined;
 }
 
 function editFormFromItem(item: Item): EditForm {
@@ -121,8 +123,10 @@ function editFormFromItem(item: Item): EditForm {
     notes: item.notes || '',
     favorite: item.favorite,
     always_in_preview: item.always_in_preview ?? false,
+    indoor_only: item.indoor_only ?? false,
     wash_interval: item.wash_interval ?? null,
     wash_interval_bad_input: false,
+    quantity: item.quantity,
   };
 }
 
@@ -158,8 +162,10 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
     notes: '',
     favorite: false,
     always_in_preview: false,
+    indoor_only: false,
     wash_interval: null,
     wash_interval_bad_input: false,
+    quantity: 1,
   });
   const [showWashHistory, setShowWashHistory] = useState(false);
   const [showWearHistory, setShowWearHistory] = useState(false);
@@ -176,6 +182,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
   const { data: features } = useFeatures();
   const logWear = useLogWear();
   const logWash = useLogWash();
+  const hasDirtyCopies = Boolean(item && (item.needs_wash || item.clean_count < item.quantity));
   const putInWash = usePutInWash();
   const { data: washHistory } = useWashHistory(item?.id || '');
   const { data: wearStats } = useItemWearStats(item?.id || '');
@@ -219,8 +226,10 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           notes: editForm.notes || undefined,
           favorite: editForm.favorite,
           always_in_preview: editIsGlasses && editForm.always_in_preview,
+          indoor_only: editForm.indoor_only,
           // A blank interval must reach the server as null to remove the override.
           wash_interval: editForm.wash_interval,
+          quantity: editIsGlasses ? undefined : editForm.quantity,
         },
       });
       setIsEditing(false);
@@ -803,9 +812,25 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                         onCheckedChange={(checked) => setEditForm({ ...editForm, always_in_preview: checked })}
                       />
                     </div>
-                  ) : <div className="space-y-2">
-                    <Label>{t('washInterval')} ({t('view.wears')})</Label>
+                  ) : <>
+                  <div className="space-y-2">
+                    <Label htmlFor="item-quantity">{t('quantity')}</Label>
                     <Input
+                      id="item-quantity"
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={editForm.quantity ?? ''}
+                      onChange={(event) => {
+                        const parsed = parseInt(event.target.value, 10);
+                        setEditForm({ ...editForm, quantity: Number.isNaN(parsed) ? undefined : Math.min(99, Math.max(1, parsed)) });
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="item-wash-interval">{t('washInterval')} ({t('view.wears')})</Label>
+                    <Input
+                      id="item-wash-interval"
                       type="number"
                       min={1}
                       max={100}
@@ -822,7 +847,15 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                     <p className="text-xs text-muted-foreground">
                       {t('view.washIntervalHint')}
                     </p>
-                  </div>}
+                  </div></>}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="item-indoor-only">{t('indoorOnly')}</Label>
+                    <Switch
+                      id="item-indoor-only"
+                      checked={editForm.indoor_only}
+                      onCheckedChange={(checked) => setEditForm({ ...editForm, indoor_only: checked })}
+                    />
+                  </div>
                   <div className="flex gap-2 pt-2">
                     <Button
                       variant="outline"
@@ -921,7 +954,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                           variant="outline"
                           size="sm"
                           className="h-7 text-xs"
-                          onClick={item.needs_wash ? handleMarkWashed : handlePutInWash}
+                          onClick={hasDirtyCopies ? handleMarkWashed : handlePutInWash}
                           disabled={logWash.isPending || putInWash.isPending}
                         >
                           {logWash.isPending || putInWash.isPending ? (
@@ -929,13 +962,16 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
                           ) : (
                             <Droplets className="h-3 w-3 mr-1" />
                           )}
-                          {t(item.needs_wash ? 'actions.markWashed' : 'actions.putInWash')}
+                          {t(hasDirtyCopies ? 'actions.markWashed' : 'actions.putInWash')}
                         </Button>
                       </div>
                     </div>
                     <div className="space-y-1.5">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{t('view.wearsSinceWash', { current: item.wears_since_wash, max: item.effective_wash_interval })}</span>
+                        {item.quantity > 1 && (
+                          <span>{tw('cleanCount', { clean: item.clean_count, total: item.quantity })}</span>
+                        )}
                         {item.needs_wash && (
                           <span className="text-amber-500 font-medium">{t('view.needsWashing')}</span>
                         )}

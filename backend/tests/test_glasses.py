@@ -26,7 +26,7 @@ from app.utils.garment_vocabulary import ITEM_ROLE, NEAR_FACE_TYPES, render_outf
 from app.utils.prompts import load_prompt
 from app.utils.washing import wash_interval
 from app.workers.tagging import tag_item_image
-from tests.migration_helpers import migration_downgrade
+from tests.migration_helpers import insert_at_revision, migration_downgrade
 from tests.test_ha_actions import LAUNDRY_DONE, TOKEN, _ha_settings
 from tests.test_image_undo_replace import _jpeg_bytes, _make_item
 from tests.test_item_scorer import _item as scoring_item
@@ -601,7 +601,19 @@ async def test_migration_column_default_and_rollback(db_session, test_user):
         assert await db_session.scalar(
             select(ClothingItem.always_in_preview).where(ClothingItem.id == item_id)
         )
-        inserted = await glasses_item(db_session, test_user, enabled=None)
-        assert inserted.always_in_preview is False
+        inserted = ClothingItem(
+            id=uuid4(),
+            user_id=test_user.id,
+            type="glasses",
+            image_path="test/glasses.jpg",
+            status=ItemStatus.ready,
+        )
+        await insert_at_revision(db_session, inserted, server_default=("always_in_preview",))
+        assert (
+            await db_session.scalar(
+                select(ClothingItem.always_in_preview).where(ClothingItem.id == inserted.id)
+            )
+            is False
+        )
     await db_session.refresh(item)
     assert item.always_in_preview is True

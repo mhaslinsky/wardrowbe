@@ -87,6 +87,8 @@ WEEKLY_ROTATION_ROLES = ("footwear", "bottom")
 # One rejected outfit marks every pair in it, including the innocent ones, so a pair has to be
 # rejected in two outfits, and never accepted or worn, before the AI is told to avoid it.
 REJECTED_PAIR_MIN_REJECTIONS = 2
+# Occasions where items flagged indoor_only (sweats, loungewear) may be suggested.
+INDOOR_OCCASIONS = frozenset({"lounge"})
 REJECTED_PAIR_PROMPT_LIMIT = 15
 # A casual coat over a dressier outfit is normal, so an outer layer counts only when it is the
 # dressier piece (a blazer over joggers). Legwear, socks and accessories never count.
@@ -444,6 +446,8 @@ class RecommendationService:
             and item.type != "unknown"
             and is_suggestion_type(item.type, include_underwear=include_underwear)
         ]
+        if occasion.lower() not in INDOOR_OCCASIONS:
+            items = [item for item in items if not item.indoor_only]
 
         if exclude_items:
             exclude_set = set(exclude_items)
