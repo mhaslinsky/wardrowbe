@@ -259,23 +259,24 @@ class ItemService:
             update_data["tags"] = merged
 
         new_quantity = update_data.pop("quantity", None)
+        # Lock the row and reread what the wash rules below depend on before applying the edit,
+        # so a type change, wear, wash or quantity edit committed since the load isn't overwritten.
+        await self.db.refresh(
+            item,
+            [
+                "type",
+                "wash_interval",
+                "quantity",
+                "clean_count",
+                "wears_since_wash",
+                "needs_wash",
+                "manually_needs_wash",
+            ],
+            with_for_update=True,
+        )
         for field, value in update_data.items():
             setattr(item, field, value)
 
-        if new_quantity is not None or never_washed(item):
-            # Lock the row and reread the counters, so a wear, wash or quantity edit since the
-            # load isn't overwritten. The never-washed reset below copies quantity.
-            await self.db.refresh(
-                item,
-                [
-                    "quantity",
-                    "clean_count",
-                    "wears_since_wash",
-                    "needs_wash",
-                    "manually_needs_wash",
-                ],
-                with_for_update=True,
-            )
         if new_quantity is not None and new_quantity != item.quantity:
             # Added copies arrive clean; a lower quantity clamps the clean count.
             added = max(0, new_quantity - item.quantity)

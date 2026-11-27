@@ -35,7 +35,7 @@ Open an item, choose **Edit item**, correct its details, then save. Add useful f
 
 If you own several identical copies of a piece, such as three pairs of the same socks, set **Quantity** (1 to 99) in **Edit item** and keep one wardrobe item for all of them. The wardrobe card and the item dialog then show how many copies are clean (for example, **2 of 3 clean**). Raising the quantity adds clean copies, and lowering it never leaves more clean copies than you own. Glasses have no quantity. See [laundry](#keep-laundry-up-to-date) for how copies are counted.
 
-Turn on **Indoor only** in **Edit item** for pieces you only wear at home, such as sweatpants or loungewear. Suggestions then use them only for the **Lounge** occasion.
+Turn on **Indoor only** in **Edit item** for pieces you only wear at home, such as sweatpants or loungewear. Outfit suggestions then use them only for the **Lounge** occasion. The web app doesn't list **Lounge** as an occasion, so an indoor-only piece appears on the web only when you pick it under **Build around a specific piece (optional)**. Pairings and trip packing ignore the setting.
 
 The item dialog also lets you rotate or replace photos, remove a background, choose a primary image, retry AI analysis, toggle a favorite, and delete an item. Deletion asks for confirmation and cannot be undone.
 
@@ -70,7 +70,7 @@ In **Settings > Recommendation Settings > Outfit options per day**, choose 1 to 
 
 You can use **Override weather** to try a different temperature or condition. **Reset** clears that override.
 
-Pieces marked **Indoor only** are suggested only for the **Lounge** occasion. A piece you choose under **Build around a specific piece (optional)** is still used for any occasion.
+Pieces marked **Indoor only** are suggested only for the **Lounge** occasion, which the web app doesn't list. A piece you choose under **Build around a specific piece (optional)** is still used for any occasion.
 
 Suggestions skip shoes and bottoms worn twice in seven days, except for pieces you include and those needed to keep at least four choices per category.
 

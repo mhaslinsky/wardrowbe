@@ -256,6 +256,33 @@ async def test_retyping_as_glasses_uses_a_quantity_committed_after_the_item_was_
 
 
 @pytest.mark.asyncio
+async def test_an_edit_keeps_a_wash_put_in_after_the_item_was_loaded_as_glasses(
+    test_user, db_session: AsyncSession, session_maker
+):
+    item = await _make_item(db_session, test_user.id, quantity=2)
+    item.type = "glasses"
+    await db_session.commit()
+    await db_session.refresh(item)
+    async with session_maker() as other:
+        await other.execute(
+            update(ClothingItem)
+            .where(ClothingItem.id == item.id)
+            .values(type="socks", manually_needs_wash=True, needs_wash=True, clean_count=0)
+        )
+        await other.commit()
+
+    await ItemService(db_session).update(item, ItemUpdate(name="Renamed"))
+    await db_session.commit()
+    await db_session.refresh(item)
+    assert (item.type, item.manually_needs_wash, item.needs_wash, item.clean_count) == (
+        "socks",
+        True,
+        True,
+        0,
+    )
+
+
+@pytest.mark.asyncio
 async def test_a_quantity_edit_reads_the_never_setting_of_the_new_type(
     client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
 ):
