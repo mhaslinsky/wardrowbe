@@ -229,7 +229,7 @@ export function ItemDetailDialog({ item, open, onOpenChange }: ItemDetailDialogP
           indoor_only: editForm.indoor_only,
           // A blank interval must reach the server as null to remove the override.
           wash_interval: editForm.wash_interval,
-          quantity: editForm.quantity,
+          quantity: editIsGlasses ? undefined : editForm.quantity,
         },
       });
       setIsEditing(false);

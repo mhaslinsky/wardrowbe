@@ -282,7 +282,7 @@ function ItemCard({
             {t('wearCount', { count: item.wear_count })}
           </p>
         ) : null}
-        {item.quantity > 1 && (
+        {item.quantity > 1 && (item.type ?? '').trim().toLowerCase() !== 'glasses' && (
           <p className="text-xs text-muted-foreground mt-1">
             {t('cleanCount', { clean: item.clean_count, total: item.quantity })}
           </p>

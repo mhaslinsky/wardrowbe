@@ -283,7 +283,13 @@ class ItemService:
                 item.wears_since_wash = 0
             item.clean_count = max(0, min(new_quantity, item.clean_count + added))
             item.quantity = new_quantity
-            item.needs_wash = item.manually_needs_wash or item.clean_count == 0
+            if "type" in update_data:
+                # wash_interval reads the type setting, which is still the old type's.
+                await self.db.flush()
+                await self.db.refresh(item, ["type_wash_interval"])
+            item.needs_wash = item.manually_needs_wash or (
+                item.clean_count == 0 and wash_interval(item) != 999
+            )
         clear_unneeded_wash_state(item)
 
         if "tags" in update_data:

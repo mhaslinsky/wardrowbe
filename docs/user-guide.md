@@ -144,12 +144,12 @@ Sources: [outfit builder](../frontend/app/dashboard/outfits/new/page.tsx), [outf
 
 Each item tracks wears since its last wash. At its wash interval, it needs washing and is excluded from normal outfit recommendations.
 
-An item with a **Quantity** above 1 counts wears one copy at a time. When the copy you are wearing reaches the wash interval, that copy goes in the wash, the clean count drops by one (**2 of 3 clean** becomes **1 of 3 clean**), and the next copy starts at zero wears. The item stays in suggestions while at least one copy is clean. **Needs wash** applies only when no copy is clean. With a wash interval of **Never**, copies never go in the wash from wear.
+An item with a **Quantity** above 1 counts wears one copy at a time. When the copy you are wearing reaches the wash interval, that copy goes in the wash, the clean count drops by one (**2 of 3 clean** becomes **1 of 3 clean**), and the next copy starts at zero wears. The item stays in suggestions while at least one copy is clean. **Needs wash** applies only when no copy is clean, or after **Put in the wash**, which holds until **Mark Washed** even if you add a copy. With a wash interval of **Never**, copies never go in the wash from wear.
 
 In **Settings > Washing**, choose the wears before washing for each clothing type you own: 1 to 30, or **Never**. Select **Reset** beside a type to restore its built-in default. Each change saves automatically. These settings apply only to your wardrobe, starting with the next wear. Past wear counts and wash status stay as recorded.
 
 1. Open an item and edit **Wash Interval** to override its type setting. Leave it blank and save to use your type setting, including when clearing an existing override. The **Default** placeholder shows that setting.
-2. Use **Put in the wash** if it needs washing earlier. This puts every copy of the item in the wash.
+2. Use **Put in the wash** if it needs washing earlier. This puts every copy of the item in the wash. It is offered only while no copy is in the wash.
 3. After washing, filter Wardrobe by **Needs wash**, open the clean items, and select **Mark Washed**. This resets their wash status so they can return to suggestions and makes every copy clean again.
 4. An item with only some copies in the wash is not listed under **Needs wash**. Find it by its clean count on the wardrobe card (such as **1 of 3 clean**), open it, and select **Mark Washed**. The button shows **Mark Washed** whenever any copy is in the wash.
 

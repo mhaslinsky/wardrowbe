@@ -253,13 +253,19 @@ async def test_retyping_as_glasses_brings_every_copy_back(
 async def test_a_never_wash_interval_frees_an_item_with_no_clean_copies(
     client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
 ):
-    item = await _make_item(db_session, test_user.id)
+    item = await _make_item(db_session, test_user.id, quantity=2)
+    await _wear(client, item.id, auth_headers)
     assert (await _wear(client, item.id, auth_headers))["needs_wash"] is True
     response = await client.patch(
         f"/api/v1/items/{item.id}", json={"wash_interval": 999}, headers=auth_headers
     )
     assert response.status_code == 200, response.json()
     assert (await _wear(client, item.id, auth_headers))["needs_wash"] is False
+    response = await client.patch(
+        f"/api/v1/items/{item.id}", json={"quantity": 1}, headers=auth_headers
+    )
+    assert response.status_code == 200, response.json()
+    assert response.json()["needs_wash"] is False
 
 
 def test_undo_replay_keeps_an_item_put_in_the_wash():
