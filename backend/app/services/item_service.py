@@ -265,6 +265,7 @@ class ItemService:
             item,
             [
                 "type",
+                "type_wash_interval",
                 "wash_interval",
                 "quantity",
                 "clean_count",

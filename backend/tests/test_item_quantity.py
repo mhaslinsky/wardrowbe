@@ -303,6 +303,35 @@ async def test_a_quantity_edit_reads_the_never_setting_of_the_new_type(
 
 
 @pytest.mark.asyncio
+async def test_a_quantity_edit_reads_the_setting_of_a_type_changed_after_the_load(
+    client: AsyncClient, test_user, auth_headers, db_session: AsyncSession, session_maker
+):
+    item = await _make_item(db_session, test_user.id, quantity=2, wash_interval=None)
+    response = await client.patch(
+        "/api/v1/users/me/preferences",
+        json={"wash_intervals": {"socks": 1, "dress": 999}},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200, response.json()
+    await _wear(client, item.id, auth_headers)
+    assert (await _wear(client, item.id, auth_headers))["needs_wash"] is True
+    await db_session.commit()
+    await db_session.refresh(item)
+    async with session_maker() as other:
+        await other.execute(
+            update(ClothingItem)
+            .where(ClothingItem.id == item.id)
+            .values(type="dress", needs_wash=False)
+        )
+        await other.commit()
+
+    await ItemService(db_session).update(item, ItemUpdate(quantity=1))
+    await db_session.commit()
+    await db_session.refresh(item)
+    assert (item.type, item.clean_count, item.needs_wash) == ("dress", 0, False)
+
+
+@pytest.mark.asyncio
 async def test_retyping_as_glasses_brings_every_copy_back(
     client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
 ):
