@@ -14,7 +14,7 @@ from tests.test_ha_actions import LAUNDRY_DONE, TOKEN, _ha_settings
 
 
 async def _make_item(
-    db_session: AsyncSession, user_id, quantity: int = 1, wash_interval: int = 1
+    db_session: AsyncSession, user_id, quantity: int = 1, wash_interval: int | None = 1
 ) -> ClothingItem:
     item = ClothingItem(
         user_id=user_id,
@@ -233,6 +233,46 @@ async def test_laundry_done_washes_an_item_with_some_copies_dirty(
     assert response.json() == {"ok": True, "washed": 1}
     await db_session.refresh(item)
     assert (item.clean_count, item.needs_wash) == (3, False)
+
+
+@pytest.mark.asyncio
+async def test_retyping_as_glasses_uses_a_quantity_committed_after_the_item_was_loaded(
+    test_user, db_session: AsyncSession, session_maker
+):
+    item = await _make_item(db_session, test_user.id, quantity=3)
+    item.clean_count = 0
+    await db_session.commit()
+    await db_session.refresh(item)
+    async with session_maker() as other:
+        await other.execute(
+            update(ClothingItem).where(ClothingItem.id == item.id).values(quantity=2)
+        )
+        await other.commit()
+
+    await ItemService(db_session).update(item, ItemUpdate(type="glasses"))
+    await db_session.commit()
+    await db_session.refresh(item)
+    assert (item.quantity, item.clean_count) == (2, 2)
+
+
+@pytest.mark.asyncio
+async def test_a_quantity_edit_reads_the_never_setting_of_the_new_type(
+    client: AsyncClient, test_user, auth_headers, db_session: AsyncSession
+):
+    item = await _make_item(db_session, test_user.id, quantity=2, wash_interval=None)
+    response = await client.patch(
+        "/api/v1/users/me/preferences",
+        json={"wash_intervals": {"socks": 1, "dress": 999}},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200, response.json()
+    await _wear(client, item.id, auth_headers)
+    assert (await _wear(client, item.id, auth_headers))["needs_wash"] is True
+    response = await client.patch(
+        f"/api/v1/items/{item.id}", json={"type": "dress", "quantity": 1}, headers=auth_headers
+    )
+    assert response.status_code == 200, response.json()
+    assert response.json()["needs_wash"] is False
 
 
 @pytest.mark.asyncio

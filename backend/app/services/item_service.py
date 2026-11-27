@@ -262,8 +262,9 @@ class ItemService:
         for field, value in update_data.items():
             setattr(item, field, value)
 
-        if new_quantity is not None:
-            # Lock the row and reread the counters, so a wear or wash since the load isn't overwritten.
+        if new_quantity is not None or never_washed(item):
+            # Lock the row and reread the counters, so a wear, wash or quantity edit since the
+            # load isn't overwritten. The never-washed reset below copies quantity.
             await self.db.refresh(
                 item,
                 [

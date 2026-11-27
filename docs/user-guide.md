@@ -151,7 +151,7 @@ In **Settings > Washing**, choose the wears before washing for each clothing typ
 1. Open an item and edit **Wash Interval** to override its type setting. Leave it blank and save to use your type setting, including when clearing an existing override. The **Default** placeholder shows that setting.
 2. Use **Put in the wash** if it needs washing earlier. This puts every copy of the item in the wash. It is offered only while no copy is in the wash.
 3. After washing, filter Wardrobe by **Needs wash**, open the clean items, and select **Mark Washed**. This resets their wash status so they can return to suggestions and makes every copy clean again.
-4. An item with only some copies in the wash is not listed under **Needs wash**. Find it by its clean count on the wardrobe card (such as **1 of 3 clean**), open it, and select **Mark Washed**. The button shows **Mark Washed** whenever any copy is in the wash.
+4. An item with only some copies in the wash from wear is not listed under **Needs wash**. Find it by its clean count on the wardrobe card (such as **1 of 3 clean**), open it, and select **Mark Washed**. The button shows **Mark Washed** whenever any copy is in the wash.
 
 Use the item's wash and wear history to check a surprising status. Logging what you actually wore keeps this count useful.
 
